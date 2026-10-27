@@ -68,7 +68,9 @@ jobs:
           cache-dependency-path: frontend/restaurant-web/package-lock.json
 
       - name: Install dependencies
-        run: npm ci
+        run: |
+          npm ci
+          npm install --no-save @rollup/rollup-linux-x64-gnu
 
       - name: Verify Prettier Code Formatting
         run: npm run lint
