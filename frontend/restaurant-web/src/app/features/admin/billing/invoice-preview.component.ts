@@ -2,7 +2,7 @@ import { Component, inject, signal, computed, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { RouterModule, ActivatedRoute } from '@angular/router';
 import { FormsModule } from '@angular/forms';
-import { MockDataService } from '../../../data-access/mock/mock-data.service';
+import { RestaurantDataService } from '../../../data-access/services/restaurant-data.service';
 import { CurrencyInrPipe } from '../../../shared/pipes/currency-inr.pipe';
 import { ToastService } from '../../../core/services/toast.service';
 import { AdminAuthService } from '../../../core/services/admin-auth.service';
@@ -932,7 +932,8 @@ import { AdminAuthService } from '../../../core/services/admin-auth.service';
 })
 export class InvoicePreviewComponent implements OnInit {
   private route = inject(ActivatedRoute);
-  private mock = inject(MockDataService);
+  private dataService = inject(RestaurantDataService);
+  private mock = this.dataService;
   private toastService = inject(ToastService);
   private adminAuth = inject(AdminAuthService);
 

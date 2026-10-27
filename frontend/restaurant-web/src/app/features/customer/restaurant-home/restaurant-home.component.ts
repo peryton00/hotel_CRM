@@ -1,7 +1,7 @@
 import { Component, inject, signal, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { RouterModule, ActivatedRoute } from '@angular/router';
-import { MockDataService } from '../../../data-access/mock/mock-data.service';
+import { RestaurantDataService } from '../../../data-access/services/restaurant-data.service';
 import { CartService } from '../../../core/services/cart.service';
 
 @Component({
@@ -412,7 +412,8 @@ import { CartService } from '../../../core/services/cart.service';
   ],
 })
 export class RestaurantHomeComponent implements OnInit {
-  private mock = inject(MockDataService);
+  private dataService = inject(RestaurantDataService);
+  private mock = this.dataService;
   cartService = inject(CartService);
 
   restaurant = this.mock.restaurant;

@@ -13,9 +13,7 @@ export class AdminAuthService {
   readonly isAuthenticated = signal<boolean>(
     !!(localStorage.getItem(AUTH_TOKEN_KEY) || localStorage.getItem('supabase_auth_token')),
   );
-  readonly staffRole = signal<string>(
-    localStorage.getItem(STAFF_ROLE_KEY) || 'MANAGER',
-  );
+  readonly staffRole = signal<string>(localStorage.getItem(STAFF_ROLE_KEY) || 'MANAGER');
 
   loginWithToken(token: string, role = 'MANAGER'): void {
     localStorage.setItem(AUTH_TOKEN_KEY, token);

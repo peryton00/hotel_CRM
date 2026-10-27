@@ -46,9 +46,7 @@ import {
 
 const STORAGE_PREFIX = 'royal_spice_';
 
-@Injectable({
-  providedIn: 'root',
-})
+@Injectable()
 export class MockDataService {
   private http = inject(HttpClient);
 
@@ -83,345 +81,27 @@ export class MockDataService {
   }
 
   initializeData(): void {
-    // Check if we have localStorage data cached from this session
-    const cachedOrders = this.loadLocalArray<Order>('orders');
-    const cachedTables = this.loadLocalArray<Table>('tables');
-    const cachedCustomers = this.loadLocalArray<Customer>('customers');
-    const cachedMenuItems = this.loadLocalArray<MenuItem>('menuItems');
-    const cachedCategories = this.loadLocalArray<MenuCategory>('categories');
-    const cachedCoupons = this.loadLocalArray<Coupon>('coupons');
-    const cachedInvoices = this.loadLocalArray<Invoice>('invoices');
-
-    // Load baseline data from JSON seed files with immediate synchronous fallback
     this.initFallbackRestaurant();
-    this.http.get<Restaurant>('/data/restaurant.json').subscribe({
-      next: (res) => {
-        const cachedRes = this.loadLocalObject<Restaurant>('restaurant');
-        this.restaurant.set(cachedRes || res);
-      },
-      error: () => this.initFallbackRestaurant(),
-    });
-
-    this.http.get<Customer[]>('/data/customers.json').subscribe({
-      next: (data) => {
-        const raw = cachedCustomers || data;
-        const normalized = raw.map((c) => ({
-          ...c,
-          phoneE164: c.phoneE164 || normalizeToE164(c.phone),
-          phoneMasked: c.phoneMasked || maskPhone(c.phone),
-          isPhoneVerified: c.isPhoneVerified ?? true,
-        }));
-        this.customers.set(normalized);
-      },
-      error: () => {},
-    });
-
-    this.http.get<Table[]>('/data/tables.json').subscribe({
-      next: (data) => this.tables.set(cachedTables || data),
-      error: () => {},
-    });
-
-    this.http.get<MenuCategory[]>('/data/menu-categories.json').subscribe({
-      next: (data) => this.categories.set(cachedCategories || data),
-      error: () => {},
-    });
-
-    this.http.get<MenuItem[]>('/data/menu-items.json').subscribe({
-      next: (data) => this.menuItems.set(cachedMenuItems || data),
-      error: () => {
-        if (!cachedMenuItems && this.menuItems().length === 0) {
-          this.menuItems.set(this.getDefaultMenuItems());
-        }
-      },
-    });
-    if (!cachedMenuItems && this.menuItems().length === 0) {
-      this.menuItems.set(this.getDefaultMenuItems());
-    }
-
-    this.http.get<Order[]>('/data/orders.json').subscribe({
-      next: (data) => {
-        this.orders.set(this.normalizeLegacyOrders(cachedOrders || data));
-        if (cachedInvoices) {
-          this.invoices.set(cachedInvoices);
-        } else {
-          this.buildInitialInvoices(this.orders());
-        }
-      },
-      error: () => {},
-    });
-
-    this.http.get<Coupon[]>('/data/coupons.json').subscribe({
-      next: (data) => {
-        const raw = cachedCoupons || data;
-        const updated = raw.map((coup) => ({
-          ...coup,
-          isTargeted:
-            coup.code === 'VIPDINER' ||
-            (coup.assignedCustomerIds && coup.assignedCustomerIds.length > 0),
-        }));
-        this.coupons.set(updated);
-      },
-      error: () => {},
-    });
-
-    // Initialize Targeted Coupon Assignments
-    const cachedAssignments = this.loadLocalArray<CouponAssignment>('coupon_assignments');
-    if (cachedAssignments) {
-      this.couponAssignments.set(cachedAssignments);
-    } else {
-      const defaultAssignments: CouponAssignment[] = [
-        {
-          id: 'asgn-001',
-          restaurantId: 'rest-001',
-          couponId: 'coup-003',
-          couponCode: 'VIPDINER',
-          customerId: 'cust-001',
-          customerPhoneE164: '+919876543210',
-          customerName: 'Aditya Sharma',
-          assignedBy: 'Ranveer B. (General Manager)',
-          assignedAt: '2026-10-01T12:00:00Z',
-          validFrom: '2026-01-01T00:00:00Z',
-          validUntil: '2026-12-31T23:59:59Z',
-          maxRedemptions: 2,
-          redemptionsUsed: 0,
-          status: 'ACTIVE',
-          notes: 'Targeted exclusive reward for Platinum loyalty patron',
-        },
-      ];
-      this.couponAssignments.set(defaultAssignments);
-      this.saveLocal('coupon_assignments', defaultAssignments);
-    }
-
-    // Initialize Redemptions & Audit Log
-    const cachedRedemptions = this.loadLocalArray<CouponRedemption>('coupon_redemptions') || [];
-    this.couponRedemptions.set(cachedRedemptions);
-
-    const cachedAudit = this.loadLocalArray<AuditLogEntry>('audit_logs') || [];
-    this.auditLogs.set(cachedAudit);
-
-    const cachedSplitBills = this.loadLocalArray<SplitBill>('split_bills') || [];
-    this.splitBills.set(cachedSplitBills);
-
-    const cachedRefunds = this.loadLocalArray<RefundRecord>('refunds') || [];
-    this.refunds.set(cachedRefunds);
-
-    const cachedTransfers = this.loadLocalArray<TableTransferRecord>('table_transfers') || [];
-    this.tableTransfers.set(cachedTransfers);
-
-    this.http.get<Reservation[]>('/data/reservations.json').subscribe({
-      next: (data) =>
-        this.reservations.set(this.loadLocalArray<Reservation>('reservations') || data),
-      error: () => {},
-    });
-
-    this.http
-      .get<{ tiers: LoyaltyTierConfig[]; recentTransactions: LoyaltyTransaction[] }>(
-        '/data/loyalty.json',
-      )
-      .subscribe({
-        next: (data) => {
-          this.loyaltyTiers.set(data.tiers || []);
-          this.loyaltyTransactions.set(
-            this.loadLocalArray<LoyaltyTransaction>('loyaltyTransactions') ||
-              data.recentTransactions ||
-              [],
-          );
-        },
-        error: () => {},
-      });
-
-    this.http.get<Feedback[]>('/data/feedback.json').subscribe({
-      next: (data) => this.feedbacks.set(this.loadLocalArray<Feedback>('feedbacks') || data),
-      error: () => {},
-    });
-
-    this.http.get<StaffMember[]>('/data/staff.json').subscribe({
-      next: (data) => this.staffMembers.set(this.loadLocalArray<StaffMember>('staff') || data),
-      error: () => {},
-    });
-
-    // Initialize Inventory & Recipe Domain Data
-    const cachedIngredients = this.loadLocalArray<Ingredient>('ingredients');
-    if (cachedIngredients) {
-      this.ingredients.set(cachedIngredients);
-    } else {
-      const defaultIngredients = this.getDefaultIngredients();
-      this.ingredients.set(defaultIngredients);
-      this.saveLocal('ingredients', defaultIngredients);
-    }
-
-    const cachedRecipes = this.loadLocalArray<Recipe>('recipes');
-    if (cachedRecipes) {
-      this.recipes.set(cachedRecipes);
-    } else {
-      const defaultRecipes = this.getDefaultRecipes();
-      this.recipes.set(defaultRecipes);
-      this.saveLocal('recipes', defaultRecipes);
-    }
-
-    const cachedStockMovements = this.loadLocalArray<StockMovement>('stock_movements');
-    if (cachedStockMovements) {
-      this.stockMovements.set(cachedStockMovements);
-    } else {
-      const defaultMovements = this.getDefaultStockMovements();
-      this.stockMovements.set(defaultMovements);
-      this.saveLocal('stock_movements', defaultMovements);
-    }
-
-    const cachedStockReservations = this.loadLocalArray<StockReservation>('stock_reservations');
-    this.stockReservations.set(cachedStockReservations || []);
-
+    this.categories.set([]);
+    this.menuItems.set(this.getDefaultMenuItems());
+    this.orders.set([]);
+    this.customers.set([]);
+    this.tables.set([]);
+    this.coupons.set([]);
+    this.reservations.set([]);
+    this.staffMembers.set([]);
+    this.feedbacks.set([]);
+    this.loyaltyTiers.set([]);
+    this.loyaltyTransactions.set([]);
+    this.invoices.set([]);
+    this.splitBills.set([]);
+    this.refunds.set([]);
+    this.tableTransfers.set([]);
+    this.ingredients.set(this.getDefaultIngredients());
+    this.recipes.set(this.getDefaultRecipes());
+    this.stockMovements.set([]);
+    this.stockReservations.set([]);
     this.isInitialized.set(true);
-
-    if (!environment.useMockRepositories) {
-      this.syncWithBackendApi();
-    }
-  }
-
-  /**
-   * Synchronizes authoritative signals with the real Rust backend API in production mode.
-   */
-  private syncWithBackendApi(): void {
-    const baseUrl = environment.apiBaseUrl;
-    let headers = new HttpHeaders({
-      'Content-Type': 'application/json',
-      Accept: 'application/json',
-    });
-
-    const token =
-      localStorage.getItem('sb-access-token') || localStorage.getItem('supabase_auth_token');
-    if (token) {
-      headers = headers.set('Authorization', `Bearer ${token}`);
-    }
-
-    const restaurantId =
-      localStorage.getItem('active_restaurant_id') || '00000000-0000-0000-0000-000000000001';
-    headers = headers.set('x-restaurant-id', restaurantId);
-
-    // Sync restaurant context
-    this.http.get<any>(`${baseUrl}/restaurants`, { headers }).subscribe({
-      next: (res) => {
-        if (res?.data) {
-          const current = this.restaurant() || ({} as Restaurant);
-          this.restaurant.set({
-            ...current,
-            id: res.data.id,
-            name: res.data.name || current.name,
-            slug: res.data.slug || current.slug,
-          });
-        }
-      },
-      error: () => {},
-    });
-
-    // Sync tables
-    this.http.get<any>(`${baseUrl}/tables`, { headers }).subscribe({
-      next: (res) => {
-        if (Array.isArray(res?.data) && res.data.length > 0) {
-          this.tables.set(
-            res.data.map((t: any) => ({
-              id: t.id,
-              number: t.table_number,
-              capacity: t.capacity,
-              section: t.section,
-              status: (t.status || 'available').toUpperCase() as TableStatus,
-              qrToken: t.qr_code_identifier || t.id,
-              qrUrl: `/menu/table/${t.table_number}`,
-              orderingEnabled: true,
-              activeOrderId: t.active_order_id,
-            })),
-          );
-        }
-      },
-      error: () => {},
-    });
-
-    // Sync menu categories
-    this.http.get<any>(`${baseUrl}/menu/categories`, { headers }).subscribe({
-      next: (res) => {
-        if (Array.isArray(res?.data) && res.data.length > 0) {
-          this.categories.set(
-            res.data.map((c: any) => ({
-              id: c.id,
-              name: c.name,
-              slug: c.slug || c.name.toLowerCase().replace(/\s+/g, '-'),
-              sortOrder: c.display_order || 0,
-              isActive: c.is_active !== false,
-            })),
-          );
-        }
-      },
-      error: () => {},
-    });
-
-    // Sync menu items
-    this.http.get<any>(`${baseUrl}/menu/items`, { headers }).subscribe({
-      next: (res) => {
-        if (Array.isArray(res?.data) && res.data.length > 0) {
-          this.menuItems.set(
-            res.data.map((i: any) => ({
-              id: i.id,
-              name: i.name,
-              description: i.description || '',
-              price: (i.base_price_paise || 0) / 100,
-              categoryId: i.category_id || '',
-              isVeg: i.is_veg !== false,
-              isAvailable: i.is_available !== false,
-              dietary: (i.is_veg ? 'VEG' : 'NON_VEG') as any,
-              imageUrl:
-                i.image_url || 'https://images.unsplash.com/photo-1546833999-b9f581a1996d?w=400',
-              prepTimeMinutes: i.preparation_time_minutes || 15,
-            })),
-          );
-        }
-      },
-      error: () => {},
-    });
-
-    // Sync orders
-    this.http.get<any>(`${baseUrl}/orders`, { headers }).subscribe({
-      next: (res) => {
-        const items = res?.data?.items || res?.data;
-        if (Array.isArray(items) && items.length > 0) {
-          this.orders.set(
-            items.map((o: any) => ({
-              id: o.id,
-              orderNumber: o.order_number,
-              orderType: (o.order_type || 'DINE_IN').toUpperCase() as any,
-              tableId: o.table_id,
-              restaurantSlug: 'gurukripa-dhaba',
-              customerName: o.customer_name || 'Walk-in Guest',
-              customerPhone: o.customer_phone || '',
-              status: (o.status || 'CONFIRMED').toUpperCase() as OrderStatus,
-              paymentStatus: (o.payment_status === 'paid' ? 'PAID' : 'UNPAID') as PaymentStatus,
-              paymentMethod: 'UPI',
-              items: (o.items || []).map((it: any) => ({
-                id: it.id,
-                menuItemId: it.menu_item_id || it.id,
-                name: it.item_name || it.name,
-                selectedVariants: [],
-                selectedAddons: [],
-                unitPrice: (it.unit_price_paise || 0) / 100,
-                quantity: it.quantity,
-                itemTotal: (it.total_paise || 0) / 100,
-              })),
-              subtotal: (o.subtotal_paise || 0) / 100,
-              taxAmount: (o.tax_paise || 0) / 100,
-              cgstAmount: (o.tax_paise || 0) / 2 / 100,
-              sgstAmount: (o.tax_paise || 0) / 2 / 100,
-              discountAmount: (o.discount_paise || 0) / 100,
-              totalAmount: (o.total_amount_paise || 0) / 100,
-              createdAt: o.created_at,
-              updatedAt: o.updated_at,
-              settledAt: o.settled_at,
-              cancelledAt: o.cancelled_at,
-              timeline: [],
-            })),
-          );
-        }
-      },
-      error: () => {},
-    });
   }
 
   /**
@@ -3078,7 +2758,7 @@ export class MockDataService {
       return {
         menuItemId,
         status: 'UNTRACKED',
-        produciblePortions: 0,
+        produciblePortions: 999,
         missingIngredients: [],
       };
     }

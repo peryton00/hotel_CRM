@@ -95,4 +95,6 @@ export interface CouponValidationResult {
   isValid: boolean;
   discountAmount: number;
   reason?: string;
+  authorizedDiscountAmount?: number;
+  rejectionReason?: string;
 }

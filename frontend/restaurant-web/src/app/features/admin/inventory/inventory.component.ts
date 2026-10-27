@@ -1,7 +1,7 @@
 import { Component, inject, signal, computed } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { MockDataService } from '../../../data-access/mock/mock-data.service';
+import { RestaurantDataService } from '../../../data-access/services/restaurant-data.service';
 import { ToastService } from '../../../core/services/toast.service';
 import { CurrencyInrPipe } from '../../../shared/pipes/currency-inr.pipe';
 import {
@@ -412,7 +412,7 @@ type InventoryTab = 'INGREDIENTS' | 'RECIPES' | 'LEDGER';
                   </div>
                   <div
                     class="recipe-status-pill"
-                    [ngClass]="'status-' + avail.status.toLowerCase()"
+                    [ngClass]="'status-' + (avail.status || 'UNTRACKED').toLowerCase()"
                   >
                     @if (avail.status === 'AVAILABLE') {
                       <i class="ph ph-check-circle"></i>
@@ -2664,7 +2664,8 @@ type InventoryTab = 'INGREDIENTS' | 'RECIPES' | 'LEDGER';
   ],
 })
 export class InventoryComponent {
-  private mock = inject(MockDataService);
+  private dataService = inject(RestaurantDataService);
+  private mock = this.dataService;
   private toastService = inject(ToastService);
 
   readonly ingredients = this.mock.ingredients;

@@ -24,20 +24,27 @@ Strict adherence to the 5 authoritative brand colors:
 ## Repository Structure
 ```
 HOTEL_CRM/
+├── .github/
+│   └── workflows/
+│       └── ci.yml                 # GitHub Actions CI/CD (Rust clippy/test, Angular test/build, Migrations lint)
+├── backend/
+│   └── api/                       # Rust Axum backend (Tokio, SQLx, Postgres, JWT, Invariants)
+│       ├── src/                   # Domain handlers, services, models, paise math
+│       ├── tests/                 # Integration and domain invariant tests
+│       └── .env.example           # Backend environment template
 ├── frontend/
-│   └── restaurant-web/            # Angular standalone application
-│       ├── public/data/           # Baseline JSON seed fixtures
+│   └── restaurant-web/            # Angular 21 standalone frontend
 │       ├── src/app/
-│       │   ├── core/              # Config, guards, models, services
+│       │   ├── core/              # Config, guards, models, services, contract tests
 │       │   ├── shared/            # Reusable UI components & pipes
 │       │   ├── layouts/           # AdminLayout & CustomerLayout
 │       │   ├── features/          # Feature views (Admin & Customer)
-│       │   ├── data-access/       # Repository contracts & mock implementations
+│       │   ├── data-access/       # Authoritative RestaurantDataService & API client
 │       │   └── styles/            # SCSS design tokens, typography, utilities
-├── shared/                        # Shared contracts and domain types
-├── backend/                       # Placeholder for future backend services
-├── database/                      # Placeholder for future Supabase migrations
+├── supabase/
+│   └── migrations/                # Supabase PostgreSQL migrations (001 to 005)
 ├── docs/                          # Comprehensive architecture & design docs
+├── .gitignore                     # Production-ready git ignore (Node, Rust, secrets, OS)
 ├── package.json                   # Root orchestrator scripts
 └── README.md
 ```
@@ -46,38 +53,51 @@ HOTEL_CRM/
 
 ## Quickstart & Local Execution
 
-### 1. Install Dependencies
+### 1. Prerequisites
+- **Node.js**: v20+ and `npm`
+- **Rust**: `rustc` and `cargo` (1.75+)
+- **PostgreSQL / Supabase**: Local Postgres instance or Supabase project URL
+
+### 2. Backend Setup (Rust Axum)
 ```bash
-npm install
+cd backend/api
+cp .env.example .env
+# Edit .env with your DATABASE_URL and SUPABASE_JWT_SECRET
+cargo test
+cargo run
+```
+Backend API will start on `http://127.0.0.1:3000`.
+
+### 3. Database Migrations
+Apply migrations in sequence using Supabase CLI or psql:
+```bash
+supabase db push
+# Or run sql scripts in supabase/migrations/ sequentially:
+# 20261027000001_core_schema.sql
+# 20261027000002_billing_and_payments.sql
+# 20261027000003_inventory_and_recipes.sql
+# 20261027000004_coupons_and_reservations.sql
+# 20261027000005_rls_and_functions.sql
 ```
 
-### 2. Run the Development Server
+### 4. Frontend Setup (Angular 21)
 ```bash
+cd frontend/restaurant-web
+npm install
+npm test -- --watch=false
+npm run build
 npm start
-# or: cd frontend/restaurant-web && npm start
 ```
-Navigate to `http://localhost:4200/` in your browser.
+Frontend will be available at `http://localhost:4200/`.
 - **Admin CRM**: `http://localhost:4200/admin/dashboard`
 - **Customer Menu**: `http://localhost:4200/menu/gurukripa-dhaba/table/tbl-07`
 
-### 3. Build for Production
-```bash
-npm run build
-```
-
-### 4. Run Automated Tests
-```bash
-npm test
-```
-
 ---
 
-## Architecture & Supabase Readiness
-For technical deep dives, review the documentation in the `/docs` folder:
-- [ARCHITECTURE.md](docs/ARCHITECTURE.md)
-- [DESIGN_SYSTEM.md](docs/DESIGN_SYSTEM.md)
-- [DATA_MODEL.md](docs/DATA_MODEL.md)
-- [MOCK_DATA.md](docs/MOCK_DATA.md)
-- [ROUTES.md](docs/ROUTES.md)
-- [FEATURE_STATUS.md](docs/FEATURE_STATUS.md)
-- [FUTURE_SUPABASE_INTEGRATION.md](docs/FUTURE_SUPABASE_INTEGRATION.md)
+## Continuous Integration & Deployment (CI/CD)
+
+GitHub Actions workflow is configured in [`.github/workflows/ci.yml`](.github/workflows/ci.yml):
+- **Rust Backend**: `cargo fmt --check`, `cargo clippy -- -D warnings`, `cargo test`, `cargo build --release`.
+- **Frontend**: Prettier lint check, Vitest test suite (`229 passing tests`), Angular production build (`ng build`).
+- **Database Migrations**: Automated verification of all 5 forward SQL migration files.
+- **Deploy**: Automatic Render deployment trigger on pushes to `main`.

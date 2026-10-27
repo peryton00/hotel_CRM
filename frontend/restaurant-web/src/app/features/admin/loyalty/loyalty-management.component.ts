@@ -1,7 +1,7 @@
 import { Component, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { MockDataService } from '../../../data-access/mock/mock-data.service';
+import { RestaurantDataService } from '../../../data-access/services/restaurant-data.service';
 import { LoyaltyTierConfig, LoyaltyTransaction } from '../../../core/models/loyalty.model';
 import { CurrencyInrPipe } from '../../../shared/pipes/currency-inr.pipe';
 import { ToastService } from '../../../core/services/toast.service';
@@ -226,7 +226,8 @@ import { ToastService } from '../../../core/services/toast.service';
   ],
 })
 export class LoyaltyManagementComponent {
-  private mock = inject(MockDataService);
+  private dataService = inject(RestaurantDataService);
+  private mock = this.dataService;
   private toastService = inject(ToastService);
 
   tiers = this.mock.loyaltyTiers;

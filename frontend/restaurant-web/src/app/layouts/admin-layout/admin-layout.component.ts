@@ -2,7 +2,7 @@ import { Component, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { RouterModule, Router } from '@angular/router';
 import { ToastContainerComponent } from '../../shared/components/toast-container/toast-container.component';
-import { MockDataService } from '../../data-access/mock/mock-data.service';
+import { RestaurantDataService } from '../../data-access/services/restaurant-data.service';
 import { AdminAuthService } from '../../core/services/admin-auth.service';
 
 @Component({
@@ -748,7 +748,8 @@ import { AdminAuthService } from '../../core/services/admin-auth.service';
 })
 export class AdminLayoutComponent {
   auth = inject(AdminAuthService);
-  private mock = inject(MockDataService);
+  private dataService = inject(RestaurantDataService);
+  private mock = this.dataService;
 
   restaurant = this.mock.restaurant;
   isSidebarCollapsed = signal<boolean>(false);

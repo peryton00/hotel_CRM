@@ -2,7 +2,7 @@ import { Component, inject, signal, computed } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { RouterModule } from '@angular/router';
 import { FormsModule } from '@angular/forms';
-import { MockDataService } from '../../../data-access/mock/mock-data.service';
+import { RestaurantDataService } from '../../../data-access/services/restaurant-data.service';
 import { Customer, CustomerStatus, LoyaltyTier } from '../../../core/models/customer.model';
 import { CurrencyInrPipe } from '../../../shared/pipes/currency-inr.pipe';
 import { StatusBadgeComponent } from '../../../shared/components/status-badge/status-badge.component';
@@ -461,7 +461,8 @@ import { ToastService } from '../../../core/services/toast.service';
   ],
 })
 export class CustomerListComponent {
-  private mock = inject(MockDataService);
+  private dataService = inject(RestaurantDataService);
+  private mock = this.dataService;
   private toastService = inject(ToastService);
 
   customers = this.mock.customers;

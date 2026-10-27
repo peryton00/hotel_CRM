@@ -1,7 +1,7 @@
 import { Component, inject, signal, computed } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { MockDataService } from '../../../data-access/mock/mock-data.service';
+import { RestaurantDataService } from '../../../data-access/services/restaurant-data.service';
 import { Feedback } from '../../../core/models/feedback.model';
 import { ToastService } from '../../../core/services/toast.service';
 
@@ -319,7 +319,8 @@ import { ToastService } from '../../../core/services/toast.service';
   ],
 })
 export class FeedbackListComponent {
-  private mock = inject(MockDataService);
+  private dataService = inject(RestaurantDataService);
+  private mock = this.dataService;
   private toastService = inject(ToastService);
 
   feedbacks = this.mock.feedbacks;

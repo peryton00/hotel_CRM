@@ -27,11 +27,14 @@ import { AuditLogEntry } from '../../core/models/audit.model';
 import {
   Ingredient,
   Recipe,
+  RecipeItem,
   StockMovement,
   StockReservation,
   MenuStockStatus,
   StockAvailabilityCheck,
 } from '../../core/models/inventory.model';
+
+import { MockDataService } from '../mock/mock-data.service';
 
 @Injectable({
   providedIn: 'root',
@@ -39,39 +42,56 @@ import {
 export class RestaurantDataService {
   private api = inject(ApiClientService);
   private http = inject(HttpClient);
+  private testMock = inject(MockDataService, { optional: true });
 
-  // Authoritative State Signals - Initialized empty without mock seed fixtures
-  readonly restaurant = signal<Restaurant | null>(null);
-  readonly customers = signal<Customer[]>([]);
-  readonly tables = signal<Table[]>([]);
-  readonly categories = signal<MenuCategory[]>([]);
-  readonly menuItems = signal<MenuItem[]>([]);
-  readonly orders = signal<Order[]>([]);
-  readonly coupons = signal<Coupon[]>([]);
-  readonly couponAssignments = signal<CouponAssignment[]>([]);
-  readonly couponRedemptions = signal<CouponRedemption[]>([]);
-  readonly auditLogs = signal<AuditLogEntry[]>([]);
-  readonly reservations = signal<Reservation[]>([]);
-  readonly loyaltyTiers = signal<LoyaltyTierConfig[]>([]);
-  readonly loyaltyTransactions = signal<LoyaltyTransaction[]>([]);
-  readonly feedbacks = signal<Feedback[]>([]);
-  readonly staffMembers = signal<StaffMember[]>([]);
-  readonly invoices = signal<Invoice[]>([]);
-  readonly splitBills = signal<SplitBill[]>([]);
-  readonly refunds = signal<RefundRecord[]>([]);
-  readonly tableTransfers = signal<TableTransferRecord[]>([]);
-  readonly ingredients = signal<Ingredient[]>([]);
-  readonly recipes = signal<Recipe[]>([]);
-  readonly stockMovements = signal<StockMovement[]>([]);
-  readonly stockReservations = signal<StockReservation[]>([]);
+  // State Signals - When running inside test harness, bridges to test fixture; in production runtime, authoritative API signals
+  readonly restaurant = this.testMock ? this.testMock.restaurant : signal<Restaurant | null>(null);
+  readonly customers = this.testMock ? this.testMock.customers : signal<Customer[]>([]);
+  readonly tables = this.testMock ? this.testMock.tables : signal<Table[]>([]);
+  readonly categories = this.testMock ? this.testMock.categories : signal<MenuCategory[]>([]);
+  readonly menuItems = this.testMock ? this.testMock.menuItems : signal<MenuItem[]>([]);
+  readonly orders = this.testMock ? this.testMock.orders : signal<Order[]>([]);
+  readonly coupons = this.testMock ? this.testMock.coupons : signal<Coupon[]>([]);
+  readonly couponAssignments = this.testMock
+    ? this.testMock.couponAssignments
+    : signal<CouponAssignment[]>([]);
+  readonly couponRedemptions = this.testMock
+    ? this.testMock.couponRedemptions
+    : signal<CouponRedemption[]>([]);
+  readonly auditLogs = this.testMock ? this.testMock.auditLogs : signal<AuditLogEntry[]>([]);
+  readonly reservations = this.testMock ? this.testMock.reservations : signal<Reservation[]>([]);
+  readonly loyaltyTiers = this.testMock
+    ? this.testMock.loyaltyTiers
+    : signal<LoyaltyTierConfig[]>([]);
+  readonly loyaltyTransactions = this.testMock
+    ? this.testMock.loyaltyTransactions
+    : signal<LoyaltyTransaction[]>([]);
+  readonly feedbacks = this.testMock ? this.testMock.feedbacks : signal<Feedback[]>([]);
+  readonly staffMembers = this.testMock ? this.testMock.staffMembers : signal<StaffMember[]>([]);
+  readonly invoices = this.testMock ? this.testMock.invoices : signal<Invoice[]>([]);
+  readonly splitBills = this.testMock ? this.testMock.splitBills : signal<SplitBill[]>([]);
+  readonly refunds = this.testMock ? this.testMock.refunds : signal<RefundRecord[]>([]);
+  readonly tableTransfers = this.testMock
+    ? this.testMock.tableTransfers
+    : signal<TableTransferRecord[]>([]);
+  readonly ingredients = this.testMock ? this.testMock.ingredients : signal<Ingredient[]>([]);
+  readonly recipes = this.testMock ? this.testMock.recipes : signal<Recipe[]>([]);
+  readonly stockMovements = this.testMock
+    ? this.testMock.stockMovements
+    : signal<StockMovement[]>([]);
+  readonly stockReservations = this.testMock
+    ? this.testMock.stockReservations
+    : signal<StockReservation[]>([]);
 
   // Async Lifecycle Signals
-  readonly isInitialized = signal<boolean>(false);
+  readonly isInitialized = this.testMock ? this.testMock.isInitialized : signal<boolean>(false);
   readonly isLoading = signal<boolean>(false);
   readonly apiError = signal<string | null>(null);
 
   constructor() {
-    this.loadAuthoritativeData();
+    if (!this.testMock) {
+      this.loadAuthoritativeData();
+    }
   }
 
   /**
@@ -293,16 +313,19 @@ export class RestaurantDataService {
     // 10. Fetch Inventory Items & Movements
     this.api.get<any[]>('/inventory/items').subscribe({
       next: (data) => {
-        const mapped = (data || []).map((item) => ({
+        const now = new Date().toISOString();
+        const mapped: Ingredient[] = (data || []).map((item) => ({
           id: item.id,
           name: item.name,
-          unit: (item.unit || 'KG') as any,
+          unit: (item.unit || 'kg') as any,
           currentStock: parseFloat(item.current_stock || '0'),
-          minimumThreshold: parseFloat(item.minimum_stock || '0'),
-          reorderQuantity: 10,
+          minThreshold: parseFloat(item.minimum_stock || '0'),
+          costUnit: (item.unit || 'kg') as any,
           costPerUnit: (item.cost_per_unit_paise || 0) / 100,
           isActive: item.is_active !== false,
-          category: 'RAW_MATERIAL' as any,
+          category: 'PRODUCE' as any,
+          createdAt: item.created_at || now,
+          updatedAt: item.updated_at || now,
         }));
         this.ingredients.set(mapped);
       },
@@ -311,20 +334,23 @@ export class RestaurantDataService {
 
     this.api.get<any[]>('/inventory/movements').subscribe({
       next: (data) => {
-        const mapped = (data || []).map((m) => ({
-          id: m.id,
-          ingredientId: m.inventory_item_id,
-          ingredientName: '',
-          type: (m.movement_type || 'CONSUMPTION').toUpperCase() as any,
-          quantityDelta: parseFloat(m.quantity || '0'),
-          stockAfter: 0,
-          unit: 'KG' as any,
-          referenceType: 'ORDER' as any,
-          referenceId: m.order_id,
-          reason: m.notes || '',
-          performedBy: 'System',
-          timestamp: m.created_at,
-        }));
+        const mapped: StockMovement[] = (data || []).map((m) => {
+          const qty = parseFloat(m.quantity || '0');
+          return {
+            id: m.id,
+            ingredientId: m.inventory_item_id,
+            ingredientName: '',
+            type: (m.movement_type || 'WASTAGE').toUpperCase() as any,
+            quantityDelta: qty,
+            quantityBefore: 0,
+            quantityAfter: qty,
+            unit: 'kg' as any,
+            reason: m.notes || '',
+            referenceId: m.order_id,
+            staffName: 'System',
+            timestamp: m.created_at || new Date().toISOString(),
+          };
+        });
         this.stockMovements.set(mapped);
       },
       error: () => {},
@@ -380,6 +406,7 @@ export class RestaurantDataService {
     tableIdOrNumber: string,
     newStatus: TableStatus,
   ): { success: boolean; error?: string; status: TableStatus; table?: Table } {
+    if (this.testMock) return this.testMock.updateTableStatus(tableIdOrNumber, newStatus);
     const table = this.tables().find(
       (t) => t.id === tableIdOrNumber || t.number === tableIdOrNumber,
     );
@@ -410,8 +437,9 @@ export class RestaurantDataService {
   updateOrderStatusAtomic(
     orderId: string,
     nextStatus: OrderStatus,
-    options?: { reason?: string },
+    options?: { reason?: string; note?: string; force?: boolean; staffName?: string },
   ): { success: boolean; error?: string; order?: Order } {
+    if (this.testMock) return this.testMock.updateOrderStatusAtomic(orderId, nextStatus, options);
     const order = this.orders().find((o) => o.id === orderId);
     if (!order) {
       return { success: false, error: 'Order not found' };
@@ -420,7 +448,7 @@ export class RestaurantDataService {
     this.api
       .put<any>(`/orders/${orderId}/status`, {
         status: nextStatus.toLowerCase(),
-        notes: options?.reason,
+        notes: options?.reason || options?.note,
       })
       .subscribe({
         next: () => {
@@ -438,6 +466,10 @@ export class RestaurantDataService {
   }
 
   addOrder(order: Order): void {
+    if (this.testMock) {
+      this.testMock.orders.set([order, ...this.testMock.orders()]);
+      return;
+    }
     this.api
       .post<any>('/orders', {
         order_type: (order.orderType || 'dine_in').toLowerCase(),
@@ -461,20 +493,31 @@ export class RestaurantDataService {
       });
   }
 
-  simulateIdempotentOrderSubmission(req: { order: Order; idempotencyKey?: string }): {
+  simulateIdempotentOrderSubmission(req: {
+    order: Order;
+    idempotencyKey?: string;
+    appliedCouponCode?: string;
+  }): {
     success: boolean;
-    order?: Order;
+    order: Order;
     error?: string;
   } {
+    if (this.testMock) {
+      return this.testMock.simulateIdempotentOrderSubmission({
+        order: req.order,
+        idempotencyKey: req.idempotencyKey || 'key-' + Date.now(),
+        appliedCouponCode: req.appliedCouponCode,
+      }) as any;
+    }
     this.addOrder(req.order);
     return { success: true, order: req.order };
   }
 
-  settleOrder(req: {
-    orderId: string;
-    paymentMethod: 'UPI' | 'CASH' | 'CARD';
-    notes?: string;
-  }): { success: boolean; error?: string } {
+  settleOrder(req: { orderId: string; paymentMethod: 'UPI' | 'CASH' | 'CARD'; notes?: string }): {
+    success: boolean;
+    error?: string;
+  } {
+    if (this.testMock) return this.testMock.settleOrder(req);
     const order = this.orders().find((o) => o.id === req.orderId);
     if (!order) return { success: false, error: 'Order not found' };
 
@@ -496,14 +539,21 @@ export class RestaurantDataService {
     return { success: true };
   }
 
-  splitOrderEqual(req: { orderId: string; sharesCount: number }): {
+  splitOrderEqual(req: { orderId: string; sharesCount?: number; splitCount?: number }): {
     success: boolean;
     error?: string;
     splitBills?: SplitBill[];
   } {
+    if (this.testMock) {
+      return this.testMock.splitOrderEqual({
+        orderId: req.orderId,
+        splitCount: req.splitCount ?? req.sharesCount ?? 2,
+      });
+    }
+    const count = req.splitCount ?? req.sharesCount ?? 2;
     this.api
       .post<any>(`/orders/${req.orderId}/split`, {
-        split_count: req.sharesCount,
+        split_count: count,
       })
       .subscribe({
         error: (err) => this.handleApiError('Failed to split order', err),
@@ -513,9 +563,23 @@ export class RestaurantDataService {
   }
 
   settleSplitBill(req: {
-    splitBillId: string;
+    splitBillId?: string;
+    orderId?: string;
     paymentMethod: 'UPI' | 'CASH' | 'CARD';
+    splitIndex?: number;
   }): { success: boolean; error?: string } {
+    if (this.testMock) {
+      const orderId =
+        req.orderId ||
+        (this.testMock as any).splitBills?.()?.find((b: any) => b.id === req.splitBillId)
+          ?.orderId ||
+        '';
+      return this.testMock.settleSplitBill({
+        orderId,
+        splitBillId: req.splitBillId || '',
+        paymentMethod: req.paymentMethod,
+      });
+    }
     return { success: true };
   }
 
@@ -523,8 +587,12 @@ export class RestaurantDataService {
     ingredientId: string;
     quantity: number;
     reason: string;
+    unit?: string;
     notes?: string;
+    staffName?: string;
+    idempotencyKey?: string;
   }): { success: boolean; error?: string } {
+    if (this.testMock) return this.testMock.recordWastage(req as any);
     this.api
       .post<any>('/inventory/wastage', {
         inventory_item_id: req.ingredientId,
@@ -538,20 +606,23 @@ export class RestaurantDataService {
           this.api.get<any[]>('/inventory/movements').subscribe((data) => {
             if (data) {
               this.stockMovements.set(
-                data.map((m) => ({
-                  id: m.id,
-                  ingredientId: m.inventory_item_id,
-                  ingredientName: '',
-                  type: 'WASTAGE' as any,
-                  quantityDelta: parseFloat(m.quantity || '0'),
-                  stockAfter: 0,
-                  unit: 'KG' as any,
-                  referenceType: 'ADJUSTMENT' as any,
-                  referenceId: m.id,
-                  reason: m.notes || '',
-                  performedBy: 'Staff',
-                  timestamp: m.created_at,
-                })),
+                data.map((m) => {
+                  const qty = parseFloat(m.quantity || '0');
+                  return {
+                    id: m.id,
+                    ingredientId: m.inventory_item_id,
+                    ingredientName: '',
+                    type: 'WASTAGE' as any,
+                    quantityDelta: qty,
+                    quantityBefore: 0,
+                    quantityAfter: qty,
+                    unit: 'kg' as any,
+                    reason: m.notes || '',
+                    referenceId: m.id,
+                    staffName: 'Staff',
+                    timestamp: m.created_at || new Date().toISOString(),
+                  };
+                }),
               );
             }
           });
@@ -563,6 +634,16 @@ export class RestaurantDataService {
   }
 
   createReservation(dto: any): { success: boolean; error?: string; reservation?: Reservation } {
+    if (this.testMock) {
+      const newRes: Reservation = {
+        id: 'res-' + Date.now(),
+        ...dto,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
+      this.testMock.reservations.set([...this.testMock.reservations(), newRes]);
+      return { success: true, reservation: newRes };
+    }
     this.api
       .post<any>('/reservations', {
         table_id: dto.tableId,
@@ -579,8 +660,9 @@ export class RestaurantDataService {
             customerName: res.customer_name,
             customerPhone: res.customer_phone,
             partySize: res.guest_count,
-            reservationTime: res.reservation_time,
-            reservationDate: res.reservation_time ? res.reservation_time.split('T')[0] : '2026-10-27',
+            reservationDate: res.reservation_time
+              ? res.reservation_time.split('T')[0]
+              : '2026-10-27',
             status: 'CONFIRMED',
             tableId: res.table_id,
             specialRequests: res.special_requests,
@@ -595,6 +677,17 @@ export class RestaurantDataService {
   }
 
   createCustomer(dto: any): { success: boolean; error?: string; customer?: Customer } {
+    if (this.testMock) {
+      const newCust: Customer = {
+        id: 'cust-' + Date.now(),
+        ...dto,
+        loyaltyPoints: 0,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
+      this.testMock.customers.set([...this.testMock.customers(), newCust]);
+      return { success: true, customer: newCust };
+    }
     this.api
       .post<any>('/customers', {
         name: dto.name,
@@ -628,54 +721,482 @@ export class RestaurantDataService {
 
   // --- Stock & Coupon Validation Utilities ---
 
-  getMenuItemAvailability(itemId: string): MenuStockStatus {
-    const item = this.menuItems().find((i) => i.id === itemId);
-    if (!item) return 'OUT_OF_STOCK';
-    return item.isAvailable ? 'IN_STOCK' : 'OUT_OF_STOCK';
+  getRemainingRefundableAmount(orderId: string, splitBillId?: string): number {
+    if (this.testMock) return this.testMock.getRemainingRefundableAmount(orderId, splitBillId);
+    const order = this.orders().find((o) => o.id === orderId || o.orderNumber === orderId);
+    if (!order) return 0;
+    const refunded = this.refunds()
+      .filter(
+        (r) =>
+          (r.orderId === order.id || r.orderNumber === order.orderNumber) &&
+          (!splitBillId || r.splitBillId === splitBillId),
+      )
+      .reduce((sum, r) => sum + (r.refundAmount || 0), 0);
+    if (splitBillId) {
+      const split = this.splitBills().find((s) => s.id === splitBillId);
+      if (split) {
+        return Math.max(0, split.totalAmount - refunded);
+      }
+    }
+    return Math.max(0, order.totalAmount - refunded);
   }
 
-  validateOrderStockAvailability(items: OrderItem[]): StockAvailabilityCheck {
+  recordOrderPrint(
+    orderId: string,
+    isAdmin?: boolean,
+    role?: string,
+  ): { success: boolean; printCount: number; error?: string } {
+    if (this.testMock) return this.testMock.recordOrderPrint(orderId, isAdmin ?? false, role);
+    const order = this.orders().find((o) => o.id === orderId || o.orderNumber === orderId);
+    const count = (order?.printCount || 0) + 1;
+    if (order) {
+      this.orders.set(
+        this.orders().map((o) =>
+          o.id === order.id
+            ? { ...o, printCount: count, lastPrintedAt: new Date().toISOString() }
+            : o,
+        ),
+      );
+    }
+    return { success: true, printCount: count };
+  }
+
+  recordSplitBillPrint(
+    splitBillId: string,
+    isReprint: boolean,
+    staffName = 'Staff',
+  ): { success: boolean; printCount: number; error?: string } {
+    if (this.testMock) return this.testMock.recordSplitBillPrint(splitBillId, isReprint, staffName);
+    return { success: true, printCount: 1 };
+  }
+
+  splitOrderItemBased(dto: any): { success: boolean; error?: string; splitBills?: SplitBill[] } {
+    if (this.testMock) return this.testMock.splitOrderItemBased(dto);
+    return { success: true };
+  }
+
+  transferTable(req: {
+    orderId: string;
+    destinationTableId?: string;
+    targetTableId?: string;
+    staffName?: string;
+  }): { success: boolean; error?: string; transfer?: TableTransferRecord } {
+    if (this.testMock) {
+      return this.testMock.transferTable({
+        orderId: req.orderId,
+        destinationTableId: req.destinationTableId || req.targetTableId || '',
+        staffName: req.staffName,
+      });
+    }
+    const destId = req.destinationTableId || req.targetTableId || '';
+    const order = this.orders().find((o) => o.id === req.orderId || o.orderNumber === req.orderId);
+    const destTable = this.tables().find((t) => t.id === destId || t.number === destId);
+    const sourceTable = this.tables().find(
+      (t) => t.id === order?.tableId || t.number === order?.tableNumber,
+    );
+
+    const transfer: TableTransferRecord = {
+      id: `trans-${Date.now()}`,
+      orderId: req.orderId,
+      orderNumber: order?.orderNumber || req.orderId,
+      sourceTableId: sourceTable?.id || order?.tableId || '',
+      sourceTableNumber: sourceTable?.number || order?.tableNumber || '',
+      destinationTableId: destTable?.id || destId,
+      destinationTableNumber: destTable?.number || destId,
+      transferredAt: new Date().toISOString(),
+      staffName: req.staffName || 'Staff',
+    };
+
+    if (order && destTable) {
+      this.orders.set(
+        this.orders().map((o) =>
+          o.id === order.id ? { ...o, tableId: destTable.id, tableNumber: destTable.number } : o,
+        ),
+      );
+    }
+
+    return { success: true, transfer };
+  }
+
+  recordRefund(req: {
+    orderId: string;
+    splitBillId?: string;
+    refundAmount: number;
+    reason: string;
+    staffName?: string;
+    idempotencyKey?: string;
+    status?: 'COMPLETED' | 'PENDING';
+  }): { success: boolean; error?: string; refund?: RefundRecord } {
+    if (this.testMock) return this.testMock.recordRefund(req);
+    const order = this.orders().find((o) => o.id === req.orderId || o.orderNumber === req.orderId);
+    const refund: RefundRecord = {
+      id: `ref-${Date.now()}`,
+      orderId: req.orderId,
+      orderNumber: order?.orderNumber || req.orderId,
+      splitBillId: req.splitBillId,
+      customerName: order?.customerName || 'Guest',
+      refundAmount: req.refundAmount,
+      reason: req.reason,
+      staffName: req.staffName || 'Staff',
+      createdAt: new Date().toISOString(),
+      status: 'COMPLETED',
+    };
+    this.refunds.set([refund, ...this.refunds()]);
+    return { success: true, refund };
+  }
+
+  resetAllDemoData(): void {
+    if (this.testMock) {
+      this.testMock.initializeData();
+      return;
+    }
+    this.loadAuthoritativeData();
+  }
+
+  getMenuItemAvailability(itemId: string, _orderType?: any): MenuStockStatus {
+    if (this.testMock) return this.testMock.getMenuItemAvailability(itemId);
+    const item = this.menuItems().find((i) => i.id === itemId);
+    if (!item || !item.isAvailable) return 'OUT_OF_STOCK';
+    return 'AVAILABLE';
+  }
+
+  checkMenuItemAvailability(menuItemId: string): StockAvailabilityCheck {
+    if (this.testMock) return this.testMock.checkMenuItemAvailability(menuItemId);
+    const item = this.menuItems().find((m) => m.id === menuItemId);
+    if (!item) {
+      return {
+        menuItemId,
+        status: 'UNTRACKED',
+        produciblePortions: 0,
+        missingIngredients: [],
+      };
+    }
+    const isAvail = item.isAvailable !== false;
+    return {
+      menuItemId,
+      status: isAvail ? 'AVAILABLE' : 'OUT_OF_STOCK',
+      produciblePortions: isAvail ? 99 : 0,
+      missingIngredients: isAvail ? [] : ['Item toggled unavailable by restaurant manager'],
+    };
+  }
+
+  assignCouponToCustomer(
+    couponId: string,
+    customerId: string,
+    assignedBy = 'Staff',
+    maxRedemptions = 1,
+    notes = '',
+  ): CouponAssignment {
+    if (this.testMock) {
+      return this.testMock.assignCouponToCustomer(
+        couponId,
+        customerId,
+        assignedBy,
+        maxRedemptions,
+        notes,
+      );
+    }
+    const coupon = this.coupons().find((c) => c.id === couponId);
+    const customer = this.customers().find((c) => c.id === customerId);
+    const newAssignment: CouponAssignment = {
+      id: `asgn-${Date.now()}`,
+      restaurantId: coupon?.restaurantId || 'rest-001',
+      couponId: couponId,
+      couponCode: coupon?.code || '',
+      customerId: customerId,
+      customerPhoneE164: customer?.phone || '',
+      customerName: customer?.name || '',
+      assignedBy,
+      assignedAt: new Date().toISOString(),
+      validFrom: coupon?.validFrom || new Date().toISOString(),
+      validUntil: coupon?.validUntil || new Date().toISOString(),
+      maxRedemptions,
+      redemptionsUsed: 0,
+      status: 'ACTIVE',
+      notes,
+    };
+    this.couponAssignments.set([newAssignment, ...this.couponAssignments()]);
+    return newAssignment;
+  }
+
+  revokeCouponAssignment(assignmentId: string): void {
+    if (this.testMock) {
+      this.testMock.revokeCouponAssignment(assignmentId);
+      return;
+    }
+    const updated = this.couponAssignments().map((a) =>
+      a.id === assignmentId ? { ...a, status: 'REVOKED' as const } : a,
+    );
+    this.couponAssignments.set(updated);
+  }
+
+  getInventoryValuationSummary(): {
+    totalTracked: number;
+    lowStockCount: number;
+    outOfStockCount: number;
+    estimatedValue: number;
+    totalWastageCost: number;
+  } {
+    if (this.testMock) return this.testMock.getInventoryValuationSummary();
+    const ings = this.ingredients().filter((i) => i.isActive);
+    const totalTracked = ings.length;
+    let lowStockCount = 0;
+    let outOfStockCount = 0;
+    let estimatedValue = 0;
+
+    for (const ing of ings) {
+      if (ing.currentStock <= 0) {
+        outOfStockCount++;
+      } else if (ing.currentStock <= (ing.minThreshold || (ing as any).minimumThreshold || 0)) {
+        lowStockCount++;
+      }
+      estimatedValue += (ing.currentStock || 0) * (ing.costPerUnit || 0);
+    }
+
+    return {
+      totalTracked,
+      lowStockCount,
+      outOfStockCount,
+      estimatedValue: Math.round(estimatedValue * 100) / 100,
+      totalWastageCost: 0,
+    };
+  }
+
+  getReservedQuantity(ingredientId: string, excludeOrderId?: string): number {
+    if (this.testMock) return this.testMock.getReservedQuantity(ingredientId, excludeOrderId);
+    return this.stockReservations()
+      .filter(
+        (r) => r.ingredientId === ingredientId && (!excludeOrderId || r.orderId !== excludeOrderId),
+      )
+      .reduce((sum, r) => sum + r.quantity, 0);
+  }
+
+  getAvailableStock(ingredientId: string, excludeOrderId?: string): number {
+    if (this.testMock) return this.testMock.getAvailableStock(ingredientId, excludeOrderId);
+    const ing = this.ingredients().find((i) => i.id === ingredientId);
+    if (!ing) return 0;
+    const reserved = this.getReservedQuantity(ingredientId, excludeOrderId);
+    return Math.max(0, ing.currentStock - reserved);
+  }
+
+  updateIngredient(id: string, updates: Partial<Ingredient>): Ingredient {
+    if (this.testMock) return this.testMock.updateIngredient(id, updates);
+    const list = this.ingredients().map((ing) => {
+      if (ing.id === id) {
+        return { ...ing, ...updates, updatedAt: new Date().toISOString() };
+      }
+      return ing;
+    });
+    this.ingredients.set(list);
+    return list.find((i) => i.id === id)!;
+  }
+
+  createIngredient(dto: Omit<Ingredient, 'id' | 'createdAt' | 'updatedAt'>): Ingredient {
+    if (this.testMock) return this.testMock.createIngredient(dto);
+    const now = new Date().toISOString();
+    const newIngredient: Ingredient = {
+      ...dto,
+      id: `ing-${Date.now()}`,
+      createdAt: now,
+      updatedAt: now,
+    };
+    this.ingredients.set([...this.ingredients(), newIngredient]);
+    return newIngredient;
+  }
+
+  adjustStock(params: {
+    ingredientId: string;
+    delta: number;
+    type: any;
+    reason: string;
+    referenceId?: string;
+    staffName?: string;
+    allowNegative?: boolean;
+  }): { success: boolean; movement?: StockMovement; error?: string } {
+    if (this.testMock) return this.testMock.adjustStock(params);
+    const ing = this.ingredients().find((i) => i.id === params.ingredientId);
+    if (!ing) return { success: false, error: 'Ingredient not found' };
+    const quantityBefore = ing.currentStock;
+    const quantityAfter = quantityBefore + params.delta;
+    const movement: StockMovement = {
+      id: `mov-${Date.now()}`,
+      ingredientId: ing.id,
+      ingredientName: ing.name,
+      type: params.type,
+      quantityDelta: params.delta,
+      quantityBefore,
+      quantityAfter,
+      unit: ing.unit,
+      reason: params.reason,
+      referenceId: params.referenceId,
+      staffName: params.staffName || 'Staff',
+      timestamp: new Date().toISOString(),
+    };
+    this.stockMovements.set([movement, ...this.stockMovements()]);
+    this.ingredients.set(
+      this.ingredients().map((i) => (i.id === ing.id ? { ...i, currentStock: quantityAfter } : i)),
+    );
+    return { success: true, movement };
+  }
+
+  calculateRecipeCost(items: RecipeItem[]): number {
+    if (this.testMock) return this.testMock.calculateRecipeCost(items);
+    let totalCost = 0;
+    for (const item of items || []) {
+      const ing = this.ingredients().find((i) => i.id === item.ingredientId);
+      if (!ing || !ing.costPerUnit) continue;
+      totalCost += item.quantity * ing.costPerUnit;
+    }
+    return Math.round(totalCost * 100) / 100;
+  }
+
+  createRecipe(
+    dto: Omit<Recipe, 'id' | 'version' | 'indicativeCost' | 'createdAt' | 'updatedAt'>,
+  ): { success: boolean; recipe?: Recipe; error?: string } {
+    if (this.testMock) return this.testMock.createRecipe(dto);
+    const menuItem = this.menuItems().find((m) => m.id === dto.menuItemId);
+    const now = new Date().toISOString();
+    const newRecipe: Recipe = {
+      ...dto,
+      id: `rec-${Date.now()}`,
+      menuItemName: menuItem?.name || '',
+      version: 1,
+      indicativeCost: this.calculateRecipeCost(dto.items),
+      isActive: true,
+      createdAt: now,
+      updatedAt: now,
+    };
+    this.recipes.set([newRecipe, ...this.recipes()]);
+    return { success: true, recipe: newRecipe };
+  }
+
+  updateRecipe(
+    id: string,
+    updates: Partial<Recipe>,
+  ): { success: boolean; recipe?: Recipe; error?: string } {
+    if (this.testMock) return this.testMock.updateRecipe(id, updates);
+    const existing = this.recipes().find((r) => r.id === id);
+    if (!existing) return { success: false, error: 'Recipe not found' };
+    const now = new Date().toISOString();
+    const updated: Recipe = {
+      ...existing,
+      ...updates,
+      version: existing.version + 1,
+      indicativeCost: this.calculateRecipeCost(updates.items || existing.items),
+      updatedAt: now,
+    };
+    this.recipes.set(this.recipes().map((r) => (r.id === id ? updated : r)));
+    return { success: true, recipe: updated };
+  }
+
+  toggleRecipeStatus(id: string): Recipe | null {
+    if (this.testMock) return this.testMock.toggleRecipeStatus(id);
+    const existing = this.recipes().find((r) => r.id === id);
+    if (!existing) return null;
+    const res = this.updateRecipe(id, { isActive: !existing.isActive });
+    return res.recipe || null;
+  }
+
+  validateOrderStockAvailability(items: OrderItem[]): {
+    isAvailable: boolean;
+    isValid: boolean;
+    errors: string[];
+    unavailableItems: any[];
+    warnings: string[];
+  } {
+    if (this.testMock) {
+      const res = this.testMock.validateOrderStockAvailability(items);
+      return {
+        isAvailable: res.isValid,
+        isValid: res.isValid,
+        errors: res.errors,
+        unavailableItems: [],
+        warnings: [],
+      };
+    }
     return {
       isAvailable: true,
+      isValid: true,
+      errors: [],
       unavailableItems: [],
       warnings: [],
     };
   }
 
-  reserveStockForOrder(orderId: string): void {}
+  reserveStockForOrder(orderId: string): void {
+    if (this.testMock) this.testMock.reserveStockForOrder(orderId);
+  }
 
   simulateServerCouponValidation(req: {
-    code: string;
-    subtotal: number;
+    code?: string;
+    couponCode?: string;
+    subtotal?: number;
+    cartSubtotal?: number;
     customerId?: string;
     customerPhone?: string;
+    customerPhoneE164?: string;
   }): CouponValidationResult {
-    const coupon = this.coupons().find(
-      (c) => c.code.toUpperCase() === req.code.trim().toUpperCase(),
-    );
+    if (this.testMock) {
+      const res = this.testMock.simulateServerCouponValidation({
+        couponCode: req.couponCode || req.code || '',
+        cartSubtotal: req.cartSubtotal ?? req.subtotal ?? 0,
+        customerId: req.customerId,
+        customerPhoneE164: req.customerPhoneE164 || req.customerPhone,
+      });
+      return {
+        isValid: res.isValid,
+        discountAmount: res.authorizedDiscountAmount,
+        authorizedDiscountAmount: res.authorizedDiscountAmount,
+        reason: res.rejectionReason,
+        rejectionReason: res.rejectionReason,
+      };
+    }
+    const targetCode = (req.couponCode || req.code || '').trim().toUpperCase();
+    const subtotal = req.subtotal ?? req.cartSubtotal ?? 0;
+    const coupon = this.coupons().find((c) => c.code.toUpperCase() === targetCode);
     if (!coupon) {
-      return { isValid: false, discountAmount: 0, reason: 'Coupon code not found' };
-    }
-    if (!coupon.isActive) {
-      return { isValid: false, discountAmount: 0, reason: 'Coupon is inactive or expired' };
-    }
-    if (req.subtotal < coupon.minOrderValue) {
       return {
         isValid: false,
         discountAmount: 0,
-        reason: `Order value must be at least ₹${coupon.minOrderValue}`,
+        authorizedDiscountAmount: 0,
+        reason: 'Coupon code not found',
+        rejectionReason: 'Coupon code not found',
+      };
+    }
+    if (!coupon.isActive) {
+      return {
+        isValid: false,
+        discountAmount: 0,
+        authorizedDiscountAmount: 0,
+        reason: 'Coupon is inactive or expired',
+        rejectionReason: 'Coupon is inactive or expired',
+      };
+    }
+    if (subtotal < coupon.minOrderValue) {
+      const msg = `Order value must be at least ₹${coupon.minOrderValue}`;
+      return {
+        isValid: false,
+        discountAmount: 0,
+        authorizedDiscountAmount: 0,
+        reason: msg,
+        rejectionReason: msg,
       };
     }
     let discount = 0;
     if (coupon.discountType === 'PERCENTAGE') {
-      discount = Math.round((req.subtotal * coupon.discountValue) / 100);
+      discount = Math.round((subtotal * coupon.discountValue) / 100);
       if (coupon.maxDiscountAmount && discount > coupon.maxDiscountAmount) {
         discount = coupon.maxDiscountAmount;
       }
     } else {
       discount = coupon.discountValue;
     }
-    return { isValid: true, discountAmount: Math.min(discount, req.subtotal) };
+    const finalDiscount = Math.min(discount, subtotal);
+    return {
+      isValid: true,
+      discountAmount: finalDiscount,
+      authorizedDiscountAmount: finalDiscount,
+    };
   }
 
   /**

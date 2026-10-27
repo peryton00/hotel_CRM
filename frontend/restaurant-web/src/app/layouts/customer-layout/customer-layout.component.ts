@@ -817,9 +817,7 @@ export class CustomerLayoutComponent {
   isEditingPhone = false;
   inputPhone = '';
 
-  customerPhone = signal<string>(
-    localStorage.getItem('customer_phone') || '',
-  );
+  customerPhone = signal<string>(localStorage.getItem('customer_phone') || '');
 
   customerOrders = computed(() => {
     const raw = this.customerPhone().replace(/[^0-9]/g, '');

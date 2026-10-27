@@ -2,7 +2,7 @@ import { Component, inject, signal, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { RouterModule, ActivatedRoute, Router } from '@angular/router';
 import { FormsModule } from '@angular/forms';
-import { MockDataService } from '../../../data-access/mock/mock-data.service';
+import { RestaurantDataService } from '../../../data-access/services/restaurant-data.service';
 import { ToastService } from '../../../core/services/toast.service';
 import { Feedback } from '../../../core/models/feedback.model';
 
@@ -212,7 +212,8 @@ import { Feedback } from '../../../core/models/feedback.model';
 })
 export class CustomerFeedbackComponent implements OnInit {
   private route = inject(ActivatedRoute);
-  private mock = inject(MockDataService);
+  private dataService = inject(RestaurantDataService);
+  private mock = this.dataService;
   private toastService = inject(ToastService);
 
   orderId = '';

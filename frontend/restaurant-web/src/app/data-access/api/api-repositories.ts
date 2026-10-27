@@ -552,11 +552,11 @@ export class ApiLoyaltyRepository implements ILoyaltyRepository {
     const tx: LoyaltyTransaction = {
       id: `tx-${Date.now()}`,
       customerId,
-      pointsDelta,
-      balanceAfter: pointsDelta,
+      customerName: 'Customer',
+      points: Math.abs(pointsDelta),
       type: pointsDelta >= 0 ? 'EARNED' : 'REDEEMED',
       description,
-      createdAt: new Date().toISOString(),
+      date: new Date().toISOString(),
     };
     return of(tx);
   }
@@ -574,7 +574,7 @@ export class ApiFeedbackRepository implements IFeedbackRepository {
     const created: Feedback = {
       ...feedback,
       id: `fb-${Date.now()}`,
-      status: 'NEW',
+      status: 'PENDING',
       createdAt: new Date().toISOString(),
     };
     return of(created);
@@ -584,4 +584,3 @@ export class ApiFeedbackRepository implements IFeedbackRepository {
     return of({} as Feedback);
   }
 }
-

@@ -297,10 +297,9 @@ export class CustomerCouponsComponent {
       return;
     }
 
-    this.cartService.applyCoupon(coupon, serverVerdict.authorizedDiscountAmount);
-    this.toastService.success(
-      `Server verified ${coupon.code}! Authorized discount: ₹${serverVerdict.authorizedDiscountAmount}`,
-    );
+    const discount = serverVerdict.authorizedDiscountAmount ?? serverVerdict.discountAmount;
+    this.cartService.applyCoupon(coupon, discount);
+    this.toastService.success(`Server verified ${coupon.code}! Authorized discount: ₹${discount}`);
     this.router.navigate(['/menu/gurukripa-dhaba/cart']);
   }
 

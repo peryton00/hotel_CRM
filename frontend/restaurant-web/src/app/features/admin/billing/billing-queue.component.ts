@@ -2,7 +2,7 @@ import { Component, inject, computed, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { RouterModule } from '@angular/router';
 import { FormsModule } from '@angular/forms';
-import { MockDataService } from '../../../data-access/mock/mock-data.service';
+import { RestaurantDataService } from '../../../data-access/services/restaurant-data.service';
 import { CurrencyInrPipe } from '../../../shared/pipes/currency-inr.pipe';
 import { StatusBadgeComponent } from '../../../shared/components/status-badge/status-badge.component';
 import { ToastService } from '../../../core/services/toast.service';
@@ -1323,7 +1323,8 @@ import { generateIdempotencyKey } from '../../../core/utils/idempotency.util';
   ],
 })
 export class BillingQueueComponent {
-  private mock = inject(MockDataService);
+  private dataService = inject(RestaurantDataService);
+  private mock = this.dataService;
   private toastService = inject(ToastService);
 
   orders = this.mock.orders;
