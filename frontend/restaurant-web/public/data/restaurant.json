@@ -1,0 +1,44 @@
+{
+  "id": "rest-001",
+  "slug": "gurukripa-dhaba",
+  "name": "GuruKripa Dhaba",
+  "tagline": "Artisanal Mughlai & Contemporary Indian Bistro",
+  "description": "Immerse yourself in authentic royal heritage recipes, charcoal tandoori marvels, and modern culinary interpretations curated by Master Chefs.",
+  "coverImage": "https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?auto=format&fit=crop&w=1400&q=80",
+  "logoUrl": "https://images.unsplash.com/photo-1555396273-367ea4eb4db5?auto=format&fit=crop&w=240&q=80",
+  "cuisine": ["North Indian", "Mughlai", "Biryani", "Awadhi", "Tandoor"],
+  "rating": 4.85,
+  "reviewCount": 1420,
+  "address": {
+    "street": "14 Heritage Promenade, MG Road",
+    "area": "Civil Lines",
+    "city": "Bengaluru",
+    "state": "Karnataka",
+    "zip": "560001",
+    "landmark": "Near Victoria Memorial Circle"
+  },
+  "contact": {
+    "phone": "+91 80 4912 8800",
+    "email": "concierge@royalspice.dining",
+    "website": "https://royalspice.dining"
+  },
+  "openingHours": [
+    { "days": "Monday – Friday", "hours": "12:00 PM – 03:30 PM, 07:00 PM – 11:30 PM" },
+    { "days": "Saturday – Sunday", "hours": "12:00 PM – 11:45 PM (All Day Dining)" }
+  ],
+  "currency": "INR",
+  "currencySymbol": "₹",
+  "taxSettings": {
+    "enableGst": true,
+    "cgstRate": 2.5,
+    "sgstRate": 2.5,
+    "serviceChargeRate": 5.0,
+    "gstNumber": "29AAAAA0000A1Z5"
+  },
+  "orderingSettings": {
+    "dineInEnabled": true,
+    "takeawayEnabled": true,
+    "minOrderAmount": 200,
+    "estimatedPrepMinutes": 25
+  }
+}

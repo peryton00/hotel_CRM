@@ -1,0 +1,316 @@
+[
+  {
+    "id": "item-001",
+    "categoryId": "cat-01",
+    "name": "Dahi Ke Kebab",
+    "description": "Velvety spiced hung curd patties crusted with roasted gram flour and pomegranate pearls, served with mint emulsion.",
+    "price": 385,
+    "imageUrl": "https://images.unsplash.com/photo-1541518763669-27fef04b14ea?auto=format&fit=crop&w=600&q=80",
+    "isAvailable": true,
+    "dietary": "VEG",
+    "prepTimeMinutes": 15,
+    "isPopular": true,
+    "isChefSpecial": false,
+    "portionSizes": [
+      { "label": "Standard (4 pcs)", "price": 385 },
+      { "label": "Platter (8 pcs)", "price": 680 }
+    ],
+    "variantGroups": [
+      {
+        "id": "vg-spice-01",
+        "name": "Spice Level",
+        "required": true,
+        "options": [
+          { "id": "sp-mild", "name": "Gentle & Aromatic", "priceDelta": 0 },
+          { "id": "sp-med", "name": "Signature Royal Medium", "priceDelta": 0 }
+        ]
+      }
+    ],
+    "addonGroups": [
+      {
+        "id": "ag-dips",
+        "name": "Artisanal Chutneys & Dips",
+        "options": [
+          { "id": "dip-mint", "name": "Smoked Walnut Mint Chutney", "priceDelta": 45 },
+          { "id": "dip-tamarind", "name": "Spiced Anardana Chutney", "priceDelta": 45 }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "item-002",
+    "categoryId": "cat-01",
+    "name": "Kurkuri Nadru (Crispy Lotus Stem)",
+    "description": "Kashmiri lotus stems tossed in raw mango dust, crushed coriander seeds, and mountain honey glaze.",
+    "price": 345,
+    "imageUrl": "https://images.unsplash.com/photo-1565557623262-b51c2513a641?auto=format&fit=crop&w=600&q=80",
+    "isAvailable": true,
+    "dietary": "VEG",
+    "prepTimeMinutes": 12,
+    "isPopular": false,
+    "isChefSpecial": true
+  },
+  {
+    "id": "item-003",
+    "categoryId": "cat-02",
+    "name": "Murgh Malai Kebab",
+    "description": "Tender boneless chicken morsels steeped overnight in clotted cream, cardamom, green chilies, and royal saffron.",
+    "price": 495,
+    "imageUrl": "https://images.unsplash.com/photo-1599488615731-7e5c2823ff28?auto=format&fit=crop&w=600&q=80",
+    "isAvailable": true,
+    "dietary": "NON_VEG",
+    "prepTimeMinutes": 20,
+    "isPopular": true,
+    "isChefSpecial": false,
+    "portionSizes": [
+      { "label": "Half (4 pcs)", "price": 495 },
+      { "label": "Full (8 pcs)", "price": 895 }
+    ],
+    "variantGroups": [
+      {
+        "id": "vg-spice-03",
+        "name": "Preparation Style",
+        "required": true,
+        "options": [
+          { "id": "opt-mild", "name": "Mild Creamy Cardamom", "priceDelta": 0 },
+          { "id": "opt-peppery", "name": "Cracked Tellicherry Pepper", "priceDelta": 30 }
+        ]
+      }
+    ],
+    "addonGroups": [
+      {
+        "id": "ag-side-03",
+        "name": "Accompaniments",
+        "options": [
+          { "id": "opt-kachumber", "name": "Sirka Onions & Green Chilli", "priceDelta": 35 },
+          { "id": "opt-raita", "name": "Burani Garlic Raita", "priceDelta": 75 }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "item-004",
+    "categoryId": "cat-02",
+    "name": "Bhatti Ka Galouti Kebab",
+    "description": "Melt-in-mouth smoked lamb patties infused with 32 secret Awadhi potli spices, served on miniature saffron sheermal.",
+    "price": 625,
+    "imageUrl": "https://images.unsplash.com/photo-1544025162-d76694265947?auto=format&fit=crop&w=600&q=80",
+    "isAvailable": true,
+    "dietary": "NON_VEG",
+    "prepTimeMinutes": 22,
+    "isPopular": true,
+    "isChefSpecial": true
+  },
+  {
+    "id": "item-005",
+    "categoryId": "cat-02",
+    "name": "Paneer Tikka Angara",
+    "description": "Handcrafted cottage cheese cubes marinated in smoked yellow chilli oil, hung curd, and roasted cumin char-grilled over acacia wood.",
+    "price": 445,
+    "imageUrl": "https://images.unsplash.com/photo-1567188040759-fb8a883dc6d8?auto=format&fit=crop&w=600&q=80",
+    "isAvailable": true,
+    "dietary": "VEG",
+    "prepTimeMinutes": 18,
+    "isPopular": true,
+    "isChefSpecial": false,
+    "portionSizes": [
+      { "label": "Regular (6 cubes)", "price": 445 },
+      { "label": "Large (10 cubes)", "price": 725 }
+    ]
+  },
+  {
+    "id": "item-006",
+    "categoryId": "cat-03",
+    "name": "Dal Makhani 'The Royal Reserve'",
+    "description": "Black lentils slow-cooked for 36 hours over tandoor embers, finished with white churned butter and hand-crushed fenugreek.",
+    "price": 425,
+    "imageUrl": "https://images.unsplash.com/photo-1546833999-b9f581a1996d?auto=format&fit=crop&w=600&q=80",
+    "isAvailable": true,
+    "dietary": "VEG",
+    "prepTimeMinutes": 15,
+    "isPopular": true,
+    "isChefSpecial": true,
+    "addonGroups": [
+      {
+        "id": "ag-butter",
+        "name": "Toppings",
+        "options": [
+          { "id": "opt-wh-butter", "name": "Extra Artisanal White Butter dollop", "priceDelta": 40 },
+          { "id": "opt-ginger", "name": "Crispy Ginger Juliennes & Green Chilly", "priceDelta": 20 }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "item-007",
+    "categoryId": "cat-03",
+    "name": "Murgh Lababdar",
+    "description": "Tandoori chicken simmered in rich tomato, cashew, and caramelized onion gravy with subtle hints of mace and kasuri methi.",
+    "price": 545,
+    "imageUrl": "https://images.unsplash.com/photo-1603894584373-5ac82b2ae398?auto=format&fit=crop&w=600&q=80",
+    "isAvailable": true,
+    "dietary": "NON_VEG",
+    "prepTimeMinutes": 20,
+    "isPopular": true,
+    "isChefSpecial": false,
+    "portionSizes": [
+      { "label": "Regular Portion", "price": 545 },
+      { "label": "Chef Family Portion", "price": 980 }
+    ],
+    "variantGroups": [
+      {
+        "id": "vg-spice-gravy",
+        "name": "Spice Profile",
+        "required": true,
+        "options": [
+          { "id": "opt-medium", "name": "Royal Medium (Recommended)", "priceDelta": 0 },
+          { "id": "opt-fiery", "name": "Teekha (Spicy)", "priceDelta": 0 }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "item-008",
+    "categoryId": "cat-03",
+    "name": "Nalli Rogan Josh",
+    "description": "Prime baby lamb shanks braised in Kashmiri Ratanjot bark, fennel broth, and brown shallots until falling off the bone.",
+    "price": 695,
+    "imageUrl": "https://images.unsplash.com/photo-1585937421612-70a008356fbe?auto=format&fit=crop&w=600&q=80",
+    "isAvailable": true,
+    "dietary": "NON_VEG",
+    "prepTimeMinutes": 25,
+    "isPopular": true,
+    "isChefSpecial": true
+  },
+  {
+    "id": "item-009",
+    "categoryId": "cat-03",
+    "name": "Paneer Kadhai Peshawari",
+    "description": "Fresh cottage cheese braised with crushed coriander, bell peppers, hand-pounded black peppercorn and heirloom tomato masala.",
+    "price": 475,
+    "imageUrl": "https://images.unsplash.com/photo-1631452180519-c014fe946bc7?auto=format&fit=crop&w=600&q=80",
+    "isAvailable": true,
+    "dietary": "VEG",
+    "prepTimeMinutes": 18,
+    "isPopular": false,
+    "isChefSpecial": false
+  },
+  {
+    "id": "item-010",
+    "categoryId": "cat-04",
+    "name": "Awadhi Gosht Dum Biryani",
+    "description": "Long-grain aged basmati rice layered with prime mutton cuts, kewra, and pure saffron, sealed with dough in copper handi.",
+    "price": 645,
+    "imageUrl": "https://images.unsplash.com/photo-1563379091339-03b21ab4a4f8?auto=format&fit=crop&w=600&q=80",
+    "isAvailable": true,
+    "dietary": "NON_VEG",
+    "prepTimeMinutes": 25,
+    "isPopular": true,
+    "isChefSpecial": true,
+    "portionSizes": [
+      { "label": "Single Handi (Serves 1-2)", "price": 645 },
+      { "label": "Royal Handi (Serves 3-4)", "price": 1195 }
+    ],
+    "addonGroups": [
+      {
+        "id": "ag-biryani-sides",
+        "name": "Biryani Complements",
+        "options": [
+          { "id": "opt-salan", "name": "Mirchi Ka Salan", "priceDelta": 60 },
+          { "id": "opt-burani", "name": "Burani Garlic Raita", "priceDelta": 60 }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "item-011",
+    "categoryId": "cat-04",
+    "name": "Subz-E-Khas Dum Biryani",
+    "description": "Fragrant saffron rice dum-cooked with heirloom garden vegetables, fresh mint leaves, fried onions, and whole spices.",
+    "price": 465,
+    "imageUrl": "https://images.unsplash.com/photo-1642821373181-696a54913e93?auto=format&fit=crop&w=600&q=80",
+    "isAvailable": true,
+    "dietary": "VEG",
+    "prepTimeMinutes": 20,
+    "isPopular": true,
+    "isChefSpecial": false
+  },
+  {
+    "id": "item-012",
+    "categoryId": "cat-05",
+    "name": "Truffle Butter Garlic Naan",
+    "description": "Leavened refined wheat bread baked on tandoor walls, brushed with Italian white truffle oil and fresh cilantro.",
+    "price": 145,
+    "imageUrl": "https://images.unsplash.com/photo-1626082927389-6cd097cdc6ec?auto=format&fit=crop&w=600&q=80",
+    "isAvailable": true,
+    "dietary": "VEG",
+    "prepTimeMinutes": 8,
+    "isPopular": true,
+    "isChefSpecial": true
+  },
+  {
+    "id": "item-013",
+    "categoryId": "cat-05",
+    "name": "Amritsari Chur Chur Kulcha",
+    "description": "Flaky layered bread stuffed with spiced potato and paneer mash, crushed and drenched in clarified butter.",
+    "price": 165,
+    "imageUrl": "https://images.unsplash.com/photo-1601050690597-df0568f70950?auto=format&fit=crop&w=600&q=80",
+    "isAvailable": true,
+    "dietary": "VEG",
+    "prepTimeMinutes": 10,
+    "isPopular": false,
+    "isChefSpecial": false
+  },
+  {
+    "id": "item-014",
+    "categoryId": "cat-06",
+    "name": "Shahi Tukda Brioche",
+    "description": "Artisan brioche soaked in saffron cardamom rabri, topped with pistachio silvers and edible 24k gold leaf foil.",
+    "price": 325,
+    "imageUrl": "https://images.unsplash.com/photo-1589301760014-d929f3979dbc?auto=format&fit=crop&w=600&q=80",
+    "isAvailable": true,
+    "dietary": "VEG",
+    "prepTimeMinutes": 12,
+    "isPopular": true,
+    "isChefSpecial": true
+  },
+  {
+    "id": "item-015",
+    "categoryId": "cat-06",
+    "name": "Gulab Jamun Flambé",
+    "description": "Warm khoya dumplings with pistachio core, flambéed tableside with dark rum and paired with vanilla bean gelato.",
+    "price": 295,
+    "imageUrl": "https://images.unsplash.com/photo-1605197161470-5b5832ff1875?auto=format&fit=crop&w=600&q=80",
+    "isAvailable": true,
+    "dietary": "VEG",
+    "prepTimeMinutes": 10,
+    "isPopular": true,
+    "isChefSpecial": false
+  },
+  {
+    "id": "item-016",
+    "categoryId": "cat-07",
+    "name": "Royal Kesar Pista Thandai",
+    "description": "Chilled full-cream milk steeped with crushed almonds, melon seeds, wild Kashmiri saffron, and rose petals.",
+    "price": 245,
+    "imageUrl": "https://images.unsplash.com/photo-1544787219-7f47ccb76574?auto=format&fit=crop&w=600&q=80",
+    "isAvailable": true,
+    "dietary": "VEG",
+    "prepTimeMinutes": 5,
+    "isPopular": true,
+    "isChefSpecial": false
+  },
+  {
+    "id": "item-017",
+    "categoryId": "cat-07",
+    "name": "Jamun Kala Khatta Fizz",
+    "description": "Organic black plum reduction with rock salt, roasted cumin, lime spritz, and sparkling soda.",
+    "price": 225,
+    "imageUrl": "https://images.unsplash.com/photo-1513558161293-cdaf765ed2fd?auto=format&fit=crop&w=600&q=80",
+    "isAvailable": true,
+    "dietary": "VEGAN",
+    "prepTimeMinutes": 5,
+    "isPopular": false,
+    "isChefSpecial": true
+  }
+]

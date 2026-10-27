@@ -1,0 +1,24 @@
+services:
+  - type: web
+    name: hotel-crm-api
+    runtime: rust
+    rootDir: backend/api
+    buildCommand: cargo build --release
+    startCommand: ./target/release/hotel_crm_api
+    plan: starter
+    healthCheckPath: /health/live
+    envVars:
+      - key: ENVIRONMENT
+        value: production
+      - key: PORT
+        value: 10000
+      - key: DATABASE_URL
+        sync: false # Set securely in Render Dashboard (Supabase PostgreSQL Connection String)
+      - key: SUPABASE_JWT_SECRET
+        sync: false # Set securely in Render Dashboard (Supabase JWT Secret)
+      - key: SUPABASE_URL
+        sync: false # Set to your Supabase Project URL
+      - key: ALLOWED_ORIGINS
+        value: "https://hotel-crm.onrender.com,http://localhost:4200"
+      - key: ALLOW_DEV_AUTH
+        value: "false"

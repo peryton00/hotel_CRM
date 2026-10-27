@@ -1,0 +1,122 @@
+[
+  {
+    "id": "tbl-001",
+    "number": "T-01",
+    "capacity": 2,
+    "section": "Main Dining",
+    "status": "AVAILABLE",
+    "qrToken": "tbl-01",
+    "qrUrl": "/menu/gurukripa-dhaba/table/tbl-01",
+    "orderingEnabled": true
+  },
+  {
+    "id": "tbl-002",
+    "number": "T-02",
+    "capacity": 2,
+    "section": "Main Dining",
+    "status": "OCCUPIED",
+    "qrToken": "tbl-02",
+    "qrUrl": "/menu/gurukripa-dhaba/table/tbl-02",
+    "orderingEnabled": true
+  },
+  {
+    "id": "tbl-003",
+    "number": "T-03",
+    "capacity": 4,
+    "section": "Main Dining",
+    "status": "AVAILABLE",
+    "qrToken": "tbl-03",
+    "qrUrl": "/menu/gurukripa-dhaba/table/tbl-03",
+    "orderingEnabled": true
+  },
+  {
+    "id": "tbl-004",
+    "number": "T-04",
+    "capacity": 4,
+    "section": "Main Dining",
+    "status": "AVAILABLE",
+    "qrToken": "tbl-04",
+    "qrUrl": "/menu/gurukripa-dhaba/table/tbl-04",
+    "orderingEnabled": true
+  },
+  {
+    "id": "tbl-005",
+    "number": "T-05",
+    "capacity": 6,
+    "section": "Main Dining",
+    "status": "OCCUPIED",
+    "qrToken": "tbl-05",
+    "qrUrl": "/menu/gurukripa-dhaba/table/tbl-05",
+    "orderingEnabled": true
+  },
+  {
+    "id": "tbl-006",
+    "number": "T-06",
+    "capacity": 2,
+    "section": "Terrace Garden",
+    "status": "RESERVED",
+    "qrToken": "tbl-06",
+    "qrUrl": "/menu/gurukripa-dhaba/table/tbl-06",
+    "orderingEnabled": true
+  },
+  {
+    "id": "tbl-007",
+    "number": "T-07",
+    "capacity": 4,
+    "section": "Terrace Garden",
+    "status": "OCCUPIED",
+    "qrToken": "tbl-07",
+    "qrUrl": "/menu/gurukripa-dhaba/table/tbl-07",
+    "orderingEnabled": true
+  },
+  {
+    "id": "tbl-008",
+    "number": "T-08",
+    "capacity": 4,
+    "section": "Terrace Garden",
+    "status": "AVAILABLE",
+    "qrToken": "tbl-08",
+    "qrUrl": "/menu/gurukripa-dhaba/table/tbl-08",
+    "orderingEnabled": true
+  },
+  {
+    "id": "tbl-009",
+    "number": "T-09",
+    "capacity": 8,
+    "section": "Private Lounge",
+    "status": "OCCUPIED",
+    "qrToken": "tbl-09",
+    "qrUrl": "/menu/gurukripa-dhaba/table/tbl-09",
+    "orderingEnabled": true
+  },
+  {
+    "id": "tbl-010",
+    "number": "T-10",
+    "capacity": 10,
+    "section": "Private Lounge",
+    "status": "AVAILABLE",
+    "qrToken": "tbl-10",
+    "qrUrl": "/menu/gurukripa-dhaba/table/tbl-10",
+    "orderingEnabled": true
+  },
+  {
+    "id": "tbl-011",
+    "number": "T-11",
+    "capacity": 2,
+    "section": "Bar",
+    "status": "AVAILABLE",
+    "qrToken": "tbl-11",
+    "qrUrl": "/menu/gurukripa-dhaba/table/tbl-11",
+    "orderingEnabled": true
+  },
+  {
+    "id": "tbl-012",
+    "number": "T-12",
+    "capacity": 2,
+    "section": "Bar",
+    "status": "DIRTY",
+    "qrToken": "tbl-12",
+    "qrUrl": "/menu/gurukripa-dhaba/table/tbl-12",
+    "orderingEnabled": false
+  }
+]

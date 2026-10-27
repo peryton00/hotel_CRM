@@ -1,0 +1,23 @@
+pub mod billing;
+pub mod common;
+pub mod coupon;
+pub mod customer;
+pub mod inventory;
+pub mod menu;
+pub mod order;
+pub mod paise;
+pub mod reports;
+pub mod restaurant;
+pub mod table;
+
+pub use billing::*;
+pub use common::*;
+pub use coupon::*;
+pub use customer::*;
+pub use inventory::*;
+pub use menu::*;
+pub use order::*;
+pub use paise::*;
+pub use reports::*;
+pub use restaurant::*;
+pub use table::*;

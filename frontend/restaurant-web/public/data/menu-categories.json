@@ -1,0 +1,58 @@
+[
+  {
+    "id": "cat-01",
+    "name": "Artisanal Starters",
+    "slug": "starters",
+    "icon": "ph-cooking-pot",
+    "sortOrder": 1,
+    "isActive": true
+  },
+  {
+    "id": "cat-02",
+    "name": "Tandoor & Charcoal Kebabs",
+    "slug": "tandoor",
+    "icon": "ph-flame",
+    "sortOrder": 2,
+    "isActive": true
+  },
+  {
+    "id": "cat-03",
+    "name": "Royal Gravies & Mains",
+    "slug": "mains",
+    "icon": "ph-bowl-food",
+    "sortOrder": 3,
+    "isActive": true
+  },
+  {
+    "id": "cat-04",
+    "name": "Awadhi Dum Biryani",
+    "slug": "biryani",
+    "icon": "ph-grains",
+    "sortOrder": 4,
+    "isActive": true
+  },
+  {
+    "id": "cat-05",
+    "name": "Traditional Breads",
+    "slug": "breads",
+    "icon": "ph-cookie",
+    "sortOrder": 5,
+    "isActive": true
+  },
+  {
+    "id": "cat-06",
+    "name": "Royal Desserts",
+    "slug": "desserts",
+    "icon": "ph-ice-cream",
+    "sortOrder": 6,
+    "isActive": true
+  },
+  {
+    "id": "cat-07",
+    "name": "Signature Beverages",
+    "slug": "beverages",
+    "icon": "ph-brandy",
+    "sortOrder": 7,
+    "isActive": true
+  }
+]

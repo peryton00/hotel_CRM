@@ -1,0 +1,42 @@
+[
+  {
+    "id": "stf-01",
+    "name": "Chef Ranveer Brar (Executive Chef)",
+    "role": "EXECUTIVE_CHEF",
+    "email": "ranveer@royalspice.dining",
+    "phone": "+91 98201 12345",
+    "shift": "Morning & Evening",
+    "status": "ACTIVE",
+    "assignedSection": "Main Kitchen & Tandoor"
+  },
+  {
+    "id": "stf-02",
+    "name": "Rajesh Varma (Floor Captain)",
+    "role": "MANAGER",
+    "email": "rajesh.v@royalspice.dining",
+    "phone": "+91 98450 77665",
+    "shift": "All Day",
+    "status": "ACTIVE",
+    "assignedSection": "Main Dining & Terrace"
+  },
+  {
+    "id": "stf-03",
+    "name": "Deepak Rawat (Sommelier & Bar Lead)",
+    "role": "BEVERAGE_SPECIALIST",
+    "email": "deepak.r@royalspice.dining",
+    "phone": "+91 97110 33445",
+    "shift": "Evening",
+    "status": "ACTIVE",
+    "assignedSection": "Cocktail & Mocktail Bar"
+  },
+  {
+    "id": "stf-04",
+    "name": "Sunita Rao (Cashier & Billing)",
+    "role": "CASHIER",
+    "email": "sunita.r@royalspice.dining",
+    "phone": "+91 99001 55667",
+    "shift": "Evening",
+    "status": "ACTIVE",
+    "assignedSection": "Billing Counter"
+  }
+]

@@ -1,0 +1,24 @@
+{
+  "name": "restaurant-platform-monorepo",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Premium Restaurant CRM and Digital Ordering Platform",
+  "scripts": {
+    "start": "npm --prefix frontend/restaurant-web start",
+    "build": "npm --prefix frontend/restaurant-web run build",
+    "test": "npm --prefix frontend/restaurant-web test -- --watch=false",
+    "lint": "npm --prefix frontend/restaurant-web run lint"
+  },
+  "workspaces": [
+    "frontend/restaurant-web"
+  ],
+  "keywords": [
+    "restaurant",
+    "crm",
+    "ordering",
+    "angular",
+    "signals"
+  ],
+  "author": "Antigravity Engineering",
+  "license": "UNLICENSED"
+}
