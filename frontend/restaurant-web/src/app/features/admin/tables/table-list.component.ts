@@ -2,7 +2,7 @@ import { Component, inject, signal, computed, ViewChild, ElementRef } from '@ang
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import * as QRCode from 'qrcode';
-import { MockDataService } from '../../../data-access/mock/mock-data.service';
+import { RestaurantDataService } from '../../../data-access/services/restaurant-data.service';
 import { Table, TableStatus, TableSection } from '../../../core/models/table.model';
 import { StatusBadgeComponent } from '../../../shared/components/status-badge/status-badge.component';
 import { ConfirmModalComponent } from '../../../shared/components/confirm-modal/confirm-modal.component';
@@ -651,7 +651,8 @@ import { ToastService } from '../../../core/services/toast.service';
   ],
 })
 export class TableListComponent {
-  private mock = inject(MockDataService);
+  private dataService = inject(RestaurantDataService);
+  private mock = this.dataService;
   private toastService = inject(ToastService);
 
   tables = this.mock.tables;

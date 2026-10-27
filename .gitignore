@@ -1,0 +1,70 @@
+# =============================================================================
+# HOTEL_CRM — Root .gitignore
+# Covers Rust (Axum), Angular 21, Supabase, Node, IDEs & OS files
+# =============================================================================
+
+# --- Environment & Secret Credentials ---
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.cert
+*.pfx
+
+# --- Rust Build & Artifacts ---
+target/
+**/target/
+**/*.rs.bk
+*.pdb
+.cargo/
+**/.cargo/
+
+# --- Node & Frontend Build Artifacts ---
+node_modules/
+**/node_modules/
+dist/
+**/dist/
+.angular/
+**/.angular/
+tmp/
+out-tsc/
+.nx/
+
+# --- Logs & Runtime Output ---
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# --- OS Specific Files ---
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+[Dd]esktop.ini
+
+# --- IDE & Editor Artifacts ---
+.idea/
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+*.swp
+*.swo
+*~
+.history/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+
+# --- Temporary & Agent Scratch Dirs ---
+.system_generated/
+scratch/

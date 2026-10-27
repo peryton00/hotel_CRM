@@ -1,7 +1,7 @@
 import { Component, inject, signal, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { MockDataService } from '../../../data-access/mock/mock-data.service';
+import { RestaurantDataService } from '../../../data-access/services/restaurant-data.service';
 import { Restaurant } from '../../../core/models/restaurant.model';
 import { ConfirmModalComponent } from '../../../shared/components/confirm-modal/confirm-modal.component';
 import { ToastService } from '../../../core/services/toast.service';
@@ -207,7 +207,8 @@ import { ToastService } from '../../../core/services/toast.service';
   ],
 })
 export class SettingsComponent implements OnInit {
-  private mock = inject(MockDataService);
+  private dataService = inject(RestaurantDataService);
+  private mock = this.dataService;
   private toastService = inject(ToastService);
 
   confirmResetOpen = false;

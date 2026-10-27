@@ -3,7 +3,7 @@ import { CommonModule } from '@angular/common';
 import { RouterModule, ActivatedRoute } from '@angular/router';
 import { FormsModule } from '@angular/forms';
 import { CartService } from '../../core/services/cart.service';
-import { MockDataService } from '../../data-access/mock/mock-data.service';
+import { RestaurantDataService } from '../../data-access/services/restaurant-data.service';
 import { ToastService } from '../../core/services/toast.service';
 import { CurrencyInrPipe } from '../../shared/pipes/currency-inr.pipe';
 import { ToastContainerComponent } from '../../shared/components/toast-container/toast-container.component';
@@ -808,7 +808,8 @@ import { maskPhone, normalizeToE164 } from '../../core/utils/phone.util';
 })
 export class CustomerLayoutComponent {
   cartService = inject(CartService);
-  private mock = inject(MockDataService);
+  private dataService = inject(RestaurantDataService);
+  private mock = this.dataService;
   private toastService = inject(ToastService);
 
   restaurant = this.mock.restaurant;
@@ -817,7 +818,7 @@ export class CustomerLayoutComponent {
   inputPhone = '';
 
   customerPhone = signal<string>(
-    localStorage.getItem('royal_spice_customer_phone') || '9876543210',
+    localStorage.getItem('customer_phone') || '',
   );
 
   customerOrders = computed(() => {

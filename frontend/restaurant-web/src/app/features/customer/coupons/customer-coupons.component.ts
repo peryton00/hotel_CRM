@@ -2,7 +2,7 @@ import { Component, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { RouterModule, Router } from '@angular/router';
 import { FormsModule } from '@angular/forms';
-import { MockDataService } from '../../../data-access/mock/mock-data.service';
+import { RestaurantDataService } from '../../../data-access/services/restaurant-data.service';
 import { CartService } from '../../../core/services/cart.service';
 import { ToastService } from '../../../core/services/toast.service';
 import { Coupon } from '../../../core/models/coupon.model';
@@ -243,12 +243,13 @@ import { normalizeToE164, maskPhone } from '../../../core/utils/phone.util';
   ],
 })
 export class CustomerCouponsComponent {
-  private mock = inject(MockDataService);
+  private dataService = inject(RestaurantDataService);
+  private mock = this.dataService;
   private cartService = inject(CartService);
   private toastService = inject(ToastService);
   private router = inject(Router);
 
-  guestPhone = localStorage.getItem('royal_spice_customer_phone') || '9876543210';
+  guestPhone = localStorage.getItem('customer_phone') || '';
   maskedPhone = signal<string>('');
   availableCoupons = this.mock.coupons;
 

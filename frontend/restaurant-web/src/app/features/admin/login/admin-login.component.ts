@@ -245,13 +245,13 @@ export class AdminLoginComponent {
   private toastService = inject(ToastService);
   private router = inject(Router);
 
-  role = 'Floor Manager';
-  pin = '1234';
+  role = 'Manager';
+  pin = '';
   errorMessage = signal<string>('');
 
   handleLogin(): void {
     if (!this.pin.trim()) {
-      this.errorMessage.set('Please enter the 4-digit staff PIN.');
+      this.errorMessage.set('Please enter your staff PIN or authorization key.');
       return;
     }
 
@@ -260,7 +260,7 @@ export class AdminLoginComponent {
       this.toastService.success(`Welcome back, ${this.role}! Access granted.`);
       this.router.navigate(['/admin/dashboard']);
     } else {
-      this.errorMessage.set('Invalid PIN code. Use demo PIN 1234.');
+      this.errorMessage.set('Invalid credentials. Please verify your staff access.');
     }
   }
 }

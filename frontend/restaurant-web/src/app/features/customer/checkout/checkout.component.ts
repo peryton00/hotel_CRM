@@ -3,7 +3,7 @@ import { CommonModule } from '@angular/common';
 import { RouterModule, Router } from '@angular/router';
 import { FormsModule } from '@angular/forms';
 import { CartService } from '../../../core/services/cart.service';
-import { MockDataService } from '../../../data-access/mock/mock-data.service';
+import { RestaurantDataService } from '../../../data-access/services/restaurant-data.service';
 import { ToastService } from '../../../core/services/toast.service';
 import { Order, OrderStatus } from '../../../core/models/order.model';
 import { CurrencyInrPipe } from '../../../shared/pipes/currency-inr.pipe';
@@ -425,13 +425,14 @@ import { generateIdempotencyKey } from '../../../core/utils/idempotency.util';
 })
 export class CheckoutComponent {
   cartService = inject(CartService);
-  private mock = inject(MockDataService);
+  private dataService = inject(RestaurantDataService);
+  private mock = this.dataService;
   private toastService = inject(ToastService);
   private router = inject(Router);
 
-  guestName = localStorage.getItem('royal_spice_customer_name') || 'Aditya Sharma';
-  guestPhone = localStorage.getItem('royal_spice_customer_phone') || '9876543210';
-  demoOtp = '1234';
+  guestName = '';
+  guestPhone = '';
+  demoOtp = '';
   isSubmitting = false;
 
   isFormValid(): boolean {

@@ -2,7 +2,7 @@ import { Component, inject, signal, computed } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { RouterModule } from '@angular/router';
 import { FormsModule } from '@angular/forms';
-import { MockDataService } from '../../../data-access/mock/mock-data.service';
+import { RestaurantDataService } from '../../../data-access/services/restaurant-data.service';
 import { Order, OrderStatus, OrderItem } from '../../../core/models/order.model';
 import { MenuItem } from '../../../core/models/menu.model';
 import { MenuStockStatus } from '../../../core/models/inventory.model';
@@ -3146,7 +3146,8 @@ import { AdminAuthService } from '../../../core/services/admin-auth.service';
   ],
 })
 export class OrderQueueComponent {
-  private mock = inject(MockDataService);
+  private dataService = inject(RestaurantDataService);
+  private mock = this.dataService;
   private toastService = inject(ToastService);
   private adminAuth = inject(AdminAuthService);
 

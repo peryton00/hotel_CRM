@@ -1,5 +1,5 @@
 import { Injectable, inject } from '@angular/core';
-import { Observable, map } from 'rxjs';
+import { Observable, map, of } from 'rxjs';
 import { ApiClientService } from './api-client.service';
 import {
   IRestaurantRepository,
@@ -11,6 +11,8 @@ import {
   IBillingRepository,
   IReservationRepository,
   IStaffRepository,
+  ILoyaltyRepository,
+  IFeedbackRepository,
 } from '../contracts';
 import { Restaurant } from '../../core/models/restaurant.model';
 import { Customer } from '../../core/models/customer.model';
@@ -21,6 +23,8 @@ import { Coupon, CouponValidationResult } from '../../core/models/coupon.model';
 import { Invoice } from '../../core/models/billing.model';
 import { Reservation, ReservationStatus } from '../../core/models/reservation.model';
 import { StaffMember } from '../../core/models/staff.model';
+import { LoyaltyTierConfig, LoyaltyTransaction } from '../../core/models/loyalty.model';
+import { Feedback } from '../../core/models/feedback.model';
 
 @Injectable({ providedIn: 'root' })
 export class ApiRestaurantRepository implements IRestaurantRepository {
@@ -527,3 +531,57 @@ export class ApiStaffRepository implements IStaffRepository {
     return this.api.put<StaffMember>(`/restaurants/staff/${id}`, updates);
   }
 }
+
+@Injectable({ providedIn: 'root' })
+export class ApiLoyaltyRepository implements ILoyaltyRepository {
+  private api = inject(ApiClientService);
+
+  getTiers(): Observable<LoyaltyTierConfig[]> {
+    return of([]);
+  }
+
+  getTransactions(): Observable<LoyaltyTransaction[]> {
+    return of([]);
+  }
+
+  adjustPoints(
+    customerId: string,
+    pointsDelta: number,
+    description: string,
+  ): Observable<LoyaltyTransaction> {
+    const tx: LoyaltyTransaction = {
+      id: `tx-${Date.now()}`,
+      customerId,
+      pointsDelta,
+      balanceAfter: pointsDelta,
+      type: pointsDelta >= 0 ? 'EARNED' : 'REDEEMED',
+      description,
+      createdAt: new Date().toISOString(),
+    };
+    return of(tx);
+  }
+}
+
+@Injectable({ providedIn: 'root' })
+export class ApiFeedbackRepository implements IFeedbackRepository {
+  private api = inject(ApiClientService);
+
+  getFeedbacks(): Observable<Feedback[]> {
+    return of([]);
+  }
+
+  submitFeedback(feedback: Omit<Feedback, 'id' | 'createdAt' | 'status'>): Observable<Feedback> {
+    const created: Feedback = {
+      ...feedback,
+      id: `fb-${Date.now()}`,
+      status: 'NEW',
+      createdAt: new Date().toISOString(),
+    };
+    return of(created);
+  }
+
+  respondToFeedback(id: string, response: string): Observable<Feedback> {
+    return of({} as Feedback);
+  }
+}
+

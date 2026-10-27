@@ -1,7 +1,7 @@
 import { Component, inject, signal, computed } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { MockDataService } from '../../../data-access/mock/mock-data.service';
+import { RestaurantDataService } from '../../../data-access/services/restaurant-data.service';
 import { Reservation, ReservationStatus } from '../../../core/models/reservation.model';
 import { StatusBadgeComponent } from '../../../shared/components/status-badge/status-badge.component';
 import { ToastService } from '../../../core/services/toast.service';

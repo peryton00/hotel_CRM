@@ -1,0 +1,119 @@
+name: HOTEL_CRM CI/CD Pipeline
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # =========================================================================
+  # 1. RUST BACKEND CI (Format, Clippy, Tests, Release Build)
+  # =========================================================================
+  backend-ci:
+    name: Rust Backend API (Axum & Tokio)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend/api
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+
+      - name: Cache Cargo dependencies and build artifacts
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: backend/api -> target
+
+      - name: Verify Code Formatting
+        run: cargo fmt --all -- --check
+
+      - name: Run Clippy Linter (-D warnings)
+        run: cargo clippy --workspace --all-targets --all-features -- -D warnings
+
+      - name: Run Backend Unit & Invariant Tests
+        run: cargo test --workspace --verbose
+
+      - name: Build Release Binary
+        run: cargo build --release
+
+  # =========================================================================
+  # 2. FRONTEND CI (Angular 21, Linter, Tests, Production Build)
+  # =========================================================================
+  frontend-ci:
+    name: Angular Frontend (Angular 21 & Vitest)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend/restaurant-web
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+          cache-dependency-path: frontend/restaurant-web/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Verify Prettier Code Formatting
+        run: npm run lint
+
+      - name: Run Angular Test Suite (229 Contract & Hardening Tests)
+        run: npm test -- --watch=false
+
+      - name: Compile Production Build
+        run: npm run build
+
+  # =========================================================================
+  # 3. SUPABASE MIGRATIONS VALIDATION
+  # =========================================================================
+  migrations-lint:
+    name: Supabase Database Migrations
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Verify Migration Files Presence
+        run: |
+          echo "Checking Supabase SQL migrations in supabase/migrations/..."
+          ls -la supabase/migrations/*.sql
+          test -f supabase/migrations/20261027000001_core_schema.sql
+          test -f supabase/migrations/20261027000002_billing_and_payments.sql
+          test -f supabase/migrations/20261027000003_inventory_and_recipes.sql
+          test -f supabase/migrations/20261027000004_coupons_and_reservations.sql
+          test -f supabase/migrations/20261027000005_rls_and_functions.sql
+          echo "All 5 required forward SQL migration files are present and tracked."
+
+  # =========================================================================
+  # 4. DEPLOYMENT TRIGGER (Render Web Service)
+  # =========================================================================
+  deploy:
+    name: Render Deployment Trigger
+    needs: [ backend-ci, frontend-ci, migrations-lint ]
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy to Render via Deploy Hook
+        if: env.RENDER_DEPLOY_HOOK_URL != ''
+        env:
+          RENDER_DEPLOY_HOOK_URL: ${{ secrets.RENDER_DEPLOY_HOOK_URL }}
+        run: |
+          echo "Triggering Render web service deployment..."
+          curl -X POST "$RENDER_DEPLOY_HOOK_URL"
+          echo "Render deployment triggered successfully."

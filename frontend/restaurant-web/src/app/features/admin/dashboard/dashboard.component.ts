@@ -1,7 +1,7 @@
 import { Component, inject, computed, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { RouterModule } from '@angular/router';
-import { MockDataService } from '../../../data-access/mock/mock-data.service';
+import { RestaurantDataService } from '../../../data-access/services/restaurant-data.service';
 import { CurrencyInrPipe } from '../../../shared/pipes/currency-inr.pipe';
 import { StatusBadgeComponent } from '../../../shared/components/status-badge/status-badge.component';
 import { calculateFinancialSummary } from '../../../core/utils/financial.utils';
@@ -646,7 +646,8 @@ import {
   ],
 })
 export class AdminDashboardComponent {
-  private mock = inject(MockDataService);
+  private dataService = inject(RestaurantDataService);
+  private mock = this.dataService;
 
   selectedTimeframe = signal<'today' | 'week' | 'all'>('today');
 
