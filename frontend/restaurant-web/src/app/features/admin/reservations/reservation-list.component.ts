@@ -298,7 +298,8 @@ import { ToastService } from '../../../core/services/toast.service';
   ],
 })
 export class ReservationListComponent {
-  private mock = inject(MockDataService);
+  private dataService = inject(RestaurantDataService);
+  private mock = this.dataService;
   private toastService = inject(ToastService);
 
   reservations = this.mock.reservations;
