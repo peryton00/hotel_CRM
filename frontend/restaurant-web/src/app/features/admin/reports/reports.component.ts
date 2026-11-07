@@ -24,6 +24,8 @@ import { generateIdempotencyKey } from '../../../core/utils/idempotency.util';
 export type WastageReasonType =
   'SPOILAGE' | 'EXPIRY' | 'SPILLAGE' | 'PREPARATION_WASTE' | 'QUALITY_REJECTION' | 'OTHER';
 
+export type ReportViewTab = 'overview' | 'revenue' | 'cogs' | 'wastage';
+
 @Component({
   selector: 'app-reports',
   standalone: true,
@@ -35,8 +37,7 @@ export type WastageReasonType =
         <div>
           <h1 class="heading-display">Reports & Financial Analytics</h1>
           <p class="text-muted">
-            Authoritative sales performance, recipe COGS, gross margins, and inventory wastage
-            analysis.
+            Sales performance, food costs (COGS), gross margins, and wastage reports.
           </p>
         </div>
 
@@ -179,115 +180,186 @@ export type WastageReasonType =
         </div>
       }
 
-      <!-- Financial & COGS Metric Cards -->
-      <div class="kpi-grid">
-        <div class="kpi-card">
-          <span class="kpi-title">Gross Sales (Billed)</span>
-          <span class="kpi-val">{{ grossSales() | currencyInr }}</span>
-          <span class="kpi-sub">{{ filteredOrders().length }} orders placed</span>
-        </div>
+      <!-- Navigation Sub-Tabs to separate data views -->
+      <div class="tabs-nav-bar">
+        <button
+          class="tab-btn"
+          [class.active]="activeReportTab() === 'overview'"
+          (click)="activeReportTab.set('overview')"
+        >
+          <i class="ph ph-squares-four tab-icon"></i>
+          <span class="tab-title">Executive Overview</span>
+        </button>
+        <button
+          class="tab-btn"
+          [class.active]="activeReportTab() === 'revenue'"
+          (click)="activeReportTab.set('revenue')"
+        >
+          <i class="ph ph-chart-line-up tab-icon"></i>
+          <span class="tab-title">Sales & Revenue Analytics</span>
+          <span class="tab-count-pill">{{ filteredOrders().length }} Orders</span>
+        </button>
+        <button
+          class="tab-btn"
+          [class.active]="activeReportTab() === 'cogs'"
+          (click)="activeReportTab.set('cogs')"
+        >
+          <i class="ph ph-cooking-pot tab-icon"></i>
+          <span class="tab-title">COGS & Recipe Margins</span>
+          <span class="tab-count-pill">{{ cogsSummary().itemBreakdown.length }} Items</span>
+        </button>
+        <button
+          class="tab-btn"
+          [class.active]="activeReportTab() === 'wastage'"
+          (click)="activeReportTab.set('wastage')"
+        >
+          <i class="ph ph-trash tab-icon"></i>
+          <span class="tab-title">Inventory Wastage Analysis</span>
+          <span class="tab-count-pill">{{ wastageSummary().totalMovementsCount }} Events</span>
+        </button>
+      </div>
 
-        <div class="kpi-card">
-          <span class="kpi-title">Promotional Discounts</span>
-          <span class="kpi-val text-crimson">-{{ totalDiscounts() | currencyInr }}</span>
-          <span class="kpi-sub">Redeemed promotional discounts</span>
-        </div>
+      <!-- Financial Metrics: Structured Operational Bands -->
+      <div class="metrics-sections-container">
+        <!-- Section 1: Revenue & Collections -->
+        @if (activeReportTab() === 'overview' || activeReportTab() === 'revenue') {
+          <div class="metrics-section">
+            <div class="metrics-section-title">
+              <i class="ph ph-receipt"></i>
+              <span>Revenue & Collections</span>
+            </div>
+            <div class="kpi-grid">
+              <div class="kpi-card">
+                <span class="kpi-title">Gross Sales (Billed)</span>
+                <span class="kpi-val">{{ grossSales() | currencyInr }}</span>
+                <span class="kpi-sub">{{ filteredOrders().length }} orders placed</span>
+              </div>
 
-        <div class="kpi-card">
-          <span class="kpi-title">Net Sales Performance</span>
-          <span class="kpi-val text-onyx" style="font-weight: 700;">{{
-            netSales() | currencyInr
-          }}</span>
-          <span class="kpi-sub">Billed sales (net of promotions)</span>
-        </div>
+              <div class="kpi-card">
+                <span class="kpi-title">Promotional Discounts</span>
+                <span class="kpi-val text-crimson">-{{ totalDiscounts() | currencyInr }}</span>
+                <span class="kpi-sub">Redeemed promotional discounts</span>
+              </div>
 
-        <div class="kpi-card">
-          <span class="kpi-title">Collected Revenue</span>
-          <span class="kpi-val text-success">{{ collectedRevenue() | currencyInr }}</span>
-          <span class="kpi-sub">
-            {{ paidOrdersCount() }} settled orders
-            @if (hasEstimatedSettlements()) {
-              <small class="text-muted">(legacy timestamps)</small>
-            }
-          </span>
-        </div>
+              <div class="kpi-card">
+                <span class="kpi-title">Net Sales</span>
+                <span class="kpi-val text-onyx font-bold">{{
+                  netSales() | currencyInr
+                }}</span>
+                <span class="kpi-sub">Billed sales (net of promotions)</span>
+              </div>
 
-        <div class="kpi-card">
-          <span class="kpi-title">Completed Refunds</span>
-          <span class="kpi-val text-crimson">-{{ totalRefunds() | currencyInr }}</span>
-          <span class="kpi-sub">{{ completedRefundsCount() }} recorded refunds</span>
-        </div>
+              <div class="kpi-card">
+                <span class="kpi-title">Collected Revenue</span>
+                <span class="kpi-val text-success">{{ collectedRevenue() | currencyInr }}</span>
+                <span class="kpi-sub">
+                  {{ paidOrdersCount() }} settled orders
+                  @if (hasEstimatedSettlements()) {
+                    <small class="text-muted">(legacy timestamps)</small>
+                  }
+                </span>
+              </div>
 
-        <div class="kpi-card highlight-card">
-          <span class="kpi-title">Net Collections</span>
-          <span
-            class="kpi-val"
-            [class.text-success]="netRevenue() >= 0"
-            [class.text-crimson]="netRevenue() < 0"
-            style="font-weight: 800;"
-            >{{ netRevenue() | currencyInr }}</span
-          >
-          <span class="kpi-sub">
-            Collected cash/UPI minus completed refunds
-            @if (hasEstimatedSettlements()) {
-              <small class="text-muted">(legacy timestamps)</small>
-            }
-          </span>
-        </div>
+              <div class="kpi-card">
+                <span class="kpi-title">Completed Refunds</span>
+                <span class="kpi-val text-crimson">-{{ totalRefunds() | currencyInr }}</span>
+                <span class="kpi-sub">{{ completedRefundsCount() }} recorded refunds</span>
+              </div>
 
-        <div class="kpi-card">
-          <span class="kpi-title">Outstanding Receivables</span>
-          <span class="kpi-val text-onyx">{{ outstandingReceivables() | currencyInr }}</span>
-          <span class="kpi-sub">Unsettled orders & split shares</span>
-        </div>
+              <div class="kpi-card highlight-card">
+                <span class="kpi-title">Net Collections</span>
+                <span
+                  class="kpi-val font-extrabold"
+                  [class.text-success]="netRevenue() >= 0"
+                  [class.text-crimson]="netRevenue() < 0"
+                  >{{ netRevenue() | currencyInr }}</span
+                >
+                <span class="kpi-sub">
+                  Collected cash/UPI minus completed refunds
+                  @if (hasEstimatedSettlements()) {
+                    <small class="text-muted">(legacy timestamps)</small>
+                  }
+                </span>
+              </div>
 
-        <div class="kpi-card">
-          <span class="kpi-title">Recipe COGS (Fulfilled)</span>
-          <span class="kpi-val text-onyx">{{ cogsSummary().totalCogs | currencyInr }}</span>
-          <span class="kpi-sub"
-            >{{ cogsSummary().fulfilledPortionsCount }} served/completed portions</span
-          >
-        </div>
+              <div class="kpi-card">
+                <span class="kpi-title">Outstanding Receivables</span>
+                <span class="kpi-val text-onyx">{{ outstandingReceivables() | currencyInr }}</span>
+                <span class="kpi-sub">Unsettled orders & split shares</span>
+              </div>
+            </div>
+          </div>
+        }
 
-        <div class="kpi-card highlight-gold">
-          <span class="kpi-title">Gross Profit</span>
-          <span
-            class="kpi-val"
-            [class.text-success]="cogsSummary().grossProfit >= 0"
-            [class.text-crimson]="cogsSummary().grossProfit < 0"
-          >
-            {{ cogsSummary().grossProfit | currencyInr }}
-          </span>
-          <span class="kpi-sub">Net Collections minus COGS</span>
-        </div>
+        <!-- Section 2: Kitchen Food Costs & Margins (COGS) -->
+        @if (activeReportTab() === 'overview' || activeReportTab() === 'cogs') {
+          <div class="metrics-section">
+            <div class="metrics-section-title">
+              <i class="ph ph-chart-donut"></i>
+              <span>Kitchen Food Costs & Profitability</span>
+            </div>
+            <div class="kpi-grid grid-3-col">
+              <div class="kpi-card">
+                <span class="kpi-title">Recipe COGS (Fulfilled)</span>
+                <span class="kpi-val text-onyx">{{ cogsSummary().totalCogs | currencyInr }}</span>
+                <span class="kpi-sub"
+                  >{{ cogsSummary().fulfilledPortionsCount }} served/completed portions</span
+                >
+              </div>
 
-        <div class="kpi-card highlight-gold">
-          <span class="kpi-title">Gross Margin</span>
-          <span
-            class="kpi-val"
-            [class.text-success]="cogsSummary().grossMarginPercentage >= 40"
-            [class.text-crimson]="cogsSummary().grossMarginPercentage < 40"
-          >
-            {{ cogsSummary().grossMarginPercentage }}%
-          </span>
-          <span class="kpi-sub">(Gross Profit ÷ Net Collections) × 100</span>
-        </div>
+              <div class="kpi-card highlight-gold">
+                <span class="kpi-title">Gross Profit</span>
+                <span
+                  class="kpi-val font-bold"
+                  [class.text-success]="cogsSummary().grossProfit >= 0"
+                  [class.text-crimson]="cogsSummary().grossProfit < 0"
+                >
+                  {{ cogsSummary().grossProfit | currencyInr }}
+                </span>
+                <span class="kpi-sub">Net Collections minus COGS</span>
+              </div>
 
-        <div class="kpi-card highlight-crimson">
-          <span class="kpi-title">Inventory Wastage</span>
-          <span class="kpi-val text-crimson">{{
-            wastageSummary().totalWastageValue | currencyInr
-          }}</span>
-          <span class="kpi-sub"
-            >{{ wastageSummary().totalMovementsCount }} wastage movements recorded</span
-          >
-        </div>
+              <div class="kpi-card highlight-gold">
+                <span class="kpi-title">Gross Margin</span>
+                <span
+                  class="kpi-val font-bold"
+                  [class.text-success]="cogsSummary().grossMarginPercentage >= 40"
+                  [class.text-crimson]="cogsSummary().grossMarginPercentage < 40"
+                >
+                  {{ cogsSummary().grossMarginPercentage }}%
+                </span>
+                <span class="kpi-sub">(Gross Profit ÷ Net Collections) × 100</span>
+              </div>
+            </div>
+          </div>
+        }
 
-        <div class="kpi-card">
-          <span class="kpi-title">Total GST Collected</span>
-          <span class="kpi-val">{{ totalTaxCollected() | currencyInr }}</span>
-          <span class="kpi-sub">CGST (2.5%) + SGST (2.5%)</span>
-        </div>
+        <!-- Section 3: Tax & Wastage Compliance -->
+        @if (activeReportTab() === 'overview' || activeReportTab() === 'wastage') {
+          <div class="metrics-section">
+            <div class="metrics-section-title">
+              <i class="ph ph-scales"></i>
+              <span>Taxes & Wastage</span>
+            </div>
+            <div class="kpi-grid grid-2-col">
+              <div class="kpi-card">
+                <span class="kpi-title">Total GST Collected</span>
+                <span class="kpi-val text-onyx">{{ totalTaxCollected() | currencyInr }}</span>
+                <span class="kpi-sub">CGST (2.5%) + SGST (2.5%)</span>
+              </div>
+
+              <div class="kpi-card highlight-crimson">
+                <span class="kpi-title">Inventory Wastage</span>
+                <span class="kpi-val text-crimson font-bold">{{
+                  wastageSummary().totalWastageValue | currencyInr
+                }}</span>
+                <span class="kpi-sub"
+                  >{{ wastageSummary().totalMovementsCount }} wastage movements recorded</span
+                >
+              </div>
+            </div>
+          </div>
+        }
       </div>
 
       <!-- Empty State if no records found -->
@@ -306,327 +378,513 @@ export type WastageReasonType =
         </div>
       }
 
-      <!-- Order Type Breakdown: Dine-In vs Takeaway -->
-      <div class="panel-box">
-        <div class="panel-header">
-          <div>
-            <h2 class="heading-card">Order Type Operational Performance</h2>
-            <p class="text-muted text-xs">
-              Comparison between Dine-In table service and Takeaway counter pickup orders.
-            </p>
-          </div>
-        </div>
-
-        <div class="order-types-grid">
-          <div class="order-type-card dine-in-card">
-            <div class="ot-head">
-              <span class="badge-mode">DINE_IN</span>
-              <span class="ot-count">{{ orderTypeBreakdown().dineIn.ordersCount }} Orders</span>
-            </div>
-            <div class="ot-metric">
-              <span class="ot-label">Net Sales Revenue</span>
-              <span class="ot-value">{{
-                orderTypeBreakdown().dineIn.netRevenue | currencyInr
-              }}</span>
-            </div>
-            <div class="ot-metric">
-              <span class="ot-label">Gross Order Value</span>
-              <span class="ot-sub">{{ orderTypeBreakdown().dineIn.grossSales | currencyInr }}</span>
-            </div>
-            <div class="ot-metric">
-              <span class="ot-label">Average Bill</span>
-              <span class="ot-sub">{{
-                orderTypeBreakdown().dineIn.averageOrderValue | currencyInr
-              }}</span>
-            </div>
-          </div>
-
-          <div class="order-type-card takeaway-card">
-            <div class="ot-head">
-              <span class="badge-mode">TAKEAWAY</span>
-              <span class="ot-count">{{ orderTypeBreakdown().takeaway.ordersCount }} Orders</span>
-            </div>
-            <div class="ot-metric">
-              <span class="ot-label">Net Sales Revenue</span>
-              <span class="ot-value">{{
-                orderTypeBreakdown().takeaway.netRevenue | currencyInr
-              }}</span>
-            </div>
-            <div class="ot-metric">
-              <span class="ot-label">Gross Order Value</span>
-              <span class="ot-sub">{{
-                orderTypeBreakdown().takeaway.grossSales | currencyInr
-              }}</span>
-            </div>
-            <div class="ot-metric">
-              <span class="ot-label">Average Bill</span>
-              <span class="ot-sub">{{
-                orderTypeBreakdown().takeaway.averageOrderValue | currencyInr
-              }}</span>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- COGS and Dish Margin Breakdown -->
-      <div class="panel-box">
-        <div class="panel-header">
-          <div>
-            <h2 class="heading-card">Menu Cost of Goods Sold (COGS) & Profit Margins</h2>
-            <p class="text-muted text-xs">
-              Based on fulfilled orders (SERVED & COMPLETED) and active ingredient recipe
-              specifications.
-              <span class="badge-status-estimated" style="margin-left: 6px;">
-                <i class="ph ph-info"></i> {{ cogsSummary().costBasisNotice }}
-              </span>
-              @if (cogsSummary().untrackedOrEstimatedDishesCount > 0) {
-                <span class="badge-warning text-xs" style="margin-left: 6px;">
-                  <i class="ph ph-warning"></i>
-                  {{ cogsSummary().untrackedOrEstimatedDishesCount }} item(s) estimated / missing
-                  recipe
+      <!-- Interactive Graphics & Visual Canvas Section -->
+      @if (activeReportTab() === 'overview' || activeReportTab() === 'revenue') {
+        <div class="charts-double-grid">
+          <!-- Canvas 1: Revenue & Order Trajectory Trendline -->
+          <div class="panel-box chart-canvas-panel">
+            <div class="panel-header">
+              <div>
+                <h2 class="heading-card">Sales & Collections Trajectory</h2>
+                <p class="text-muted text-xs">
+                  Periodic trendline of revenue flow across {{ dateRange().label }}
+                </p>
+              </div>
+              <div class="chart-summary-stat">
+                <span class="stat-badge-rev">
+                  <i class="ph ph-arrow-up-right"></i> {{ grossSales() | currencyInr }}
                 </span>
-              }
-            </p>
-          </div>
-          <div class="cogs-quick-stats">
-            <span class="stat-pill"
-              >COGS: <strong>{{ cogsSummary().totalCogs | currencyInr }}</strong></span
-            >
-            <span class="stat-pill"
-              >Gross Profit: <strong>{{ cogsSummary().grossProfit | currencyInr }}</strong></span
-            >
-            <span class="stat-pill"
-              >Margin: <strong>{{ cogsSummary().grossMarginPercentage }}%</strong></span
-            >
-          </div>
-        </div>
+              </div>
+            </div>
 
-        <div class="table-responsive">
-          <table class="report-table">
-            <thead>
-              <tr>
-                <th>Menu Item</th>
-                <th>Category</th>
-                <th class="text-right">Fulfilled Qty</th>
-                <th class="text-right">Unit COGS</th>
-                <th class="text-right">Total Revenue</th>
-                <th class="text-right">Total COGS</th>
-                <th class="text-right">Gross Profit</th>
-                <th class="text-right">Margin %</th>
-                <th>Cost Reliability</th>
-              </tr>
-            </thead>
-            <tbody>
-              @for (item of cogsSummary().itemBreakdown; track item.menuItemId) {
-                <tr>
-                  <td>
-                    <strong>{{ item.name }}</strong>
-                  </td>
-                  <td>
-                    <span class="tag-category">{{ item.category }}</span>
-                  </td>
-                  <td class="text-right">{{ item.fulfilledQuantity }}</td>
-                  <td class="text-right">{{ item.unitCogs | currencyInr }}</td>
-                  <td class="text-right">{{ item.revenue | currencyInr }}</td>
-                  <td class="text-right">
-                    <strong>{{ item.totalCogs | currencyInr }}</strong>
-                  </td>
-                  <td
-                    class="text-right"
-                    [class.text-success]="item.grossProfit >= 0"
-                    [class.text-crimson]="item.grossProfit < 0"
+            <div class="svg-trend-canvas-wrap">
+              <svg viewBox="0 0 640 220" class="trend-canvas-svg" preserveAspectRatio="none">
+                <defs>
+                  <linearGradient id="revenueGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+                    <stop offset="0%" stop-color="#C21807" stop-opacity="0.32" />
+                    <stop offset="100%" stop-color="#C21807" stop-opacity="0.0" />
+                  </linearGradient>
+                </defs>
+
+                <!-- Gridlines -->
+                @for (gl of revenueTrendPoints().gridLines; track gl.y) {
+                  <line
+                    x1="45"
+                    [attr.y1]="gl.y"
+                    x2="615"
+                    [attr.y2]="gl.y"
+                    stroke="var(--color-border)"
+                    stroke-width="1"
+                    stroke-dasharray="3,3"
+                  />
+                  <text
+                    x="40"
+                    [attr.y]="gl.y + 4"
+                    font-size="9"
+                    fill="var(--color-text-muted)"
+                    text-anchor="end"
                   >
-                    {{ item.grossProfit | currencyInr }}
-                  </td>
-                  <td class="text-right font-mono font-bold">{{ item.grossMarginPct }}%</td>
-                  <td>
-                    @if (item.status === 'VERIFIED') {
-                      <span class="badge-status-verified"
-                        ><i class="ph ph-check-circle"></i> Verified Recipe</span
-                      >
-                    } @else if (item.status === 'ESTIMATED_NO_RECIPE') {
-                      <span
-                        class="badge-status-estimated"
-                        title="No recipe found in database; cost estimated at 0"
-                        ><i class="ph ph-question"></i> No Recipe</span
-                      >
-                    } @else {
-                      <span
-                        class="badge-status-estimated"
-                        title="One or more ingredients lack verified purchase cost"
-                        ><i class="ph ph-warning"></i> Incomplete Cost</span
-                      >
-                    }
-                  </td>
-                </tr>
-              } @empty {
-                <tr>
-                  <td colspan="9" class="text-center text-muted" style="padding: 24px;">
-                    No fulfilled items recorded in the selected window.
-                  </td>
-                </tr>
-              }
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      <!-- Inventory Wastage Analysis Section -->
-      <div class="panel-box">
-        <div class="panel-header">
-          <div>
-            <h2 class="heading-card">Auditable Inventory Wastage Analysis</h2>
-            <p class="text-muted text-xs">
-              Dedicated stock deduction tracking for spoilage, expiration, spillages, and quality
-              rejections.
-            </p>
-          </div>
-          <button class="btn btn-secondary btn-sm" (click)="openWastageModal()">
-            <i class="ph ph-plus-circle"></i>
-            <span>Record Wastage Event</span>
-          </button>
-        </div>
-
-        <div class="wastage-summary-row">
-          <div class="wastage-kpi">
-            <span class="wk-label">Total Wastage Cost</span>
-            <span class="wk-val text-crimson">{{
-              wastageSummary().totalWastageValue | currencyInr
-            }}</span>
-          </div>
-          <div class="wastage-kpi">
-            <span class="wk-label">Wastage Events</span>
-            <span class="wk-val">{{ wastageSummary().totalMovementsCount }}</span>
-          </div>
-          <div class="wastage-kpi">
-            <span class="wk-label">Wasted Ingredients</span>
-            <span class="wk-val">{{ wastageSummary().byIngredient.length }} Items</span>
-          </div>
-        </div>
-
-        <div class="wastage-tables-grid">
-          <!-- By Ingredient -->
-          <div class="sub-table-wrap">
-            <h3 class="sub-heading">Wastage by Ingredient</h3>
-            <table class="report-table">
-              <thead>
-                <tr>
-                  <th>Ingredient</th>
-                  <th>Category</th>
-                  <th class="text-right">Quantity</th>
-                  <th class="text-right">Total Cost</th>
-                </tr>
-              </thead>
-              <tbody>
-                @for (ing of wastageSummary().byIngredient; track ing.ingredientId) {
-                  <tr>
-                    <td>
-                      <strong>{{ ing.ingredientName }}</strong>
-                    </td>
-                    <td>
-                      <span class="tag-category">{{ ing.category }}</span>
-                    </td>
-                    <td class="text-right">{{ ing.quantity }} {{ ing.unit }}</td>
-                    <td class="text-right text-crimson">
-                      <strong>{{ ing.totalValue | currencyInr }}</strong>
-                    </td>
-                  </tr>
-                } @empty {
-                  <tr>
-                    <td colspan="4" class="text-center text-muted" style="padding: 16px;">
-                      No ingredient wastage recorded in this timeframe.
-                    </td>
-                  </tr>
+                    {{ gl.val >= 1000 ? (gl.val / 1000 | number: '1.0-0') + 'k' : gl.val }}
+                  </text>
                 }
-              </tbody>
-            </table>
-          </div>
 
-          <!-- By Reason -->
-          <div class="sub-table-wrap">
-            <h3 class="sub-heading">Wastage by Operational Reason</h3>
-            <table class="report-table">
-              <thead>
-                <tr>
-                  <th>Reason</th>
-                  <th class="text-right">Events</th>
-                  <th class="text-right">Total Cost</th>
-                </tr>
-              </thead>
-              <tbody>
-                @for (rs of wastageSummary().byReason; track rs.reason) {
-                  <tr>
-                    <td>
-                      <strong>{{ formatReasonLabel(rs.reason) }}</strong>
-                    </td>
-                    <td class="text-right">{{ rs.movementCount }}</td>
-                    <td class="text-right text-crimson">
-                      <strong>{{ rs.totalValue | currencyInr }}</strong>
-                    </td>
-                  </tr>
-                } @empty {
-                  <tr>
-                    <td colspan="3" class="text-center text-muted" style="padding: 16px;">
-                      No wastage reasons recorded.
-                    </td>
-                  </tr>
+                <!-- Area Fill -->
+                @if (revenueTrendPoints().areaD) {
+                  <path [attr.d]="revenueTrendPoints().areaD" fill="url(#revenueGradient)" />
                 }
-              </tbody>
-            </table>
-          </div>
-        </div>
-      </div>
 
-      <!-- Category Breakdown & Payment Methods -->
-      <div class="reports-grid">
-        <div class="panel-box">
-          <h2 class="heading-card">Culinary Category Revenue Share</h2>
-          <div class="cat-progress-list">
-            @for (cat of categoryBreakdown(); track cat.name) {
-              <div class="cat-bar-item">
-                <div class="cat-info">
-                  <span>{{ cat.name }} ({{ cat.quantity }} sold)</span>
-                  <strong>{{ cat.percentage }}% ({{ cat.amount | currencyInr }})</strong>
-                </div>
-                <div class="bar-track">
-                  <div class="bar-fill {{ cat.colorClass }}" [style.width.%]="cat.percentage"></div>
-                </div>
-              </div>
-            } @empty {
-              <div class="empty-state-text text-muted" style="padding: 24px; text-align: center;">
-                No culinary category sales recorded in selected period.
-              </div>
-            }
-          </div>
-        </div>
+                <!-- Path Line -->
+                @if (revenueTrendPoints().pathD) {
+                  <path
+                    [attr.d]="revenueTrendPoints().pathD"
+                    fill="none"
+                    stroke="var(--color-crimson)"
+                    stroke-width="2.5"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  />
+                }
 
-        <div class="panel-box">
-          <h2 class="heading-card">Payment Mode Settlement</h2>
-          <div class="payment-modes-list">
-            @for (mode of paymentBreakdown(); track mode.name) {
-              <div class="mode-item">
-                <div class="mode-left">
-                  <i class="ph {{ mode.icon }} mode-icon"></i>
-                  <div>
-                    <strong>{{ mode.name }}</strong>
-                    <div class="text-xs text-muted">
-                      {{ mode.subtitle }} ({{ mode.count }} settled)
+                <!-- Data Dots -->
+                @for (p of revenueTrendPoints().points; track p.label) {
+                  <circle
+                    [attr.cx]="p.x"
+                    [attr.cy]="p.y"
+                    r="4"
+                    fill="var(--color-crimson)"
+                    stroke="var(--color-surface)"
+                    stroke-width="2"
+                  />
+                  <text
+                    [attr.x]="p.x"
+                    [attr.y]="revenueTrendPoints().baselineY + 16"
+                    font-size="9"
+                    fill="var(--color-text-secondary)"
+                    text-anchor="middle"
+                  >
+                    {{ p.label }}
+                  </text>
+                }
+              </svg>
+            </div>
+          </div>
+
+          <!-- Canvas 2: Cost, Margin & Taxes Financial Allocation Graphic -->
+          <div class="panel-box chart-canvas-panel">
+            <div class="panel-header">
+              <div>
+                <h2 class="heading-card">Financial Flow & Cost Allocation</h2>
+                <p class="text-muted text-xs">
+                  Relative proportion of revenue, costs, margins, and operational leaks
+                </p>
+              </div>
+            </div>
+
+            <div class="financial-bars-flow">
+              @for (bar of costProfitComparison(); track bar.label) {
+                <div class="flow-bar-row">
+                  <div class="flow-bar-head">
+                    <span class="flow-label">{{ bar.label }}</span>
+                    <div class="flow-val-group">
+                      <strong class="flow-val">{{ bar.value | currencyInr }}</strong>
+                      <span class="flow-pct">({{ bar.pct }}%)</span>
                     </div>
                   </div>
+                  <div class="flow-bar-track">
+                    <div
+                      class="flow-bar-fill"
+                      [style.width.%]="bar.pct"
+                      [style.background]="bar.color"
+                    ></div>
+                  </div>
+                  <div class="flow-bar-sub">{{ bar.sub }}</div>
                 </div>
-                <div class="mode-right">
-                  <span class="pct">{{ mode.percentage }}%</span>
-                  <span class="amt">{{ mode.amount | currencyInr }}</span>
-                </div>
-              </div>
-            } @empty {
-              <div class="empty-state-text text-muted" style="padding: 24px; text-align: center;">
-                No settled payments recorded in selected period.
-              </div>
-            }
+              }
+            </div>
           </div>
         </div>
-      </div>
+      }
+
+      <!-- Order Type Breakdown: Dine-In vs Takeaway -->
+      @if (activeReportTab() === 'overview' || activeReportTab() === 'revenue') {
+        <div class="panel-box">
+          <div class="panel-header">
+            <div>
+              <h2 class="heading-card">Order Type Operational Performance</h2>
+              <p class="text-muted text-xs">
+                Comparison between Dine-In table service and Takeaway counter pickup orders.
+              </p>
+            </div>
+          </div>
+
+          <div class="order-types-grid">
+            <div class="order-type-card dine-in-card">
+              <div class="ot-head">
+                <span class="badge-mode">DINE_IN</span>
+                <span class="ot-count">{{ orderTypeBreakdown().dineIn.ordersCount }} Orders</span>
+              </div>
+              <div class="ot-metric">
+                <span class="ot-label">Net Sales Revenue</span>
+                <span class="ot-value">{{
+                  orderTypeBreakdown().dineIn.netRevenue | currencyInr
+                }}</span>
+              </div>
+              <div class="ot-metric">
+                <span class="ot-label">Gross Order Value</span>
+                <span class="ot-sub">{{ orderTypeBreakdown().dineIn.grossSales | currencyInr }}</span>
+              </div>
+              <div class="ot-metric">
+                <span class="ot-label">Average Bill</span>
+                <span class="ot-sub">{{
+                  orderTypeBreakdown().dineIn.averageOrderValue | currencyInr
+                }}</span>
+              </div>
+            </div>
+
+            <div class="order-type-card takeaway-card">
+              <div class="ot-head">
+                <span class="badge-mode">TAKEAWAY</span>
+                <span class="ot-count">{{ orderTypeBreakdown().takeaway.ordersCount }} Orders</span>
+              </div>
+              <div class="ot-metric">
+                <span class="ot-label">Net Sales Revenue</span>
+                <span class="ot-value">{{
+                  orderTypeBreakdown().takeaway.netRevenue | currencyInr
+                }}</span>
+              </div>
+              <div class="ot-metric">
+                <span class="ot-label">Gross Order Value</span>
+                <span class="ot-sub">{{
+                  orderTypeBreakdown().takeaway.grossSales | currencyInr
+                }}</span>
+              </div>
+              <div class="ot-metric">
+                <span class="ot-label">Average Bill</span>
+                <span class="ot-sub">{{
+                  orderTypeBreakdown().takeaway.averageOrderValue | currencyInr
+                }}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      }
+
+      <!-- Category Breakdown & Payment Methods -->
+      @if (activeReportTab() === 'overview' || activeReportTab() === 'revenue') {
+        <div class="reports-grid">
+          <div class="panel-box">
+            <h2 class="heading-card">Category Revenue Share</h2>
+            <div class="cat-progress-list">
+              @for (cat of categoryBreakdown(); track cat.name) {
+                <div class="cat-bar-item">
+                  <div class="cat-info">
+                    <span>{{ cat.name }} ({{ cat.quantity }} sold)</span>
+                    <strong>{{ cat.percentage }}% ({{ cat.amount | currencyInr }})</strong>
+                  </div>
+                  <div class="bar-track">
+                    <div class="bar-fill {{ cat.colorClass }}" [style.width.%]="cat.percentage"></div>
+                  </div>
+                </div>
+              } @empty {
+                <div class="empty-state-text text-muted" style="padding: 24px; text-align: center;">
+                  No category sales recorded in selected period.
+                </div>
+              }
+            </div>
+          </div>
+
+          <div class="panel-box">
+            <h2 class="heading-card">Payment Mode Settlement</h2>
+            <div class="payment-modes-list">
+              @for (mode of paymentBreakdown(); track mode.name) {
+                <div class="mode-item">
+                  <div class="mode-left">
+                    <i class="ph {{ mode.icon }} mode-icon"></i>
+                    <div>
+                      <strong>{{ mode.name }}</strong>
+                      <div class="text-xs text-muted">
+                        {{ mode.subtitle }} ({{ mode.count }} settled)
+                      </div>
+                    </div>
+                  </div>
+                  <div class="mode-right">
+                    <span class="pct">{{ mode.percentage }}%</span>
+                    <span class="amt">{{ mode.amount | currencyInr }}</span>
+                  </div>
+                </div>
+              } @empty {
+                <div class="empty-state-text text-muted" style="padding: 24px; text-align: center;">
+                  No settled payments recorded in selected period.
+                </div>
+              }
+            </div>
+          </div>
+        </div>
+      }
+
+      <!-- COGS and Dish Margin Breakdown -->
+      @if (activeReportTab() === 'overview' || activeReportTab() === 'cogs') {
+        <div class="panel-box">
+          <div class="panel-header">
+            <div>
+              <h2 class="heading-card">Menu Cost of Goods Sold (COGS) & Profit Margins</h2>
+              <p class="text-muted text-xs">
+                Based on fulfilled orders (SERVED & COMPLETED) and active ingredient recipe
+                specifications.
+                <span class="badge-status-estimated" style="margin-left: 6px;">
+                  <i class="ph ph-info"></i> {{ cogsSummary().costBasisNotice }}
+                </span>
+                @if (cogsSummary().untrackedOrEstimatedDishesCount > 0) {
+                  <span class="badge-warning text-xs" style="margin-left: 6px;">
+                    <i class="ph ph-warning"></i>
+                    {{ cogsSummary().untrackedOrEstimatedDishesCount }} item(s) estimated / missing
+                    recipe
+                  </span>
+                }
+              </p>
+            </div>
+            <div class="cogs-quick-stats">
+              <span class="stat-pill"
+                >COGS: <strong>{{ cogsSummary().totalCogs | currencyInr }}</strong></span
+              >
+              <span class="stat-pill"
+                >Gross Profit: <strong>{{ cogsSummary().grossProfit | currencyInr }}</strong></span
+              >
+              <span class="stat-pill"
+                >Margin: <strong>{{ cogsSummary().grossMarginPercentage }}%</strong></span
+              >
+            </div>
+          </div>
+
+          <div class="table-responsive">
+            <table class="report-table">
+              <thead>
+                <tr>
+                  <th>Menu Item</th>
+                  <th>Category</th>
+                  <th class="text-right">Fulfilled Qty</th>
+                  <th class="text-right">Unit COGS</th>
+                  <th class="text-right">Total Revenue</th>
+                  <th class="text-right">Total COGS</th>
+                  <th class="text-right">Gross Profit</th>
+                  <th class="text-right">Margin %</th>
+                  <th>Cost Reliability</th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (item of cogsSummary().itemBreakdown; track item.menuItemId) {
+                  <tr>
+                    <td>
+                      <strong>{{ item.name }}</strong>
+                    </td>
+                    <td>
+                      <span class="tag-category">{{ item.category }}</span>
+                    </td>
+                    <td class="text-right">{{ item.fulfilledQuantity }}</td>
+                    <td class="text-right">{{ item.unitCogs | currencyInr }}</td>
+                    <td class="text-right">{{ item.revenue | currencyInr }}</td>
+                    <td class="text-right">
+                      <strong>{{ item.totalCogs | currencyInr }}</strong>
+                    </td>
+                    <td
+                      class="text-right"
+                      [class.text-success]="item.grossProfit >= 0"
+                      [class.text-crimson]="item.grossProfit < 0"
+                    >
+                      {{ item.grossProfit | currencyInr }}
+                    </td>
+                    <td class="text-right font-mono font-bold">{{ item.grossMarginPct }}%</td>
+                    <td>
+                      @if (item.status === 'VERIFIED') {
+                        <span class="badge-status-verified"
+                          ><i class="ph ph-check-circle"></i> Verified Recipe</span
+                        >
+                      } @else if (item.status === 'ESTIMATED_NO_RECIPE') {
+                        <span
+                          class="badge-status-estimated"
+                          title="No recipe found in database; cost estimated at 0"
+                          ><i class="ph ph-question"></i> No Recipe</span
+                        >
+                      } @else {
+                        <span
+                          class="badge-status-estimated"
+                          title="One or more ingredients lack verified purchase cost"
+                          ><i class="ph ph-warning"></i> Incomplete Cost</span
+                        >
+                      }
+                    </td>
+                  </tr>
+                } @empty {
+                  <tr>
+                    <td colspan="9" class="text-center text-muted" style="padding: 24px;">
+                      No fulfilled items recorded in the selected window.
+                    </td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        </div>
+      }
+
+      <!-- Inventory Wastage Analysis Section -->
+      @if (activeReportTab() === 'overview' || activeReportTab() === 'wastage') {
+        <div class="panel-box">
+          <div class="panel-header">
+            <div>
+              <h2 class="heading-card">Inventory Wastage Analysis</h2>
+              <p class="text-muted text-xs">
+                Dedicated stock deduction tracking for spoilage, expiration, spillages, and quality
+                rejections.
+              </p>
+            </div>
+            <button class="btn btn-secondary btn-sm" (click)="openWastageModal()">
+              <i class="ph ph-plus-circle"></i>
+              <span>Record Wastage Event</span>
+            </button>
+          </div>
+
+          <!-- Wastage Graphic Infographic -->
+          <div class="wastage-infographic-grid">
+            <div class="donut-chart-box">
+              <h3 class="sub-heading" style="margin-bottom: 12px;">Wastage Loss by Cause</h3>
+              <div class="donut-wrap">
+                <svg viewBox="0 0 160 160" class="donut-svg">
+                  @for (slice of wastageDonutSlices(); track slice.reason) {
+                    <path
+                      [attr.d]="slice.pathD"
+                      [attr.fill]="slice.color"
+                      stroke="var(--color-surface)"
+                      stroke-width="1.5"
+                    />
+                  }
+                  <!-- Donut hole -->
+                  <circle cx="80" cy="80" r="38" fill="var(--color-surface)" />
+                  <text
+                    x="80"
+                    y="76"
+                    text-anchor="middle"
+                    font-size="10"
+                    font-weight="700"
+                    fill="var(--color-crimson)"
+                  >
+                    Loss
+                  </text>
+                  <text
+                    x="80"
+                    y="92"
+                    text-anchor="middle"
+                    font-size="11"
+                    font-weight="800"
+                    fill="var(--color-onyx)"
+                  >
+                    {{ wastageSummary().totalWastageValue | currencyInr }}
+                  </text>
+                </svg>
+
+                <div class="donut-legend">
+                  @for (item of wastageReasonChart(); track item.reason) {
+                    <div class="d-leg-item">
+                      <span class="d-dot" [style.background]="item.color"></span>
+                      <span class="d-label">{{ item.label }}</span>
+                      <strong class="d-val">{{ item.percentage }}% ({{ item.value | currencyInr }})</strong>
+                    </div>
+                  }
+                </div>
+              </div>
+            </div>
+
+            <div class="wastage-summary-cards">
+              <div class="wastage-kpi">
+                <span class="wk-label">Total Wastage Cost</span>
+                <span class="wk-val text-crimson">{{
+                  wastageSummary().totalWastageValue | currencyInr
+                }}</span>
+              </div>
+              <div class="wastage-kpi">
+                <span class="wk-label">Wastage Events</span>
+                <span class="wk-val">{{ wastageSummary().totalMovementsCount }}</span>
+              </div>
+              <div class="wastage-kpi">
+                <span class="wk-label">Wasted Ingredients</span>
+                <span class="wk-val">{{ wastageSummary().byIngredient.length }} Items</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="wastage-tables-grid">
+            <!-- By Ingredient -->
+            <div class="sub-table-wrap">
+              <h3 class="sub-heading">Wastage by Ingredient</h3>
+              <table class="report-table">
+                <thead>
+                  <tr>
+                    <th>Ingredient</th>
+                    <th>Category</th>
+                    <th class="text-right">Quantity</th>
+                    <th class="text-right">Total Cost</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  @for (ing of wastageSummary().byIngredient; track ing.ingredientId) {
+                    <tr>
+                      <td>
+                        <strong>{{ ing.ingredientName }}</strong>
+                      </td>
+                      <td>
+                        <span class="tag-category">{{ ing.category }}</span>
+                      </td>
+                      <td class="text-right">{{ ing.quantity }} {{ ing.unit }}</td>
+                      <td class="text-right text-crimson">
+                        <strong>{{ ing.totalValue | currencyInr }}</strong>
+                      </td>
+                    </tr>
+                  } @empty {
+                    <tr>
+                      <td colspan="4" class="text-center text-muted" style="padding: 16px;">
+                        No ingredient wastage recorded in this timeframe.
+                      </td>
+                    </tr>
+                  }
+                </tbody>
+              </table>
+            </div>
+
+            <!-- By Reason -->
+            <div class="sub-table-wrap">
+              <h3 class="sub-heading">Wastage by Operational Reason</h3>
+              <table class="report-table">
+                <thead>
+                  <tr>
+                    <th>Reason</th>
+                    <th class="text-right">Events</th>
+                    <th class="text-right">Total Cost</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  @for (rs of wastageSummary().byReason; track rs.reason) {
+                    <tr>
+                      <td>
+                        <strong>{{ formatReasonLabel(rs.reason) }}</strong>
+                      </td>
+                      <td class="text-right">{{ rs.movementCount }}</td>
+                      <td class="text-right text-crimson">
+                        <strong>{{ rs.totalValue | currencyInr }}</strong>
+                      </td>
+                    </tr>
+                  } @empty {
+                    <tr>
+                      <td colspan="3" class="text-center text-muted" style="padding: 16px;">
+                        No wastage reasons recorded.
+                      </td>
+                    </tr>
+                  }
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      }
 
       <!-- Log Wastage Modal -->
       @if (showWastageModal()) {
@@ -638,7 +896,7 @@ export type WastageReasonType =
                 <div>
                   <h3 class="heading-card" style="margin: 0;">Record Inventory Wastage</h3>
                   <p class="text-muted text-xs" style="margin: 0;">
-                    Authoritative stock deduction with audit logging
+                    Deduct stock and record wastage reason
                   </p>
                 </div>
               </div>
@@ -735,7 +993,7 @@ export type WastageReasonType =
                   class="form-textarea"
                   [ngModel]="wastageNotes()"
                   (ngModelChange)="wastageNotes.set($event)"
-                  placeholder="Provide brief context for culinary audit..."
+                  placeholder="Provide details for the wastage record..."
                 ></textarea>
               </div>
 
@@ -789,9 +1047,9 @@ export type WastageReasonType =
       }
 
       .filter-toolbar {
-        background: var(--color-surface, #ffffff);
-        border: 1px solid var(--color-border, #e5e7eb);
-        border-radius: var(--radius-md, 8px);
+        background: var(--color-surface);
+        border: 1px solid var(--color-border);
+        border-radius: var(--radius-md);
         padding: 16px;
         display: flex;
         flex-direction: column;
@@ -809,7 +1067,7 @@ export type WastageReasonType =
       .filter-label {
         font-size: 0.8125rem;
         font-weight: 700;
-        color: var(--color-text-secondary, #4b5563);
+        color: var(--color-text-secondary);
         display: flex;
         align-items: center;
         gap: 4px;
@@ -820,22 +1078,22 @@ export type WastageReasonType =
         padding: 6px 12px;
         font-size: 0.8125rem;
         font-weight: 600;
-        background: var(--color-bone-light, #f9fafb);
-        border: 1px solid var(--color-border, #e5e7eb);
-        border-radius: var(--radius-sm, 6px);
-        color: var(--color-text-primary, #111827);
+        background: var(--color-bone-light);
+        border: 1px solid var(--color-border);
+        border-radius: var(--radius-sm);
+        color: var(--color-text-primary);
         cursor: pointer;
-        transition: all var(--transition-fast, 0.15s ease);
+        transition: all var(--transition-fast);
 
         &:hover {
-          background: #f3f4f6;
-          border-color: #d1d5db;
+          background: var(--color-surface-hover);
+          border-color: var(--color-taupe);
         }
 
         &.active {
-          background: var(--color-onyx, #1f2937);
+          background: var(--color-onyx);
           color: #ffffff;
-          border-color: var(--color-onyx, #1f2937);
+          border-color: var(--color-onyx);
         }
       }
 
@@ -844,7 +1102,7 @@ export type WastageReasonType =
         gap: 16px;
         flex-wrap: wrap;
         padding-top: 8px;
-        border-top: 1px dashed var(--color-border, #e5e7eb);
+        border-top: 1px dashed var(--color-border-subtle);
       }
 
       .date-input-wrap {
@@ -855,15 +1113,16 @@ export type WastageReasonType =
         label {
           font-size: 0.75rem;
           font-weight: 600;
-          color: var(--color-text-muted, #6b7280);
+          color: var(--color-text-muted);
         }
 
         input[type='date'] {
           padding: 6px 10px;
           font-size: 0.8125rem;
-          border: 1px solid var(--color-border, #d1d5db);
-          border-radius: 4px;
-          background: #ffffff;
+          border: 1px solid var(--color-border);
+          border-radius: var(--radius-xs);
+          background: var(--color-surface);
+          color: var(--color-text-primary);
         }
       }
 
@@ -872,13 +1131,13 @@ export type WastageReasonType =
         align-items: center;
         gap: 8px;
         padding: 10px 14px;
-        border-radius: 6px;
+        border-radius: var(--radius-sm);
         font-size: 0.875rem;
 
         &.alert-danger {
-          background: #fef2f2;
-          border: 1px solid #fecaca;
-          color: #b91c1c;
+          background: var(--color-danger-bg);
+          border: 1px solid var(--color-danger);
+          color: var(--color-danger);
         }
       }
 
@@ -887,20 +1146,46 @@ export type WastageReasonType =
         justify-content: space-between;
         align-items: center;
         padding: 10px 14px;
-        background: rgba(184, 134, 11, 0.08);
-        border: 1px solid rgba(184, 134, 11, 0.2);
-        border-radius: 6px;
+        background: var(--color-gold-subtle);
+        border: 1px solid rgba(212, 175, 55, 0.3);
+        border-radius: var(--radius-sm);
         font-size: 0.8125rem;
       }
 
       .range-summary-pill {
         font-weight: 600;
-        color: var(--color-text-secondary, #4b5563);
+        color: var(--color-text-secondary);
+      }
+
+      .metrics-sections-container {
+        display: flex;
+        flex-direction: column;
+        gap: 20px;
+      }
+
+      .metrics-section {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+
+      .metrics-section-title {
+        font-size: 0.875rem;
+        font-weight: 700;
+        color: var(--color-text-secondary);
+        display: flex;
+        align-items: center;
+        gap: 6px;
+
+        i {
+          font-size: 1.05rem;
+          color: var(--color-crimson);
+        }
       }
 
       .kpi-grid {
         display: grid;
-        grid-template-columns: repeat(5, 1fr);
+        grid-template-columns: repeat(4, 1fr);
         gap: 14px;
 
         @media (max-width: 1200px) {
@@ -912,62 +1197,83 @@ export type WastageReasonType =
         @media (max-width: 500px) {
           grid-template-columns: 1fr;
         }
+
+        &.grid-3-col {
+          grid-template-columns: repeat(3, 1fr);
+          @media (max-width: 800px) {
+            grid-template-columns: 1fr;
+          }
+        }
+
+        &.grid-2-col {
+          grid-template-columns: repeat(2, 1fr);
+          @media (max-width: 600px) {
+            grid-template-columns: 1fr;
+          }
+        }
       }
 
       .kpi-card {
-        background: var(--color-surface, #ffffff);
-        border: 1px solid var(--color-border, #e5e7eb);
-        border-radius: var(--radius-md, 8px);
+        background: var(--color-surface);
+        border: 1px solid var(--color-border);
+        border-radius: var(--radius-md);
         padding: 18px;
         display: flex;
         flex-direction: column;
         gap: 4px;
 
         &.highlight-card {
-          border-color: #10b981;
-          background: #f0fdf4;
+          border-color: var(--color-success);
+          background: var(--color-success-bg);
         }
 
         &.highlight-gold {
-          border-color: #d97706;
-          background: #fffbeb;
+          border-color: var(--color-gold);
+          background: var(--color-gold-subtle);
         }
 
         &.highlight-crimson {
-          border-color: #ef4444;
-          background: #fef2f2;
+          border-color: var(--color-crimson);
+          background: var(--color-crimson-subtle);
         }
       }
 
       .kpi-title {
         font-size: 0.75rem;
         font-weight: 700;
-        color: var(--color-text-muted, #6b7280);
+        color: var(--color-text-muted);
         text-transform: uppercase;
         letter-spacing: 0.05em;
       }
       .kpi-val {
         font-size: 1.5rem;
         font-weight: 800;
+        font-variant-numeric: tabular-nums;
       }
       .kpi-sub {
         font-size: 0.75rem;
-        color: var(--color-text-muted, #6b7280);
+        color: var(--color-text-muted);
       }
       .text-success {
-        color: #059669;
+        color: var(--color-success);
       }
       .text-crimson {
-        color: #dc2626;
+        color: var(--color-crimson);
       }
       .text-onyx {
-        color: #111827;
+        color: var(--color-onyx);
+      }
+      .font-bold {
+        font-weight: 700;
+      }
+      .font-extrabold {
+        font-weight: 800;
       }
 
       .empty-state-box {
-        background: var(--color-surface, #ffffff);
-        border: 1px dashed var(--color-border, #d1d5db);
-        border-radius: var(--radius-md, 8px);
+        background: var(--color-surface);
+        border: 1px dashed var(--color-border);
+        border-radius: var(--radius-md);
         padding: 40px 20px;
         text-align: center;
         display: flex;
@@ -977,14 +1283,14 @@ export type WastageReasonType =
 
         .empty-icon {
           font-size: 2.5rem;
-          color: var(--color-text-muted, #9ca3af);
+          color: var(--color-text-muted);
         }
       }
 
       .panel-box {
-        background: var(--color-surface, #ffffff);
-        border: 1px solid var(--color-border, #e5e7eb);
-        border-radius: var(--radius-md, 8px);
+        background: var(--color-surface);
+        border: 1px solid var(--color-border);
+        border-radius: var(--radius-md);
         padding: 22px;
         display: flex;
         flex-direction: column;
@@ -1052,12 +1358,12 @@ export type WastageReasonType =
         .ot-value {
           font-size: 1.125rem;
           font-weight: 800;
-          color: #059669;
+          color: var(--color-success);
         }
 
         .ot-sub {
           font-weight: 600;
-          color: var(--color-text-primary, #111827);
+          color: var(--color-text-primary);
         }
       }
 
@@ -1066,16 +1372,18 @@ export type WastageReasonType =
         font-weight: 800;
         letter-spacing: 0.05em;
         padding: 2px 6px;
-        border-radius: 4px;
-        background: #e5e7eb;
-        color: #374151;
+        border-radius: var(--radius-xs);
+        background: var(--color-bone-light);
+        color: var(--color-text-secondary);
+        border: 1px solid var(--color-border);
       }
 
       .badge-warning {
-        background: #fef3c7;
-        color: #92400e;
+        background: var(--color-warning-bg);
+        color: var(--color-warning);
+        border: 1px solid rgba(212, 175, 55, 0.3);
         padding: 2px 8px;
-        border-radius: 4px;
+        border-radius: var(--radius-xs);
         font-weight: 600;
         display: inline-flex;
         align-items: center;
@@ -1095,13 +1403,13 @@ export type WastageReasonType =
         td {
           padding: 10px 12px;
           text-align: left;
-          border-bottom: 1px solid var(--color-border-subtle, #f3f4f6);
+          border-bottom: 1px solid var(--color-border-subtle);
         }
 
         th {
           font-weight: 700;
-          color: var(--color-text-secondary, #4b5563);
-          background: var(--color-bone-light, #f9fafb);
+          color: var(--color-text-secondary);
+          background: var(--color-bone-light);
         }
 
         .text-right {
@@ -1112,16 +1420,17 @@ export type WastageReasonType =
       .tag-category {
         font-size: 0.75rem;
         padding: 2px 6px;
-        background: #f3f4f6;
-        border-radius: 4px;
-        color: #4b5563;
+        background: var(--color-bone-light);
+        border: 1px solid var(--color-border-subtle);
+        border-radius: var(--radius-xs);
+        color: var(--color-text-secondary);
       }
 
       .badge-status-verified {
         display: inline-flex;
         align-items: center;
         gap: 4px;
-        color: #059669;
+        color: var(--color-success);
         font-size: 0.75rem;
         font-weight: 600;
       }
@@ -1130,7 +1439,7 @@ export type WastageReasonType =
         display: inline-flex;
         align-items: center;
         gap: 4px;
-        color: #d97706;
+        color: var(--color-warning);
         font-size: 0.75rem;
         font-weight: 600;
       }
@@ -1139,9 +1448,9 @@ export type WastageReasonType =
         display: flex;
         gap: 20px;
         padding: 12px 16px;
-        background: #fef2f2;
-        border: 1px solid #fee2e2;
-        border-radius: 6px;
+        background: var(--color-crimson-subtle);
+        border: 1px solid rgba(194, 24, 7, 0.2);
+        border-radius: var(--radius-sm);
       }
 
       .wastage-kpi {
@@ -1150,7 +1459,7 @@ export type WastageReasonType =
         gap: 2px;
         .wk-label {
           font-size: 0.75rem;
-          color: #991b1b;
+          color: var(--color-crimson);
           font-weight: 700;
           text-transform: uppercase;
         }
@@ -1208,25 +1517,25 @@ export type WastageReasonType =
 
       .bar-track {
         height: 8px;
-        background: var(--color-bone, #e5e7eb);
-        border-radius: var(--radius-full, 9999px);
+        background: var(--color-bone-dark);
+        border-radius: var(--radius-full);
         overflow: hidden;
       }
 
       .bar-fill {
         height: 100%;
-        border-radius: var(--radius-full, 9999px);
+        border-radius: var(--radius-full);
         &.crimson {
-          background: #c21807;
+          background: var(--color-crimson);
         }
         &.dark {
-          background: #1f2937;
+          background: var(--color-onyx);
         }
         &.gold {
-          background: #d4af37;
+          background: var(--color-gold);
         }
         &.taupe {
-          background: #8b7355;
+          background: var(--color-taupe);
         }
       }
 
@@ -1240,9 +1549,9 @@ export type WastageReasonType =
         justify-content: space-between;
         align-items: center;
         padding: 12px 14px;
-        background: var(--color-bone-light, #f9fafb);
-        border-radius: var(--radius-sm, 6px);
-        border: 1px solid var(--color-border-subtle, #f3f4f6);
+        background: var(--color-bone-light);
+        border-radius: var(--radius-sm);
+        border: 1px solid var(--color-border-subtle);
       }
 
       .mode-left {
@@ -1252,7 +1561,7 @@ export type WastageReasonType =
       }
       .mode-icon {
         font-size: 1.5rem;
-        color: var(--color-onyx, #1f2937);
+        color: var(--color-onyx);
       }
       .mode-right {
         text-align: right;
@@ -1262,9 +1571,266 @@ export type WastageReasonType =
         font-weight: 800;
         display: block;
       }
+      /* Tabs Navigation Bar */
+      .tabs-nav-bar {
+        display: inline-flex;
+        gap: 6px;
+        background: var(--color-surface);
+        border: 1px solid var(--color-border);
+        border-radius: var(--radius-md);
+        padding: 5px;
+        box-shadow: var(--shadow-xs);
+        overflow-x: auto;
+        max-width: 100%;
+        margin-bottom: 4px;
+      }
+
+      .tab-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 9px 16px;
+        background: transparent;
+        border: 1px solid transparent;
+        border-radius: var(--radius-sm);
+        font-weight: 600;
+        font-size: 0.875rem;
+        color: var(--color-text-secondary);
+        cursor: pointer;
+        white-space: nowrap;
+        transition: all var(--transition-fast);
+        user-select: none;
+
+        .tab-icon {
+          font-size: 1.15rem;
+          color: var(--color-taupe);
+          transition: all var(--transition-fast);
+        }
+
+        .tab-title {
+          font-weight: 600;
+        }
+
+        .tab-count-pill {
+          font-size: 0.6875rem;
+          font-weight: 700;
+          padding: 2px 7px;
+          border-radius: var(--radius-full);
+          background: var(--color-bone-light);
+          color: var(--color-text-muted);
+          border: 1px solid var(--color-border-subtle);
+          transition: all var(--transition-fast);
+        }
+
+        &:hover:not(.active) {
+          background: var(--color-bone-light);
+          color: var(--color-onyx);
+
+          .tab-icon {
+            color: var(--color-onyx);
+          }
+        }
+
+        &.active {
+          background: var(--color-onyx);
+          color: #ffffff;
+          border-color: var(--color-onyx);
+          box-shadow: 0 4px 12px rgba(18, 18, 18, 0.2);
+
+          .tab-icon {
+            color: var(--color-gold);
+          }
+
+          .tab-count-pill {
+            background: rgba(255, 255, 255, 0.2);
+            color: #ffffff;
+            border-color: transparent;
+          }
+        }
+      }
+
+      /* Double Grid for Visual Canvases */
+      .charts-double-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 20px;
+
+        @media (max-width: 900px) {
+          grid-template-columns: 1fr;
+        }
+      }
+
+      .chart-canvas-panel {
+        display: flex;
+        flex-direction: column;
+        gap: 16px;
+      }
+
+      .chart-summary-stat {
+        .stat-badge-rev {
+          font-size: 0.875rem;
+          font-weight: 700;
+          color: var(--color-crimson);
+          background: var(--color-crimson-subtle);
+          padding: 4px 10px;
+          border-radius: var(--radius-full);
+          display: inline-flex;
+          align-items: center;
+          gap: 4px;
+        }
+      }
+
+      .svg-trend-canvas-wrap {
+        width: 100%;
+        background: var(--color-bone-light);
+        border: 1px solid var(--color-border-subtle);
+        border-radius: var(--radius-sm);
+        padding: 10px 6px;
+        overflow: hidden;
+      }
+
+      .trend-canvas-svg {
+        width: 100%;
+        height: auto;
+        min-height: 180px;
+        max-height: 240px;
+        display: block;
+      }
+
+      /* Flow Bar Chart */
+      .financial-bars-flow {
+        display: flex;
+        flex-direction: column;
+        gap: 14px;
+        justify-content: center;
+        height: 100%;
+      }
+
+      .flow-bar-row {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+      }
+
+      .flow-bar-head {
+        display: flex;
+        justify-content: space-between;
+        align-items: baseline;
+      }
+
+      .flow-label {
+        font-size: 0.8125rem;
+        font-weight: 700;
+        color: var(--color-text-secondary);
+      }
+
+      .flow-val-group {
+        display: flex;
+        align-items: baseline;
+        gap: 6px;
+      }
+
+      .flow-val {
+        font-size: 0.875rem;
+        font-weight: 800;
+        color: var(--color-onyx);
+      }
+
+      .flow-pct {
+        font-size: 0.75rem;
+        font-weight: 600;
+        color: var(--color-text-muted);
+      }
+
+      .flow-bar-track {
+        height: 8px;
+        background: var(--color-bone-light);
+        border: 1px solid var(--color-border-subtle);
+        border-radius: var(--radius-full);
+        overflow: hidden;
+      }
+
+      .flow-bar-fill {
+        height: 100%;
+        border-radius: var(--radius-full);
+        transition: width var(--transition-normal);
+      }
+
+      .flow-bar-sub {
+        font-size: 0.6875rem;
+        color: var(--color-text-muted);
+      }
+
+      /* Wastage Infographic */
+      .wastage-infographic-grid {
+        display: grid;
+        grid-template-columns: 1.2fr 0.8fr;
+        gap: 20px;
+        background: var(--color-bone-light);
+        border: 1px solid var(--color-border-subtle);
+        border-radius: var(--radius-sm);
+        padding: 16px;
+
+        @media (max-width: 800px) {
+          grid-template-columns: 1fr;
+        }
+      }
+
+      .donut-wrap {
+        display: flex;
+        align-items: center;
+        gap: 20px;
+        flex-wrap: wrap;
+      }
+
+      .donut-svg {
+        width: 140px;
+        height: 140px;
+        flex-shrink: 0;
+      }
+
+      .donut-legend {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        flex: 1;
+        min-width: 180px;
+      }
+
+      .d-leg-item {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 0.75rem;
+      }
+
+      .d-dot {
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        flex-shrink: 0;
+      }
+
+      .d-label {
+        color: var(--color-text-secondary);
+        flex: 1;
+      }
+
+      .d-val {
+        color: var(--color-onyx);
+        font-weight: 700;
+      }
+
+      .wastage-summary-cards {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        justify-content: center;
+      }
+
       .amt {
         font-size: 0.75rem;
-        color: var(--color-text-muted, #6b7280);
+        color: var(--color-text-muted);
       }
 
       /* Modal Styles */
@@ -1274,7 +1840,7 @@ export type WastageReasonType =
         left: 0;
         right: 0;
         bottom: 0;
-        background: rgba(0, 0, 0, 0.5);
+        background: rgba(18, 18, 18, 0.5);
         backdrop-filter: blur(4px);
         z-index: 1000;
         display: flex;
@@ -1284,11 +1850,12 @@ export type WastageReasonType =
       }
 
       .modal-card {
-        background: #ffffff;
-        border-radius: 8px;
+        background: var(--color-surface);
+        border: 1px solid var(--color-border);
+        border-radius: var(--radius-md);
         max-width: 500px;
         width: 100%;
-        box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15);
+        box-shadow: var(--shadow-lg);
         overflow: hidden;
       }
 
@@ -1297,7 +1864,7 @@ export type WastageReasonType =
         justify-content: space-between;
         align-items: center;
         padding: 16px 20px;
-        border-bottom: 1px solid #e5e7eb;
+        border-bottom: 1px solid var(--color-border);
       }
 
       .modal-title-wrap {
@@ -1310,8 +1877,8 @@ export type WastageReasonType =
         width: 36px;
         height: 36px;
         border-radius: 50%;
-        background: #fee2e2;
-        color: #dc2626;
+        background: var(--color-crimson-subtle);
+        color: var(--color-crimson);
         display: flex;
         align-items: center;
         justify-content: center;
@@ -1322,8 +1889,11 @@ export type WastageReasonType =
         background: transparent;
         border: none;
         font-size: 1.25rem;
-        color: #6b7280;
+        color: var(--color-text-muted);
         cursor: pointer;
+        &:hover {
+          color: var(--color-text-primary);
+        }
       }
 
       .modal-body {
@@ -1351,7 +1921,7 @@ export type WastageReasonType =
       .form-label {
         font-size: 0.8125rem;
         font-weight: 700;
-        color: #374151;
+        color: var(--color-text-primary);
       }
 
       .form-input,
@@ -1359,11 +1929,13 @@ export type WastageReasonType =
       .form-textarea {
         padding: 8px 12px;
         font-size: 0.875rem;
-        border: 1px solid #d1d5db;
-        border-radius: 6px;
+        border: 1px solid var(--color-border);
+        border-radius: var(--radius-xs);
         outline: none;
+        background: var(--color-surface);
+        color: var(--color-text-primary);
         &:focus {
-          border-color: #1f2937;
+          border-color: var(--color-onyx);
         }
       }
 
@@ -1374,7 +1946,7 @@ export type WastageReasonType =
 
       .available-stock-hint {
         font-size: 0.75rem;
-        color: #059669;
+        color: var(--color-success);
         display: flex;
         align-items: center;
         gap: 6px;
@@ -1385,8 +1957,8 @@ export type WastageReasonType =
         justify-content: flex-end;
         gap: 10px;
         padding: 14px 20px;
-        background: #f9fafb;
-        border-top: 1px solid #e5e7eb;
+        background: var(--color-bone-light);
+        border-top: 1px solid var(--color-border);
       }
 
       @media print {
@@ -1402,7 +1974,7 @@ export type WastageReasonType =
         .panel-box,
         .kpi-card {
           box-shadow: none !important;
-          border-color: #ccc !important;
+          border-color: var(--color-border) !important;
         }
       }
     `,
@@ -1416,6 +1988,9 @@ export class ReportsComponent {
   orders = this.mock.orders;
   categories = this.mock.categories;
   menuItems = this.mock.menuItems;
+
+  // Tab View Navigation
+  activeReportTab = signal<ReportViewTab>('overview');
 
   // Filter Signals
   selectedPreset = signal<DateRangePreset>('this_month');
@@ -1510,7 +2085,7 @@ export class ReportsComponent {
     const ot = this.orderTypeFilter();
     const allMovements = this.mock.stockMovements();
     return this.orders().filter((o) => {
-      if (o.status !== 'SERVED' && o.status !== 'COMPLETED') return false;
+      if (o.status !== 'DISPATCHED' && o.status !== 'SERVED' && o.status !== 'COMPLETED') return false;
       const inType = ot === 'ALL' || o.orderType === ot;
       if (!inType) return false;
       const fulfillmentTs = getOrderFulfillmentTimestamp(o, allMovements);
@@ -1618,6 +2193,244 @@ export class ReportsComponent {
         percentage: totalPaid > 0 ? Math.round((m.amount / totalPaid) * 100) : 0,
       }))
       .sort((a, b) => b.amount - a.amount);
+  });
+
+  // Trend Chart Computations
+  revenueTrendPoints = computed(() => {
+    const orders = this.filteredOrders().filter((o) => o.status !== 'CANCELLED');
+    const refunds = this.rangeRefunds();
+    const range = this.dateRange();
+
+    // Grouping strategy based on window size
+    const daysDiff = Math.max(1, Math.round((range.endMs - range.startMs) / (1000 * 60 * 60 * 24)));
+
+    if (daysDiff <= 2) {
+      // Hourly bins (10:00 to 23:00)
+      const hours = [10, 12, 14, 16, 18, 20, 22];
+      const data = hours.map((h) => {
+        const hOrders = orders.filter((o) => {
+          const ordH = new Date(o.createdAt).getHours();
+          return Math.abs(ordH - h) <= 1;
+        });
+        const rev = hOrders.reduce((sum, o) => sum + (o.totalAmount || 0), 0);
+        const ref = refunds
+          .filter((r) => {
+            const refH = new Date(r.createdAt).getHours();
+            return Math.abs(refH - h) <= 1;
+          })
+          .reduce((sum, r) => sum + (r.refundAmount || 0), 0);
+        return {
+          label: `${h}:00`,
+          revenue: rev,
+          refunds: ref,
+        };
+      });
+
+      return this.formatTrendChart(data);
+    }
+
+    if (daysDiff <= 14) {
+      // Daily breakdown
+      const daysMap = new Map<string, { label: string; revenue: number; refunds: number }>();
+      const cur = new Date(range.startMs);
+      const end = new Date(range.endMs);
+
+      while (cur <= end) {
+        const key = cur.toISOString().slice(0, 10);
+        const label = cur.toLocaleDateString('en-US', { weekday: 'short', day: 'numeric' });
+        daysMap.set(key, { label, revenue: 0, refunds: 0 });
+        cur.setDate(cur.getDate() + 1);
+      }
+
+      for (const ord of orders) {
+        const key = new Date(ord.createdAt).toISOString().slice(0, 10);
+        const entry = daysMap.get(key);
+        if (entry) entry.revenue += ord.totalAmount || 0;
+      }
+      for (const ref of refunds) {
+        const key = new Date(ref.createdAt).toISOString().slice(0, 10);
+        const entry = daysMap.get(key);
+        if (entry) entry.refunds += ref.refundAmount || 0;
+      }
+
+      return this.formatTrendChart(Array.from(daysMap.values()));
+    }
+
+    // Weekly or monthly aggregations (up to 7 intervals)
+    const stepMs = (range.endMs - range.startMs) / 7;
+    const intervals: { label: string; revenue: number; refunds: number }[] = [];
+
+    for (let i = 0; i < 7; i++) {
+      const bStart = range.startMs + i * stepMs;
+      const bEnd = bStart + stepMs;
+      const d = new Date(bStart);
+      const label = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+      const rev = orders
+        .filter((o) => {
+          const t = new Date(o.createdAt).getTime();
+          return t >= bStart && t < bEnd;
+        })
+        .reduce((sum, o) => sum + (o.totalAmount || 0), 0);
+      const ref = refunds
+        .filter((r) => {
+          const t = new Date(r.createdAt).getTime();
+          return t >= bStart && t < bEnd;
+        })
+        .reduce((sum, r) => sum + (r.refundAmount || 0), 0);
+
+      intervals.push({ label, revenue: rev, refunds: ref });
+    }
+
+    return this.formatTrendChart(intervals);
+  });
+
+  private formatTrendChart(items: { label: string; revenue: number; refunds: number }[]) {
+    const width = 640;
+    const height = 220;
+    const padX = 50;
+    const padY = 30;
+    const chartW = width - padX * 2;
+    const chartH = height - padY * 2;
+
+    const maxVal = Math.max(...items.map((i) => i.revenue), 1000);
+    const stepX = items.length > 1 ? chartW / (items.length - 1) : chartW / 2;
+
+    const points = items.map((it, idx) => {
+      const x = padX + idx * stepX;
+      const y = padY + chartH - (it.revenue / maxVal) * chartH;
+      return {
+        ...it,
+        x: Math.round(x),
+        y: Math.round(y),
+      };
+    });
+
+    const pathD = points.length > 0 ? points.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x} ${p.y}`).join(' ') : '';
+    const areaD =
+      points.length > 0
+        ? `${pathD} L ${points[points.length - 1].x} ${padY + chartH} L ${points[0].x} ${padY + chartH} Z`
+        : '';
+
+    return {
+      points,
+      pathD,
+      areaD,
+      maxVal,
+      gridLines: [
+        { y: padY, val: maxVal },
+        { y: padY + chartH / 2, val: Math.round(maxVal / 2) },
+        { y: padY + chartH, val: 0 },
+      ],
+      baselineY: padY + chartH,
+    };
+  }
+
+  // Cost vs Profit Distribution Bar Data
+  costProfitComparison = computed(() => {
+    const netRev = Math.max(0, this.netRevenue());
+    const cogs = Math.max(0, this.cogsSummary().totalCogs);
+    const profit = Math.max(0, this.cogsSummary().grossProfit);
+    const tax = Math.max(0, this.totalTaxCollected());
+    const waste = Math.max(0, this.wastageSummary().totalWastageValue);
+
+    const max = Math.max(netRev, cogs + profit, 1000);
+    const getPct = (val: number) => (val > 0 ? Math.min(100, Math.round((val / max) * 100)) : 0);
+
+    return [
+      {
+        label: 'Net Collections',
+        value: netRev,
+        pct: getPct(netRev),
+        color: 'var(--color-success)',
+        sub: 'Collected revenue minus refunds',
+      },
+      {
+        label: 'Recipe COGS',
+        value: cogs,
+        pct: getPct(cogs),
+        color: 'var(--color-onyx)',
+        sub: 'Food raw ingredients cost',
+      },
+      {
+        label: 'Gross Profit',
+        value: profit,
+        pct: getPct(profit),
+        color: 'var(--color-gold)',
+        sub: 'Retained margin post-food cost',
+      },
+      {
+        label: 'Total GST',
+        value: tax,
+        pct: getPct(tax),
+        color: 'var(--color-taupe)',
+        sub: 'Billed government tax',
+      },
+      {
+        label: 'Wastage Loss',
+        value: waste,
+        pct: getPct(waste),
+        color: 'var(--color-crimson)',
+        sub: 'Spoilage, expiration & kitchen waste',
+      },
+    ];
+  });
+
+  // Wastage Reason Chart Data
+  wastageReasonChart = computed(() => {
+    const summary = this.wastageSummary();
+    const colors = [
+      'var(--color-crimson)',
+      'var(--color-gold)',
+      'var(--color-onyx)',
+      'var(--color-taupe)',
+      '#a83232',
+      '#786450',
+    ];
+
+    const totalVal = summary.totalWastageValue;
+    return summary.byReason.map((r, i) => ({
+      reason: r.reason,
+      label: this.formatReasonLabel(r.reason),
+      count: r.movementCount,
+      value: r.totalValue,
+      percentage: totalVal > 0 ? Math.round((r.totalValue / totalVal) * 100) : 0,
+      color: colors[i % colors.length],
+    }));
+  });
+
+  // Wastage Donut SVG Slices
+  wastageDonutSlices = computed(() => {
+    const data = this.wastageReasonChart();
+    const total = data.reduce((acc, d) => acc + d.value, 0);
+    if (total <= 0) return [];
+
+    let currentAngle = 0;
+    const radius = 60;
+    const cx = 80;
+    const cy = 80;
+
+    return data.map((d) => {
+      const sliceAngle = (d.value / total) * 360;
+      const startAngle = currentAngle;
+      const endAngle = currentAngle + sliceAngle;
+      currentAngle += sliceAngle;
+
+      const x1 = cx + radius * Math.cos((Math.PI * (startAngle - 90)) / 180);
+      const y1 = cy + radius * Math.sin((Math.PI * (startAngle - 90)) / 180);
+      const x2 = cx + radius * Math.cos((Math.PI * (endAngle - 90)) / 180);
+      const y2 = cy + radius * Math.sin((Math.PI * (endAngle - 90)) / 180);
+
+      const largeArc = sliceAngle > 180 ? 1 : 0;
+      const pathD =
+        sliceAngle >= 359.9
+          ? `M ${cx} ${cy - radius} A ${radius} ${radius} 0 1 1 ${cx - 0.01} ${cy - radius} Z`
+          : `M ${cx} ${cy} L ${x1} ${y1} A ${radius} ${radius} 0 ${largeArc} 1 ${x2} ${y2} Z`;
+
+      return {
+        ...d,
+        pathD,
+      };
+    });
   });
 
   // Wastage Modal State
@@ -1795,7 +2608,7 @@ export class ReportsComponent {
     link.setAttribute('href', encodedUri);
     link.setAttribute(
       'download',
-      `TheRoyalSpice_Sales_Report_${new Date().toISOString().slice(0, 10)}.csv`,
+      `GuruKripa_Dhaba_Sales_Report_${new Date().toISOString().slice(0, 10)}.csv`,
     );
     document.body.appendChild(link);
     link.click();

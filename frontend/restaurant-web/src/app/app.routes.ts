@@ -23,6 +23,7 @@ export const routes: Routes = [
     path: 'admin',
     component: AdminLayoutComponent,
     canActivate: [adminGuard],
+    canActivateChild: [adminGuard],
     children: [
       {
         path: '',

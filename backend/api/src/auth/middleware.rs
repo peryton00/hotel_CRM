@@ -79,7 +79,9 @@ where
                     }
                     Err(err) => {
                         tracing::warn!("JWT decode error: {:?}", err);
-                        return Err(AppError::Unauthorized(format!("Invalid token: {}", err)));
+                        if !config.allow_dev_auth {
+                            return Err(AppError::Unauthorized(format!("Invalid token: {}", err)));
+                        }
                     }
                 }
             }
@@ -87,37 +89,36 @@ where
 
         // 2. Fallback for local development / test mode ONLY if explicitly enabled
         if config.allow_dev_auth {
-            if let Some(dev_user_header) = parts
+            let user_id = parts
                 .headers
                 .get("x-dev-user-id")
                 .and_then(|h| h.to_str().ok())
-            {
-                if let Ok(user_id) = Uuid::parse_str(dev_user_header) {
-                    let dev_role = parts
-                        .headers
-                        .get("x-dev-role")
-                        .and_then(|h| h.to_str().ok())
-                        .unwrap_or("owner")
-                        .to_string();
+                .and_then(|h| Uuid::parse_str(h).ok())
+                .unwrap_or_else(|| Uuid::parse_str("00000000-0000-0000-0000-000000000002").unwrap());
 
-                    return Ok(AuthenticatedUser {
-                        user_id,
-                        email: Some("dev@hotelcrm.local".to_string()),
-                        role: dev_role,
-                        claims: SupabaseClaims {
-                            sub: user_id.to_string(),
-                            email: Some("dev@hotelcrm.local".to_string()),
-                            role: Some("authenticated".to_string()),
-                            aud: Some("authenticated".to_string()),
-                            exp: i64::MAX / 2,
-                            iat: Some(0),
-                            iss: None,
-                            app_metadata: None,
-                            user_metadata: None,
-                        },
-                    });
-                }
-            }
+            let dev_role = parts
+                .headers
+                .get("x-dev-role")
+                .and_then(|h| h.to_str().ok())
+                .unwrap_or("admin")
+                .to_string();
+
+            return Ok(AuthenticatedUser {
+                user_id,
+                email: Some("dev@hotelcrm.local".to_string()),
+                role: dev_role,
+                claims: SupabaseClaims {
+                    sub: user_id.to_string(),
+                    email: Some("dev@hotelcrm.local".to_string()),
+                    role: Some("authenticated".to_string()),
+                    aud: Some("authenticated".to_string()),
+                    exp: i64::MAX / 2,
+                    iat: Some(0),
+                    iss: None,
+                    app_metadata: None,
+                    user_metadata: None,
+                },
+            });
         }
 
         Err(AppError::Unauthorized(

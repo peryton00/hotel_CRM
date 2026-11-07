@@ -16,7 +16,7 @@ import { CurrencyInrPipe } from '../../../shared/pipes/currency-inr.pipe';
             <i class="ph ph-check"></i>
           </div>
 
-          <h1 class="heading-section congrats-title">Order Received by Chef Station</h1>
+          <h1 class="heading-section congrats-title">Order Received by Kitchen</h1>
           <p class="congrats-sub">
             @if (ord.orderType === 'TAKEAWAY') {
               Your takeaway dishes are being prepared fresh for pickup

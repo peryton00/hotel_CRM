@@ -1,4 +1,4 @@
-import { Component, inject, signal, computed, OnInit } from '@angular/core';
+import { Component, inject, signal, computed, effect, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { RouterModule, ActivatedRoute } from '@angular/router';
 import { FormsModule } from '@angular/forms';
@@ -51,7 +51,7 @@ import { FoodCustomizerModalComponent } from '../../../shared/components/food-cu
               <span>Table {{ tableNumber() }}</span>
             </div>
             <div class="dining-meta">
-              <h1 class="heading-section">Royal Dining Menu</h1>
+              <h1 class="heading-section">Dining Menu</h1>
               <span class="text-xs text-muted"
                 >Freshly prepared to order • Scan QR to customize</span
               >
@@ -636,23 +636,22 @@ export class MenuCatalogComponent implements OnInit {
   isCustomizerOpen = false;
   customizingItem: MenuItem | null = null;
 
-  ngOnInit(): void {
-    this.route.paramMap.subscribe((params) => {
-      const token = params.get('tableToken');
-      if (!token || !token.trim()) {
-        this.tableInvalid.set(true);
-        this.tableInvalidReason.set(
-          'No table QR token provided. Please scan the QR code located on your dining table.',
-        );
-        this.tableNumber.set('');
-        this.cartService.clearTableContext();
-        return;
-      }
+  constructor() {
+    effect(() => {
+      const token = this.tableToken();
+      if (!token) return;
 
-      this.tableToken.set(token);
+      const allTables = this.mock.tables();
+      // If tables are still loading from backend API, wait before determining validity
+      if (!allTables || allTables.length === 0) return;
 
-      // Lookup table by token
-      const foundTable = this.mock.tables().find((t) => t.qrToken === token || t.id === token);
+      const foundTable = allTables.find(
+        (t) =>
+          t.qrToken === token ||
+          t.id === token ||
+          t.number.toLowerCase() === token.toLowerCase(),
+      );
+
       if (!foundTable) {
         this.tableInvalid.set(true);
         this.tableInvalidReason.set(
@@ -683,11 +682,28 @@ export class MenuCatalogComponent implements OnInit {
         return;
       }
 
-      // Valid table context (AVAILABLE, OCCUPIED, RESERVED with orderingEnabled=true)
+      // Valid table context
       this.tableInvalid.set(false);
       this.tableInvalidReason.set('');
       this.tableNumber.set(foundTable.number);
       this.cartService.setTableContext(foundTable.id, foundTable.number, token);
+    });
+  }
+
+  ngOnInit(): void {
+    this.route.paramMap.subscribe((params) => {
+      const token = params.get('tableToken');
+      if (!token || !token.trim()) {
+        this.tableInvalid.set(true);
+        this.tableInvalidReason.set(
+          'No table QR token provided. Please scan the QR code located on your dining table.',
+        );
+        this.tableNumber.set('');
+        this.cartService.clearTableContext();
+        return;
+      }
+
+      this.tableToken.set(token);
     });
   }
 

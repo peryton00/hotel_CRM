@@ -150,10 +150,15 @@ import { maskPhone, normalizeToE164 } from '../../core/utils/phone.util';
               @if (customerOrders().length === 0) {
                 <div class="empty-orders-view">
                   <div class="empty-icon-circle"><i class="ph ph-receipt"></i></div>
-                  <h3 class="empty-title">No Orders Linked</h3>
+                  <h3 class="empty-title">
+                    {{ customerPhone() ? 'No Orders Linked' : 'No Mobile Number Linked' }}
+                  </h3>
                   <p class="empty-desc">
-                    No previous orders found for mobile +91 {{ customerPhone() }}. Enter your
-                    10-digit mobile number above or during checkout to view your orders here.
+                    @if (customerPhone()) {
+                      No orders found for mobile {{ maskPhone(customerPhone()) }}. Orders placed with this mobile number will appear here automatically.
+                    } @else {
+                      Order history is assigned to customer mobile numbers. Enter your 10-digit mobile number above to view all your previous orders.
+                    }
                   </p>
                 </div>
               } @else {
@@ -817,14 +822,21 @@ export class CustomerLayoutComponent {
   isEditingPhone = false;
   inputPhone = '';
 
-  customerPhone = signal<string>(localStorage.getItem('customer_phone') || '');
+  customerPhone = signal<string>(
+    localStorage.getItem('royal_spice_customer_phone') ||
+      localStorage.getItem('customer_phone') ||
+      '',
+  );
 
   customerOrders = computed(() => {
     const raw = this.customerPhone().replace(/[^0-9]/g, '');
     if (!raw || raw.length < 5) return [];
 
     return this.mock.orders().filter((o) => {
-      const orderPhone = (o.customerPhone || '').replace(/[^0-9]/g, '');
+      // Order history is strictly assigned to the customer mobile number.
+      // Orders without a phone number are unassigned walk-ins and never shown here.
+      const orderPhone = (o.customerPhone || o.customerPhoneE164 || '').replace(/[^0-9]/g, '');
+      if (!orderPhone || orderPhone.length < 5) return false;
       return orderPhone.endsWith(raw) || raw.endsWith(orderPhone);
     });
   });

@@ -11,7 +11,7 @@ use crate::{
     error::AppError,
     models::{
         common::ApiResponse,
-        table::{TransferTableRequest, UpdateTableStatusRequest},
+        table::{AssignTableStaffRequest, TransferTableRequest, UpdateTableStatusRequest},
     },
     repositories::TableRepository,
 };
@@ -34,8 +34,26 @@ pub async fn update_table_status(
         &pool,
         tenant.restaurant_id,
         table_id,
-        &req.status,
+        req.status.as_deref(),
         req.active_order_id,
+        req.assigned_staff_id.map(Some),
+    )
+    .await?;
+
+    Ok(Json(ApiResponse::success(table)))
+}
+
+pub async fn assign_table_staff(
+    State(pool): State<PgPool>,
+    tenant: TenantContext,
+    Path(table_id): Path<Uuid>,
+    Json(req): Json<AssignTableStaffRequest>,
+) -> Result<impl IntoResponse, AppError> {
+    let table = TableRepository::assign_staff(
+        &pool,
+        tenant.restaurant_id,
+        table_id,
+        req.assigned_staff_id,
     )
     .await?;
 

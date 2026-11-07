@@ -37,7 +37,7 @@ impl MenuRepository {
             sqlx::query_as::<_, MenuItem>(
                 r#"
                 SELECT id, restaurant_id, category_id, name, description,
-                       base_price_paise, tax_rate_percent, is_veg, is_available,
+                       base_price_paise, tax_rate_percent::float8 AS tax_rate_percent, is_veg, is_available,
                        image_url, preparation_time_minutes, display_order, created_at, updated_at
                 FROM menu_items
                 WHERE restaurant_id = $1 AND category_id = $2
@@ -52,7 +52,7 @@ impl MenuRepository {
             sqlx::query_as::<_, MenuItem>(
                 r#"
                 SELECT id, restaurant_id, category_id, name, description,
-                       base_price_paise, tax_rate_percent, is_veg, is_available,
+                       base_price_paise, tax_rate_percent::float8 AS tax_rate_percent, is_veg, is_available,
                        image_url, preparation_time_minutes, display_order, created_at, updated_at
                 FROM menu_items
                 WHERE restaurant_id = $1
@@ -75,7 +75,7 @@ impl MenuRepository {
         let item = sqlx::query_as::<_, MenuItem>(
             r#"
             SELECT id, restaurant_id, category_id, name, description,
-                   base_price_paise, tax_rate_percent, is_veg, is_available,
+                   base_price_paise, tax_rate_percent::float8 AS tax_rate_percent, is_veg, is_available,
                    image_url, preparation_time_minutes, display_order, created_at, updated_at
             FROM menu_items
             WHERE restaurant_id = $1 AND id = $2
@@ -101,7 +101,7 @@ impl MenuRepository {
             SET is_available = $3, updated_at = NOW()
             WHERE restaurant_id = $1 AND id = $2
             RETURNING id, restaurant_id, category_id, name, description,
-                      base_price_paise, tax_rate_percent, is_veg, is_available,
+                      base_price_paise, tax_rate_percent::float8 AS tax_rate_percent, is_veg, is_available,
                       image_url, preparation_time_minutes, display_order, created_at, updated_at
             "#,
         )
@@ -128,7 +128,7 @@ impl MenuRepository {
             )
             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
             RETURNING id, restaurant_id, category_id, name, description,
-                      base_price_paise, tax_rate_percent, is_veg, is_available,
+                      base_price_paise, tax_rate_percent::float8 AS tax_rate_percent, is_veg, is_available,
                       image_url, preparation_time_minutes, display_order, created_at, updated_at
             "#,
         )

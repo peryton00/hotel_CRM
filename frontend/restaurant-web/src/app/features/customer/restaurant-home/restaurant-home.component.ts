@@ -65,7 +65,7 @@ import { CartService } from '../../../core/services/cart.service';
             <div>
               <div class="banner-title">Dine-In Digital Table Menu</div>
               <div class="banner-sub">
-                Select your dining table or explore our royal culinary catalog.
+                Select your dining table or explore our menu.
               </div>
             </div>
           </div>
@@ -76,13 +76,12 @@ import { CartService } from '../../../core/services/cart.service';
         </div>
       }
 
-      <!-- Culinary Narrative & Cuisines -->
+      <!-- About & Cuisines -->
       <div class="story-card">
-        <h2 class="heading-section">Royal Heritage & Wood-Fired Charcoal</h2>
+        <h2 class="heading-section">Traditional Recipes & Charcoal Grilling</h2>
         <p class="story-p">
-          Rooted in Awadhi royal kitchens and centuries-old culinary secrets, GuruKripa Dhaba
-          slow-cooks each handi over charcoal embers with hand-pounded whole spices, pure saffron,
-          and clotted cream.
+          GuruKripa Dhaba slow-cooks dishes over charcoal embers with freshly ground spices,
+          authentic gravies, and traditional cooking methods.
         </p>
 
         <div class="cuisine-chips">
@@ -106,8 +105,8 @@ import { CartService } from '../../../core/services/cart.service';
         <a [routerLink]="['/menu/gurukripa-dhaba/table/tbl-07']" class="feature-action-card">
           <div class="feature-icon"><i class="ph ph-book-open"></i></div>
           <div class="feature-text">
-            <h3>Full Menu Catalog</h3>
-            <p>25+ artisanal starters, charcoal kebabs, slow-dum biryanis and desserts.</p>
+            <h3>Full Menu</h3>
+            <p>Starters, kebabs, curries, freshly baked breads, and desserts.</p>
           </div>
           <i class="ph ph-caret-right chevron"></i>
         </a>
@@ -115,8 +114,8 @@ import { CartService } from '../../../core/services/cart.service';
         <a [routerLink]="['/menu/gurukripa-dhaba/coupons']" class="feature-action-card">
           <div class="feature-icon gold"><i class="ph ph-ticket"></i></div>
           <div class="feature-text">
-            <h3>Dining Offers & Coupons</h3>
-            <p>Exclusive promotions up to 25% off for table diners.</p>
+            <h3>Special Offers & Coupons</h3>
+            <p>Discounts and promotional offers for dining and takeaway orders.</p>
           </div>
           <i class="ph ph-caret-right chevron"></i>
         </a>
@@ -127,12 +126,12 @@ import { CartService } from '../../../core/services/cart.service';
         <div class="info-block">
           <h4 class="info-title"><i class="ph ph-clock"></i> Service Timings</h4>
           <p>Lunch: 12:00 PM – 03:30 PM</p>
-          <p>Royal Dinner: 07:00 PM – 11:30 PM</p>
+          <p>Dinner: 07:00 PM – 11:30 PM</p>
         </div>
         <div class="info-block">
-          <h4 class="info-title"><i class="ph ph-phone"></i> Reservations & Concierge</h4>
+          <h4 class="info-title"><i class="ph ph-phone"></i> Reservations & Inquiries</h4>
           <p>+91 80 4912 8800</p>
-          <p>concierge&#64;royalspice.dining</p>
+          <p>contact&#64;gurukripadhaba.com</p>
         </div>
       </div>
     </div>

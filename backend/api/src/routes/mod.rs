@@ -28,6 +28,11 @@ pub fn create_router(state: AppState) -> Router {
     let api_v1 = Router::new()
         // Auth
         .route("/auth/me", get(auth_routes::get_me))
+        .route("/auth/login", post(auth_routes::login))
+        .route(
+            "/auth/verify-admin-password",
+            post(auth_routes::verify_admin_password),
+        )
         // Restaurant & staff
         .route(
             "/restaurants",
@@ -35,11 +40,27 @@ pub fn create_router(state: AppState) -> Router {
         )
         .route(
             "/restaurants/staff",
-            get(restaurant_routes::list_staff_members),
+            get(restaurant_routes::list_staff_members)
+                .post(restaurant_routes::create_staff_member),
+        )
+        .route(
+            "/restaurants/staff/attendance",
+            get(restaurant_routes::list_staff_attendance)
+                .post(restaurant_routes::mark_staff_attendance),
+        )
+        .route(
+            "/restaurants/staff/performance",
+            get(restaurant_routes::get_staff_performance),
+        )
+        .route(
+            "/restaurants/staff/:id",
+            put(restaurant_routes::update_staff_member)
+                .delete(restaurant_routes::delete_staff_member),
         )
         // Tables
         .route("/tables", get(table_routes::list_tables))
         .route("/tables/:id/status", put(table_routes::update_table_status))
+        .route("/tables/:id/assign", put(table_routes::assign_table_staff))
         .route("/tables/transfer", post(table_routes::transfer_table))
         // Menu
         .route("/menu/categories", get(menu_routes::list_categories))
@@ -58,6 +79,7 @@ pub fn create_router(state: AppState) -> Router {
         )
         .route("/orders/:id", get(order_routes::get_order))
         .route("/orders/:id/status", put(order_routes::update_order_status))
+        .route("/orders/:id/server", put(order_routes::assign_order_server))
         // Billing & payments
         .route("/orders/:id/settle", post(billing_routes::settle_order))
         .route("/orders/:id/split", post(billing_routes::split_order))

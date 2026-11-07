@@ -1,6 +1,7 @@
 export type DietaryType = 'VEG' | 'NON_VEG' | 'EGG' | 'VEGAN';
 
 export interface PortionSize {
+  id?: string;
   label: string;
   price: number;
 }

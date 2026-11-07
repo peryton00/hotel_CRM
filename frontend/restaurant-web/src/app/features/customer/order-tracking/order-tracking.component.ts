@@ -115,7 +115,7 @@ import { StatusBadgeComponent } from '../../../shared/components/status-badge/st
               <div>
                 <strong>How was your dining experience?</strong>
                 <p class="text-xs text-muted">
-                  Help our Master Chefs maintain the highest royal standards.
+                  Help us improve our food and service quality.
                 </p>
               </div>
             </div>
@@ -397,7 +397,7 @@ export class OrderTrackingComponent implements OnInit {
     {
       status: 'PENDING',
       label: 'Received',
-      description: 'Transmitted to chef queue',
+      description: 'Sent to kitchen queue',
       icon: 'ph-receipt',
     },
     {
@@ -409,19 +409,25 @@ export class OrderTrackingComponent implements OnInit {
     {
       status: 'PREPARING',
       label: 'Preparing',
-      description: 'Woodfire & dum cooking',
+      description: 'Cooking in progress',
       icon: 'ph-cooking-pot',
     },
     {
       status: 'READY',
       label: 'Ready',
-      description: 'Plated for dispatch',
+      description: 'Plated and ready',
       icon: 'ph-bell-ringing',
+    },
+    {
+      status: 'DISPATCHED',
+      label: 'Dispatched',
+      description: 'On way to table / handover',
+      icon: 'ph-moped',
     },
     {
       status: 'SERVED',
       label: 'Served',
-      description: 'At your dining table',
+      description: 'Served / handed over',
       icon: 'ph-hand-waving',
     },
   ];
@@ -436,7 +442,7 @@ export class OrderTrackingComponent implements OnInit {
     const ord = this.order();
     if (!ord) return false;
 
-    const sequence = ['PENDING', 'ACCEPTED', 'PREPARING', 'READY', 'SERVED', 'COMPLETED'];
+    const sequence = ['PENDING', 'ACCEPTED', 'PREPARING', 'READY', 'DISPATCHED', 'SERVED', 'COMPLETED'];
     const currentIdx = sequence.indexOf(ord.status);
     const stepIdx = sequence.indexOf(stepStatus);
 
@@ -452,11 +458,13 @@ export class OrderTrackingComponent implements OnInit {
       case 'ACCEPTED':
         return 'Accepted by Captain';
       case 'PREPARING':
-        return 'Cooking in Royal Kitchen';
+        return 'Cooking in Kitchen';
       case 'READY':
-        return 'Dishes Plated & Heading to Table';
+        return 'Dishes Plated & Ready';
+      case 'DISPATCHED':
+        return ord.orderType === 'TAKEAWAY' ? 'Dispatched for Counter Pickup / Delivery' : 'Dispatched to Table';
       case 'SERVED':
-        return 'Served at Your Table';
+        return ord.orderType === 'TAKEAWAY' ? 'Handed Over at Counter' : 'Served at Your Table';
       case 'COMPLETED':
         return 'Dining Completed';
       case 'CANCELLED':

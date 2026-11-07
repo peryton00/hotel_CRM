@@ -22,7 +22,7 @@ import {
         <div>
           <h1 class="heading-display">Operations Dashboard</h1>
           <p class="text-muted">
-            Real-time overview of restaurant dining, active tables, and service dispatch.
+            Overview of sales, active tables, and live order status.
           </p>
         </div>
 
@@ -192,11 +192,9 @@ import {
                   <div class="queue-top">
                     <span class="order-num">{{ order.orderNumber }}</span>
                     @if (order.orderType === 'TAKEAWAY') {
-                      <span
-                        class="tbl-badge takeaway-badge"
-                        style="background: rgba(212, 175, 55, 0.15); border-color: rgba(212, 175, 55, 0.4); color: #8b6508;"
-                        ><i class="ph ph-bag"></i> Takeaway</span
-                      >
+                      <span class="tbl-badge takeaway-badge">
+                        <i class="ph ph-bag"></i> Takeaway
+                      </span>
                     } @else {
                       <span class="tbl-badge">Table {{ order.tableNumber }}</span>
                     }
@@ -229,7 +227,7 @@ import {
       <div class="dashboard-bottom-grid">
         <div class="dashboard-panel">
           <div class="panel-header">
-            <h2 class="heading-card">Top Selling Royal Specialities</h2>
+            <h2 class="heading-card">Top Selling Dishes</h2>
             <a
               routerLink="/admin/menu"
               class="text-sm text-crimson font-ui"
@@ -260,6 +258,12 @@ import {
                     <td>{{ item.ordersCount }} orders</td>
                     <td>
                       <span class="text-price">{{ item.revenue | currencyInr }}</span>
+                    </td>
+                  </tr>
+                } @empty {
+                  <tr>
+                    <td colspan="4" class="text-center py-4 text-muted" style="text-align: center; padding: 20px;">
+                      No dish sales recorded in this timeframe.
                     </td>
                   </tr>
                 }
@@ -558,6 +562,12 @@ import {
         border: 1px solid var(--color-border);
         padding: 2px 8px;
         border-radius: var(--radius-xs);
+
+        &.takeaway-badge {
+          background: var(--color-warning-bg);
+          border-color: rgba(212, 175, 55, 0.4);
+          color: var(--color-warning);
+        }
       }
 
       .guest-line {
@@ -722,14 +732,18 @@ export class AdminDashboardComponent {
   });
 
   recentOrders = computed(() => {
-    return this.timeframeOrders().slice(0, 4);
+    const active = this.orders().filter((o) =>
+      ['PENDING', 'ACCEPTED', 'PREPARING', 'READY', 'DISPATCHED'].includes(o.status),
+    );
+    return active.length > 0 ? active.slice(0, 5) : this.timeframeOrders().slice(0, 4);
   });
 
   revenueComparisonText = computed(() => {
     const tf = this.selectedTimeframe();
-    if (tf === 'today') return '+14.2% from yesterday';
-    if (tf === 'week') return '+22.5% from last week';
-    return '+38.4% YoY all-time growth';
+    const count = this.fulfilledOrdersCount();
+    if (tf === 'today') return `${count} order${count === 1 ? '' : 's'} fulfilled today`;
+    if (tf === 'week') return `${count} order${count === 1 ? '' : 's'} fulfilled this week`;
+    return `${count} order${count === 1 ? '' : 's'} fulfilled all-time`;
   });
 
   ordersSubtitleText = computed(() => {
@@ -742,93 +756,158 @@ export class AdminDashboardComponent {
 
   aovSubtitleText = computed(() => {
     const tf = this.selectedTimeframe();
-    if (tf === 'today') return 'Per table bill today';
-    if (tf === 'week') return 'Weekly average spend';
-    return 'Lifetime average dining bill';
+    if (tf === 'today') return 'Average spend per order today';
+    if (tf === 'week') return 'Average spend per order this week';
+    return 'Lifetime average spend per order';
   });
 
   chartTitle = computed(() => {
     const tf = this.selectedTimeframe();
-    if (tf === 'today') return 'Hourly Dining Revenue (₹)';
-    if (tf === 'week') return 'Daily Dining Revenue (₹)';
-    return 'Monthly Dining Revenue (₹)';
+    if (tf === 'today') return 'Hourly Sales Volume (₹)';
+    if (tf === 'week') return 'Daily Sales Volume (₹)';
+    return 'Monthly Sales Volume (₹)';
   });
 
   chartSubtitle = computed(() => {
     const tf = this.selectedTimeframe();
-    if (tf === 'today') return 'Peak Awadhi lunch & dinner rush trends';
-    if (tf === 'week') return 'Monday to Sunday dining volume';
-    return 'Historical Awadhi bistro dining growth';
+    if (tf === 'today') return 'Real-time sales distribution across service hours';
+    if (tf === 'week') return 'Sales distribution Monday through Sunday';
+    return 'Sales distribution across calendar months';
   });
 
   chartBars = computed(() => {
     const tf = this.selectedTimeframe();
+    const orders = this.timeframeOrders().filter((o) => o.status !== 'CANCELLED');
+
     if (tf === 'today') {
-      return [
-        { label: '12 PM', x: 65, y: 115, height: 25, color: '#C21807', opacity: 0.8 },
-        { label: '01 PM', x: 125, y: 55, height: 85, color: '#C21807', opacity: 1 },
-        { label: '02 PM', x: 185, y: 32, height: 108, color: '#C21807', opacity: 1 },
-        { label: '03 PM', x: 245, y: 104, height: 36, color: '#C21807', opacity: 0.8 },
-        { label: '07 PM', x: 305, y: 78, height: 62, color: '#121212', opacity: 0.85 },
-        { label: '08 PM', x: 365, y: 8, height: 132, color: '#D4AF37', opacity: 1 },
-        { label: '09 PM', x: 425, y: 42, height: 98, color: '#121212', opacity: 0.85 },
+      const slots = [
+        { label: '11 AM', hour: 11 },
+        { label: '01 PM', hour: 13 },
+        { label: '03 PM', hour: 15 },
+        { label: '05 PM', hour: 17 },
+        { label: '07 PM', hour: 19 },
+        { label: '08 PM', hour: 20 },
+        { label: '09 PM', hour: 21 },
+        { label: '10 PM', hour: 22 },
       ];
+      const revenues = slots.map((s) => {
+        const sum = orders
+          .filter((o) => {
+            const h = new Date(o.createdAt).getHours();
+            return Math.abs(h - s.hour) <= 1;
+          })
+          .reduce((acc, o) => acc + (o.totalAmount || 0), 0);
+        return { label: s.label, amount: sum };
+      });
+      const maxAmount = Math.max(...revenues.map((r) => r.amount), 5000);
+      return revenues.map((r, i) => {
+        const h = r.amount > 0 ? Math.max(8, Math.round((r.amount / maxAmount) * 115)) : 4;
+        return {
+          label: r.label,
+          amount: r.amount,
+          x: 55 + i * 55,
+          y: 140 - h,
+          height: h,
+          color: r.amount > 0 ? (r.amount === maxAmount ? '#D4AF37' : '#C21807') : '#E5DED4',
+          opacity: r.amount > 0 ? 1 : 0.6,
+        };
+      });
     }
+
     if (tf === 'week') {
-      return [
-        { label: 'Mon', x: 65, y: 85, height: 55, color: '#C21807', opacity: 0.8 },
-        { label: 'Tue', x: 125, y: 75, height: 65, color: '#C21807', opacity: 0.85 },
-        { label: 'Wed', x: 185, y: 60, height: 80, color: '#C21807', opacity: 0.9 },
-        { label: 'Thu', x: 245, y: 50, height: 90, color: '#C21807', opacity: 0.95 },
-        { label: 'Fri', x: 305, y: 25, height: 115, color: '#121212', opacity: 0.9 },
-        { label: 'Sat', x: 365, y: 10, height: 130, color: '#D4AF37', opacity: 1 },
-        { label: 'Sun', x: 425, y: 18, height: 122, color: '#D4AF37', opacity: 0.95 },
-      ];
+      const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+      const dayIndices = [1, 2, 3, 4, 5, 6, 0];
+      const revenues = dayIndices.map((dIdx, idx) => {
+        const sum = orders
+          .filter((o) => new Date(o.createdAt).getDay() === dIdx)
+          .reduce((acc, o) => acc + (o.totalAmount || 0), 0);
+        return { label: days[idx], amount: sum };
+      });
+      const maxAmount = Math.max(...revenues.map((r) => r.amount), 10000);
+      return revenues.map((r, i) => {
+        const h = r.amount > 0 ? Math.max(8, Math.round((r.amount / maxAmount) * 115)) : 4;
+        return {
+          label: r.label,
+          amount: r.amount,
+          x: 55 + i * 60,
+          y: 140 - h,
+          height: h,
+          color: r.amount > 0 ? (r.amount === maxAmount ? '#D4AF37' : '#C21807') : '#E5DED4',
+          opacity: r.amount > 0 ? 1 : 0.6,
+        };
+      });
     }
-    return [
-      { label: 'May', x: 65, y: 95, height: 45, color: '#C21807', opacity: 0.8 },
-      { label: 'Jun', x: 125, y: 80, height: 60, color: '#C21807', opacity: 0.85 },
-      { label: 'Jul', x: 185, y: 65, height: 75, color: '#C21807', opacity: 0.9 },
-      { label: 'Aug', x: 245, y: 45, height: 95, color: '#121212', opacity: 0.85 },
-      { label: 'Sep', x: 305, y: 30, height: 110, color: '#121212', opacity: 0.9 },
-      { label: 'Oct', x: 365, y: 12, height: 128, color: '#D4AF37', opacity: 1 },
-      { label: 'Nov', x: 425, y: 22, height: 118, color: '#D4AF37', opacity: 0.95 },
-    ];
+
+    const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    const currentMonth = new Date().getMonth();
+    const monthsToShow: number[] = [];
+    for (let offset = 6; offset >= 0; offset--) {
+      monthsToShow.push((currentMonth - offset + 12) % 12);
+    }
+    const revenues = monthsToShow.map((mIdx) => {
+      const sum = orders
+        .filter((o) => new Date(o.createdAt).getMonth() === mIdx)
+        .reduce((acc, o) => acc + (o.totalAmount || 0), 0);
+      return { label: monthNames[mIdx], amount: sum };
+    });
+    const maxAmount = Math.max(...revenues.map((r) => r.amount), 10000);
+    return revenues.map((r, i) => {
+      const h = r.amount > 0 ? Math.max(8, Math.round((r.amount / maxAmount) * 115)) : 4;
+      return {
+        label: r.label,
+        amount: r.amount,
+        x: 55 + i * 60,
+        y: 140 - h,
+        height: h,
+        color: r.amount > 0 ? (r.amount === maxAmount ? '#D4AF37' : '#C21807') : '#E5DED4',
+        opacity: r.amount > 0 ? 1 : 0.6,
+      };
+    });
   });
 
   chartLegend = computed(() => {
-    const tf = this.selectedTimeframe();
-    if (tf === 'today') {
-      return [
-        { dotClass: 'crimson', label: 'Lunch Rush' },
-        { dotClass: 'gold', label: 'Peak Dinner (08 PM)' },
-        { dotClass: 'dark', label: 'Late Evening' },
-      ];
-    }
-    if (tf === 'week') {
-      return [
-        { dotClass: 'crimson', label: 'Weekday Dining' },
-        { dotClass: 'gold', label: 'Weekend Peak (Sat)' },
-        { dotClass: 'dark', label: 'Sunday Brunch' },
-      ];
+    const bars = this.chartBars();
+    const peak = bars.find((b) => b.color === '#D4AF37' && (b as any).amount > 0);
+    const hasData = bars.some((b) => (b as any).amount > 0);
+    if (!hasData) {
+      return [{ dotClass: 'dark', label: 'No sales recorded in this period' }];
     }
     return [
-      { dotClass: 'crimson', label: 'Q2 Volume' },
-      { dotClass: 'dark', label: 'Q3 Growth' },
-      { dotClass: 'gold', label: 'Festive High (Oct)' },
+      { dotClass: 'crimson', label: 'Recorded Revenue' },
+      { dotClass: 'gold', label: peak ? `Peak Period (${peak.label})` : 'Peak Sales' },
     ];
   });
 
-  popularItems = signal([
-    { name: 'Awadhi Gosht Dum Biryani', ordersCount: 42, revenue: 27090, category: 'Biryani' },
-    { name: 'Bhatti Ka Galouti Kebab', ordersCount: 38, revenue: 23750, category: 'Kebabs' },
-    {
-      name: "Dal Makhani 'The Royal Reserve'",
-      ordersCount: 54,
-      revenue: 22950,
-      category: 'Gravies',
-    },
-    { name: 'Murgh Malai Kebab', ordersCount: 32, revenue: 15840, category: 'Kebabs' },
-    { name: 'Shahi Tukda Brioche', ordersCount: 29, revenue: 9425, category: 'Desserts' },
-  ]);
+  popularItems = computed(() => {
+    const orders = this.timeframeOrders();
+    const map = new Map<string, { name: string; category: string; ordersCount: number; revenue: number }>();
+    const menu = this.mock.menuItems();
+
+    for (const ord of orders) {
+      if (ord.status === 'CANCELLED') continue;
+      for (const it of ord.items) {
+        const itemKey = it.name;
+        const entry = map.get(itemKey) || {
+          name: it.name,
+          category: 'Dishes',
+          ordersCount: 0,
+          revenue: 0,
+        };
+        entry.ordersCount += it.quantity;
+        entry.revenue += it.itemTotal;
+        map.set(itemKey, entry);
+      }
+    }
+
+    for (const val of map.values()) {
+      const match = menu.find((m) => m.name.toLowerCase() === val.name.toLowerCase());
+      if (match && (match as any).categoryName) {
+        val.category = (match as any).categoryName;
+      }
+    }
+
+    return Array.from(map.values())
+      .sort((a, b) => b.revenue - a.revenue)
+      .slice(0, 5);
+  });
 }

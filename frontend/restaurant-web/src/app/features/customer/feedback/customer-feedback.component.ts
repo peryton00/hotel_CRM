@@ -16,10 +16,9 @@ import { Feedback } from '../../../core/models/feedback.model';
         @if (!isSubmitted) {
           <div class="feedback-head">
             <div class="crest-icon"><i class="ph ph-crown"></i></div>
-            <h1 class="heading-section">Your Royal Dining Experience</h1>
+            <h1 class="heading-section">Rate Your Experience</h1>
             <p class="text-sm text-muted">
-              Please take a moment to rate your feast. Your thoughts guide our master culinary
-              craftsmanship.
+              Please take a moment to rate your meal and service to help us improve.
             </p>
           </div>
 
@@ -74,12 +73,12 @@ import { Feedback } from '../../../core/models/feedback.model';
           </div>
 
           <div class="form-group">
-            <label class="form-label" for="comments">Culinary Remarks / Compliments</label>
+            <label class="form-label" for="comments">Comments & Feedback</label>
             <textarea
               id="comments"
               class="form-textarea"
               rows="3"
-              placeholder="Tell us what dish you relished most..."
+              placeholder="Tell us what you enjoyed or what we can improve..."
               [(ngModel)]="comments"
             ></textarea>
           </div>
@@ -96,7 +95,7 @@ import { Feedback } from '../../../core/models/feedback.model';
             <div class="crest-icon success"><i class="ph ph-heart"></i></div>
             <h2 class="heading-section">Shukriya! Thank You</h2>
             <p class="text-sm text-muted">
-              Your review has been conveyed to Executive Chef Ranveer Brar and the culinary brigade.
+              Your feedback has been shared with the kitchen and service team.
             </p>
             <a
               routerLink="/menu/gurukripa-dhaba"
@@ -240,7 +239,7 @@ export class CustomerFeedbackComponent implements OnInit {
       id: `fdbk-${Date.now().toString().slice(-4)}`,
       orderId: this.orderId,
       orderNumber: ord?.orderNumber || '#ORD-DINE',
-      customerName: ord?.customerName || 'Valued Table Diner',
+      customerName: ord?.customerName || 'Guest',
       rating: this.overallRating,
       foodRating: this.foodRating,
       serviceRating: this.serviceRating,

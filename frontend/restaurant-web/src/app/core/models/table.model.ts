@@ -10,4 +10,6 @@ export interface Table {
   qrToken: string;
   qrUrl: string;
   orderingEnabled: boolean;
+  assignedStaffId?: string;
+  activeOrderId?: string;
 }

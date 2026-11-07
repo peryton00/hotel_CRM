@@ -16,19 +16,19 @@ import { ToastService } from '../../../core/services/toast.service';
         <div>
           <h1 class="heading-display">Loyalty & Rewards Program</h1>
           <p class="text-muted">
-            Configure membership tiers, point accrual multipliers, and reward transactions.
+            Configure reward tiers, points accrual rules, and customer reward balances.
           </p>
         </div>
 
         <button class="btn btn-primary" (click)="openRewardModal()">
           <i class="ph ph-gift"></i>
-          <span>Credit Dining Points</span>
+          <span>Credit Points</span>
         </button>
       </div>
 
       <!-- Membership Tiers Overview -->
       <div class="panel-box">
-        <h2 class="heading-card">Membership Tiers & Privileges</h2>
+        <h2 class="heading-card">Membership Tiers & Benefits</h2>
         <div class="table-container">
           <table class="data-table">
             <thead>
@@ -127,7 +127,7 @@ import { ToastService } from '../../../core/services/toast.service';
         <div class="modal-overlay" (click)="onBackdropClick($event)">
           <div class="modal-card" role="dialog" aria-modal="true">
             <div class="modal-header">
-              <h3 class="heading-card">Credit Guest Dining Bonus</h3>
+              <h3 class="heading-card">Credit Customer Points</h3>
               <button class="close-btn" (click)="showRewardModal = false">
                 <i class="ph ph-x"></i>
               </button>
@@ -152,7 +152,7 @@ import { ToastService } from '../../../core/services/toast.service';
                 <input
                   type="text"
                   class="form-input"
-                  placeholder="e.g. VIP Chef Table Welcome Bonus"
+                  placeholder="e.g. Welcome bonus or goodwill credit"
                   [(ngModel)]="creditReason"
                 />
               </div>

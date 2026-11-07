@@ -452,7 +452,7 @@ export class MockBillingRepository implements IBillingRepository {
       orderNumber: order.orderNumber,
       tableNumber: order.tableNumber,
       customerName: order.customerName,
-      customerPhone: order.customerPhone,
+      customerPhone: order.customerPhone || '',
       issuedAt: new Date().toISOString(),
       items: order.items,
       subtotal: order.subtotal,

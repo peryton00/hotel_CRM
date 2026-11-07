@@ -338,7 +338,7 @@ export function calculateFinancialSummary(
   // 6. Tax, counts, and AOV
   const taxPaise = salesOrders.reduce((sum, o) => sum + safePaise(o.taxAmount), 0);
   const fulfilledOrdersCount = salesOrders.filter(
-    (o) => o.status === 'SERVED' || o.status === 'COMPLETED',
+    (o) => o.status === 'DISPATCHED' || o.status === 'SERVED' || o.status === 'COMPLETED',
   ).length;
 
   const paidOrders = salesOrders.filter((o) => {
@@ -540,7 +540,7 @@ export function getOrderFulfillmentTimestamp(
   order: Order,
   movements: StockMovement[] = [],
 ): string | null {
-  if (order.status !== 'SERVED' && order.status !== 'COMPLETED') {
+  if (order.status !== 'DISPATCHED' && order.status !== 'SERVED' && order.status !== 'COMPLETED') {
     return null;
   }
 
@@ -554,11 +554,11 @@ export function getOrderFulfillmentTimestamp(
     }
   }
 
-  // 2. Timeline SERVED or COMPLETED event
+  // 2. Timeline DISPATCHED, SERVED or COMPLETED event
   if (order.timeline && order.timeline.length > 0) {
     const fulfillmentEvent = [...order.timeline]
       .reverse()
-      .find((e) => e.status === 'SERVED' || e.status === 'COMPLETED');
+      .find((e) => e.status === 'DISPATCHED' || e.status === 'SERVED' || e.status === 'COMPLETED');
     if (fulfillmentEvent?.timestamp) {
       return fulfillmentEvent.timestamp;
     }
@@ -573,7 +573,7 @@ export function getOrderFulfillmentTimestamp(
  * active recipes, and recorded ingredient costs.
  *
  * Rules:
- * - Only fulfilled orders (status 'SERVED' or 'COMPLETED') represent consumed goods.
+ * - Only fulfilled orders (status 'DISPATCHED', 'SERVED' or 'COMPLETED') represent consumed goods.
  * - Pending, preparing, or cancelled orders are strictly excluded from COGS.
  * - Missing recipes and incomplete ingredient costs are flagged honestly with 'ESTIMATED_*' status.
  * - Handles zero revenue safely (returns 0% margin, no NaN or Infinity).
@@ -587,8 +587,10 @@ export function calculateCogsSummary(
   stockMovements: StockMovement[] = [],
   dateRangeFilter?: DateRangeFilter,
 ): CogsSummary {
-  // Fulfilled orders only: SERVED or COMPLETED
-  let eligibleOrders = orders.filter((o) => o.status === 'SERVED' || o.status === 'COMPLETED');
+  // Fulfilled orders only: DISPATCHED, SERVED or COMPLETED
+  let eligibleOrders = orders.filter(
+    (o) => o.status === 'DISPATCHED' || o.status === 'SERVED' || o.status === 'COMPLETED',
+  );
 
   // Attribution by authoritative fulfillment timestamp if dateRangeFilter is active
   if (dateRangeFilter && dateRangeFilter.isValid) {

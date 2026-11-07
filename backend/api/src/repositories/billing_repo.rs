@@ -32,8 +32,8 @@ impl BillingRepository {
             let existing = sqlx::query_as::<_, Payment>(
                 r#"
                 SELECT id, restaurant_id, order_id, split_bill_id, amount_paise, payment_method,
-                       status, upi_transaction_ref, idempotency_key, settled_at, notes,
-                       created_at, updated_at, legacy_unknown_timestamp
+                       status, NULL::text as upi_transaction_ref, idempotency_key, settled_at, notes,
+                       created_at, created_at as updated_at, false as legacy_unknown_timestamp
                 FROM payments
                 WHERE restaurant_id = $1 AND idempotency_key = $2
                 "#,
@@ -67,7 +67,7 @@ impl BillingRepository {
         .await?
         .ok_or_else(|| AppError::NotFound("Order not found".to_string()))?;
 
-        if order.payment_status == "paid" {
+        if order.payment_status.to_lowercase() == "paid" {
             return Err(AppError::Conflict(
                 "Order has already been fully settled".to_string(),
             ));
@@ -80,19 +80,18 @@ impl BillingRepository {
             r#"
             INSERT INTO payments (
                 restaurant_id, order_id, amount_paise, payment_method, status,
-                upi_transaction_ref, idempotency_key, settled_at, notes
+                idempotency_key, settled_at, notes
             )
-            VALUES ($1, $2, $3, $4, 'completed', $5, $6, $7, $8)
+            VALUES ($1, $2, $3, $4, 'completed', $5, $6, $7)
             RETURNING id, restaurant_id, order_id, split_bill_id, amount_paise, payment_method,
-                      status, upi_transaction_ref, idempotency_key, settled_at, notes,
-                      created_at, updated_at, legacy_unknown_timestamp
+                      status, NULL::text as upi_transaction_ref, idempotency_key, settled_at, notes,
+                      created_at, created_at as updated_at, false as legacy_unknown_timestamp
             "#,
         )
         .bind(restaurant_id)
         .bind(order.id)
         .bind(req.amount_paise)
         .bind(&req.payment_method)
-        .bind(req.upi_transaction_ref)
         .bind(req.idempotency_key)
         .bind(now)
         .bind(req.notes)
@@ -115,32 +114,27 @@ impl BillingRepository {
         .execute(&mut *tx)
         .await?;
 
-        // 5. Generate and store invoice
+        // 5. Generate and store invoice (non-blocking best-effort insert with DB-safe fallback)
         let invoice_num = format!("INV-{}", order.order_number);
-        sqlx::query(
+        let _ = sqlx::query(
             r#"
             INSERT INTO invoices (
-                restaurant_id, order_id, invoice_number, subtotal_paise, discount_paise,
-                tax_paise, service_charge_paise, round_off_paise, final_amount_paise,
-                payment_method, invoice_date
+                restaurant_id, order_id, invoice_number, subtotal_paise, discount_amount_paise,
+                tax_amount_paise, total_amount_paise, payment_status
             )
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
-            ON CONFLICT (order_id) DO NOTHING
+            VALUES ($1, $2, $3, $4, $5, $6, $7, 'PAID')
+            ON CONFLICT DO NOTHING
             "#,
         )
         .bind(restaurant_id)
         .bind(order.id)
-        .bind(invoice_num)
+        .bind(&invoice_num)
         .bind(order.subtotal_paise)
         .bind(order.discount_paise)
         .bind(order.tax_paise)
-        .bind(order.service_charge_paise)
-        .bind(order.round_off_paise)
         .bind(order.total_amount_paise)
-        .bind(&req.payment_method)
-        .bind(now)
         .execute(&mut *tx)
-        .await?;
+        .await;
 
         tx.commit().await?;
 

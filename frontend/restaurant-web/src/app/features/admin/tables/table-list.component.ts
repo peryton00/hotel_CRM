@@ -4,9 +4,11 @@ import { FormsModule } from '@angular/forms';
 import * as QRCode from 'qrcode';
 import { RestaurantDataService } from '../../../data-access/services/restaurant-data.service';
 import { Table, TableStatus, TableSection } from '../../../core/models/table.model';
+import { Order } from '../../../core/models/order.model';
 import { StatusBadgeComponent } from '../../../shared/components/status-badge/status-badge.component';
 import { ConfirmModalComponent } from '../../../shared/components/confirm-modal/confirm-modal.component';
 import { ToastService } from '../../../core/services/toast.service';
+import { AdminAuthService } from '../../../core/services/admin-auth.service';
 
 @Component({
   selector: 'app-table-list',
@@ -17,16 +19,15 @@ import { ToastService } from '../../../core/services/toast.service';
       <!-- Page Header -->
       <div class="page-header">
         <div>
-          <h1 class="heading-display">Dining Tables & QR Tokens</h1>
+          <h1 class="heading-display">Dining Tables & QR Codes</h1>
           <p class="text-muted">
-            Generate instant digital table tokens, configure seating sections, and monitor
-            occupancy.
+            Configure dining tables, print QR codes, and monitor occupancy.
           </p>
         </div>
 
         <button class="btn btn-primary" (click)="openAddTableModal()">
           <i class="ph ph-plus-circle"></i>
-          <span>Add Dining Table</span>
+          <span>Add Table</span>
         </button>
       </div>
 
@@ -119,6 +120,69 @@ import { ToastService } from '../../../core/services/toast.service';
                 <option value="DIRTY">Cleaning</option>
               </select>
             </div>
+
+            <!-- Active Customer & Serving Staff Allotment -->
+            @if (getActiveOrderByTable(tbl); as activeOrd) {
+              <div class="active-customer-box">
+                <div class="active-cust-header">
+                  <span class="active-dot"></span>
+                  <strong class="cust-name">{{ activeOrd.customerName || 'Walk-in Guest' }}</strong>
+                  <span class="order-chip">{{ activeOrd.orderNumber }}</span>
+                </div>
+                <div class="status-select-wrap">
+                  <label class="text-xs text-muted" [attr.for]="'staff-' + tbl.id">
+                    <i class="ph ph-user-check"></i> Serving Customer:
+                  </label>
+                  @if (isOrderPaid(activeOrd)) {
+                    <div class="locked-server-row">
+                      <span class="font-semibold text-xs">
+                        <i class="ph ph-lock-key text-muted"></i>
+                        {{ getServerStaffName(activeOrd.serverStaffId) || 'Unassigned' }}
+                      </span>
+                      <button
+                        type="button"
+                        class="btn-unlock-server"
+                        (click)="promptChangePaidServer(activeOrd)"
+                        title="Change serving staff on paid order (Admin Password required)"
+                      >
+                        <i class="ph ph-lock-key"></i>
+                        <span>Change</span>
+                      </button>
+                    </div>
+                  } @else {
+                    <select
+                      [id]="'staff-' + tbl.id"
+                      class="form-select status-dropdown active-server-select"
+                      [ngModel]="activeOrd.serverStaffId || ''"
+                      (ngModelChange)="onAssignActiveOrderServer(activeOrd, $event)"
+                    >
+                      <option value="">Unassigned</option>
+                      @for (s of staffMembers(); track s.id) {
+                        <option [value]="s.id">{{ s.name }} ({{ s.role }})</option>
+                      }
+                    </select>
+                  }
+                </div>
+              </div>
+            } @else {
+              <!-- Fallback Default Server (Optional) -->
+              <div class="status-select-wrap">
+                <label class="text-xs text-muted" [attr.for]="'staff-' + tbl.id">
+                  <i class="ph ph-user"></i> Default Server (Optional):
+                </label>
+                <select
+                  [id]="'staff-' + tbl.id"
+                  class="form-select status-dropdown"
+                  [ngModel]="tbl.assignedStaffId || ''"
+                  (ngModelChange)="onStaffAssign(tbl.id, $event)"
+                >
+                  <option value="">Dynamic (Assigned per Customer Order)</option>
+                  @for (s of staffMembers(); track s.id) {
+                    <option [value]="s.id">{{ s.name }} ({{ s.role }})</option>
+                  }
+                </select>
+              </div>
+            }
 
             <!-- Card Actions -->
             <div class="table-card-actions">
@@ -287,12 +351,100 @@ import { ToastService } from '../../../core/services/toast.service';
         [message]="
           'Are you sure you want to delete ' +
           tableToDelete?.number +
-          '? Active table QR tokens will be invalidated.'
+          '? Active table QR codes will be invalidated.'
         "
         confirmText="Delete Table"
         (confirm)="executeDeleteTable()"
         (cancel)="tableToDelete = null"
       ></app-confirm-modal>
+
+      <!-- Admin Password Modal for Server Staff Reassignment on Paid Orders -->
+      @if (showServerAdminModal()) {
+        <div class="modal-overlay" (click)="onBackdropClick($event)">
+          <div
+            class="modal-card auth-modal-card"
+            role="dialog"
+            aria-modal="true"
+            (click)="$event.stopPropagation()"
+          >
+            <div class="modal-header">
+              <div class="auth-modal-title-wrap">
+                <div class="auth-icon-badge"><i class="ph ph-lock-key"></i></div>
+                <div>
+                  <h3 class="heading-card">Admin Authorization Required</h3>
+                  <p class="text-xs text-muted" style="margin: 2px 0 0;">
+                    Reassign server staff for paid Order #{{ targetServerOrder()?.orderNumber }}
+                  </p>
+                </div>
+              </div>
+              <button class="close-btn" (click)="cancelServerAdminModal()">
+                <i class="ph ph-x"></i>
+              </button>
+            </div>
+            <div class="modal-body auth-dialog-body">
+              <div class="auth-warning-box">
+                <i class="ph ph-warning-circle"></i>
+                <p>
+                  This order has already been paid and finalized. Changing the assigned server staff
+                  affects shift reporting and server commission tracking. Enter the Admin Password
+                  to proceed.
+                </p>
+              </div>
+
+              <div class="form-group">
+                <label class="form-label" for="newTableServerSelect">Assign New Server Staff</label>
+                <select
+                  id="newTableServerSelect"
+                  class="form-select"
+                  [ngModel]="selectedServerStaffId()"
+                  (ngModelChange)="selectedServerStaffId.set($event || null)"
+                >
+                  <option [ngValue]="null">Unassigned</option>
+                  @for (s of staffMembers(); track s.id) {
+                    <option [value]="s.id">{{ s.name }} ({{ s.role }})</option>
+                  }
+                </select>
+              </div>
+
+              <div class="form-group" style="margin-top: 12px;">
+                <label class="form-label" for="tblAdminPasswordInput">Admin Master Password</label>
+                <div class="input-with-icon">
+                  <i class="ph ph-key"></i>
+                  <input
+                    id="tblAdminPasswordInput"
+                    type="password"
+                    class="form-input"
+                    placeholder="Enter admin password"
+                    [ngModel]="serverAdminPassword()"
+                    (ngModelChange)="serverAdminPassword.set($event); serverAdminError.set('')"
+                    (keydown.enter)="confirmServerAdminChange()"
+                    autofocus
+                  />
+                </div>
+                <span class="hint-text">Default master password: <code>admin123</code></span>
+              </div>
+
+              @if (serverAdminError()) {
+                <div class="auth-error-banner">
+                  <i class="ph ph-warning-octagon"></i>
+                  <span>{{ serverAdminError() }}</span>
+                </div>
+              }
+            </div>
+            <div class="modal-footer">
+              <button class="btn btn-secondary" (click)="cancelServerAdminModal()">Cancel</button>
+              <button
+                class="btn btn-primary"
+                (click)="confirmServerAdminChange()"
+                [disabled]="!serverAdminPassword().trim()"
+              >
+                <i class="ph ph-check"></i>
+                <span>Authorize & Update Server</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      }
     </div>
   `,
   styles: [
@@ -454,6 +606,156 @@ import { ToastService } from '../../../core/services/toast.service';
       .token-code {
         font-weight: 700;
         color: var(--color-crimson);
+      }
+
+      .active-customer-box {
+        background: rgba(22, 101, 52, 0.06);
+        border: 1px solid rgba(22, 101, 52, 0.25);
+        border-radius: var(--radius-xs);
+        padding: 8px 10px;
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+      }
+
+      .active-cust-header {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 0.8125rem;
+      }
+
+      .active-dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: #166534;
+        animation: pulse 2s infinite;
+      }
+
+      .cust-name {
+        color: #166534;
+        font-weight: 700;
+        flex: 1;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+
+      .order-chip {
+        font-size: 0.6875rem;
+        font-weight: 700;
+        padding: 1px 6px;
+        background: #166534;
+        color: #ffffff;
+        border-radius: 4px;
+      }
+
+      .active-server-select {
+        border-color: rgba(22, 101, 52, 0.4);
+      }
+
+      .locked-server-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 5px 8px;
+        background: #fef3c7;
+        border: 1px solid #fde68a;
+        border-radius: var(--radius-sm);
+        margin-top: 2px;
+      }
+
+      .btn-unlock-server {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        background: #ffffff;
+        border: 1px solid #d97706;
+        color: #b45309;
+        font-size: 0.6875rem;
+        font-weight: 700;
+        padding: 2px 6px;
+        border-radius: 4px;
+        cursor: pointer;
+        &:hover {
+          background: #fffbeb;
+        }
+      }
+
+      .auth-modal-card {
+        max-width: 480px;
+        width: 90vw;
+      }
+      .auth-modal-title-wrap {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        .auth-icon-badge {
+          width: 36px;
+          height: 36px;
+          border-radius: 50%;
+          background: rgba(184, 134, 11, 0.15);
+          color: #b8860b;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-size: 1.25rem;
+          flex-shrink: 0;
+        }
+      }
+      .auth-warning-box {
+        display: flex;
+        align-items: flex-start;
+        gap: 10px;
+        padding: 12px;
+        background: rgba(184, 134, 11, 0.08);
+        border: 1px solid rgba(184, 134, 11, 0.25);
+        border-radius: 6px;
+        font-size: 0.8125rem;
+        color: #1f2937;
+        margin-bottom: 12px;
+        i {
+          font-size: 1.25rem;
+          color: #b8860b;
+          flex-shrink: 0;
+          margin-top: 1px;
+        }
+        p {
+          margin: 0;
+          line-height: 1.4;
+        }
+      }
+      .auth-error-banner {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 8px 12px;
+        background: #fef2f2;
+        border: 1px solid rgba(220, 38, 38, 0.25);
+        border-radius: 6px;
+        color: #dc2626;
+        font-size: 0.8125rem;
+        margin-top: 8px;
+      }
+      .input-with-icon {
+        position: relative;
+        display: flex;
+        align-items: center;
+        i {
+          position: absolute;
+          left: 12px;
+          font-size: 1rem;
+          color: #9ca3af;
+          pointer-events: none;
+        }
+        .form-input {
+          width: 100%;
+          padding: 8px 12px 8px 36px;
+          border: 1px solid var(--color-border, #d1d5db);
+          border-radius: 6px;
+          font-size: 0.875rem;
+        }
       }
 
       .status-select-wrap {
@@ -654,9 +956,11 @@ export class TableListComponent {
   private dataService = inject(RestaurantDataService);
   private mock = this.dataService;
   private toastService = inject(ToastService);
+  private adminAuth = inject(AdminAuthService);
 
   tables = this.mock.tables;
   restaurant = this.mock.restaurant;
+  staffMembers = this.dataService.staffMembers;
   selectedSection = signal<string>('ALL');
 
   showAddModal = false;
@@ -668,6 +972,12 @@ export class TableListComponent {
   tableToDelete: Table | null = null;
   activeQrTable: Table | null = null;
   qrDataUrl: string | null = null;
+
+  showServerAdminModal = signal<boolean>(false);
+  serverAdminPassword = signal<string>('');
+  serverAdminError = signal<string>('');
+  targetServerOrder = signal<Order | null>(null);
+  selectedServerStaffId = signal<string | null>(null);
 
   filteredTables = computed(() => {
     if (this.selectedSection() === 'ALL') return this.tables();
@@ -687,6 +997,85 @@ export class TableListComponent {
       return;
     }
     this.toastService.success(`Table status updated to ${status}`);
+  }
+
+  onStaffAssign(tableId: string, staffIdStr: string): void {
+    const staffId = staffIdStr && staffIdStr.trim().length > 0 ? staffIdStr : null;
+    this.dataService.assignTableStaff(tableId, staffId);
+    this.toastService.success('Table staff assignment updated');
+  }
+
+  getActiveOrderByTable(table: Table): Order | undefined {
+    return this.mock
+      .orders()
+      .find(
+        (o) =>
+          (o.tableId === table.id || o.tableNumber === table.number) &&
+          !['COMPLETED', 'CANCELLED'].includes(o.status),
+      );
+  }
+
+  isOrderPaid(order: Order | null | undefined): boolean {
+    if (!order) return false;
+    const ps = (order.paymentStatus || '').toUpperCase();
+    if (ps === 'PAID' || ps === 'COMPLETED') return true;
+    if (order.status === 'COMPLETED' || !!order.settledAt) return true;
+    return false;
+  }
+
+  getServerStaffName(staffId: string | null | undefined): string {
+    if (!staffId) return '';
+    return this.staffMembers().find((s) => s.id === staffId)?.name || '';
+  }
+
+  promptChangePaidServer(order: Order): void {
+    this.targetServerOrder.set(order);
+    this.selectedServerStaffId.set(order.serverStaffId || null);
+    this.serverAdminPassword.set('');
+    this.serverAdminError.set('');
+    this.showServerAdminModal.set(true);
+  }
+
+  cancelServerAdminModal(): void {
+    this.showServerAdminModal.set(false);
+    this.targetServerOrder.set(null);
+    this.serverAdminPassword.set('');
+    this.serverAdminError.set('');
+  }
+
+  confirmServerAdminChange(): void {
+    const pwd = this.serverAdminPassword();
+    if (!this.adminAuth.verifyAdminPassword(pwd)) {
+      this.serverAdminError.set('Incorrect admin password. Cannot reassign server on paid order.');
+      return;
+    }
+    const ord = this.targetServerOrder();
+    if (!ord) return;
+    const newStaffId = this.selectedServerStaffId();
+    const res = this.dataService.assignOrderServer(ord.id, newStaffId, pwd);
+    if (!res.success) {
+      this.serverAdminError.set(res.error || 'Failed to update server staff');
+      return;
+    }
+    this.toastService.success(
+      `Serving staff updated to ${this.getServerStaffName(newStaffId) || 'Unassigned'} (Admin Authorized).`,
+    );
+    this.cancelServerAdminModal();
+  }
+
+  onAssignActiveOrderServer(order: Order, staffIdStr: string): void {
+    if (this.isOrderPaid(order)) {
+      this.promptChangePaidServer(order);
+      return;
+    }
+    const staffId = staffIdStr && staffIdStr.trim().length > 0 ? staffIdStr.trim() : null;
+    const res = this.dataService.assignOrderServer(order.id, staffId);
+    if (!res.success) {
+      this.toastService.warning(res.error || 'Failed to assign staff to customer order');
+      return;
+    }
+    const staffName = this.staffMembers().find((s) => s.id === staffId)?.name || 'Unassigned';
+    this.toastService.success(`Assigned ${staffName} to ${order.customerName || 'customer order'}`);
   }
 
   toggleOrdering(table: Table): void {
@@ -729,7 +1118,7 @@ export class TableListComponent {
     this.mock.tables.set(updated);
     this.mock.saveLocal('tables', updated);
 
-    this.toastService.success(`Created ${newTbl.number} with QR Token`);
+    this.toastService.success(`Created ${newTbl.number} with QR Code`);
     this.showAddModal = false;
   }
 
@@ -785,6 +1174,7 @@ export class TableListComponent {
     if ((event.target as HTMLElement).classList.contains('modal-overlay')) {
       this.showAddModal = false;
       this.activeQrTable = null;
+      this.cancelServerAdminModal();
     }
   }
 }

@@ -48,7 +48,7 @@ export class StatusBadgeComponent {
     if (['PREPARING', 'OCCUPIED', 'SEATED', 'PARTIALLY_PAID', 'PENDING'].includes(s)) {
       return 'badge-warning';
     }
-    if (['ACCEPTED', 'INFO', 'RESERVED'].includes(s)) {
+    if (['ACCEPTED', 'INFO', 'RESERVED', 'DISPATCHED'].includes(s)) {
       return 'badge-info';
     }
     if (['CANCELLED', 'REFUNDED', 'DIRTY', 'INACTIVE', 'NO_SHOW'].includes(s)) {

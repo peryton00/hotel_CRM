@@ -19,7 +19,7 @@ import { ToastService } from '../../../core/services/toast.service';
         <div>
           <h1 class="heading-display">Customer Directory</h1>
           <p class="text-muted">
-            Manage dining guest profiles, loyalty tiers, lifetime spend, and coupon privileges.
+            Manage customer profiles, loyalty tiers, order history, and assigned coupons.
           </p>
         </div>
 
@@ -252,8 +252,7 @@ import { ToastService } from '../../../core/services/toast.service';
             </div>
             <div class="modal-body">
               <p class="text-sm text-muted" style="margin-bottom: 16px;">
-                Select a promo code offer to bind to this customer profile for exclusive digital
-                dining redemption.
+                Select a coupon code to assign to this customer.
               </p>
               <div class="coupon-picker-list">
                 @for (c of coupons(); track c.id) {
@@ -281,7 +280,7 @@ import { ToastService } from '../../../core/services/toast.service';
                 (click)="confirmAssignCoupon()"
                 [disabled]="!selectedCouponToAssign"
               >
-                Assign Privilege
+                Assign Coupon
               </button>
             </div>
           </div>

@@ -33,7 +33,7 @@ type InventoryTab = 'INGREDIENTS' | 'RECIPES' | 'LEDGER';
         <div>
           <h1 class="heading-display">Inventory & Recipe Management</h1>
           <p class="text-muted">
-            Live stock levels, portion costing, recipe definitions, and auditable movement ledger.
+            Track ingredient stock levels, recipe costs, restock orders, and stock adjustments.
           </p>
         </div>
 
@@ -1104,7 +1104,7 @@ type InventoryTab = 'INGREDIENTS' | 'RECIPES' | 'LEDGER';
               </div>
 
               <div class="form-group mt-4">
-                <label class="form-label" for="recNotes">Culinary Preparation Notes / SOP</label>
+                <label class="form-label" for="recNotes">Preparation Notes / SOP</label>
                 <textarea
                   id="recNotes"
                   class="form-input"
@@ -1117,7 +1117,7 @@ type InventoryTab = 'INGREDIENTS' | 'RECIPES' | 'LEDGER';
 
             <div class="modal-footer">
               <button class="btn btn-secondary" (click)="showRecipeModal.set(false)">Cancel</button>
-              <button class="btn btn-primary" (click)="saveRecipe()">Save Formulation</button>
+              <button class="btn btn-primary" (click)="saveRecipe()">Save Recipe</button>
             </div>
           </div>
         </div>

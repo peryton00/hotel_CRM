@@ -6,6 +6,9 @@ use std::env;
 pub struct AppConfig {
     pub port: u16,
     pub database_url: String,
+    pub local_database_url: Option<String>,
+    pub cloud_database_url: Option<String>,
+    pub is_offline_first: bool,
     pub supabase_jwt_secret: String,
     pub supabase_url: Option<String>,
     pub allowed_origins: Vec<String>,
@@ -22,9 +25,21 @@ impl AppConfig {
             .and_then(|p| p.parse::<u16>().ok())
             .unwrap_or(3000);
 
-        let database_url = env::var("DATABASE_URL").unwrap_or_else(|_| {
-            "postgres://postgres:postgres@localhost:5432/hotel_crm".to_string()
-        });
+        let local_database_url = env::var("LOCAL_DATABASE_URL")
+            .ok()
+            .filter(|s| !s.trim().is_empty());
+        let cloud_database_url = env::var("CLOUD_DATABASE_URL")
+            .ok()
+            .filter(|s| !s.trim().is_empty());
+
+        let database_url = local_database_url
+            .clone()
+            .or_else(|| env::var("DATABASE_URL").ok())
+            .unwrap_or_else(|| {
+                "postgres://postgres:postgres@localhost:5432/hotel_crm".to_string()
+            });
+
+        let is_offline_first = local_database_url.is_some();
 
         let supabase_jwt_secret = env::var("SUPABASE_JWT_SECRET").unwrap_or_else(|_| {
             "dev_jwt_secret_must_be_configured_in_production_environment_32chars".to_string()
@@ -50,6 +65,9 @@ impl AppConfig {
         Self {
             port,
             database_url,
+            local_database_url,
+            cloud_database_url,
+            is_offline_first,
             supabase_jwt_secret,
             supabase_url,
             allowed_origins,
@@ -62,6 +80,7 @@ impl AppConfig {
 #[derive(Clone)]
 pub struct AppState {
     pub pool: PgPool,
+    pub cloud_pool: Option<PgPool>,
     pub config: AppConfig,
 }
 

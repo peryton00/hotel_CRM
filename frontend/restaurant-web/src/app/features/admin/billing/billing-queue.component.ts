@@ -344,7 +344,7 @@ import { generateIdempotencyKey } from '../../../core/utils/idempotency.util';
                 </div>
                 @if (ord.discountAmount > 0) {
                   <div class="settle-row discount">
-                    <span>Discount Privilege</span>
+                    <span>Discount Applied</span>
                     <span>-{{ ord.discountAmount | currencyInr }}</span>
                   </div>
                 }

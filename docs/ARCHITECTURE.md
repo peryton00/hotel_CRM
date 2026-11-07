@@ -45,7 +45,7 @@ HOTEL_CRM/
 │   ├── documentation/             # System specs
 │   └── fixtures/                  # Baseline seed JSON fixtures
 ├── backend/                       # Placeholder for future backend
-├── database/                      # Placeholder for future DB/Supabase migrations
+├── supabase/                      # Supabase PostgreSQL schema migrations (001 to 005)
 ├── docs/                          # Comprehensive architectural and system docs
 ├── package.json                   # Root orchestrator scripts
 └── README.md

@@ -25,7 +25,7 @@ import { ToastService } from '../../../core/services/toast.service';
         <div>
           <h1 class="heading-display">Menu Catalog Management</h1>
           <p class="text-muted">
-            Curate culinary recipes, portions, variants, pricing, and live inventory availability.
+            Manage menu items, portions, prices, and kitchen availability.
           </p>
         </div>
 
@@ -188,7 +188,7 @@ import { ToastService } from '../../../core/services/toast.service';
           <div class="modal-card dish-form-modal" role="dialog" aria-modal="true">
             <div class="modal-header">
               <h3 class="heading-card">
-                {{ editingItem ? 'Edit Culinary Recipe' : 'Add New Dish' }}
+                {{ editingItem ? 'Edit Dish' : 'Add New Dish' }}
               </h3>
               <button class="close-btn" (click)="showItemModal = false">
                 <i class="ph ph-x"></i>
@@ -242,7 +242,7 @@ import { ToastService } from '../../../core/services/toast.service';
               </div>
 
               <div class="form-group">
-                <label class="form-label">Culinary Description</label>
+                <label class="form-label">Dish Description</label>
                 <textarea
                   class="form-textarea"
                   rows="2"
@@ -324,7 +324,7 @@ import { ToastService } from '../../../core/services/toast.service';
       <!-- Delete Confirmation -->
       <app-confirm-modal
         [isOpen]="!!itemToDelete"
-        title="Delete Culinary Dish"
+        title="Delete Dish"
         [message]="
           'Are you sure you want to permanently delete ' +
           itemToDelete?.name +

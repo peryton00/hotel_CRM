@@ -57,6 +57,54 @@ pub struct StaffMember {
     pub email: Option<String>,
     pub phone: Option<String>,
     pub is_active: bool,
+    #[serde(default)]
+    pub shift: Option<String>,
+    #[serde(default)]
+    pub assigned_section: Option<String>,
+    #[serde(default)]
+    pub login_id: Option<String>,
+    #[serde(default)]
+    pub monthly_salary_paise: Option<i64>,
+    #[serde(default)]
+    pub payroll_cycle_start_day: Option<i32>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
+pub struct StaffAttendance {
+    pub id: Uuid,
+    pub restaurant_id: Uuid,
+    pub staff_id: Uuid,
+    pub attendance_date: chrono::NaiveDate,
+    pub status: String,
+    pub check_in_time: Option<DateTime<Utc>>,
+    pub check_out_time: Option<DateTime<Utc>>,
+    pub notes: Option<String>,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct StaffPerformanceSummary {
+    pub staff_id: Uuid,
+    pub staff_name: String,
+    pub role: String,
+    pub shift: Option<String>,
+    pub monthly_salary_paise: i64,
+    pub total_days_in_month: i64,
+    pub present_days: f64,
+    pub half_days: i64,
+    pub absent_days: i64,
+    pub leave_days: i64,
+    pub effective_working_days: f64,
+    pub calculated_salary_paise: i64,
+    pub orders_served_count: i64,
+    pub orders_served_total_paise: i64,
+    #[serde(default)]
+    pub payroll_cycle_start_day: Option<i32>,
+    #[serde(default)]
+    pub cycle_start_date: Option<String>,
+    #[serde(default)]
+    pub cycle_end_date: Option<String>,
 }

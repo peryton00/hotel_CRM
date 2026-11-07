@@ -61,10 +61,11 @@ impl IntoResponse for AppError {
             ),
             AppError::Database(err) => {
                 tracing::error!("Database query error: {:?}", err);
+                eprintln!("[DATABASE ERROR] {:?}", err);
                 (
                     StatusCode::INTERNAL_SERVER_ERROR,
                     "DATABASE_ERROR",
-                    "A database error occurred. Please try again later.".to_string(),
+                    format!("Database error: {err}"),
                 )
             }
             AppError::Internal(msg) => {

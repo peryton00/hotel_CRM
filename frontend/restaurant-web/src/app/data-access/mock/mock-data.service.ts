@@ -44,11 +44,14 @@ import {
   areUnitsCompatible,
 } from '../../core/models/inventory.model';
 
+import { AdminAuthService } from '../../core/services/admin-auth.service';
+
 const STORAGE_PREFIX = 'royal_spice_';
 
 @Injectable()
 export class MockDataService {
-  private http = inject(HttpClient);
+  private http = inject(HttpClient, { optional: true });
+  private adminAuth = inject(AdminAuthService);
 
   // Reactive State Signals
   readonly restaurant = signal<Restaurant | null>(null);
@@ -75,16 +78,22 @@ export class MockDataService {
   readonly stockMovements = signal<StockMovement[]>([]);
   readonly stockReservations = signal<StockReservation[]>([]);
   readonly isInitialized = signal<boolean>(false);
+  readonly liveOrderEvent = signal<{ type: string; order?: Order; timestamp: number } | null>(null);
+
+  private orderChannel: BroadcastChannel | null = null;
+  private storageEventListener: ((e: StorageEvent) => void) | null = null;
 
   constructor() {
     this.initializeData();
+    this.setupRealtimeSync();
   }
 
   initializeData(): void {
     this.initFallbackRestaurant();
     this.categories.set([]);
     this.menuItems.set(this.getDefaultMenuItems());
-    this.orders.set([]);
+    const savedOrders = this.loadLocalArray<Order>('orders');
+    this.orders.set(savedOrders ? this.normalizeLegacyOrders(savedOrders) : []);
     this.customers.set([]);
     this.tables.set([]);
     this.coupons.set([]);
@@ -139,7 +148,7 @@ export class MockDataService {
         pickupReference: ord.pickupReference,
         tableNumber: ord.tableNumber,
         customerName: ord.customerName,
-        customerPhone: ord.customerPhone,
+        customerPhone: ord.customerPhone || '',
         issuedAt: ord.updatedAt || ord.createdAt,
         items: ord.items,
         subtotal: ord.subtotal,
@@ -165,7 +174,7 @@ export class MockDataService {
       name: 'GuruKripa Dhaba',
       tagline: 'Artisanal Mughlai & Contemporary Indian Bistro',
       description:
-        'Authentic royal recipes, charcoal tandoori marvels, and modern culinary interpretations.',
+        'Traditional tandoori specialties, authentic recipes, and North Indian cuisine.',
       coverImage:
         'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?auto=format&fit=crop&w=1400&q=80',
       logoUrl:
@@ -211,8 +220,96 @@ export class MockDataService {
   saveLocal<T>(key: string, data: T): void {
     try {
       localStorage.setItem(STORAGE_PREFIX + key, JSON.stringify(data));
+      if (key === 'orders' && Array.isArray(data)) {
+        this.broadcastOrderEvent({ type: 'ORDERS_SYNC', orders: data as Order[] });
+      }
     } catch (e) {
       console.warn('Could not persist to localStorage', e);
+    }
+  }
+
+  // Real-Time Cross-Tab Event Stream (Zero CPU / Zero Network polling)
+  setupRealtimeSync(): void {
+    if (typeof window === 'undefined') return;
+
+    if (typeof BroadcastChannel !== 'undefined') {
+      try {
+        this.orderChannel = new BroadcastChannel('hotel_crm_order_stream');
+        this.orderChannel.onmessage = (ev) => {
+          this.handleIncomingSyncEvent(ev.data);
+        };
+      } catch (e) {
+        console.warn('[MockDataService] BroadcastChannel unavailable:', e);
+      }
+    }
+
+    this.storageEventListener = (e: StorageEvent) => {
+      if (e.key === 'royal_spice_order_stream_event' && e.newValue) {
+        try {
+          const parsed = JSON.parse(e.newValue);
+          this.handleIncomingSyncEvent(parsed);
+        } catch {
+          // Ignore parse errors
+        }
+      } else if (e.key === STORAGE_PREFIX + 'orders' && e.newValue) {
+        try {
+          const parsedOrders = JSON.parse(e.newValue);
+          if (Array.isArray(parsedOrders)) {
+            this.handleIncomingSyncEvent({ type: 'ORDERS_SYNC', orders: parsedOrders });
+          }
+        } catch {
+          // Ignore parse errors
+        }
+      }
+    };
+
+    window.addEventListener('storage', this.storageEventListener);
+  }
+
+  broadcastOrderEvent(event: {
+    type: 'ORDER_CREATED' | 'ORDER_UPDATED' | 'ORDERS_SYNC';
+    order?: Order;
+    orders?: Order[];
+  }): void {
+    if (typeof window === 'undefined') return;
+    try {
+      if (this.orderChannel) {
+        this.orderChannel.postMessage(event);
+      }
+      localStorage.setItem(
+        'royal_spice_order_stream_event',
+        JSON.stringify({ ...event, _ts: Date.now() }),
+      );
+    } catch {
+      // Ignore serialization or cross-origin restrictions
+    }
+  }
+
+  handleIncomingSyncEvent(ev: any): void {
+    if (!ev || !ev.type) return;
+
+    if (ev.type === 'ORDER_CREATED' && ev.order) {
+      const incoming: Order = ev.order;
+      const current = this.orders();
+      if (!current.some((o) => o.id === incoming.id)) {
+        this.orders.set([incoming, ...current]);
+        this.liveOrderEvent.set({ type: 'ORDER_CREATED', order: incoming, timestamp: Date.now() });
+      }
+    } else if (ev.type === 'ORDER_UPDATED' && ev.order) {
+      const incoming: Order = ev.order;
+      const current = this.orders();
+      if (current.some((o) => o.id === incoming.id)) {
+        this.orders.set(current.map((o) => (o.id === incoming.id ? incoming : o)));
+        this.liveOrderEvent.set({ type: 'ORDER_UPDATED', order: incoming, timestamp: Date.now() });
+      }
+    } else if (ev.type === 'ORDERS_SYNC' && Array.isArray(ev.orders)) {
+      const normalized = this.normalizeLegacyOrders(ev.orders);
+      if (
+        normalized.length !== this.orders().length ||
+        (normalized[0] && normalized[0].id !== this.orders()[0]?.id)
+      ) {
+        this.orders.set(normalized);
+      }
     }
   }
 
@@ -373,7 +470,7 @@ export class MockDataService {
           isValid: false,
           authorizedDiscountAmount: 0,
           couponId: coupon.id,
-          rejectionReason: 'This exclusive coupon is assigned to selected VIP patron accounts.',
+          rejectionReason: 'This exclusive coupon is reserved for assigned customer accounts.',
           calculatedBy: 'SERVER_AUTHORITATIVE',
           checkedAt,
         };
@@ -388,7 +485,7 @@ export class MockDataService {
           authorizedDiscountAmount: 0,
           couponId: coupon.id,
           assignmentId: matchingAssignment.id,
-          rejectionReason: 'You have exhausted your entitlement limit for this privilege',
+          rejectionReason: 'You have reached the maximum redemptions allowed for this coupon',
           calculatedBy: 'SERVER_AUTHORITATIVE',
           checkedAt,
         };
@@ -598,7 +695,9 @@ export class MockDataService {
         couponCode: req.appliedCouponCode,
         cartSubtotal: req.order.subtotal,
         customerId: req.order.customerId,
-        customerPhoneE164: req.order.customerPhoneE164 || normalizeToE164(req.order.customerPhone),
+        customerPhoneE164:
+          req.order.customerPhoneE164 ||
+          (req.order.customerPhone ? normalizeToE164(req.order.customerPhone) : undefined),
       });
 
       if (!valResult.isValid) {
@@ -638,6 +737,7 @@ export class MockDataService {
     const updatedOrders = [finalizedOrder, ...this.orders()];
     this.orders.set(updatedOrders);
     this.saveLocal('orders', updatedOrders);
+    this.broadcastOrderEvent({ type: 'ORDER_CREATED', order: finalizedOrder });
 
     // If order was created in ACCEPTED status, reserve stock immediately
     if (finalizedOrder.status === 'ACCEPTED') {
@@ -753,6 +853,7 @@ export class MockDataService {
       'ACCEPTED',
       'PREPARING',
       'READY',
+      'DISPATCHED',
       'SERVED',
     ];
     const activeOrders = this.orders().filter(
@@ -808,6 +909,7 @@ export class MockDataService {
       'ACCEPTED',
       'PREPARING',
       'READY',
+      'DISPATCHED',
       'SERVED',
     ];
     const activeOrders = this.orders().filter(
@@ -944,6 +1046,7 @@ export class MockDataService {
       'ACCEPTED',
       'PREPARING',
       'READY',
+      'DISPATCHED',
       'SERVED',
     ];
     const conflictingOrder = this.orders().find(
@@ -1005,6 +1108,7 @@ export class MockDataService {
     const updatedOrders = this.orders().map((o) => (o.id === order.id ? updatedOrder : o));
     this.orders.set(updatedOrders);
     this.saveLocal('orders', updatedOrders);
+    this.broadcastOrderEvent({ type: 'ORDER_UPDATED', order: updatedOrder });
 
     // 3. Update Table Statuses
     // Destination table becomes OCCUPIED
@@ -1195,6 +1299,7 @@ export class MockDataService {
     const updatedOrders = this.orders().map((o) => (o.id === order.id ? updatedOrder : o));
     this.orders.set(updatedOrders);
     this.saveLocal('orders', updatedOrders);
+    this.broadcastOrderEvent({ type: 'ORDER_UPDATED', order: updatedOrder });
 
     return { success: true, splitBills: splits };
   }
@@ -1378,6 +1483,7 @@ export class MockDataService {
     const updatedOrders = this.orders().map((o) => (o.id === order.id ? updatedOrder : o));
     this.orders.set(updatedOrders);
     this.saveLocal('orders', updatedOrders);
+    this.broadcastOrderEvent({ type: 'ORDER_UPDATED', order: updatedOrder });
 
     return { success: true, splitBills };
   }
@@ -1480,8 +1586,11 @@ export class MockDataService {
     }
 
     const now = new Date().toISOString();
+    const isPrinted = (order.printCount || 0) > 0;
+    const nextStatus = isPrinted ? 'COMPLETED' : order.status;
     const updatedOrder: Order = {
       ...order,
+      status: nextStatus,
       paymentStatus: 'PAID',
       paymentMethod: req.paymentMethod,
       settledAt: now,
@@ -1489,9 +1598,11 @@ export class MockDataService {
       timeline: [
         ...order.timeline,
         {
-          status: 'PAID',
+          status: nextStatus === 'COMPLETED' ? 'COMPLETED' : 'PAID',
           timestamp: now,
-          note: `Dining bill settled via ${req.paymentMethod} (₹${order.totalAmount})`,
+          note: isPrinted
+            ? `Dining bill settled via ${req.paymentMethod} (₹${order.totalAmount}) and invoice printed; marked COMPLETED`
+            : `Dining bill settled via ${req.paymentMethod} (₹${order.totalAmount})`,
         },
       ],
     };
@@ -1499,6 +1610,14 @@ export class MockDataService {
     const updatedOrders = this.orders().map((o) => (o.id === order.id ? updatedOrder : o));
     this.orders.set(updatedOrders);
     this.saveLocal('orders', updatedOrders);
+    this.broadcastOrderEvent({ type: 'ORDER_UPDATED', order: updatedOrder });
+
+    if (nextStatus === 'COMPLETED' && order.orderType !== 'TAKEAWAY') {
+      const tableKey = order.tableId || order.tableNumber;
+      if (tableKey) {
+        this.recalculateTableStatus(tableKey);
+      }
+    }
 
     // Update Invoices
     const existingInvoices = this.invoices();
@@ -1528,7 +1647,7 @@ export class MockDataService {
         pickupReference: order.pickupReference,
         tableNumber: order.tableNumber,
         customerName: order.customerName,
-        customerPhone: order.customerPhone,
+        customerPhone: order.customerPhone || '',
         issuedAt: now,
         items: order.items,
         subtotal: order.subtotal,
@@ -3057,6 +3176,7 @@ export class MockDataService {
     const updatedOrders = this.orders().map((o) => (o.id === order.id ? updatedOrder : o));
     this.orders.set(updatedOrders);
     this.saveLocal('orders', updatedOrders);
+    this.broadcastOrderEvent({ type: 'ORDER_UPDATED', order: updatedOrder });
 
     return { success: true, order: updatedOrder };
   }
@@ -3255,8 +3375,8 @@ export class MockDataService {
       // If wasConsumed, physically consumed stock is NOT silently restored
     }
 
-    // 3. Transition to SERVED or COMPLETED: consume stock atomically
-    if (targetStatus === 'SERVED' || targetStatus === 'COMPLETED') {
+    // 3. Transition to DISPATCHED, SERVED or COMPLETED: consume stock atomically
+    if (targetStatus === 'DISPATCHED' || targetStatus === 'SERVED' || targetStatus === 'COMPLETED') {
       const consResult = this.consumeStockForOrder(order.id);
       if (!consResult.success) {
         // Do NOT advance order status! Return clear error and preserve order state.
@@ -3287,6 +3407,7 @@ export class MockDataService {
     const updatedOrders = this.orders().map((o) => (o.id === order.id ? updatedOrder : o));
     this.orders.set(updatedOrders);
     this.saveLocal('orders', updatedOrders);
+    this.broadcastOrderEvent({ type: 'ORDER_UPDATED', order: updatedOrder });
 
     // 5. Update dining table occupancy if completed or cancelled (only for dine-in orders)
     const tableIdOrNumber = order.tableId || order.tableNumber;
@@ -3370,8 +3491,17 @@ export class MockDataService {
     }
 
     const currentCount = order.printCount || 0;
+    if (currentCount > 0 && !isReprint) {
+      return {
+        success: false,
+        printCount: currentCount,
+        error: 'Invoice has already been printed. Admin password authorization required to reprint.',
+      };
+    }
     const newCount = currentCount + 1;
     const now = new Date().toISOString();
+    const isPaid = order.paymentStatus === 'PAID';
+    const nextStatus = isPaid ? 'COMPLETED' : order.status;
     const note = isReprint
       ? `Tax Invoice reprinted (Copy #${newCount}) authorized by Admin`
       : `Tax Invoice printed (Original - Copy #1) by ${staffName}`;
@@ -3379,14 +3509,17 @@ export class MockDataService {
     const updatedTimeline = [
       ...order.timeline,
       {
-        status: order.status,
+        status: nextStatus,
         timestamp: now,
-        note,
+        note: isPaid
+          ? `${note} — Order paid and invoice printed; marked COMPLETED`
+          : note,
       },
     ];
 
     const updatedOrder: Order = {
       ...order,
+      status: nextStatus,
       printCount: newCount,
       lastPrintedAt: now,
       updatedAt: now,
@@ -3396,6 +3529,14 @@ export class MockDataService {
     const updatedOrders = this.orders().map((o) => (o.id === order.id ? updatedOrder : o));
     this.orders.set(updatedOrders);
     this.saveLocal('orders', updatedOrders);
+    this.broadcastOrderEvent({ type: 'ORDER_UPDATED', order: updatedOrder });
+
+    if (nextStatus === 'COMPLETED' && order.orderType !== 'TAKEAWAY') {
+      const tableKey = order.tableId || order.tableNumber;
+      if (tableKey) {
+        this.recalculateTableStatus(tableKey);
+      }
+    }
 
     return { success: true, printCount: newCount };
   }
@@ -3415,6 +3556,14 @@ export class MockDataService {
     }
 
     const currentCount = split.printCount || 0;
+    if (currentCount > 0 && !isReprint) {
+      return {
+        success: false,
+        printCount: currentCount,
+        error:
+          'Split bill slip has already been printed. Admin password authorization required to reprint.',
+      };
+    }
     const newCount = currentCount + 1;
 
     const updatedSplitBills = this.splitBills().map((b) =>
@@ -3424,5 +3573,48 @@ export class MockDataService {
     this.saveLocal('split_bills', updatedSplitBills);
 
     return { success: true, printCount: newCount };
+  }
+
+  /**
+   * Assigns serving staff to an order.
+   * If the order is COMPLETED, requires valid admin authorization password.
+   */
+  assignOrderServer(
+    orderId: string,
+    staffId: string | null,
+    adminPassword?: string,
+  ): { success: boolean; error?: string } {
+    const server_staff_id = staffId && staffId.trim() ? staffId.trim() : null;
+    const currentOrder = this.orders().find((o) => o.id === orderId);
+    if (!currentOrder) {
+      return { success: false, error: 'Order not found' };
+    }
+
+    const isPaid =
+      (currentOrder.paymentStatus || '').toUpperCase() === 'PAID' ||
+      currentOrder.status === 'COMPLETED' ||
+      !!currentOrder.settledAt;
+    if (isPaid) {
+      const isAuthorized = !!(adminPassword && this.adminAuth.verifyAdminPassword(adminPassword));
+      if (!isAuthorized) {
+        return {
+          success: false,
+          error: 'Admin password required to change server on paid or completed orders.',
+        };
+      }
+    }
+
+    const updated = this.orders().map((o) =>
+      o.id === orderId
+        ? { ...o, serverStaffId: server_staff_id || undefined, updatedAt: new Date().toISOString() }
+        : o,
+    );
+    this.orders.set(updated);
+    this.saveLocal('orders', updated);
+    const updatedOrder = updated.find((o) => o.id === orderId);
+    if (updatedOrder) {
+      this.broadcastOrderEvent({ type: 'ORDER_UPDATED', order: updatedOrder });
+    }
+    return { success: true };
   }
 }

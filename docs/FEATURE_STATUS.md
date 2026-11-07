@@ -3,7 +3,7 @@
 | Feature / Domain | Implementation Status | Data Source | Notes |
 |------------------|----------------------|-------------|-------|
 | **Brand Identity & SCSS Tokens** | Completed | SCSS `:root` variables | Exact 5 brand colors, typography tokens (Libre Baskerville + Inter) |
-| **Monorepo Architecture** | Completed | Structure | `frontend/restaurant-web`, `docs/`, `backend/`, `database/` |
+| **Monorepo Architecture** | Completed | Structure | `frontend/restaurant-web`, `docs/`, `backend/`, `supabase/` |
 | **Data Contracts & Repositories** | Completed | TypeScript Interfaces | Contract-first design ready for Supabase DI injection |
 | **Admin Application Shell** | Completed | Standalone Angular | Collapsible sidebar, Phosphor Icons, topbar, responsive layout |
 | **Admin Dashboard** | Completed | In-Memory Repository | Reactive KPIs, order status breakdown, revenue metrics in INR |

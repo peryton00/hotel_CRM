@@ -1,4 +1,4 @@
-import { Component, inject, signal } from '@angular/core';
+import { Component, inject, signal, computed } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { RouterModule, Router } from '@angular/router';
 import { ToastContainerComponent } from '../../shared/components/toast-container/toast-container.component';
@@ -40,165 +40,197 @@ import { AdminAuthService } from '../../core/services/admin-auth.service';
         <nav class="sidebar-nav">
           <div class="nav-group-label" *ngIf="!isSidebarCollapsed()">OPERATIONS</div>
 
-          <a
-            routerLink="/admin/dashboard"
-            routerLinkActive="active"
-            class="nav-item"
-            (click)="closeMobileMenu()"
-            [attr.title]="isSidebarCollapsed() ? 'Dashboard' : null"
-          >
-            <i class="ph ph-chart-pie-slice"></i>
-            <span class="nav-text" *ngIf="!isSidebarCollapsed()">Dashboard</span>
-          </a>
+          @if (auth.canAccess('dashboard')) {
+            <a
+              routerLink="/admin/dashboard"
+              routerLinkActive="active"
+              class="nav-item"
+              (click)="closeMobileMenu()"
+              [attr.title]="isSidebarCollapsed() ? 'Dashboard' : null"
+            >
+              <i class="ph ph-chart-pie-slice"></i>
+              <span class="nav-text" *ngIf="!isSidebarCollapsed()">Dashboard</span>
+            </a>
+          }
 
-          <a
-            routerLink="/admin/orders"
-            routerLinkActive="active"
-            class="nav-item"
-            (click)="closeMobileMenu()"
-            [attr.title]="isSidebarCollapsed() ? 'Live Orders' : null"
-          >
-            <i class="ph ph-receipt"></i>
-            <span class="nav-text" *ngIf="!isSidebarCollapsed()">Live Orders</span>
-            <span class="live-pill" *ngIf="!isSidebarCollapsed()">Live</span>
-            <span class="live-dot" *ngIf="isSidebarCollapsed()" title="Live Orders"></span>
-          </a>
+          @if (auth.canAccess('orders')) {
+            <a
+              routerLink="/admin/orders"
+              routerLinkActive="active"
+              class="nav-item"
+              (click)="closeMobileMenu()"
+              [attr.title]="isSidebarCollapsed() ? 'Live Orders' : null"
+            >
+              <i class="ph ph-receipt"></i>
+              <span class="nav-text" *ngIf="!isSidebarCollapsed()">Live Orders</span>
+              <span class="live-pill" *ngIf="!isSidebarCollapsed()">Live</span>
+              <span class="live-dot" *ngIf="isSidebarCollapsed()" title="Live Orders"></span>
+            </a>
+          }
 
-          <a
-            routerLink="/admin/tables"
-            routerLinkActive="active"
-            class="nav-item"
-            (click)="closeMobileMenu()"
-            [attr.title]="isSidebarCollapsed() ? 'Tables & QR' : null"
-          >
-            <i class="ph ph-qr-code"></i>
-            <span class="nav-text" *ngIf="!isSidebarCollapsed()">Tables & QR</span>
-          </a>
+          @if (auth.canAccess('tables')) {
+            <a
+              routerLink="/admin/tables"
+              routerLinkActive="active"
+              class="nav-item"
+              (click)="closeMobileMenu()"
+              [attr.title]="isSidebarCollapsed() ? 'Tables & QR' : null"
+            >
+              <i class="ph ph-qr-code"></i>
+              <span class="nav-text" *ngIf="!isSidebarCollapsed()">Tables & QR</span>
+            </a>
+          }
 
-          <a
-            routerLink="/admin/menu"
-            routerLinkActive="active"
-            class="nav-item"
-            (click)="closeMobileMenu()"
-            [attr.title]="isSidebarCollapsed() ? 'Menu Catalog' : null"
-          >
-            <i class="ph ph-book-open"></i>
-            <span class="nav-text" *ngIf="!isSidebarCollapsed()">Menu Catalog</span>
-          </a>
+          @if (auth.canAccess('menu')) {
+            <a
+              routerLink="/admin/menu"
+              routerLinkActive="active"
+              class="nav-item"
+              (click)="closeMobileMenu()"
+              [attr.title]="isSidebarCollapsed() ? 'Menu Catalog' : null"
+            >
+              <i class="ph ph-book-open"></i>
+              <span class="nav-text" *ngIf="!isSidebarCollapsed()">Menu Catalog</span>
+            </a>
+          }
 
-          <a
-            routerLink="/admin/inventory"
-            routerLinkActive="active"
-            class="nav-item"
-            (click)="closeMobileMenu()"
-            [attr.title]="isSidebarCollapsed() ? 'Inventory & Recipes' : null"
-          >
-            <i class="ph ph-package"></i>
-            <span class="nav-text" *ngIf="!isSidebarCollapsed()">Inventory & Recipes</span>
-          </a>
+          @if (auth.canAccess('inventory')) {
+            <a
+              routerLink="/admin/inventory"
+              routerLinkActive="active"
+              class="nav-item"
+              (click)="closeMobileMenu()"
+              [attr.title]="isSidebarCollapsed() ? 'Inventory & Recipes' : null"
+            >
+              <i class="ph ph-package"></i>
+              <span class="nav-text" *ngIf="!isSidebarCollapsed()">Inventory & Recipes</span>
+            </a>
+          }
 
-          <a
-            routerLink="/admin/billing"
-            routerLinkActive="active"
-            class="nav-item"
-            (click)="closeMobileMenu()"
-            [attr.title]="isSidebarCollapsed() ? 'Billing & Invoices' : null"
-          >
-            <i class="ph ph-currency-inr"></i>
-            <span class="nav-text" *ngIf="!isSidebarCollapsed()">Billing & Invoices</span>
-          </a>
+          @if (auth.canAccess('billing')) {
+            <a
+              routerLink="/admin/billing"
+              routerLinkActive="active"
+              class="nav-item"
+              (click)="closeMobileMenu()"
+              [attr.title]="isSidebarCollapsed() ? 'Billing & Invoices' : null"
+            >
+              <i class="ph ph-currency-inr"></i>
+              <span class="nav-text" *ngIf="!isSidebarCollapsed()">Billing & Invoices</span>
+            </a>
+          }
 
-          <div class="nav-group-label" *ngIf="!isSidebarCollapsed()">GUEST EXPERIENCE</div>
+          @if (hasGuestSection()) {
+            <div class="nav-group-label" *ngIf="!isSidebarCollapsed()">GUEST EXPERIENCE</div>
 
-          <a
-            routerLink="/admin/customers"
-            routerLinkActive="active"
-            class="nav-item"
-            (click)="closeMobileMenu()"
-            [attr.title]="isSidebarCollapsed() ? 'Customers' : null"
-          >
-            <i class="ph ph-users"></i>
-            <span class="nav-text" *ngIf="!isSidebarCollapsed()">Customers</span>
-          </a>
+            @if (auth.canAccess('customers')) {
+              <a
+                routerLink="/admin/customers"
+                routerLinkActive="active"
+                class="nav-item"
+                (click)="closeMobileMenu()"
+                [attr.title]="isSidebarCollapsed() ? 'Customers' : null"
+              >
+                <i class="ph ph-users"></i>
+                <span class="nav-text" *ngIf="!isSidebarCollapsed()">Customers</span>
+              </a>
+            }
 
-          <a
-            routerLink="/admin/coupons"
-            routerLinkActive="active"
-            class="nav-item"
-            (click)="closeMobileMenu()"
-            [attr.title]="isSidebarCollapsed() ? 'Coupons & Offers' : null"
-          >
-            <i class="ph ph-tag"></i>
-            <span class="nav-text" *ngIf="!isSidebarCollapsed()">Coupons & Offers</span>
-          </a>
+            @if (auth.canAccess('coupons')) {
+              <a
+                routerLink="/admin/coupons"
+                routerLinkActive="active"
+                class="nav-item"
+                (click)="closeMobileMenu()"
+                [attr.title]="isSidebarCollapsed() ? 'Coupons & Offers' : null"
+              >
+                <i class="ph ph-tag"></i>
+                <span class="nav-text" *ngIf="!isSidebarCollapsed()">Coupons & Offers</span>
+              </a>
+            }
 
-          <a
-            routerLink="/admin/reservations"
-            routerLinkActive="active"
-            class="nav-item"
-            (click)="closeMobileMenu()"
-            [attr.title]="isSidebarCollapsed() ? 'Reservations' : null"
-          >
-            <i class="ph ph-calendar-check"></i>
-            <span class="nav-text" *ngIf="!isSidebarCollapsed()">Reservations</span>
-          </a>
+            @if (auth.canAccess('reservations')) {
+              <a
+                routerLink="/admin/reservations"
+                routerLinkActive="active"
+                class="nav-item"
+                (click)="closeMobileMenu()"
+                [attr.title]="isSidebarCollapsed() ? 'Reservations' : null"
+              >
+                <i class="ph ph-calendar-check"></i>
+                <span class="nav-text" *ngIf="!isSidebarCollapsed()">Reservations</span>
+              </a>
+            }
 
-          <a
-            routerLink="/admin/loyalty"
-            routerLinkActive="active"
-            class="nav-item"
-            (click)="closeMobileMenu()"
-            [attr.title]="isSidebarCollapsed() ? 'Loyalty Program' : null"
-          >
-            <i class="ph ph-crown"></i>
-            <span class="nav-text" *ngIf="!isSidebarCollapsed()">Loyalty Program</span>
-          </a>
+            @if (auth.canAccess('loyalty')) {
+              <a
+                routerLink="/admin/loyalty"
+                routerLinkActive="active"
+                class="nav-item"
+                (click)="closeMobileMenu()"
+                [attr.title]="isSidebarCollapsed() ? 'Loyalty Program' : null"
+              >
+                <i class="ph ph-crown"></i>
+                <span class="nav-text" *ngIf="!isSidebarCollapsed()">Loyalty Program</span>
+              </a>
+            }
 
-          <a
-            routerLink="/admin/feedback"
-            routerLinkActive="active"
-            class="nav-item"
-            (click)="closeMobileMenu()"
-            [attr.title]="isSidebarCollapsed() ? 'Feedback & Reviews' : null"
-          >
-            <i class="ph ph-star"></i>
-            <span class="nav-text" *ngIf="!isSidebarCollapsed()">Feedback & Reviews</span>
-          </a>
+            @if (auth.canAccess('feedback')) {
+              <a
+                routerLink="/admin/feedback"
+                routerLinkActive="active"
+                class="nav-item"
+                (click)="closeMobileMenu()"
+                [attr.title]="isSidebarCollapsed() ? 'Feedback & Reviews' : null"
+              >
+                <i class="ph ph-star"></i>
+                <span class="nav-text" *ngIf="!isSidebarCollapsed()">Feedback & Reviews</span>
+              </a>
+            }
+          }
 
-          <div class="nav-group-label" *ngIf="!isSidebarCollapsed()">MANAGEMENT</div>
+          @if (hasManagementSection()) {
+            <div class="nav-group-label" *ngIf="!isSidebarCollapsed()">MANAGEMENT</div>
 
-          <a
-            routerLink="/admin/reports"
-            routerLinkActive="active"
-            class="nav-item"
-            (click)="closeMobileMenu()"
-            [attr.title]="isSidebarCollapsed() ? 'Reports & Analytics' : null"
-          >
-            <i class="ph ph-chart-line-up"></i>
-            <span class="nav-text" *ngIf="!isSidebarCollapsed()">Reports & Analytics</span>
-          </a>
+            @if (auth.canAccess('reports')) {
+              <a
+                routerLink="/admin/reports"
+                routerLinkActive="active"
+                class="nav-item"
+                (click)="closeMobileMenu()"
+                [attr.title]="isSidebarCollapsed() ? 'Reports & Analytics' : null"
+              >
+                <i class="ph ph-chart-line-up"></i>
+                <span class="nav-text" *ngIf="!isSidebarCollapsed()">Reports & Analytics</span>
+              </a>
+            }
 
-          <a
-            routerLink="/admin/staff"
-            routerLinkActive="active"
-            class="nav-item"
-            (click)="closeMobileMenu()"
-            [attr.title]="isSidebarCollapsed() ? 'Staff Directory' : null"
-          >
-            <i class="ph ph-identification-badge"></i>
-            <span class="nav-text" *ngIf="!isSidebarCollapsed()">Staff Directory</span>
-          </a>
+            @if (auth.canAccess('staff')) {
+              <a
+                routerLink="/admin/staff"
+                routerLinkActive="active"
+                class="nav-item"
+                (click)="closeMobileMenu()"
+                [attr.title]="isSidebarCollapsed() ? 'Staff Directory' : null"
+              >
+                <i class="ph ph-identification-badge"></i>
+                <span class="nav-text" *ngIf="!isSidebarCollapsed()">Staff Directory</span>
+              </a>
+            }
 
-          <a
-            routerLink="/admin/settings"
-            routerLinkActive="active"
-            class="nav-item"
-            (click)="closeMobileMenu()"
-            [attr.title]="isSidebarCollapsed() ? 'Settings & Reset' : null"
-          >
-            <i class="ph ph-gear"></i>
-            <span class="nav-text" *ngIf="!isSidebarCollapsed()">Settings & Reset</span>
-          </a>
+            @if (auth.canAccess('settings')) {
+              <a
+                routerLink="/admin/settings"
+                routerLinkActive="active"
+                class="nav-item"
+                (click)="closeMobileMenu()"
+                [attr.title]="isSidebarCollapsed() ? 'Settings & Reset' : null"
+              >
+                <i class="ph ph-gear"></i>
+                <span class="nav-text" *ngIf="!isSidebarCollapsed()">Settings & Reset</span>
+              </a>
+            }
+          }
         </nav>
 
         <div class="sidebar-footer">
@@ -255,11 +287,16 @@ import { AdminAuthService } from '../../core/services/admin-auth.service';
               <span>Customer Mobile View</span>
             </a>
 
-            <div class="avatar-badge">
-              <div class="avatar-circle">M</div>
+            <div class="avatar-badge" [class.admin-badge]="auth.isAdmin()">
+              <div class="avatar-circle">{{ userInitial() }}</div>
               <div class="avatar-details">
-                <span class="avatar-name">Ranveer B.</span>
-                <span class="avatar-role">General Manager</span>
+                <span class="avatar-name">{{ userName() }}</span>
+                <span class="avatar-role">
+                  {{ userRoleBadge() }}
+                  @if (!auth.isAdmin()) {
+                    <span class="controlled-badge"><i class="ph ph-lock"></i> Controlled</span>
+                  }
+                </span>
               </div>
             </div>
 
@@ -725,6 +762,28 @@ import { AdminAuthService } from '../../core/services/admin-auth.service';
       .avatar-role {
         font-size: 0.6875rem;
         color: var(--color-text-muted);
+        display: flex;
+        align-items: center;
+      }
+
+      .controlled-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 3px;
+        background: rgba(194, 24, 7, 0.12);
+        color: #d32f2f;
+        font-size: 0.625rem;
+        padding: 1px 5px;
+        border-radius: 4px;
+        margin-left: 6px;
+        font-weight: 700;
+        letter-spacing: 0.03em;
+        text-transform: uppercase;
+      }
+
+      .admin-badge .avatar-circle {
+        background: linear-gradient(135deg, #d4af37 0%, #aa8c2c 100%);
+        color: #121212;
       }
 
       .admin-content {
@@ -754,6 +813,38 @@ export class AdminLayoutComponent {
   restaurant = this.mock.restaurant;
   isSidebarCollapsed = signal<boolean>(false);
   isMobileMenuOpen = signal<boolean>(false);
+
+  userName = computed(() => {
+    return this.auth.currentUser()?.name || (this.auth.isAdmin() ? 'Super Admin' : 'Staff Member');
+  });
+
+  userRoleBadge = computed(() => {
+    const r = (this.auth.currentUser()?.role || this.auth.staffRole()).replace(/_/g, ' ');
+    return this.auth.isAdmin() ? 'Super Admin' : r;
+  });
+
+  userInitial = computed(() => {
+    const name = this.userName();
+    return name ? name.charAt(0).toUpperCase() : 'S';
+  });
+
+  hasGuestSection = computed(() => {
+    return (
+      this.auth.canAccess('customers') ||
+      this.auth.canAccess('coupons') ||
+      this.auth.canAccess('reservations') ||
+      this.auth.canAccess('loyalty') ||
+      this.auth.canAccess('feedback')
+    );
+  });
+
+  hasManagementSection = computed(() => {
+    return (
+      this.auth.canAccess('reports') ||
+      this.auth.canAccess('staff') ||
+      this.auth.canAccess('settings')
+    );
+  });
 
   toggleSidebar(): void {
     this.isSidebarCollapsed.set(!this.isSidebarCollapsed());

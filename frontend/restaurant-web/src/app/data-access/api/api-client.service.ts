@@ -24,13 +24,18 @@ export class ApiClientService {
     // Check for Supabase token in localStorage
     const authSessionStr =
       localStorage.getItem('sb-access-token') || localStorage.getItem('supabase_auth_token');
-    if (authSessionStr) {
+    if (authSessionStr && authSessionStr !== 'undefined' && authSessionStr !== 'null') {
       headers = headers.set('Authorization', `Bearer ${authSessionStr}`);
     }
 
     const restaurantId =
       localStorage.getItem('active_restaurant_id') || '00000000-0000-0000-0000-000000000001';
     headers = headers.set('x-restaurant-id', restaurantId);
+
+    if (!environment.production) {
+      headers = headers.set('x-dev-user-id', '00000000-0000-0000-0000-000000000002');
+      headers = headers.set('x-dev-role', 'admin');
+    }
 
     return headers;
   }
@@ -90,8 +95,22 @@ export class ApiClientService {
   }
 
   private handleError(error: any) {
-    const errorMsg =
-      error.error?.error?.message || error.message || 'An unexpected server error occurred';
+    let errorMsg = 'An unexpected server error occurred';
+
+    if (typeof error?.error === 'string' && error.error.trim()) {
+      errorMsg = error.error.trim();
+    } else if (error?.error?.error?.message) {
+      errorMsg = error.error.error.message;
+    } else if (typeof error?.error?.error === 'string' && error.error.error.trim()) {
+      errorMsg = error.error.error.trim();
+    } else if (error?.error?.message) {
+      errorMsg = error.error.message;
+    } else if (error?.statusText && error?.status) {
+      errorMsg = `Server returned ${error.status}: ${error.statusText}`;
+    } else if (error?.message) {
+      errorMsg = error.message;
+    }
+
     console.error('API Client Error:', errorMsg, error);
     return throwError(() => new Error(errorMsg));
   }

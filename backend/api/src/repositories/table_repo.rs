@@ -13,7 +13,7 @@ impl TableRepository {
         let tables = sqlx::query_as::<_, RestaurantTable>(
             r#"
             SELECT id, restaurant_id, table_number, capacity, section, status,
-                   qr_code_identifier, active_order_id, created_at, updated_at
+                   qr_code_identifier, active_order_id, assigned_staff_id, created_at, updated_at
             FROM tables
             WHERE restaurant_id = $1
             ORDER BY table_number ASC
@@ -34,7 +34,7 @@ impl TableRepository {
         let table = sqlx::query_as::<_, RestaurantTable>(
             r#"
             SELECT id, restaurant_id, table_number, capacity, section, status,
-                   qr_code_identifier, active_order_id, created_at, updated_at
+                   qr_code_identifier, active_order_id, assigned_staff_id, created_at, updated_at
             FROM tables
             WHERE restaurant_id = $1 AND id = $2
             "#,
@@ -51,24 +51,63 @@ impl TableRepository {
         pool: &PgPool,
         restaurant_id: Uuid,
         table_id: Uuid,
-        status: &str,
+        status: Option<&str>,
         active_order_id: Option<Uuid>,
+        assigned_staff_id: Option<Option<Uuid>>,
     ) -> Result<RestaurantTable, AppError> {
+        let existing = Self::get_by_id(pool, restaurant_id, table_id)
+            .await?
+            .ok_or_else(|| AppError::NotFound("Table not found".to_string()))?;
+
+        let new_status = status.unwrap_or(&existing.status);
+        let new_active_order = active_order_id.or(existing.active_order_id);
+        let new_assigned_staff = match assigned_staff_id {
+            Some(val) => val,
+            None => existing.assigned_staff_id,
+        };
+
         let table = sqlx::query_as::<_, RestaurantTable>(
             r#"
             UPDATE tables
             SET status = $3,
                 active_order_id = $4,
+                assigned_staff_id = $5,
                 updated_at = NOW()
             WHERE restaurant_id = $1 AND id = $2
             RETURNING id, restaurant_id, table_number, capacity, section, status,
-                      qr_code_identifier, active_order_id, created_at, updated_at
+                      qr_code_identifier, active_order_id, assigned_staff_id, created_at, updated_at
             "#,
         )
         .bind(restaurant_id)
         .bind(table_id)
-        .bind(status)
-        .bind(active_order_id)
+        .bind(new_status)
+        .bind(new_active_order)
+        .bind(new_assigned_staff)
+        .fetch_one(pool)
+        .await?;
+
+        Ok(table)
+    }
+
+    pub async fn assign_staff(
+        pool: &PgPool,
+        restaurant_id: Uuid,
+        table_id: Uuid,
+        assigned_staff_id: Option<Uuid>,
+    ) -> Result<RestaurantTable, AppError> {
+        let table = sqlx::query_as::<_, RestaurantTable>(
+            r#"
+            UPDATE tables
+            SET assigned_staff_id = $3,
+                updated_at = NOW()
+            WHERE restaurant_id = $1 AND id = $2
+            RETURNING id, restaurant_id, table_number, capacity, section, status,
+                      qr_code_identifier, active_order_id, assigned_staff_id, created_at, updated_at
+            "#,
+        )
+        .bind(restaurant_id)
+        .bind(table_id)
+        .bind(assigned_staff_id)
         .fetch_one(pool)
         .await?;
 

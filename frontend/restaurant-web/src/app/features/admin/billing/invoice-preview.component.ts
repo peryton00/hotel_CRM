@@ -356,7 +356,7 @@ import { AdminAuthService } from '../../../core/services/admin-auth.service';
               </div>
               @if (ord.discountAmount > 0) {
                 <div class="t-row discount">
-                  <span>Discount Privilege ({{ ord.appliedCouponCode }}):</span>
+                  <span>Discount ({{ ord.appliedCouponCode }}):</span>
                   <span>-{{ ord.discountAmount | currencyInr }}</span>
                 </div>
               }
@@ -970,10 +970,18 @@ export class InvoicePreviewComponent implements OnInit {
     });
     this.route.queryParamMap.subscribe((q) => {
       this.splitBillId.set(q.get('splitId') || '');
+      if (q.get('reprint') === 'true') {
+        setTimeout(() => this.openReprintModal(), 50);
+      }
     });
   }
 
   printInvoice(): void {
+    if (this.effectivePrintCount() > 0) {
+      this.openReprintModal();
+      return;
+    }
+
     const split = this.splitBill();
     if (split) {
       const res = this.mock.recordSplitBillPrint(split.id, false, 'Billing Staff');
@@ -988,6 +996,9 @@ export class InvoicePreviewComponent implements OnInit {
     if (!ord) return;
     const res = this.mock.recordOrderPrint(ord.id, false, 'Billing Staff');
     if (res.success) {
+      if (ord.paymentStatus === 'PAID' && ord.status !== 'COMPLETED') {
+        this.mock.updateOrderStatusAtomic(ord.id, 'COMPLETED');
+      }
       this.toastService.success(`Tax Invoice printed (Original - Copy #1).`);
       window.print();
     }
@@ -1038,6 +1049,9 @@ export class InvoicePreviewComponent implements OnInit {
 
     const res = this.mock.recordOrderPrint(ord.id, true, 'Admin Override');
     if (res.success) {
+      if (ord.paymentStatus === 'PAID' && ord.status !== 'COMPLETED') {
+        this.mock.updateOrderStatusAtomic(ord.id, 'COMPLETED');
+      }
       this.toastService.info(
         `Admin authorization verified. Printing reprint (Copy #${res.printCount}).`,
       );

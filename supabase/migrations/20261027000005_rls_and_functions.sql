@@ -46,11 +46,23 @@ $$ LANGUAGE sql STABLE;
 
 CREATE OR REPLACE FUNCTION current_customer_id()
 RETURNS UUID AS $$
-  SELECT NULLIF(auth.uid()::text, '')::UUID;
+  SELECT COALESCE(
+    NULLIF(current_setting('request.jwt.claims', true)::jsonb->>'customer_id', '')::UUID,
+    NULLIF(auth.uid()::text, '')::UUID
+  );
+$$ LANGUAGE sql STABLE;
+
+CREATE OR REPLACE FUNCTION current_staff_role()
+RETURNS VARCHAR AS $$
+  SELECT COALESCE(
+    NULLIF(current_setting('request.jwt.claims', true)::jsonb->>'role', ''),
+    NULLIF(current_setting('request.jwt.claims', true)::jsonb->'app_metadata'->>'role', ''),
+    'STAFF'
+  );
 $$ LANGUAGE sql STABLE;
 
 -- ------------------------------------------------------------------------------
--- 3. RLS POLICIES FOR TENANT ISOLATION
+-- 3. RLS POLICIES FOR TENANT & CUSTOMER ISOLATION
 -- ------------------------------------------------------------------------------
 
 -- RESTAURANTS: Active restaurants are publicly readable; staff only for admin updates
@@ -59,6 +71,30 @@ CREATE POLICY restaurants_public_read ON restaurants
 
 CREATE POLICY restaurants_staff_manage ON restaurants
     FOR ALL USING (id = current_staff_restaurant_id());
+
+-- STAFF: Staff view members in their own restaurant; Admins/Managers manage them
+CREATE POLICY staff_members_tenant_read ON staff_members
+    FOR SELECT USING (restaurant_id = current_staff_restaurant_id());
+
+CREATE POLICY staff_members_admin_manage ON staff_members
+    FOR ALL USING (
+        restaurant_id = current_staff_restaurant_id()
+        AND current_staff_role() IN ('ADMIN', 'MANAGER')
+    );
+
+-- CUSTOMERS: Staff manage all within tenant; Customers see & edit ONLY their own profile
+CREATE POLICY customers_staff_manage ON customers
+    FOR ALL USING (restaurant_id = current_staff_restaurant_id());
+
+CREATE POLICY customers_customer_select ON customers
+    FOR SELECT USING (id = current_customer_id());
+
+CREATE POLICY customers_customer_update ON customers
+    FOR UPDATE USING (id = current_customer_id())
+    WITH CHECK (id = current_customer_id());
+
+CREATE POLICY customers_anon_insert ON customers
+    FOR INSERT WITH CHECK (TRUE);
 
 -- MENU: Public read for active categories & items within active restaurants
 CREATE POLICY menu_categories_public_read ON menu_categories
@@ -80,7 +116,7 @@ CREATE POLICY tables_read ON tables
 CREATE POLICY tables_staff_manage ON tables
     FOR ALL USING (restaurant_id = current_staff_restaurant_id());
 
--- ORDERS: Staff see restaurant orders; customers see their own
+-- ORDERS: Staff see restaurant orders; customers see ONLY their own
 CREATE POLICY orders_staff_manage ON orders
     FOR ALL USING (restaurant_id = current_staff_restaurant_id());
 
@@ -96,7 +132,16 @@ CREATE POLICY order_items_staff_manage ON order_items
         )
     );
 
--- BILLING & PAYMENTS: Staff managed
+CREATE POLICY order_items_customer_select ON order_items
+    FOR SELECT USING (
+        EXISTS (
+            SELECT 1 FROM orders o
+            WHERE o.id = order_items.order_id
+              AND o.customer_id = current_customer_id()
+        )
+    );
+
+-- BILLING & PAYMENTS: Staff managed (Cashier, Manager, Admin)
 CREATE POLICY split_bills_staff_manage ON split_bills
     FOR ALL USING (restaurant_id = current_staff_restaurant_id());
 
@@ -104,12 +149,15 @@ CREATE POLICY payments_staff_manage ON payments
     FOR ALL USING (restaurant_id = current_staff_restaurant_id());
 
 CREATE POLICY refunds_staff_manage ON refunds
-    FOR ALL USING (restaurant_id = current_staff_restaurant_id());
+    FOR ALL USING (
+        restaurant_id = current_staff_restaurant_id()
+        AND current_staff_role() IN ('ADMIN', 'MANAGER')
+    );
 
 CREATE POLICY invoices_staff_manage ON invoices
     FOR ALL USING (restaurant_id = current_staff_restaurant_id());
 
--- INVENTORY & RECIPES: Staff access only
+-- INVENTORY & RECIPES: Staff access only (Kitchen, Manager, Admin)
 CREATE POLICY inventory_items_staff_manage ON inventory_items
     FOR ALL USING (restaurant_id = current_staff_restaurant_id());
 
@@ -129,6 +177,7 @@ CREATE POLICY coupons_public_read ON coupons
 CREATE POLICY coupons_staff_manage ON coupons
     FOR ALL USING (restaurant_id = current_staff_restaurant_id());
 
+-- COUPON ASSIGNMENTS: Customer sees ONLY their own assigned coupons
 CREATE POLICY coupon_assignments_customer_read ON coupon_assignments
     FOR SELECT USING (customer_id = current_customer_id());
 
@@ -141,6 +190,12 @@ CREATE POLICY reservations_staff_manage ON reservations
 
 CREATE POLICY reservations_customer_select ON reservations
     FOR SELECT USING (customer_id = current_customer_id());
+
+CREATE POLICY customer_feedback_staff_manage ON customer_feedback
+    FOR ALL USING (restaurant_id = current_staff_restaurant_id());
+
+CREATE POLICY customer_feedback_customer_manage ON customer_feedback
+    FOR ALL USING (customer_id = current_customer_id());
 
 -- AUDIT & IDEMPOTENCY: Restricted to staff tenant
 CREATE POLICY audit_logs_staff_read ON audit_logs

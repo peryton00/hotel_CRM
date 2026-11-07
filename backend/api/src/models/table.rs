@@ -46,14 +46,21 @@ pub struct RestaurantTable {
     pub status: String,
     pub qr_code_identifier: Option<String>,
     pub active_order_id: Option<Uuid>,
+    pub assigned_staff_id: Option<Uuid>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct UpdateTableStatusRequest {
-    pub status: String,
+    pub status: Option<String>,
     pub active_order_id: Option<Uuid>,
+    pub assigned_staff_id: Option<Uuid>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct AssignTableStaffRequest {
+    pub assigned_staff_id: Option<Uuid>,
 }
 
 #[derive(Debug, Clone, Deserialize)]

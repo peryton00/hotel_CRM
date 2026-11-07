@@ -84,15 +84,50 @@ impl OrderService {
         }
 
         let valid = match current {
-            OrderStatus::Draft => matches!(target, OrderStatus::Confirmed),
-            OrderStatus::Confirmed => {
-                matches!(target, OrderStatus::InPreparation | OrderStatus::Ready)
-            }
-            OrderStatus::InPreparation => {
-                matches!(target, OrderStatus::Ready | OrderStatus::Served)
-            }
-            OrderStatus::Ready => matches!(target, OrderStatus::Served | OrderStatus::Completed),
-            OrderStatus::Served => matches!(target, OrderStatus::Completed),
+            OrderStatus::Draft | OrderStatus::Pending => matches!(
+                target,
+                OrderStatus::Confirmed
+                    | OrderStatus::Accepted
+                    | OrderStatus::InPreparation
+                    | OrderStatus::Preparing
+                    | OrderStatus::Ready
+                    | OrderStatus::Dispatched
+                    | OrderStatus::Served
+                    | OrderStatus::Completed
+            ),
+            OrderStatus::Confirmed | OrderStatus::Accepted => matches!(
+                target,
+                OrderStatus::InPreparation
+                    | OrderStatus::Preparing
+                    | OrderStatus::Ready
+                    | OrderStatus::Dispatched
+                    | OrderStatus::Served
+                    | OrderStatus::Completed
+            ),
+            OrderStatus::InPreparation | OrderStatus::Preparing => matches!(
+                target,
+                OrderStatus::Ready
+                    | OrderStatus::Dispatched
+                    | OrderStatus::Served
+                    | OrderStatus::Completed
+            ),
+            OrderStatus::Ready => matches!(
+                target,
+                OrderStatus::Dispatched
+                    | OrderStatus::Served
+                    | OrderStatus::Completed
+            ),
+            OrderStatus::Dispatched => matches!(
+                target,
+                OrderStatus::Served
+                    | OrderStatus::Completed
+                    | OrderStatus::Ready
+            ),
+            OrderStatus::Served => matches!(
+                target,
+                OrderStatus::Completed
+                    | OrderStatus::Dispatched
+            ),
             _ => false,
         };
 
@@ -137,6 +172,10 @@ mod tests {
     fn test_status_transitions() {
         assert!(OrderService::validate_status_transition("draft", "confirmed").is_ok());
         assert!(OrderService::validate_status_transition("confirmed", "in_preparation").is_ok());
+        assert!(OrderService::validate_status_transition("confirmed", "dispatched").is_ok());
+        assert!(OrderService::validate_status_transition("ready", "dispatched").is_ok());
+        assert!(OrderService::validate_status_transition("dispatched", "served").is_ok());
+        assert!(OrderService::validate_status_transition("accepted", "dispatched").is_ok());
         assert!(OrderService::validate_status_transition("confirmed", "cancelled").is_ok());
         assert!(OrderService::validate_status_transition("completed", "draft").is_err());
         assert!(OrderService::validate_status_transition("cancelled", "confirmed").is_err());

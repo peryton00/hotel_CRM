@@ -51,11 +51,12 @@ impl OrderRepository {
             r#"
             INSERT INTO orders (
                 restaurant_id, order_number, order_type, status, payment_status,
-                table_id, customer_id, subtotal_paise, discount_paise, tax_paise,
+                table_id, customer_id, customer_name, customer_phone_e164,
+                subtotal_paise, discount_paise, tax_paise,
                 service_charge_paise, round_off_paise, total_amount_paise, notes,
-                server_staff_id
+                server_staff_id, legacy_unknown_timestamp
             )
-            VALUES ($1, $2, $3, 'confirmed', 'pending', $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+            VALUES ($1, $2, $3, 'confirmed', 'pending', $4, $5, 'Guest', '+919999999999', $6, $7, $8, $9, $10, $11, $12, $13, false)
             RETURNING id, restaurant_id, order_number, order_type, status, payment_status,
                       table_id, customer_id, subtotal_paise, discount_paise, tax_paise,
                       service_charge_paise, round_off_paise, total_amount_paise, notes,
@@ -90,9 +91,9 @@ impl OrderRepository {
                 r#"
                 INSERT INTO order_items (
                     order_id, menu_item_id, item_name, quantity, unit_price_paise,
-                    subtotal_paise, tax_paise, discount_paise, total_paise, notes, status
+                    subtotal_paise, tax_paise, discount_paise, total_paise, item_total_paise, notes, status
                 )
-                VALUES ($1, $2, $3, $4, $5, $6, $7, 0, $8, $9, 'confirmed')
+                VALUES ($1, $2, $3, $4, $5, $6, $7, 0, $8, $8, $9, 'confirmed')
                 RETURNING id, order_id, menu_item_id, item_name, quantity, unit_price_paise,
                           subtotal_paise, tax_paise, discount_paise, total_paise, notes, status, created_at
                 "#,
@@ -194,7 +195,7 @@ impl OrderRepository {
         restaurant_id: Uuid,
         status: Option<String>,
         pagination: PaginationQuery,
-    ) -> Result<PaginatedResponse<Order>, AppError> {
+    ) -> Result<PaginatedResponse<OrderWithItems>, AppError> {
         let limit = pagination.limit();
         let offset = pagination.offset();
 
@@ -258,7 +259,41 @@ impl OrderRepository {
         };
 
         let page = pagination.page.unwrap_or(1);
-        Ok(PaginatedResponse::new(orders, total, page, limit))
+
+        if orders.is_empty() {
+            return Ok(PaginatedResponse::new(vec![], total, page, limit));
+        }
+
+        let order_ids: Vec<Uuid> = orders.iter().map(|o| o.id).collect();
+
+        let all_items = sqlx::query_as::<_, OrderItem>(
+            r#"
+            SELECT id, order_id, menu_item_id, item_name, quantity, unit_price_paise,
+                   subtotal_paise, tax_paise, discount_paise, total_paise, notes, status, created_at
+            FROM order_items
+            WHERE order_id = ANY($1)
+            ORDER BY created_at ASC
+            "#,
+        )
+        .bind(&order_ids)
+        .fetch_all(pool)
+        .await?;
+
+        let mut items_by_order: std::collections::HashMap<Uuid, Vec<OrderItem>> =
+            std::collections::HashMap::new();
+        for item in all_items {
+            items_by_order.entry(item.order_id).or_default().push(item);
+        }
+
+        let orders_with_items: Vec<OrderWithItems> = orders
+            .into_iter()
+            .map(|order| {
+                let items = items_by_order.remove(&order.id).unwrap_or_default();
+                OrderWithItems { order, items }
+            })
+            .collect();
+
+        Ok(PaginatedResponse::new(orders_with_items, total, page, limit))
     }
 
     pub async fn update_status(
@@ -352,5 +387,33 @@ impl OrderRepository {
         tx.commit().await?;
 
         Ok(updated_order)
+    }
+
+    pub async fn assign_server(
+        pool: &PgPool,
+        restaurant_id: Uuid,
+        order_id: Uuid,
+        server_staff_id: Option<Uuid>,
+    ) -> Result<Order, AppError> {
+        let order = sqlx::query_as::<_, Order>(
+            r#"
+            UPDATE orders
+            SET server_staff_id = $3,
+                updated_at = NOW()
+            WHERE restaurant_id = $1 AND id = $2
+            RETURNING id, restaurant_id, order_number, order_type, status, payment_status,
+                      table_id, customer_id, subtotal_paise, discount_paise, tax_paise,
+                      service_charge_paise, round_off_paise, total_amount_paise, notes,
+                      server_staff_id, created_at, updated_at, settled_at, cancelled_at,
+                      legacy_unknown_timestamp
+            "#,
+        )
+        .bind(restaurant_id)
+        .bind(order_id)
+        .bind(server_staff_id)
+        .fetch_one(pool)
+        .await?;
+
+        Ok(order)
     }
 }

@@ -31,14 +31,36 @@ impl RestaurantRepository {
     ) -> Result<Vec<StaffMember>, AppError> {
         let staff = sqlx::query_as::<_, StaffMember>(
             r#"
-            SELECT id, restaurant_id, auth_user_id, name, role, email, phone, is_active, created_at, updated_at
+            SELECT id, restaurant_id, auth_user_id, name, role, email, phone, is_active,
+                   shift, assigned_section, login_id, monthly_salary_paise, payroll_cycle_start_day, created_at, updated_at
             FROM staff_members
-            WHERE restaurant_id = $1 AND is_active = true
+            WHERE restaurant_id = $1
             ORDER BY name ASC
             "#,
         )
         .bind(restaurant_id)
         .fetch_all(pool)
+        .await?;
+
+        Ok(staff)
+    }
+
+    pub async fn get_staff_by_id(
+        pool: &PgPool,
+        id: Uuid,
+        restaurant_id: Uuid,
+    ) -> Result<Option<StaffMember>, AppError> {
+        let staff = sqlx::query_as::<_, StaffMember>(
+            r#"
+            SELECT id, restaurant_id, auth_user_id, name, role, email, phone, is_active,
+                   shift, assigned_section, login_id, monthly_salary_paise, payroll_cycle_start_day, created_at, updated_at
+            FROM staff_members
+            WHERE id = $1 AND restaurant_id = $2
+            "#,
+        )
+        .bind(id)
+        .bind(restaurant_id)
+        .fetch_optional(pool)
         .await?;
 
         Ok(staff)

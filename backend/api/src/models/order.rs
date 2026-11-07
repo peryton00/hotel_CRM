@@ -34,9 +34,13 @@ impl From<String> for OrderType {
 #[serde(rename_all = "snake_case")]
 pub enum OrderStatus {
     Draft,
+    Pending,
     Confirmed,
+    Accepted,
     InPreparation,
+    Preparing,
     Ready,
+    Dispatched,
     Served,
     Completed,
     Cancelled,
@@ -45,10 +49,11 @@ pub enum OrderStatus {
 impl std::fmt::Display for OrderStatus {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            OrderStatus::Draft => write!(f, "draft"),
-            OrderStatus::Confirmed => write!(f, "confirmed"),
-            OrderStatus::InPreparation => write!(f, "in_preparation"),
+            OrderStatus::Draft | OrderStatus::Pending => write!(f, "pending"),
+            OrderStatus::Confirmed | OrderStatus::Accepted => write!(f, "confirmed"),
+            OrderStatus::InPreparation | OrderStatus::Preparing => write!(f, "in_preparation"),
             OrderStatus::Ready => write!(f, "ready"),
+            OrderStatus::Dispatched => write!(f, "dispatched"),
             OrderStatus::Served => write!(f, "served"),
             OrderStatus::Completed => write!(f, "completed"),
             OrderStatus::Cancelled => write!(f, "cancelled"),
@@ -59,9 +64,11 @@ impl std::fmt::Display for OrderStatus {
 impl From<String> for OrderStatus {
     fn from(s: String) -> Self {
         match s.to_lowercase().as_str() {
-            "confirmed" => OrderStatus::Confirmed,
-            "in_preparation" => OrderStatus::InPreparation,
+            "pending" | "draft" => OrderStatus::Pending,
+            "confirmed" | "accepted" => OrderStatus::Confirmed,
+            "in_preparation" | "preparing" => OrderStatus::InPreparation,
             "ready" => OrderStatus::Ready,
+            "dispatched" => OrderStatus::Dispatched,
             "served" => OrderStatus::Served,
             "completed" => OrderStatus::Completed,
             "cancelled" => OrderStatus::Cancelled,

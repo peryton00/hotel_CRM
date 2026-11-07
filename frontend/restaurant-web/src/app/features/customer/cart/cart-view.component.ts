@@ -175,7 +175,7 @@ import { CurrencyInrPipe } from '../../../shared/pipes/currency-inr.pipe';
               }
 
               <p class="terms-note">
-                Taxes calculated in Indian Rupees (INR) • Orders sent straight to Chef Station
+                Taxes calculated in Indian Rupees (INR) • Orders sent directly to kitchen
               </p>
             </div>
           </div>
@@ -183,18 +183,17 @@ import { CurrencyInrPipe } from '../../../shared/pipes/currency-inr.pipe';
       } @else {
         <div class="empty-tray-card">
           <div class="tray-icon-box"><i class="ph ph-shopping-bag"></i></div>
-          <h2 class="heading-card">Your Dining Tray is Empty</h2>
+          <h2 class="heading-card">Your Tray is Empty</h2>
           <p class="text-muted">
-            You haven't added any culinary dishes yet. Explore our royal menu and add your
-            favourites!
+            You haven't added any items yet. Browse our menu to add dishes.
           </p>
           @if (cartService.tableContext(); as ctx) {
             <a [routerLink]="['/menu/gurukripa-dhaba/table', ctx.token]" class="btn btn-primary">
-              Browse Royal Menu
+              Browse Menu
             </a>
           } @else {
             <a [routerLink]="['/menu/gurukripa-dhaba']" class="btn btn-primary">
-              Browse Royal Menu
+              Browse Menu
             </a>
           }
         </div>

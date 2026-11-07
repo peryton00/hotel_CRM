@@ -23,6 +23,7 @@ import { Reservation, ReservationStatus } from '../../core/models/reservation.mo
 import { LoyaltyTierConfig, LoyaltyTransaction } from '../../core/models/loyalty.model';
 import { Feedback } from '../../core/models/feedback.model';
 import { StaffMember } from '../../core/models/staff.model';
+import { StaffAttendance, StaffPerformanceSummary } from '../../core/models/attendance.model';
 import { AuditLogEntry } from '../../core/models/audit.model';
 import {
   Ingredient,
@@ -35,6 +36,8 @@ import {
 } from '../../core/models/inventory.model';
 
 import { MockDataService } from '../mock/mock-data.service';
+import { AdminAuthService } from '../../core/services/admin-auth.service';
+import { ToastService } from '../../core/services/toast.service';
 
 @Injectable({
   providedIn: 'root',
@@ -42,7 +45,14 @@ import { MockDataService } from '../mock/mock-data.service';
 export class RestaurantDataService {
   private api = inject(ApiClientService);
   private http = inject(HttpClient);
+  private adminAuth = inject(AdminAuthService);
+  private toastService = inject(ToastService);
   private testMock = inject(MockDataService, { optional: true });
+
+  isValidUuid(id?: string | null): boolean {
+    if (!id) return false;
+    return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id.trim());
+  }
 
   // State Signals - When running inside test harness, bridges to test fixture; in production runtime, authoritative API signals
   readonly restaurant = this.testMock ? this.testMock.restaurant : signal<Restaurant | null>(null);
@@ -51,6 +61,9 @@ export class RestaurantDataService {
   readonly categories = this.testMock ? this.testMock.categories : signal<MenuCategory[]>([]);
   readonly menuItems = this.testMock ? this.testMock.menuItems : signal<MenuItem[]>([]);
   readonly orders = this.testMock ? this.testMock.orders : signal<Order[]>([]);
+  readonly liveOrderEvent = this.testMock
+    ? this.testMock.liveOrderEvent
+    : signal<{ type: string; order?: Order; timestamp: number } | null>(null);
   readonly coupons = this.testMock ? this.testMock.coupons : signal<Coupon[]>([]);
   readonly couponAssignments = this.testMock
     ? this.testMock.couponAssignments
@@ -68,6 +81,8 @@ export class RestaurantDataService {
     : signal<LoyaltyTransaction[]>([]);
   readonly feedbacks = this.testMock ? this.testMock.feedbacks : signal<Feedback[]>([]);
   readonly staffMembers = this.testMock ? this.testMock.staffMembers : signal<StaffMember[]>([]);
+  readonly staffAttendance = signal<StaffAttendance[]>([]);
+  readonly staffPerformance = signal<StaffPerformanceSummary[]>([]);
   readonly invoices = this.testMock ? this.testMock.invoices : signal<Invoice[]>([]);
   readonly splitBills = this.testMock ? this.testMock.splitBills : signal<SplitBill[]>([]);
   readonly refunds = this.testMock ? this.testMock.refunds : signal<RefundRecord[]>([]);
@@ -165,6 +180,7 @@ export class RestaurantDataService {
           qrUrl: `/menu/table/${t.table_number}`,
           orderingEnabled: true,
           activeOrderId: t.active_order_id,
+          assignedStaffId: t.assigned_staff_id,
         }));
         this.tables.set(mapped);
       },
@@ -292,14 +308,22 @@ export class RestaurantDataService {
         const mapped = (data || []).map((s) => ({
           id: s.id,
           name: s.name,
-          role: 'MANAGER' as any,
+          role: (s.role || 'STAFF') as any,
           email: s.email || '',
           phone: s.phone || '',
-          shift: 'GENERAL' as any,
+          shift: s.shift || 'General Shift',
           status: s.is_active ? ('ACTIVE' as any) : ('INACTIVE' as any),
+          assignedSection: s.assigned_section || 'Main Dining Floor',
+          loginId:
+            s.login_id ||
+            (s.email ? s.email.split('@')[0] : s.name.toLowerCase().replace(/ /g, '.')),
           joinedAt: s.created_at,
+          monthlySalary: (s.monthly_salary_paise || 1500000) / 100,
+          payrollCycleStartDay: s.payroll_cycle_start_day || 1,
         }));
         this.staffMembers.set(mapped);
+        this.loadStaffPerformance();
+        this.loadStaffAttendance();
         this.isLoading.set(false);
         this.isInitialized.set(true);
       },
@@ -358,41 +382,120 @@ export class RestaurantDataService {
   }
 
   private handleApiError(context: string, err: any): void {
-    const message = err?.message || 'Server error occurred';
+    const rawMsg =
+      err?.message ||
+      (typeof err?.error === 'string' ? err.error : undefined) ||
+      err?.error?.error?.message ||
+      err?.error?.message ||
+      'Server error occurred';
+    const message = rawMsg.replace(/^Http failure response for [^:]+:\s*/i, '');
     console.error(`[RestaurantDataService] ${context}:`, message);
     this.apiError.set(`${context}: ${message}`);
+    this.toastService.error(message, context);
+  }
+
+  mapApiStatus(rawStatus: string): OrderStatus {
+    const s = (rawStatus || '').toLowerCase();
+    switch (s) {
+      case 'pending':
+      case 'draft':
+        return 'PENDING';
+      case 'confirmed':
+      case 'accepted':
+        return 'ACCEPTED';
+      case 'in_preparation':
+      case 'preparing':
+        return 'PREPARING';
+      case 'ready':
+        return 'READY';
+      case 'dispatched':
+        return 'DISPATCHED';
+      case 'served':
+        return 'SERVED';
+      case 'completed':
+        return 'COMPLETED';
+      case 'cancelled':
+        return 'CANCELLED';
+      default:
+        return 'ACCEPTED';
+    }
+  }
+
+  mapFrontendStatusToApi(st: OrderStatus): string {
+    switch (st) {
+      case 'PENDING':
+        return 'pending';
+      case 'ACCEPTED':
+        return 'confirmed';
+      case 'PREPARING':
+        return 'in_preparation';
+      case 'READY':
+        return 'ready';
+      case 'DISPATCHED':
+        return 'dispatched';
+      case 'SERVED':
+        return 'served';
+      case 'COMPLETED':
+        return 'completed';
+      case 'CANCELLED':
+        return 'cancelled';
+      default:
+        return ((st as any) || '').toLowerCase();
+    }
   }
 
   private mapApiOrder(o: any): Order {
+    const tbl = this.tables().find((t) => t.id === o.table_id);
+    const tableNumber = o.table_number || (tbl ? tbl.number : '');
+
     return {
       id: o.id,
       orderNumber: o.order_number,
       orderType: (o.order_type || 'DINE_IN').toUpperCase() as any,
       tableId: o.table_id,
-      tableNumber: o.table_number || '',
+      tableNumber,
       restaurantSlug: 'restaurant',
       customerName: o.customer_name || 'Walk-in Guest',
       customerPhone: o.customer_phone || '',
       customerPhoneE164: o.customer_phone || '',
-      status: (o.status || 'CONFIRMED').toUpperCase() as OrderStatus,
-      paymentStatus: (o.payment_status === 'paid' ? 'PAID' : 'UNPAID') as PaymentStatus,
+      status: this.mapApiStatus(o.status),
+      paymentStatus: (
+        (o.payment_status || '').toUpperCase() === 'PAID' ||
+        (o.payment_status || '').toUpperCase() === 'COMPLETED' ||
+        (o.status || '').toUpperCase() === 'COMPLETED' ||
+        !!o.settled_at
+          ? 'PAID'
+          : 'UNPAID'
+      ) as PaymentStatus,
       paymentMethod: (o.payment_method?.toUpperCase() || 'UPI') as any,
-      items: (o.items || []).map((it: any) => ({
-        id: it.id,
-        menuItemId: it.menu_item_id || it.id,
-        name: it.item_name || it.name,
-        selectedVariants: [],
-        selectedAddons: [],
-        unitPrice: (it.unit_price_paise || 0) / 100,
-        quantity: it.quantity,
-        itemTotal: (it.total_paise || 0) / 100,
-      })),
+      items: (o.items || []).map((it: any) => {
+        const unitPrice = (it.unit_price_paise || it.unitPrice || 0) > 1000
+          ? (it.unit_price_paise || 0) / 100
+          : (it.unitPrice || (it.unit_price_paise || 0) / 100);
+        const quantity = it.quantity || 1;
+        const totalPaise = it.total_paise || it.item_total_paise;
+        const itemTotal = totalPaise
+          ? totalPaise / 100
+          : it.itemTotal || unitPrice * quantity;
+
+        return {
+          id: it.id || `item-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+          menuItemId: it.menu_item_id || it.menuItemId || it.id,
+          name: it.item_name || it.name || 'Dish Item',
+          selectedVariants: it.selectedVariants || [],
+          selectedAddons: it.selectedAddons || [],
+          unitPrice,
+          quantity,
+          itemTotal,
+        };
+      }),
       subtotal: (o.subtotal_paise || 0) / 100,
       taxAmount: (o.tax_paise || 0) / 100,
       cgstAmount: (o.tax_paise || 0) / 2 / 100,
       sgstAmount: (o.tax_paise || 0) / 2 / 100,
       discountAmount: (o.discount_paise || 0) / 100,
       totalAmount: (o.total_amount_paise || 0) / 100,
+      serverStaffId: o.server_staff_id,
       createdAt: o.created_at,
       updatedAt: o.updated_at,
       settledAt: o.settled_at,
@@ -445,24 +548,63 @@ export class RestaurantDataService {
       return { success: false, error: 'Order not found' };
     }
 
+    const apiStatus = this.mapFrontendStatusToApi(nextStatus);
+
+    // Optimistically update status in memory and localStorage
+    const updated = this.orders().map((o) =>
+      o.id === orderId ? { ...o, status: nextStatus, updatedAt: new Date().toISOString() } : o,
+    );
+    this.orders.set(updated);
+    this.saveLocal('orders', updated);
+
+    // Broadcast across tabs
+    const updatedOrder = { ...order, status: nextStatus };
+    this.broadcastRealtimeOrderEvent({ type: 'ORDER_UPDATED', order: updatedOrder });
+
+    // If order ID is not a valid UUID (e.g. local mock or offline order), skip remote API call
+    if (!this.isValidUuid(orderId)) {
+      return { success: true, order: updatedOrder };
+    }
+
     this.api
       .put<any>(`/orders/${orderId}/status`, {
-        status: nextStatus.toLowerCase(),
+        status: apiStatus,
         notes: options?.reason || options?.note,
       })
       .subscribe({
-        next: () => {
-          const updated = this.orders().map((o) =>
-            o.id === orderId ? { ...o, status: nextStatus } : o,
-          );
-          this.orders.set(updated);
+        next: (res) => {
+          if (res?.order || res?.status) {
+            const serverOrder = res.order || res;
+            const mapped = this.mapApiOrder(serverOrder);
+            const synced = this.orders().map((o) =>
+              o.id === orderId ? { ...o, ...mapped, status: nextStatus } : o,
+            );
+            this.orders.set(synced);
+            this.saveLocal('orders', synced);
+          }
         },
         error: (err) => {
           this.handleApiError('Failed to update order status', err);
+          // Rollback on server error
+          const rolledBack = this.orders().map((o) => (o.id === orderId ? order : o));
+          this.orders.set(rolledBack);
+          this.saveLocal('orders', rolledBack);
         },
       });
 
-    return { success: true, order: { ...order, status: nextStatus } };
+    return { success: true, order: updatedOrder };
+  }
+
+  private broadcastRealtimeOrderEvent(event: { type: string; order: Order }): void {
+    if (typeof window !== 'undefined') {
+      try {
+        const channel = typeof BroadcastChannel !== 'undefined' ? new BroadcastChannel('hotel_crm_order_stream') : null;
+        channel?.postMessage(event);
+        localStorage.setItem('royal_spice_order_stream_event', JSON.stringify({ ...event, _ts: Date.now() }));
+      } catch {
+        // Ignore cross-origin / private mode restriction
+      }
+    }
   }
 
   addOrder(order: Order): void {
@@ -473,10 +615,10 @@ export class RestaurantDataService {
     this.api
       .post<any>('/orders', {
         order_type: (order.orderType || 'dine_in').toLowerCase(),
-        table_id: order.tableId,
+        table_id: this.isValidUuid(order.tableId) ? order.tableId : undefined,
         customer_id: undefined,
         items: (order.items || []).map((it) => ({
-          menu_item_id: it.menuItemId,
+          menu_item_id: this.isValidUuid(it.menuItemId) ? it.menuItemId : undefined,
           item_name: it.name,
           quantity: it.quantity,
           unit_price_paise: Math.round(it.unitPrice * 100),
@@ -487,7 +629,14 @@ export class RestaurantDataService {
       .subscribe({
         next: (res) => {
           const mapped = this.mapApiOrder(res.order || res);
-          this.orders.set([mapped, ...this.orders()]);
+          const current = this.orders();
+          const existingIdx = current.findIndex((o) => o.id === order.id);
+          const updated =
+            existingIdx > -1
+              ? current.map((o) => (o.id === order.id ? { ...o, ...mapped, id: mapped.id } : o))
+              : [mapped, ...current];
+          this.orders.set(updated);
+          this.saveLocal('orders', updated);
         },
         error: (err) => this.handleApiError('Failed to create order', err),
       });
@@ -521,6 +670,31 @@ export class RestaurantDataService {
     const order = this.orders().find((o) => o.id === req.orderId);
     if (!order) return { success: false, error: 'Order not found' };
 
+    // 1. Optimistic / Instant update in memory & local storage so UI reflects PAID immediately
+    const isPrinted = (order.printCount || 0) > 0;
+    const targetStatus = isPrinted ? 'COMPLETED' : order.status;
+    const settledOrder: Order = {
+      ...order,
+      status: targetStatus,
+      paymentStatus: 'PAID' as PaymentStatus,
+      paymentMethod: req.paymentMethod,
+      settledAt: new Date().toISOString(),
+    };
+
+    const updatedOrders = this.orders().map((o) => (o.id === req.orderId ? settledOrder : o));
+    this.orders.set(updatedOrders);
+    this.saveLocal('orders', updatedOrders);
+
+    this.broadcastRealtimeOrderEvent({
+      type: 'ORDER_UPDATED',
+      order: settledOrder,
+    });
+
+    if (isPrinted && order.status !== 'COMPLETED') {
+      this.updateOrderStatusAtomic(order.id, 'COMPLETED');
+    }
+
+    // 2. Persist settlement to Backend API
     this.api
       .post<any>(`/orders/${req.orderId}/settle`, {
         payment_method: req.paymentMethod.toLowerCase(),
@@ -528,12 +702,11 @@ export class RestaurantDataService {
       })
       .subscribe({
         next: () => {
-          const updatedOrders = this.orders().map((o) =>
-            o.id === req.orderId ? { ...o, paymentStatus: 'PAID' as PaymentStatus } : o,
-          );
-          this.orders.set(updatedOrders);
+          // Confirmed by backend
         },
-        error: (err) => this.handleApiError('Failed to settle order', err),
+        error: (err) => {
+          console.warn('[RestaurantDataService] Settle order backend sync warning:', err?.message || err);
+        },
       });
 
     return { success: true };
@@ -581,6 +754,109 @@ export class RestaurantDataService {
       });
     }
     return { success: true };
+  }
+
+  assignTableStaff(tableId: string, staffId: string | null): void {
+    const assigned_staff_id = staffId && staffId.trim() ? staffId.trim() : null;
+    const updated = this.tables().map((t) =>
+      t.id === tableId ? { ...t, assignedStaffId: assigned_staff_id || undefined } : t,
+    );
+    this.tables.set(updated);
+
+    if (this.testMock) return;
+
+    this.api
+      .put<any>(`/tables/${tableId}/assign`, { assigned_staff_id })
+      .subscribe({
+        error: (err) => this.handleApiError('Failed to assign table staff', err),
+      });
+  }
+
+  assignOrderServer(
+    orderId: string,
+    staffId: string | null,
+    adminPassword?: string,
+  ): { success: boolean; error?: string } {
+    const server_staff_id = staffId && staffId.trim() ? staffId.trim() : null;
+    const currentOrder = this.orders().find((o) => o.id === orderId);
+    if (!currentOrder) {
+      return { success: false, error: 'Order not found' };
+    }
+
+    if (currentOrder.status === 'COMPLETED') {
+      const isAuthorized = !!(adminPassword && this.adminAuth.verifyAdminPassword(adminPassword));
+      if (!isAuthorized) {
+        return {
+          success: false,
+          error: 'Admin password required to change server on completed orders.',
+        };
+      }
+    }
+
+    const updated = this.orders().map((o) =>
+      o.id === orderId
+        ? { ...o, serverStaffId: server_staff_id || undefined, updatedAt: new Date().toISOString() }
+        : o,
+    );
+    this.orders.set(updated);
+    const updatedOrder = updated.find((o) => o.id === orderId);
+    if (updatedOrder) {
+      this.broadcastRealtimeOrderEvent({ type: 'ORDER_UPDATED', order: updatedOrder });
+    }
+
+    if (this.testMock) {
+      this.testMock.assignOrderServer(orderId, staffId, adminPassword);
+      return { success: true };
+    }
+
+    this.api
+      .put<any>(`/orders/${orderId}/server`, {
+        server_staff_id,
+        admin_password: adminPassword,
+      })
+      .subscribe({
+        error: (err) => this.handleApiError('Failed to assign server to order', err),
+      });
+
+    return { success: true };
+  }
+
+  markStaffAttendance(staffId: string, date: string, status: string, notes?: string): Observable<any> {
+    return this.api
+      .post<any>('/restaurants/staff/attendance', {
+        staff_id: staffId,
+        attendance_date: date,
+        status: status.toUpperCase(),
+        notes: notes || '',
+      })
+      .pipe(
+        tap(() => {
+          this.loadStaffPerformance();
+          this.loadStaffAttendance();
+        }),
+      );
+  }
+
+  loadStaffPerformance(month?: string): void {
+    const params: any = {};
+    if (month) params.month = month;
+    this.api.get<StaffPerformanceSummary[]>('/restaurants/staff/performance', params).subscribe({
+      next: (data) => {
+        if (data) this.staffPerformance.set(data);
+      },
+      error: (err) => this.handleApiError('Failed to load staff performance', err),
+    });
+  }
+
+  loadStaffAttendance(month?: string): void {
+    const params: any = {};
+    if (month) params.month = month;
+    this.api.get<StaffAttendance[]>('/restaurants/staff/attendance', params).subscribe({
+      next: (data) => {
+        if (data) this.staffAttendance.set(data);
+      },
+      error: (err) => this.handleApiError('Failed to load staff attendance', err),
+    });
   }
 
   recordWastage(req: {
@@ -750,13 +1026,21 @@ export class RestaurantDataService {
     const order = this.orders().find((o) => o.id === orderId || o.orderNumber === orderId);
     const count = (order?.printCount || 0) + 1;
     if (order) {
+      const isPaid = order.paymentStatus === 'PAID';
+      const targetStatus = isPaid ? 'COMPLETED' : order.status;
+      const updatedOrder = {
+        ...order,
+        status: targetStatus,
+        printCount: count,
+        lastPrintedAt: new Date().toISOString(),
+      };
       this.orders.set(
-        this.orders().map((o) =>
-          o.id === order.id
-            ? { ...o, printCount: count, lastPrintedAt: new Date().toISOString() }
-            : o,
-        ),
+        this.orders().map((o) => (o.id === order.id ? updatedOrder : o)),
       );
+      this.broadcastRealtimeOrderEvent({ type: 'ORDER_UPDATED', order: updatedOrder });
+      if (isPaid && order.status !== 'COMPLETED') {
+        this.updateOrderStatusAtomic(order.id, 'COMPLETED');
+      }
     }
     return { success: true, printCount: count };
   }

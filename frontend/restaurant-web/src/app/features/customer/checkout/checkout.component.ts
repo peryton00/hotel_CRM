@@ -33,32 +33,32 @@ import { generateIdempotencyKey } from '../../../core/utils/idempotency.util';
               <div>
                 <h3 class="panel-title">Guest Contact Details</h3>
                 <p class="text-xs text-muted">
-                  Required for digital bill delivery and table service communication.
+                  Optional. Provide your mobile number to link orders to your personal history.
                 </p>
               </div>
             </div>
 
             <div class="form-body">
               <div class="form-group">
-                <label class="form-label" for="guestName">Full Name *</label>
+                <label class="form-label" for="guestName">Full Name (Optional)</label>
                 <input
                   id="guestName"
                   type="text"
                   class="form-input"
-                  placeholder="e.g. Aditya Sharma"
+                  placeholder="e.g. Aditya Sharma (or leave blank for Walk-in)"
                   [(ngModel)]="guestName"
                 />
               </div>
 
               <div class="form-group">
-                <label class="form-label" for="guestPhone">Mobile Number (10 Digits) *</label>
+                <label class="form-label" for="guestPhone">Mobile Number (Optional - for order history)</label>
                 <div class="phone-input-wrap">
                   <span class="phone-prefix">+91</span>
                   <input
                     id="guestPhone"
                     type="tel"
                     class="form-input phone-input"
-                    placeholder="98765 43210"
+                    placeholder="98765 43210 (leave blank for unassigned order)"
                     [(ngModel)]="guestPhone"
                     maxlength="10"
                   />
@@ -447,11 +447,11 @@ export class CheckoutComponent {
       );
     if (!table || table.orderingEnabled === false || table.status === 'DIRTY') return false;
 
-    return (
-      this.guestName.trim().length >= 2 &&
-      this.guestPhone.trim().length >= 10 &&
-      this.cartService.items().length > 0
-    );
+    // Phone is optional: if provided, must be a 10-digit number
+    const cleanPhone = this.guestPhone.trim().replace(/[^0-9]/g, '');
+    if (cleanPhone.length > 0 && cleanPhone.length < 10) return false;
+
+    return this.cartService.items().length > 0;
   }
 
   submitOrder(): void {
@@ -475,24 +475,38 @@ export class CheckoutComponent {
       return;
     }
 
-    const normalizedPhone = normalizeToE164(this.guestPhone);
+    const cleanPhone = this.guestPhone.trim().replace(/[^0-9]/g, '');
+    const hasPhone = cleanPhone.length >= 10;
+    const normalizedPhone = hasPhone ? normalizeToE164(cleanPhone) : undefined;
+    const displayName = this.guestName.trim() || 'Walk-in Guest';
 
-    // Persist phone & name for auto-linking previous orders
-    localStorage.setItem('royal_spice_customer_phone', normalizedPhone);
-    localStorage.setItem('royal_spice_customer_name', this.guestName.trim());
+    // Persist phone & name for auto-linking previous orders only if phone provided
+    if (normalizedPhone) {
+      localStorage.setItem('royal_spice_customer_phone', normalizedPhone);
+      localStorage.setItem('royal_spice_customer_name', displayName);
+    }
 
     this.isSubmitting = true;
     const randomNum = Math.floor(100 + Math.random() * 900);
-    const orderId = `ord-${Date.now().toString().slice(-4)}`;
+    const orderId =
+      typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+        ? crypto.randomUUID()
+        : 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+            const r = (Math.random() * 16) | 0;
+            const v = c === 'x' ? r : (r & 0x3) | 0x8;
+            return v.toString(16);
+          });
 
-    // Resolve or find customer UUID
-    const matchedCustomer = this.mock
-      .customers()
-      .find(
-        (c) =>
-          c.phoneE164 === normalizedPhone ||
-          (c.phone && normalizeToE164(c.phone) === normalizedPhone),
-      );
+    // Resolve or find customer UUID if phone provided
+    const matchedCustomer = normalizedPhone
+      ? this.mock
+          .customers()
+          .find(
+            (c) =>
+              c.phoneE164 === normalizedPhone ||
+              (c.phone && normalizeToE164(c.phone) === normalizedPhone),
+          )
+      : undefined;
 
     const idempotencyKey = generateIdempotencyKey('order', matchedCustomer?.id);
 
@@ -506,9 +520,10 @@ export class CheckoutComponent {
       tableId: tableCtx.tableId,
       tableNumber: tableCtx.tableNumber,
       customerId: matchedCustomer?.id,
-      customerName: this.guestName.trim(),
-      customerPhone: `+91 ${this.guestPhone.trim()}`,
+      customerName: displayName,
+      customerPhone: normalizedPhone ? `+91 ${cleanPhone}` : '',
       customerPhoneE164: normalizedPhone,
+      serverStaffId: table.assignedStaffId,
       items: [...this.cartService.items()],
       subtotal: this.cartService.subtotal(),
       discountAmount: this.cartService.discountAmount(),

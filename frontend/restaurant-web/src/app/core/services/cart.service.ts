@@ -66,8 +66,14 @@ export class CartService {
     specialInstructions?: string,
   ): void {
     const basePrice = portion ? portion.price : item.price;
-    const variantsPriceDelta = variants.reduce((acc, v) => acc + v.priceDelta, 0);
-    const addonsPriceDelta = addons.reduce((acc, a) => acc + a.priceDelta, 0);
+    const variantsPriceDelta = variants.reduce(
+      (acc, v) => acc + (v.priceDelta ?? v.priceModifier ?? 0),
+      0,
+    );
+    const addonsPriceDelta = addons.reduce(
+      (acc, a) => acc + (a.priceDelta ?? a.price ?? 0),
+      0,
+    );
     const unitPrice = basePrice + variantsPriceDelta + addonsPriceDelta;
 
     // Create unique key based on item + customization

@@ -341,16 +341,27 @@ export class ApiOrderRepository implements IOrderRepository {
       status: (o.status || 'CONFIRMED').toUpperCase() as OrderStatus,
       paymentStatus: (o.payment_status === 'paid' ? 'PAID' : 'UNPAID') as PaymentStatus,
       paymentMethod: 'UPI',
-      items: (o.items || []).map((it: any) => ({
-        id: it.id,
-        menuItemId: it.menu_item_id || it.id,
-        name: it.item_name || it.name,
-        selectedVariants: [],
-        selectedAddons: [],
-        unitPrice: (it.unit_price_paise || 0) / 100,
-        quantity: it.quantity,
-        itemTotal: (it.total_paise || 0) / 100,
-      })),
+      items: (o.items || []).map((it: any) => {
+        const unitPrice = (it.unit_price_paise || it.unitPrice || 0) > 1000
+          ? (it.unit_price_paise || 0) / 100
+          : (it.unitPrice || (it.unit_price_paise || 0) / 100);
+        const quantity = it.quantity || 1;
+        const totalPaise = it.total_paise || it.item_total_paise;
+        const itemTotal = totalPaise
+          ? totalPaise / 100
+          : it.itemTotal || unitPrice * quantity;
+
+        return {
+          id: it.id || `item-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+          menuItemId: it.menu_item_id || it.menuItemId || it.id,
+          name: it.item_name || it.name || 'Dish Item',
+          selectedVariants: it.selectedVariants || [],
+          selectedAddons: it.selectedAddons || [],
+          unitPrice,
+          quantity,
+          itemTotal,
+        };
+      }),
       subtotal: (o.subtotal_paise || 0) / 100,
       taxAmount: (o.tax_paise || 0) / 100,
       cgstAmount: (o.tax_paise || 0) / 2 / 100,
@@ -509,15 +520,21 @@ export class ApiStaffRepository implements IStaffRepository {
   getStaffMembers(): Observable<StaffMember[]> {
     return this.api.get<any[]>('/restaurants/staff').pipe(
       map((items) =>
-        items.map((s) => ({
+        (items || []).map((s) => ({
           id: s.id,
           name: s.name,
-          role: 'MANAGER' as any,
-          email: s.email || 'staff@hotelcrm.local',
-          phone: s.phone || '+91 98765 00000',
-          shift: 'GENERAL',
+          role: (s.role || 'STAFF') as any,
+          email: s.email || '',
+          phone: s.phone || '',
+          shift: s.shift || 'General Shift',
           status: s.is_active ? 'ACTIVE' : 'INACTIVE',
-          joinedAt: s.created_at,
+          assignedSection: s.assigned_section || 'Main Dining Floor',
+          loginId:
+            s.login_id ||
+            (s.email ? s.email.split('@')[0] : s.name.toLowerCase().replace(/ /g, '.')),
+          monthlySalary: (s.monthly_salary_paise || 1500000) / 100,
+          payrollCycleStartDay: s.payroll_cycle_start_day || 1,
+          created_at: s.created_at,
         })),
       ),
     );
@@ -527,8 +544,21 @@ export class ApiStaffRepository implements IStaffRepository {
     return this.api.post<StaffMember>('/restaurants/staff', staff);
   }
 
-  updateStaff(id: string, updates: Partial<StaffMember>): Observable<StaffMember> {
-    return this.api.put<StaffMember>(`/restaurants/staff/${id}`, updates);
+  updateStaff(id: string, updates: any): Observable<StaffMember> {
+    const payload: any = { ...updates };
+    if (updates.monthlySalary !== undefined && updates.monthly_salary_paise === undefined) {
+      payload.monthly_salary_paise = Math.round(updates.monthlySalary * 100);
+    }
+    if (updates.loginId !== undefined && updates.login_id === undefined) {
+      payload.login_id = updates.loginId;
+    }
+    if (updates.assignedSection !== undefined && updates.assigned_section === undefined) {
+      payload.assigned_section = updates.assignedSection;
+    }
+    if (updates.payrollCycleStartDay !== undefined && updates.payroll_cycle_start_day === undefined) {
+      payload.payroll_cycle_start_day = updates.payrollCycleStartDay;
+    }
+    return this.api.put<StaffMember>(`/restaurants/staff/${id}`, payload);
   }
 }
 

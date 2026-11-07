@@ -1,6 +1,6 @@
-import { Component, inject, signal, computed } from '@angular/core';
+import { Component, inject, signal, computed, effect, HostListener } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { RouterModule } from '@angular/router';
+import { RouterModule, Router } from '@angular/router';
 import { FormsModule } from '@angular/forms';
 import { RestaurantDataService } from '../../../data-access/services/restaurant-data.service';
 import { Order, OrderStatus, OrderItem } from '../../../core/models/order.model';
@@ -31,18 +31,27 @@ import { AdminAuthService } from '../../../core/services/admin-auth.service';
         <div>
           <h1 class="heading-display">Live Order Queue</h1>
           <p class="text-muted">
-            Real-time order dispatch board synchronized across table QR scans and kitchen stations.
+            Live order queue synchronized across table QR scans, takeaway, and kitchen stations.
           </p>
         </div>
 
         <div class="header-right-actions">
+          <button
+            type="button"
+            class="sound-toggle-btn"
+            [class.muted]="!soundEnabled()"
+            (click)="soundEnabled.set(!soundEnabled())"
+            [title]="soundEnabled() ? 'Chime sound active (click to mute)' : 'Chime sound muted (click to enable)'"
+          >
+            <i class="ph" [class.ph-speaker-high]="soundEnabled()" [class.ph-speaker-simple-slash]="!soundEnabled()"></i>
+          </button>
           <button class="btn btn-primary" (click)="openManualOrderModal()">
             <i class="ph ph-plus-circle"></i>
             <span>Create Manual Order</span>
           </button>
-          <div class="live-counter-badge">
+          <div class="live-counter-badge" title="Zero-overhead real-time stream active across QR ordering and POS stations">
             <span class="pulse-indicator"></span>
-            <span>Live Synchronized Stream</span>
+            <span>Live Order Stream</span>
           </div>
         </div>
       </div>
@@ -52,17 +61,18 @@ import { AdminAuthService } from '../../../core/services/admin-auth.service';
         <div class="status-tabs">
           <button
             class="status-tab"
+            [class.active]="selectedStatus() === 'ACTIVE'"
+            (click)="selectedStatus.set('ACTIVE')"
+          >
+            <span class="tab-live-dot" *ngIf="activeOrdersCount() > 0"></span>
+            Active Orders ({{ activeOrdersCount() }})
+          </button>
+          <button
+            class="status-tab"
             [class.active]="selectedStatus() === 'ALL'"
             (click)="selectedStatus.set('ALL')"
           >
             All Orders ({{ orders().length }})
-          </button>
-          <button
-            class="status-tab"
-            [class.active]="selectedStatus() === 'ACTIVE'"
-            (click)="selectedStatus.set('ACTIVE')"
-          >
-            Active Dispatch ({{ activeOrdersCount() }})
           </button>
           <button
             class="status-tab"
@@ -84,6 +94,13 @@ import { AdminAuthService } from '../../../core/services/admin-auth.service';
             (click)="selectedStatus.set('READY')"
           >
             Ready to Serve ({{ countByStatus('READY') }})
+          </button>
+          <button
+            class="status-tab"
+            [class.active]="selectedStatus() === 'DISPATCHED'"
+            (click)="selectedStatus.set('DISPATCHED')"
+          >
+            Dispatched ({{ countByStatus('DISPATCHED') }})
           </button>
           <button
             class="status-tab"
@@ -116,7 +133,14 @@ import { AdminAuthService } from '../../../core/services/admin-auth.service';
       <!-- Orders Board (Responsive Cards / Table View) -->
       <div class="orders-grid">
         @for (ord of filteredOrders(); track ord.id) {
-          <div class="order-board-card" [class.pending-highlight]="ord.status === 'PENDING'">
+          <div
+            class="order-board-card"
+            [class.pending-highlight]="ord.status === 'PENDING'"
+            [class.new-order-flash]="latestNewOrderId() === ord.id"
+            [class.card-selected]="selectedSidePanelOrderId() === ord.id"
+            (click)="openOrderSidePanel(ord)"
+            title="Click to view full order bill & details in side panel"
+          >
             <!-- 1. Header: ID & Time + Status Badge & Split Indicator -->
             <div class="card-top">
               <div class="order-id-group">
@@ -138,10 +162,7 @@ import { AdminAuthService } from '../../../core/services/admin-auth.service';
             <!-- 2. Guest & Location Bar -->
             <div class="guest-bar">
               @if (ord.orderType === 'TAKEAWAY') {
-                <div
-                  class="tbl-badge takeaway-badge"
-                  style="background: rgba(212, 175, 55, 0.15); border-color: rgba(212, 175, 55, 0.4); color: #8b6508;"
-                >
+                <div class="tbl-badge takeaway-badge">
                   <i class="ph ph-bag"></i>
                   <span>Takeaway ({{ ord.pickupReference || ord.orderNumber }})</span>
                 </div>
@@ -159,6 +180,42 @@ import { AdminAuthService } from '../../../core/services/admin-auth.service';
                   </span>
                 }
               </div>
+            </div>
+
+            <!-- Server / Staff Handling Order -->
+            <div class="server-bar" [class.server-bar-locked]="isOrderPaid(ord)">
+              <span class="server-label">
+                <i class="ph" [class.ph-user-check]="!isOrderPaid(ord)" [class.ph-lock-key]="isOrderPaid(ord)"></i> Server:
+              </span>
+              @if (isOrderPaid(ord)) {
+                <div class="server-completed-box">
+                  <span class="server-name-badge" [title]="'Serving Staff: ' + (getServerStaffName(ord.serverStaffId) || 'Unassigned')">
+                    {{ getServerStaffName(ord.serverStaffId) || 'Unassigned' }}
+                  </span>
+                  <button
+                    type="button"
+                    class="btn-unlock-server"
+                    (click)="$event.stopPropagation(); promptChangeCompletedServer(ord)"
+                    title="Change serving staff for paid order (Admin Password required)"
+                  >
+                    <i class="ph ph-lock-key"></i>
+                    <span>Change</span>
+                  </button>
+                </div>
+              } @else {
+                <select
+                  class="server-select"
+                  [ngModel]="ord.serverStaffId || ''"
+                  (ngModelChange)="onAssignOrderServer(ord, $event)"
+                  (click)="$event.stopPropagation()"
+                  title="Assign staff handling this order"
+                >
+                  <option value="">Unassigned</option>
+                  @for (s of staffMembers(); track s.id) {
+                    <option [value]="s.id">{{ s.name }} ({{ s.role }})</option>
+                  }
+                </select>
+              }
             </div>
 
             <!-- 3. Ordered Dishes Stream -->
@@ -212,102 +269,200 @@ import { AdminAuthService } from '../../../core/services/admin-auth.service';
               </div>
             </div>
 
-            <!-- 5. Operational Actions: Primary Workflow + Secondary Utilities -->
+            <!-- 5. Progressive Dispatch Stepper Bar & Operational Actions -->
             <div class="card-footer-actions">
+              <!-- Progressive Step Indicators (Clickable on each stage) -->
+              @if (ord.status !== 'CANCELLED' && ord.status !== 'COMPLETED') {
+                <div class="dispatch-stepper-bar">
+                  <div
+                    class="step-bubble"
+                    [class.completed]="getOrderStageIndex(ord.status) >= 1"
+                    [class.active]="ord.status === 'ACCEPTED'"
+                    (click)="$event.stopPropagation(); advanceStatus(ord, 'ACCEPTED')"
+                    title="Click to mark Accepted"
+                  >
+                    <span class="step-num"><i class="ph ph-check"></i></span>
+                    <span class="step-txt">Accept</span>
+                  </div>
+                  <div class="step-connector" [class.filled]="getOrderStageIndex(ord.status) >= 2"></div>
+
+                  <div
+                    class="step-bubble"
+                    [class.completed]="getOrderStageIndex(ord.status) >= 2"
+                    [class.active]="ord.status === 'PREPARING'"
+                    (click)="$event.stopPropagation(); advanceStatus(ord, 'PREPARING')"
+                    title="Click to send to Kitchen"
+                  >
+                    <span class="step-num"><i class="ph ph-cooking-pot"></i></span>
+                    <span class="step-txt">Prepare</span>
+                  </div>
+                  <div class="step-connector" [class.filled]="getOrderStageIndex(ord.status) >= 3"></div>
+
+                  <div
+                    class="step-bubble"
+                    [class.completed]="getOrderStageIndex(ord.status) >= 3"
+                    [class.active]="ord.status === 'READY'"
+                    (click)="$event.stopPropagation(); advanceStatus(ord, 'READY')"
+                    title="Click to mark Ready"
+                  >
+                    <span class="step-num"><i class="ph ph-bell-ringing"></i></span>
+                    <span class="step-txt">Ready</span>
+                  </div>
+                  <div class="step-connector" [class.filled]="getOrderStageIndex(ord.status) >= 4"></div>
+
+                  <div
+                    class="step-bubble"
+                    [class.completed]="getOrderStageIndex(ord.status) >= 4"
+                    [class.active]="ord.status === 'DISPATCHED'"
+                    (click)="$event.stopPropagation(); advanceStatus(ord, 'DISPATCHED')"
+                    title="Click to mark Dispatched"
+                  >
+                    <span class="step-num"><i class="ph ph-moped"></i></span>
+                    <span class="step-txt">Dispatch</span>
+                  </div>
+                  <div class="step-connector" [class.filled]="getOrderStageIndex(ord.status) >= 5"></div>
+
+                  <div
+                    class="step-bubble"
+                    [class.completed]="getOrderStageIndex(ord.status) >= 5"
+                    [class.active]="ord.status === 'SERVED'"
+                    (click)="$event.stopPropagation(); advanceStatus(ord, 'SERVED')"
+                    title="Click to mark Served / Delivered"
+                  >
+                    <span class="step-num"><i class="ph ph-hand-waving"></i></span>
+                    <span class="step-txt">Serve</span>
+                  </div>
+                </div>
+              }
+
+              <!-- Primary Next-Stage Button -->
               <div class="action-row-primary">
                 @if (ord.status === 'PENDING') {
                   <button
                     class="btn btn-primary btn-sm w-full action-btn-main"
-                    (click)="advanceStatus(ord, 'ACCEPTED')"
+                    (click)="$event.stopPropagation(); advanceStatus(ord, 'ACCEPTED')"
                   >
                     <i class="ph ph-check-bold"></i> Accept Order
                   </button>
                 } @else if (ord.status === 'ACCEPTED') {
                   <button
                     class="btn btn-dark btn-sm w-full action-btn-main"
-                    (click)="advanceStatus(ord, 'PREPARING')"
+                    (click)="$event.stopPropagation(); advanceStatus(ord, 'PREPARING')"
                   >
                     <i class="ph ph-cooking-pot"></i> Send to Kitchen
                   </button>
                 } @else if (ord.status === 'PREPARING') {
                   <button
                     class="btn btn-gold btn-sm w-full action-btn-main"
-                    (click)="advanceStatus(ord, 'READY')"
+                    (click)="$event.stopPropagation(); advanceStatus(ord, 'READY')"
                   >
                     <i class="ph ph-bell-ringing"></i> Mark Ready
                   </button>
                 } @else if (ord.status === 'READY') {
                   <button
-                    class="btn btn-success btn-sm w-full action-btn-main"
-                    (click)="advanceStatus(ord, 'SERVED')"
+                    class="btn btn-info btn-sm w-full action-btn-main"
+                    (click)="$event.stopPropagation(); advanceStatus(ord, 'DISPATCHED')"
                   >
-                    <i class="ph ph-hand-waving"></i> Mark Served
+                    <i class="ph ph-moped"></i>
+                    <span>{{ ord.orderType === 'TAKEAWAY' ? 'Dispatch for Delivery/Handover' : 'Dispatch to Table' }}</span>
+                  </button>
+                } @else if (ord.status === 'DISPATCHED') {
+                  <button
+                    class="btn btn-success btn-sm w-full action-btn-main"
+                    (click)="$event.stopPropagation(); advanceStatus(ord, 'SERVED')"
+                  >
+                    <i class="ph ph-check-circle"></i>
+                    <span>{{ ord.orderType === 'TAKEAWAY' ? 'Delivered / Handed Over' : 'Mark Delivered & Served' }}</span>
                   </button>
                 } @else if (ord.status === 'SERVED') {
                   <button
-                    class="btn btn-primary btn-sm w-full action-btn-main settle-glow"
-                    (click)="openSettleModal(ord)"
+                    type="button"
+                    (click)="$event.stopPropagation(); openSettleModal(ord)"
+                    class="btn btn-primary btn-sm w-full action-btn-main checkout-glow"
                   >
-                    <i class="ph ph-receipt"></i> Settle & Complete
+                    <i class="ph ph-shopping-bag-open"></i>
+                    <span>Checkout & Print Invoice</span>
                   </button>
+                } @else if (ord.status === 'COMPLETED') {
+                  <div class="completed-order-badge-strip">
+                    <div class="completed-chips-cluster">
+                      <span class="status-chip chip-completed-pill">
+                        <i class="ph ph-check-circle"></i>
+                        <span>Completed</span>
+                      </span>
+                      <span class="status-chip chip-paid-pill">
+                        <i class="ph ph-money"></i>
+                        <span>Paid ({{ ord.paymentMethod || 'UPI' }})</span>
+                      </span>
+                      <span class="status-chip chip-printed-pill">
+                        <i class="ph ph-printer"></i>
+                        <span>Printed ({{ ord.printCount || 1 }}x)</span>
+                      </span>
+                    </div>
+                  </div>
                 }
               </div>
 
               <div class="action-row-secondary">
-                <a
-                  [routerLink]="['/admin/orders', ord.id]"
+                <button
+                  type="button"
+                  (click)="$event.stopPropagation(); openOrderSidePanel(ord)"
                   class="card-util-btn"
-                  title="View Full Bill & Order Details"
+                  title="View Full Bill & Order Details in Side Panel"
                 >
-                  <i class="ph ph-file-text"></i>
+                  <i class="ph ph-sidebar-simple"></i>
                   <span>Details</span>
-                </a>
+                </button>
 
-                @if (ord.status !== 'CANCELLED') {
+                @if (ord.status !== 'CANCELLED' && ord.status !== 'COMPLETED') {
                   <button
                     type="button"
                     class="card-util-btn"
-                    [class.paid-locked]="ord.paymentStatus === 'PAID'"
-                    (click)="openEditOrderModal(ord)"
+                    [class.paid-locked]="isOrderPaid(ord)"
+                    (click)="$event.stopPropagation(); openEditOrderModal(ord)"
                     [title]="
-                      ord.paymentStatus === 'PAID'
+                      isOrderPaid(ord)
                         ? 'Order is PAID — Admin Password required to edit'
                         : 'Edit Order & Add Further Dishes'
                     "
                   >
                     <i
                       class="ph"
-                      [class.ph-lock-key]="ord.paymentStatus === 'PAID'"
-                      [class.ph-pencil-simple-line]="ord.paymentStatus !== 'PAID'"
+                      [class.ph-lock-key]="isOrderPaid(ord)"
+                      [class.ph-pencil-simple-line]="!isOrderPaid(ord)"
                     ></i>
-                    <span>{{ ord.paymentStatus === 'PAID' ? 'Edit (Paid)' : 'Edit' }}</span>
+                    <span>{{ isOrderPaid(ord) ? 'Edit (Paid)' : 'Edit' }}</span>
                   </button>
                 }
 
-                <a
-                  [routerLink]="['/admin/billing', ord.id]"
-                  class="card-util-btn"
-                  [title]="
-                    ord.printCount && ord.printCount > 0
-                      ? 'Tax Invoice printed ' +
-                        ord.printCount +
-                        ' time(s) — Reprint requires Admin authorization'
-                      : 'Print Tax Invoice'
-                  "
-                >
-                  <i class="ph ph-printer"></i>
-                  <span>{{
-                    ord.printCount && ord.printCount > 0
-                      ? 'Invoice (' + ord.printCount + 'x)'
-                      : 'Invoice'
-                  }}</span>
-                </a>
+                @if (ord.status !== 'CANCELLED') {
+                  <a
+                    [routerLink]="['/admin/billing', ord.id]"
+                    [queryParams]="ord.printCount && ord.printCount > 0 ? { reprint: 'true' } : null"
+                    (click)="$event.stopPropagation()"
+                    class="card-util-btn"
+                    [title]="
+                      ord.printCount && ord.printCount > 0
+                        ? 'Tax Invoice printed ' +
+                          ord.printCount +
+                          ' time(s) — Reprint requires Admin authorization'
+                        : 'Print Tax Invoice'
+                    "
+                  >
+                    <i class="ph ph-printer"></i>
+                    <span>{{
+                      ord.printCount && ord.printCount > 0
+                        ? 'Invoice (' + ord.printCount + 'x)'
+                        : 'Invoice'
+                    }}</span>
+                  </a>
+                }
 
                 @if (ord.status !== 'COMPLETED' && ord.status !== 'CANCELLED') {
                   <button
                     type="button"
                     class="card-util-btn btn-cancel-order"
-                    (click)="openCancelModal(ord)"
+                    (click)="$event.stopPropagation(); openCancelModal(ord)"
                     title="Cancel Order"
                   >
                     <i class="ph ph-x-circle text-crimson"></i>
@@ -322,11 +477,372 @@ import { AdminAuthService } from '../../../core/services/admin-auth.service';
             <i class="ph ph-tray empty-icon"></i>
             <h3 class="heading-card">No Orders In This Queue</h3>
             <p class="text-muted">
-              New orders placed by table diners will appear here in real-time.
+              New dine-in and takeaway orders will appear here in real-time.
             </p>
           </div>
         }
       </div>
+
+      <!-- Order Quick Details Side Drawer -->
+      @if (selectedSidePanelOrder(); as sideOrd) {
+        <div class="side-drawer-backdrop" (click)="closeOrderSidePanel()"></div>
+        <aside
+          class="order-side-drawer"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="side-drawer-order-title"
+        >
+          <!-- Drawer Header -->
+          <div class="drawer-header">
+            <div class="drawer-title-group">
+              <div class="drawer-title-row">
+                <h3 id="side-drawer-order-title" class="drawer-order-num">{{ sideOrd.orderNumber }}</h3>
+                <app-status-badge [status]="sideOrd.status"></app-status-badge>
+              </div>
+              <div class="drawer-sub-meta">
+                <span class="drawer-type-pill" [class.takeaway-pill]="sideOrd.orderType === 'TAKEAWAY'">
+                  <i class="ph" [class.ph-bag]="sideOrd.orderType === 'TAKEAWAY'" [class.ph-table]="sideOrd.orderType !== 'TAKEAWAY'"></i>
+                  {{ sideOrd.orderType === 'TAKEAWAY' ? 'Takeaway • ' + (sideOrd.pickupReference || sideOrd.orderNumber) : 'Dine-In • Table ' + sideOrd.tableNumber }}
+                </span>
+                <span class="drawer-time-stamp">
+                  <i class="ph ph-clock"></i> {{ sideOrd.createdAt | date: 'shortTime' }}
+                </span>
+              </div>
+            </div>
+            <button
+              class="close-btn"
+              (click)="closeOrderSidePanel()"
+              aria-label="Close side panel"
+              title="Close panel"
+            >
+              <i class="ph ph-x"></i>
+            </button>
+          </div>
+
+          <!-- Drawer Body (Scrollable) -->
+          <div class="drawer-body">
+            <!-- 1. Customer & Contact Details Card -->
+            <div class="drawer-section-card">
+              <div class="section-card-header">
+                <span class="section-card-title"><i class="ph ph-user"></i> Customer & Guest Details</span>
+              </div>
+              <div class="drawer-info-grid">
+                <div class="drawer-info-row">
+                  <span class="drawer-info-label">Customer Name</span>
+                  <span class="drawer-info-value font-semibold">{{ sideOrd.customerName || 'Walk-in Guest' }}</span>
+                </div>
+                <div class="drawer-info-row">
+                  <span class="drawer-info-label">Phone Contact</span>
+                  <div class="drawer-phone-wrap">
+                    <span class="drawer-info-value">{{ sideOrd.customerPhone || 'Not provided' }}</span>
+                    @if (sideOrd.customerPhone) {
+                      <a [href]="'tel:' + sideOrd.customerPhone" class="btn-tel-call" title="Call Customer">
+                        <i class="ph ph-phone-call"></i>
+                        <span>Call</span>
+                      </a>
+                    }
+                  </div>
+                </div>
+                <div class="drawer-info-row">
+                  <span class="drawer-info-label">Order Type / Location</span>
+                  <span class="drawer-info-value font-bold text-crimson">
+                    {{ sideOrd.orderType === 'TAKEAWAY' ? 'Takeaway Counter (' + (sideOrd.pickupReference || sideOrd.orderNumber) + ')' : 'Table ' + sideOrd.tableNumber }}
+                  </span>
+                </div>
+                <div class="drawer-info-row">
+                  <span class="drawer-info-label">Serving Staff</span>
+                  @if (isOrderPaid(sideOrd)) {
+                    <div class="drawer-server-locked">
+                      <span class="font-semibold">
+                        <i class="ph ph-lock-key text-muted"></i>
+                        {{ getServerStaffName(sideOrd.serverStaffId) || 'Unassigned' }}
+                      </span>
+                      <button
+                        type="button"
+                        class="btn-unlock-server"
+                        (click)="promptChangeCompletedServer(sideOrd)"
+                        title="Change serving staff (Admin Password required)"
+                      >
+                        <i class="ph ph-lock-key"></i>
+                        <span>Change</span>
+                      </button>
+                    </div>
+                  } @else {
+                    <div class="drawer-server-select-wrap">
+                      <select
+                        class="form-select form-select-xs"
+                        [ngModel]="sideOrd.serverStaffId || ''"
+                        (ngModelChange)="onAssignOrderServer(sideOrd, $event)"
+                        title="Assign staff handling this order"
+                      >
+                        <option value="">Unassigned</option>
+                        @for (s of staffMembers(); track s.id) {
+                          <option [value]="s.id">{{ s.name }} ({{ s.role }})</option>
+                        }
+                      </select>
+                    </div>
+                  }
+                </div>
+              </div>
+            </div>
+
+            <!-- 2. Live Order Workflow & Dispatch Controls (If live) -->
+            @if (sideOrd.status !== 'COMPLETED' && sideOrd.status !== 'CANCELLED') {
+              <div class="drawer-section-card workflow-card">
+                <div class="section-card-header">
+                  <span class="section-card-title"><i class="ph ph-arrows-clockwise"></i> Live Dispatch Progression</span>
+                  <span class="current-stage-tag">{{ sideOrd.status }}</span>
+                </div>
+
+                <!-- Stepper Progress Bar -->
+                <div class="stepper-horizontal-bar">
+                  <div class="step-point" [class.done]="getOrderStageIndex(sideOrd.status) >= 1" [class.current]="sideOrd.status === 'PENDING'">
+                    <span class="point-dot"><i class="ph ph-bell"></i></span>
+                    <span class="point-lbl">Pending</span>
+                  </div>
+                  <div class="step-connector" [class.filled]="getOrderStageIndex(sideOrd.status) >= 1"></div>
+                  <div class="step-point" [class.done]="getOrderStageIndex(sideOrd.status) >= 2" [class.current]="sideOrd.status === 'ACCEPTED'">
+                    <span class="point-dot"><i class="ph ph-check"></i></span>
+                    <span class="point-lbl">Accepted</span>
+                  </div>
+                  <div class="step-connector" [class.filled]="getOrderStageIndex(sideOrd.status) >= 2"></div>
+                  <div class="step-point" [class.done]="getOrderStageIndex(sideOrd.status) >= 3" [class.current]="sideOrd.status === 'PREPARING'">
+                    <span class="point-dot"><i class="ph ph-cooking-pot"></i></span>
+                    <span class="point-lbl">Kitchen</span>
+                  </div>
+                  <div class="step-connector" [class.filled]="getOrderStageIndex(sideOrd.status) >= 3"></div>
+                  <div class="step-point" [class.done]="getOrderStageIndex(sideOrd.status) >= 4" [class.current]="sideOrd.status === 'READY'">
+                    <span class="point-dot"><i class="ph ph-bell-ringing"></i></span>
+                    <span class="point-lbl">Ready</span>
+                  </div>
+                  <div class="step-connector" [class.filled]="getOrderStageIndex(sideOrd.status) >= 4"></div>
+                  <div class="step-point" [class.done]="getOrderStageIndex(sideOrd.status) >= 5" [class.current]="sideOrd.status === 'DISPATCHED'">
+                    <span class="point-dot"><i class="ph ph-moped"></i></span>
+                    <span class="point-lbl">Dispatch</span>
+                  </div>
+                  <div class="step-connector" [class.filled]="getOrderStageIndex(sideOrd.status) >= 5"></div>
+                  <div class="step-point" [class.done]="sideOrd.status === 'SERVED'" [class.current]="sideOrd.status === 'SERVED'">
+                    <span class="point-dot"><i class="ph ph-hand-waving"></i></span>
+                    <span class="point-lbl">Served</span>
+                  </div>
+                </div>
+
+                <!-- Next Dispatch Action Button -->
+                <div class="drawer-dispatch-action-row">
+                  @if (sideOrd.status === 'PENDING') {
+                    <button class="btn btn-primary w-full" (click)="advanceStatus(sideOrd, 'ACCEPTED')">
+                      <i class="ph ph-check-bold"></i> Accept Order
+                    </button>
+                  } @else if (sideOrd.status === 'ACCEPTED') {
+                    <button class="btn btn-dark w-full" (click)="advanceStatus(sideOrd, 'PREPARING')">
+                      <i class="ph ph-cooking-pot"></i> Send to Kitchen / Preparing
+                    </button>
+                  } @else if (sideOrd.status === 'PREPARING') {
+                    <button class="btn btn-gold w-full" (click)="advanceStatus(sideOrd, 'READY')">
+                      <i class="ph ph-bell-ringing"></i> Mark Food Ready
+                    </button>
+                  } @else if (sideOrd.status === 'READY') {
+                    <button class="btn btn-info w-full" (click)="advanceStatus(sideOrd, 'DISPATCHED')">
+                      <i class="ph ph-moped"></i> {{ sideOrd.orderType === 'TAKEAWAY' ? 'Handover for Delivery / Counter' : 'Dispatch to Table' }}
+                    </button>
+                  } @else if (sideOrd.status === 'DISPATCHED') {
+                    <button class="btn btn-success w-full" (click)="advanceStatus(sideOrd, 'SERVED')">
+                      <i class="ph ph-check-circle"></i> {{ sideOrd.orderType === 'TAKEAWAY' ? 'Mark Picked Up / Delivered' : 'Mark Delivered & Served' }}
+                    </button>
+                  } @else if (sideOrd.status === 'SERVED') {
+                    <button class="btn btn-primary w-full checkout-glow" (click)="openSettleModal(sideOrd)">
+                      <i class="ph ph-credit-card"></i> Proceed to Bill Settlement & Invoice
+                    </button>
+                  }
+                </div>
+              </div>
+            }
+
+            <!-- 3. Billing & Payment Status Card (Unpaid vs Paid vs Completed) -->
+            <div class="drawer-section-card billing-card">
+              <div class="section-card-header">
+                <span class="section-card-title"><i class="ph ph-receipt"></i> Billing & Payment Status</span>
+                <span
+                  class="payment-status-pill"
+                  [class.status-paid]="isOrderPaid(sideOrd)"
+                  [class.status-unpaid]="!isOrderPaid(sideOrd)"
+                >
+                  <i class="ph" [class.ph-check-circle]="isOrderPaid(sideOrd)" [class.ph-warning-circle]="!isOrderPaid(sideOrd)"></i>
+                  {{ isOrderPaid(sideOrd) ? 'PAID (' + (sideOrd.paymentMethod || 'UPI') + ')' : 'UNPAID / PENDING' }}
+                </span>
+              </div>
+
+              <div class="billing-action-content">
+                @if (!isOrderPaid(sideOrd) && sideOrd.status !== 'CANCELLED') {
+                  <div class="unpaid-alert-banner">
+                    <i class="ph ph-info"></i>
+                    <div>
+                      <strong>Order is Unsettled</strong>
+                      <p>Total amount of {{ sideOrd.totalAmount | currencyInr }} is pending collection from guest.</p>
+                    </div>
+                  </div>
+
+                  <div class="billing-buttons-cluster">
+                    <button class="btn btn-primary btn-sm flex-1" (click)="openSettleModal(sideOrd)">
+                      <i class="ph ph-credit-card"></i> Settle Bill
+                    </button>
+                    <button class="btn btn-secondary btn-sm" (click)="printOrderReceipt(sideOrd)" title="Print Bill Receipt">
+                      <i class="ph ph-printer"></i> Print Bill
+                    </button>
+                  </div>
+                } @else if (sideOrd.status === 'COMPLETED') {
+                  <div class="completed-summary-box">
+                    <div class="completed-chips-cluster">
+                      <span class="status-chip chip-completed-pill">
+                        <i class="ph ph-check-circle"></i> Completed
+                      </span>
+                      <span class="status-chip chip-paid-pill">
+                        <i class="ph ph-money"></i> Paid ({{ sideOrd.paymentMethod || 'UPI' }})
+                      </span>
+                      <span class="status-chip chip-printed-pill">
+                        <i class="ph ph-printer"></i> Printed ({{ sideOrd.printCount || 1 }}x)
+                      </span>
+                    </div>
+                    <p class="text-xs text-muted" style="margin-top: 6px;">
+                      Order is completed, settled and invoice printed.
+                    </p>
+                    <div class="completed-invoice-actions">
+                      <button class="btn btn-secondary btn-sm" (click)="printOrderReceipt(sideOrd)">
+                        <i class="ph ph-printer"></i> Reprint Receipt
+                      </button>
+                      <a
+                        [routerLink]="['/admin/billing', sideOrd.id]"
+                        [queryParams]="sideOrd.printCount && sideOrd.printCount > 0 ? { reprint: 'true' } : null"
+                        class="btn btn-secondary btn-sm"
+                        (click)="closeOrderSidePanel()"
+                      >
+                        <i class="ph ph-file-text"></i> Full Tax Invoice
+                      </a>
+                    </div>
+                  </div>
+                } @else if (sideOrd.status === 'CANCELLED') {
+                  <div class="cancelled-summary-box">
+                    <i class="ph ph-x-circle text-crimson"></i>
+                    <div>
+                      <strong class="text-crimson">Order Cancelled</strong>
+                      <p class="text-xs text-muted">This order was cancelled. Invoicing and settlements are disabled.</p>
+                    </div>
+                  </div>
+                } @else {
+                  <!-- Paid but not yet marked completed (Needs invoice print) -->
+                  <div class="paid-pending-print-box">
+                    <p class="text-xs text-muted">
+                      Payment of {{ sideOrd.totalAmount | currencyInr }} is collected via {{ sideOrd.paymentMethod || 'UPI' }}. Print invoice to complete order.
+                    </p>
+                    <button class="btn btn-primary btn-sm w-full" (click)="printOrderReceipt(sideOrd)">
+                      <i class="ph ph-printer"></i> Print Invoice to Complete
+                    </button>
+                  </div>
+                }
+              </div>
+            </div>
+
+            <!-- 4. Itemized Bill & Dish Details -->
+            <div class="drawer-section-card dishes-card">
+              <div class="section-card-header">
+                <span class="section-card-title">
+                  <i class="ph ph-bowl-food"></i> Itemized Order Bill ({{ sideOrd.items.length }} dishes)
+                </span>
+                @if (sideOrd.status !== 'CANCELLED' && sideOrd.status !== 'COMPLETED') {
+                  <button class="btn btn-secondary btn-xs" (click)="openEditOrderModal(sideOrd)">
+                    <i class="ph ph-plus-circle"></i> Add / Edit Dishes
+                  </button>
+                }
+              </div>
+
+              <!-- Item List Table -->
+              <div class="drawer-items-list">
+                @for (item of sideOrd.items; track item.id) {
+                  <div class="drawer-item-row">
+                    <div class="item-qty-badge">{{ item.quantity }}×</div>
+                    <div class="item-info-col">
+                      <span class="item-name-txt">{{ item.name }}</span>
+                      <div class="item-sub-tags">
+                        @if (item.selectedPortion) {
+                          <span class="portion-tag">{{ item.selectedPortion.label }}</span>
+                        }
+                        @for (v of item.selectedVariants; track v.optionName) {
+                          <span class="variant-tag">{{ v.groupName }}: {{ v.optionName }}</span>
+                        }
+                        @for (a of item.selectedAddons; track a.name || a.addonName || a) {
+                          <span class="addon-tag">+{{ a.name || a.addonName }} (₹{{ a.priceDelta || a.price || 0 }})</span>
+                        }
+                        @if (item.specialInstructions || item.customInstructions) {
+                          <span class="notes-tag"><i class="ph ph-chat-text"></i> {{ item.specialInstructions || item.customInstructions }}</span>
+                        }
+                      </div>
+                    </div>
+                    <div class="item-price-col">
+                      <span class="item-rate">₹{{ item.unitPrice }}</span>
+                      <span class="item-total-val font-semibold">₹{{ item.itemTotal }}</span>
+                    </div>
+                  </div>
+                }
+              </div>
+
+              <!-- Financial Breakdown -->
+              <div class="drawer-financial-summary">
+                <div class="fin-row">
+                  <span>Subtotal</span>
+                  <span>{{ sideOrd.subtotal | currencyInr }}</span>
+                </div>
+                @if (sideOrd.discountAmount > 0) {
+                  <div class="fin-row discount-row">
+                    <span>Discount {{ sideOrd.appliedCouponCode ? '(' + sideOrd.appliedCouponCode + ')' : '' }}</span>
+                    <span class="text-success">-{{ sideOrd.discountAmount | currencyInr }}</span>
+                  </div>
+                }
+                <div class="fin-row">
+                  <span>CGST (2.5%)</span>
+                  <span>{{ sideOrd.cgstAmount | currencyInr }}</span>
+                </div>
+                <div class="fin-row">
+                  <span>SGST (2.5%)</span>
+                  <span>{{ sideOrd.sgstAmount | currencyInr }}</span>
+                </div>
+                @if (sideOrd.serviceChargeAmount && sideOrd.serviceChargeAmount > 0) {
+                  <div class="fin-row">
+                    <span>Service Charge</span>
+                    <span>{{ sideOrd.serviceChargeAmount | currencyInr }}</span>
+                  </div>
+                }
+                <div class="fin-total-row">
+                  <span class="total-lbl">Grand Total</span>
+                  <span class="total-amt">{{ sideOrd.totalAmount | currencyInr }}</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- 5. Order Management Utilities & Full Navigation -->
+            <div class="drawer-quick-actions">
+              <a
+                [routerLink]="['/admin/orders', sideOrd.id]"
+                class="btn btn-secondary w-full"
+                (click)="closeOrderSidePanel()"
+              >
+                <i class="ph ph-arrow-square-out"></i>
+                <span>Open Dedicated Order Page</span>
+              </a>
+
+              @if (sideOrd.status !== 'COMPLETED' && sideOrd.status !== 'CANCELLED') {
+                <button
+                  type="button"
+                  class="btn btn-danger-outline w-full"
+                  (click)="openCancelModal(sideOrd)"
+                >
+                  <i class="ph ph-x-circle"></i>
+                  <span>Cancel Order</span>
+                </button>
+              }
+            </div>
+          </div>
+        </aside>
+      }
 
       <!-- Manual Walk-in Order Creation Modal -->
       @if (showManualModal) {
@@ -710,7 +1226,7 @@ import { AdminAuthService } from '../../../core/services/admin-auth.service';
                   </div>
                   @if (ord.discountAmount > 0) {
                     <div class="settle-row discount">
-                      <span>Discount Privilege</span>
+                      <span>Discount Applied</span>
                       <span>-{{ ord.discountAmount | currencyInr }}</span>
                     </div>
                   }
@@ -1031,7 +1547,7 @@ import { AdminAuthService } from '../../../core/services/admin-auth.service';
                         ? 'Cancelling will release reserved ingredients back to stock.'
                         : 'Cancelling will release reserved ingredients back to stock and immediately mark Table ' +
                           ord.tableNumber +
-                          ' as available for new diners.'
+                          ' as available for new guests.'
                     }}
                   </p>
                 </div>
@@ -1189,6 +1705,107 @@ import { AdminAuthService } from '../../../core/services/admin-auth.service';
               >
                 <i class="ph ph-lock-key-open"></i>
                 <span>Authorize & Edit</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      }
+
+      <!-- Admin Password Authorization Modal for Changing Server on Completed Order -->
+      @if (showServerAdminModal() && pendingServerOrder(); as serverOrd) {
+        <div class="modal-overlay" (click)="onBackdropClick($event, 'server-admin-password')">
+          <div
+            class="modal-card auth-modal-card"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="server-admin-dialog-title"
+          >
+            <div class="modal-header">
+              <div class="auth-modal-title-wrap">
+                <div class="auth-icon-badge">
+                  <i class="ph ph-shield-lock"></i>
+                </div>
+                <div>
+                  <h3 id="server-admin-dialog-title" class="heading-card">Admin Password Required</h3>
+                  <span class="text-xs text-muted"
+                    >Authorization required to change serving staff for completed order {{ serverOrd.orderNumber }}</span
+                  >
+                </div>
+              </div>
+              <button
+                class="close-btn"
+                (click)="closeServerAdminModal()"
+                aria-label="Close dialog"
+              >
+                <i class="ph ph-x"></i>
+              </button>
+            </div>
+
+            <div class="modal-body auth-dialog-body">
+              <div class="auth-warning-box">
+                <i class="ph ph-warning-circle"></i>
+                <p>
+                  Order <strong>{{ serverOrd.orderNumber }}</strong> is finalized and completed.
+                  Changing the assigned serving staff impacts service records, audit logs, and tip distribution.
+                </p>
+              </div>
+
+              <div class="form-group">
+                <label class="form-label" for="newServerSelect">Select New Serving Staff</label>
+                <select
+                  id="newServerSelect"
+                  class="form-select"
+                  [value]="selectedNewStaffId()"
+                  (change)="selectedNewStaffId.set($any($event.target).value)"
+                >
+                  <option value="">Unassigned</option>
+                  @for (s of staffMembers(); track s.id) {
+                    <option [value]="s.id">{{ s.name }} ({{ s.role }})</option>
+                  }
+                </select>
+              </div>
+
+              <div class="form-group">
+                <label class="form-label" for="serverAdminPassword">Enter Admin Password / Staff PIN</label>
+                <div class="input-with-icon">
+                  <i class="ph ph-lock-key"></i>
+                  <input
+                    id="serverAdminPassword"
+                    type="password"
+                    class="form-input"
+                    placeholder="Enter password or 4-digit PIN..."
+                    [value]="serverAdminPasswordInput()"
+                    (input)="serverAdminPasswordInput.set($any($event.target).value)"
+                    (keyup.enter)="confirmChangeCompletedServer()"
+                    autocomplete="current-password"
+                    autofocus
+                  />
+                </div>
+                <span class="hint-text"
+                  >Staff/Manager PIN: <strong>1234</strong> or password <strong>admin</strong></span
+                >
+              </div>
+
+              @if (serverAdminPasswordError()) {
+                <div class="auth-error-banner">
+                  <i class="ph ph-warning-circle"></i>
+                  <span>{{ serverAdminPasswordError() }}</span>
+                </div>
+              }
+            </div>
+
+            <div class="modal-footer">
+              <button type="button" class="btn btn-secondary" (click)="closeServerAdminModal()">
+                Cancel
+              </button>
+              <button
+                type="button"
+                class="btn btn-primary"
+                [disabled]="!serverAdminPasswordInput().trim()"
+                (click)="confirmChangeCompletedServer()"
+              >
+                <i class="ph ph-lock-key-open"></i>
+                <span>Authorize & Reassign Staff</span>
               </button>
             </div>
           </div>
@@ -1446,6 +2063,111 @@ import { AdminAuthService } from '../../../core/services/admin-auth.service';
         }
       }
 
+      .sound-toggle-btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 38px;
+        height: 38px;
+        border-radius: var(--radius-sm);
+        border: 1px solid var(--color-border);
+        background: var(--color-surface);
+        color: var(--color-onyx);
+        cursor: pointer;
+        font-size: 1.15rem;
+        transition: all var(--transition-fast);
+
+        &:hover {
+          background: var(--color-bone-light);
+          border-color: var(--color-onyx);
+        }
+        &.muted {
+          color: var(--color-text-muted);
+          background: var(--color-bone-light);
+        }
+      }
+
+      .completed-order-badge-strip {
+        padding: 8px 12px;
+        background: rgba(27, 99, 62, 0.08);
+        border: 1px solid rgba(27, 99, 62, 0.2);
+        border-radius: var(--radius-sm);
+        margin-bottom: 6px;
+      }
+
+      .completed-chips-cluster {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex-wrap: wrap;
+      }
+
+      .chip-completed-pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        padding: 4px 10px;
+        background: var(--color-success);
+        color: #ffffff;
+        border-radius: var(--radius-full);
+        font-size: 0.75rem;
+        font-weight: 700;
+        letter-spacing: 0.02em;
+      }
+
+      .chip-paid-pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        padding: 4px 10px;
+        background: rgba(27, 99, 62, 0.15);
+        color: var(--color-success);
+        border: 1px solid rgba(27, 99, 62, 0.3);
+        border-radius: var(--radius-full);
+        font-size: 0.75rem;
+        font-weight: 700;
+      }
+
+      .chip-printed-pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        padding: 4px 10px;
+        background: rgba(184, 134, 11, 0.12);
+        color: #8b6508;
+        border: 1px solid rgba(184, 134, 11, 0.3);
+        border-radius: var(--radius-full);
+        font-size: 0.75rem;
+        font-weight: 700;
+      }
+
+      .tab-live-dot {
+        display: inline-block;
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+        background: #10b981;
+        margin-right: 6px;
+        box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.3);
+        animation: pulseGlow 1.5s infinite;
+      }
+
+      .order-board-card.new-order-flash {
+        animation: cardNewOrderFlash 2s ease-in-out infinite alternate;
+        border-color: #d4af37 !important;
+      }
+
+      @keyframes cardNewOrderFlash {
+        0% {
+          box-shadow: 0 0 0 2px #d4af37, 0 8px 24px rgba(212, 175, 55, 0.25);
+          transform: translateY(-2px);
+        }
+        100% {
+          box-shadow: 0 0 0 1px rgba(212, 175, 55, 0.3), 0 2px 8px rgba(0, 0, 0, 0.05);
+          transform: translateY(0);
+        }
+      }
+
       .toolbar-card {
         background: var(--color-surface);
         border: 1px solid var(--color-border);
@@ -1523,15 +2245,22 @@ import { AdminAuthService } from '../../../core/services/admin-auth.service';
         gap: 12px;
         min-width: 0;
         overflow: hidden;
+        cursor: pointer;
         transition: all var(--transition-fast);
 
         &:hover {
-          border-color: var(--color-taupe);
-          box-shadow: var(--shadow-sm);
+          border-color: var(--color-crimson);
+          box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
+          transform: translateY(-2px);
         }
 
         &.pending-highlight {
           border-left: 4px solid var(--color-crimson);
+        }
+
+        &.card-selected {
+          border-color: var(--color-crimson);
+          box-shadow: 0 0 0 2px rgba(139, 0, 0, 0.15), 0 8px 24px rgba(0, 0, 0, 0.1);
         }
       }
 
@@ -1578,14 +2307,44 @@ import { AdminAuthService } from '../../../core/services/admin-auth.service';
         flex-shrink: 0;
       }
 
+      .dispatch-status-dropdown-wrap {
+        display: inline-flex;
+        align-items: center;
+      }
+
+      .dispatch-status-select {
+        padding: 3px 6px;
+        font-size: 0.6875rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.03em;
+        background: var(--color-bone-light);
+        border: 1px solid var(--color-border);
+        border-radius: var(--radius-xs);
+        color: var(--color-text-secondary);
+        cursor: pointer;
+        outline: none;
+        transition: all var(--transition-fast);
+
+        &:hover {
+          border-color: var(--color-onyx);
+          color: var(--color-onyx);
+        }
+
+        &:focus {
+          border-color: var(--color-crimson);
+          background: var(--color-surface);
+        }
+      }
+
       .split-indicator-pill {
         display: inline-flex;
         align-items: center;
         gap: 4px;
         padding: 3px 8px;
-        border-radius: 999px;
-        background: rgba(139, 29, 36, 0.08);
-        border: 1px solid rgba(139, 29, 36, 0.2);
+        border-radius: var(--radius-full);
+        background: var(--color-crimson-subtle);
+        border: 1px solid rgba(194, 24, 7, 0.2);
         color: var(--color-crimson);
         font-size: 0.6875rem;
         font-weight: 700;
@@ -1627,6 +2386,12 @@ import { AdminAuthService } from '../../../core/services/admin-auth.service';
         i {
           font-size: 0.95rem;
         }
+
+        &.takeaway-badge {
+          background: var(--color-warning-bg);
+          border-color: rgba(212, 175, 55, 0.4);
+          color: var(--color-warning);
+        }
       }
 
       .guest-meta {
@@ -1654,6 +2419,86 @@ import { AdminAuthService } from '../../../core/services/admin-auth.service';
         align-items: center;
         gap: 3px;
         white-space: nowrap;
+      }
+
+      .server-bar {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 5px 10px;
+        background: var(--color-surface);
+        border: 1px dashed var(--color-border);
+        border-radius: var(--radius-xs);
+        font-size: 0.75rem;
+      }
+
+      .server-label {
+        color: var(--color-text-muted);
+        font-weight: 600;
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        white-space: nowrap;
+      }
+
+      .server-select {
+        flex: 1;
+        font-size: 0.75rem;
+        padding: 3px 6px;
+        border: 1px solid var(--color-border);
+        border-radius: var(--radius-xs);
+        background: var(--color-surface);
+        color: var(--color-text-primary);
+        outline: none;
+        cursor: pointer;
+      }
+
+      .server-bar-locked {
+        background: rgba(0, 0, 0, 0.02);
+        border-style: solid;
+        border-color: rgba(0, 0, 0, 0.08);
+      }
+
+      .server-completed-box {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 6px;
+        flex: 1;
+      }
+
+      .server-name-badge {
+        font-size: 0.75rem;
+        font-weight: 600;
+        color: var(--color-onyx);
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .btn-unlock-server {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        padding: 2px 7px;
+        border-radius: var(--radius-xs);
+        border: 1px solid var(--color-border);
+        background: var(--color-surface);
+        color: var(--color-text-secondary);
+        font-size: 0.7rem;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all var(--transition-fast);
+
+        &:hover {
+          background: #eff6ff;
+          border-color: #3b82f6;
+          color: #1d4ed8;
+        }
+
+        i {
+          font-size: 0.75rem;
+        }
       }
 
       .items-summary-list {
@@ -1698,7 +2543,7 @@ import { AdminAuthService } from '../../../core/services/admin-auth.service';
         font-weight: 800;
         color: var(--color-crimson);
         font-size: 0.75rem;
-        background: rgba(139, 29, 36, 0.08);
+        background: var(--color-crimson-subtle);
         padding: 1px 5px;
         border-radius: 4px;
         flex-shrink: 0;
@@ -1816,6 +2661,106 @@ import { AdminAuthService } from '../../../core/services/admin-auth.service';
         min-width: 0;
       }
 
+      /* Progressive Stepper Bar in Card Footer */
+      .dispatch-stepper-bar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        background: var(--color-bone-light);
+        border: 1px solid var(--color-border-subtle);
+        border-radius: var(--radius-sm);
+        padding: 8px 10px;
+        margin-bottom: 4px;
+        gap: 2px;
+      }
+
+      .step-bubble {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 3px;
+        cursor: pointer;
+        user-select: none;
+        flex: 1;
+        transition: all var(--transition-fast);
+
+        .step-num {
+          width: 24px;
+          height: 24px;
+          border-radius: 50%;
+          background: var(--color-surface);
+          border: 1.5px solid var(--color-border);
+          color: var(--color-text-muted);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-size: 0.75rem;
+          font-weight: 700;
+          transition: all var(--transition-fast);
+        }
+
+        .step-txt {
+          font-size: 0.625rem;
+          font-weight: 600;
+          color: var(--color-text-muted);
+          text-transform: uppercase;
+          letter-spacing: 0.02em;
+        }
+
+        &:hover {
+          .step-num {
+            border-color: var(--color-onyx);
+            color: var(--color-onyx);
+            transform: scale(1.08);
+          }
+          .step-txt {
+            color: var(--color-onyx);
+          }
+        }
+
+        &.completed {
+          .step-num {
+            background: var(--color-success);
+            border-color: var(--color-success);
+            color: #ffffff;
+          }
+          .step-txt {
+            color: var(--color-success);
+            font-weight: 700;
+          }
+        }
+
+        &.active {
+          .step-num {
+            background: var(--color-crimson);
+            border-color: var(--color-crimson);
+            color: #ffffff;
+            box-shadow: 0 0 0 3px rgba(194, 24, 7, 0.2);
+          }
+          .step-txt {
+            color: var(--color-crimson);
+            font-weight: 800;
+          }
+        }
+      }
+
+      .step-connector {
+        height: 2px;
+        background: var(--color-border);
+        flex: 0.8;
+        margin-top: -12px;
+        transition: background var(--transition-fast);
+
+        &.filled {
+          background: var(--color-success);
+        }
+      }
+
+      .checkout-glow {
+        box-shadow: 0 2px 10px rgba(194, 24, 7, 0.3);
+        font-weight: 800 !important;
+      }
+
       .action-row-primary {
         display: flex;
         width: 100%;
@@ -1840,7 +2785,7 @@ import { AdminAuthService } from '../../../core/services/admin-auth.service';
 
       .action-row-secondary {
         display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(56px, 1fr));
+        grid-template-columns: repeat(2, 1fr);
         gap: 6px;
         width: 100%;
       }
@@ -1851,6 +2796,7 @@ import { AdminAuthService } from '../../../core/services/admin-auth.service';
         justify-content: center;
         gap: 5px;
         padding: 6px 8px;
+        min-height: 32px;
         border-radius: var(--radius-xs);
         border: 1px solid var(--color-border);
         background: var(--color-surface);
@@ -1861,6 +2807,8 @@ import { AdminAuthService } from '../../../core/services/admin-auth.service';
         cursor: pointer;
         transition: all var(--transition-fast);
         white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
 
         i {
           font-size: 0.875rem;
@@ -3142,6 +4090,576 @@ import { AdminAuthService } from '../../../core/services/admin-auth.service';
           border-color: #b8860b;
         }
       }
+
+      /* Order Side Drawer */
+      .side-drawer-backdrop {
+        position: fixed;
+        inset: 0;
+        background: rgba(0, 0, 0, 0.45);
+        backdrop-filter: blur(2px);
+        z-index: 990;
+        animation: fadeIn 0.2s ease-out;
+      }
+
+      .order-side-drawer {
+        position: fixed;
+        top: 0;
+        right: 0;
+        bottom: 0;
+        width: 100%;
+        max-width: 480px;
+        background: var(--color-surface);
+        box-shadow: -8px 0 32px rgba(0, 0, 0, 0.15);
+        z-index: 995;
+        display: flex;
+        flex-direction: column;
+        animation: slideInRight 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+        overflow: hidden;
+      }
+
+      @keyframes slideInRight {
+        from {
+          transform: translateX(100%);
+        }
+        to {
+          transform: translateX(0);
+        }
+      }
+
+      .drawer-header {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        padding: 18px 20px;
+        border-bottom: 1px solid var(--color-border);
+        background: var(--color-surface);
+        gap: 12px;
+      }
+
+      .drawer-title-group {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        min-width: 0;
+      }
+
+      .drawer-title-row {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        flex-wrap: wrap;
+      }
+
+      .drawer-order-num {
+        margin: 0;
+        font-size: 1.25rem;
+        font-weight: 800;
+        color: var(--color-onyx);
+        letter-spacing: -0.01em;
+      }
+
+      .drawer-sub-meta {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        flex-wrap: wrap;
+        font-size: 0.75rem;
+        color: var(--color-text-muted);
+      }
+
+      .drawer-type-pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        padding: 2px 8px;
+        background: rgba(186, 12, 47, 0.08);
+        color: var(--color-crimson);
+        font-weight: 700;
+        border-radius: var(--radius-full);
+
+        &.takeaway-pill {
+          background: rgba(30, 41, 59, 0.08);
+          color: var(--color-onyx);
+        }
+      }
+
+      .drawer-time-stamp {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+      }
+
+      .drawer-body {
+        flex: 1;
+        overflow-y: auto;
+        padding: 16px 20px 24px;
+        display: flex;
+        flex-direction: column;
+        gap: 16px;
+      }
+
+      .drawer-section-card {
+        background: var(--color-bone-light);
+        border: 1px solid var(--color-border);
+        border-radius: var(--radius-md);
+        padding: 14px 16px;
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+      }
+
+      .section-card-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+      }
+
+      .section-card-title {
+        font-size: 0.8125rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        color: var(--color-text-muted);
+        display: flex;
+        align-items: center;
+        gap: 6px;
+
+        i {
+          font-size: 1rem;
+          color: var(--color-crimson);
+        }
+      }
+
+      .current-stage-tag {
+        font-size: 0.6875rem;
+        font-weight: 800;
+        letter-spacing: 0.05em;
+        padding: 2px 8px;
+        border-radius: var(--radius-xs);
+        background: var(--color-onyx);
+        color: #fff;
+      }
+
+      .drawer-info-grid {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+
+      .drawer-info-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        font-size: 0.8125rem;
+        gap: 8px;
+      }
+
+      .drawer-info-label {
+        color: var(--color-text-muted);
+        flex-shrink: 0;
+      }
+
+      .drawer-info-value {
+        color: var(--color-onyx);
+        text-align: right;
+        word-break: break-word;
+      }
+
+      .drawer-phone-wrap {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+
+      .btn-tel-call {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        font-size: 0.6875rem;
+        font-weight: 700;
+        padding: 2px 8px;
+        border-radius: var(--radius-xs);
+        background: var(--color-crimson);
+        color: #fff;
+        text-decoration: none;
+        transition: opacity var(--transition-fast);
+
+        &:hover {
+          opacity: 0.88;
+        }
+      }
+
+      .drawer-server-locked {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 0.8125rem;
+      }
+
+      .btn-unlock-server {
+        background: transparent;
+        border: 1px solid var(--color-border);
+        color: var(--color-text-muted);
+        font-size: 0.6875rem;
+        font-weight: 600;
+        padding: 2px 8px;
+        border-radius: var(--radius-xs);
+        cursor: pointer;
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+
+        &:hover {
+          color: var(--color-onyx);
+          border-color: var(--color-onyx);
+        }
+      }
+
+      .drawer-server-select-wrap {
+        min-width: 140px;
+      }
+
+      /* Horizontal Stepper */
+      .stepper-horizontal-bar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 8px 4px 4px;
+      }
+
+      .step-point {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 4px;
+        flex: 1;
+
+        .point-dot {
+          width: 28px;
+          height: 28px;
+          border-radius: var(--radius-full);
+          background: var(--color-surface);
+          border: 2px solid var(--color-border);
+          color: var(--color-text-muted);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-size: 0.875rem;
+          transition: all var(--transition-fast);
+        }
+
+        .point-lbl {
+          font-size: 0.625rem;
+          font-weight: 700;
+          color: var(--color-text-muted);
+          text-transform: uppercase;
+          letter-spacing: 0.03em;
+          text-align: center;
+        }
+
+        &.done {
+          .point-dot {
+            background: #2e7d32;
+            border-color: #2e7d32;
+            color: #fff;
+          }
+          .point-lbl {
+            color: #2e7d32;
+          }
+        }
+
+        &.current {
+          .point-dot {
+            background: var(--color-crimson);
+            border-color: var(--color-crimson);
+            color: #fff;
+            box-shadow: 0 0 0 3px rgba(186, 12, 47, 0.2);
+          }
+          .point-lbl {
+            color: var(--color-crimson);
+            font-weight: 800;
+          }
+        }
+      }
+
+      .step-connector {
+        height: 2px;
+        flex: 1;
+        background: var(--color-border);
+        margin-top: -16px;
+        transition: background var(--transition-fast);
+
+        &.filled {
+          background: #2e7d32;
+        }
+      }
+
+      .drawer-dispatch-action-row {
+        margin-top: 4px;
+      }
+
+      /* Billing Card */
+      .payment-status-pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        font-size: 0.6875rem;
+        font-weight: 800;
+        letter-spacing: 0.04em;
+        padding: 3px 8px;
+        border-radius: var(--radius-xs);
+
+        &.status-paid {
+          background: rgba(46, 125, 50, 0.1);
+          color: #2e7d32;
+          border: 1px solid rgba(46, 125, 50, 0.25);
+        }
+
+        &.status-unpaid {
+          background: rgba(184, 134, 11, 0.1);
+          color: #b8860b;
+          border: 1px solid rgba(184, 134, 11, 0.3);
+        }
+      }
+
+      .unpaid-alert-banner {
+        display: flex;
+        align-items: flex-start;
+        gap: 10px;
+        padding: 10px 12px;
+        background: rgba(184, 134, 11, 0.08);
+        border: 1px solid rgba(184, 134, 11, 0.25);
+        border-radius: var(--radius-sm);
+        margin-bottom: 10px;
+
+        i {
+          font-size: 1.125rem;
+          color: #b8860b;
+          margin-top: 1px;
+        }
+
+        strong {
+          display: block;
+          font-size: 0.8125rem;
+          color: #8b6508;
+        }
+
+        p {
+          margin: 2px 0 0;
+          font-size: 0.75rem;
+          color: var(--color-text-secondary);
+        }
+      }
+
+      .billing-buttons-cluster {
+        display: flex;
+        gap: 8px;
+      }
+
+      .completed-summary-box {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+      }
+
+      .completed-chips-cluster {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+      }
+
+      .completed-invoice-actions {
+        display: flex;
+        gap: 8px;
+        margin-top: 6px;
+      }
+
+      .cancelled-summary-box {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 10px 12px;
+        background: rgba(186, 12, 47, 0.06);
+        border: 1px solid rgba(186, 12, 47, 0.2);
+        border-radius: var(--radius-sm);
+
+        i {
+          font-size: 1.5rem;
+        }
+      }
+
+      .paid-pending-print-box {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+
+      .checkout-glow {
+        box-shadow: 0 4px 14px rgba(186, 12, 47, 0.3);
+      }
+
+      /* Dishes & Items */
+      .drawer-items-list {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+
+      .drawer-item-row {
+        display: flex;
+        align-items: flex-start;
+        gap: 10px;
+        padding: 8px 10px;
+        background: var(--color-surface);
+        border-radius: var(--radius-sm);
+        border: 1px solid var(--color-border);
+      }
+
+      .item-qty-badge {
+        font-weight: 800;
+        font-size: 0.75rem;
+        color: var(--color-crimson);
+        padding: 2px 6px;
+        background: rgba(186, 12, 47, 0.08);
+        border-radius: var(--radius-xs);
+        flex-shrink: 0;
+        margin-top: 1px;
+      }
+
+      .item-info-col {
+        flex: 1;
+        min-width: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+      }
+
+      .item-name-txt {
+        font-size: 0.8125rem;
+        font-weight: 600;
+        color: var(--color-onyx);
+      }
+
+      .item-sub-tags {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 4px;
+        margin-top: 2px;
+      }
+
+      .portion-tag,
+      .variant-tag,
+      .addon-tag {
+        font-size: 0.625rem;
+        font-weight: 600;
+        padding: 1px 5px;
+        border-radius: var(--radius-xs);
+        background: var(--color-bone);
+        color: var(--color-text-secondary);
+      }
+
+      .addon-tag {
+        color: var(--color-crimson);
+        background: rgba(186, 12, 47, 0.05);
+      }
+
+      .notes-tag {
+        font-size: 0.625rem;
+        font-style: italic;
+        color: var(--color-text-muted);
+        display: flex;
+        align-items: center;
+        gap: 3px;
+      }
+
+      .item-price-col {
+        display: flex;
+        flex-direction: column;
+        align-items: flex-end;
+        flex-shrink: 0;
+      }
+
+      .item-rate {
+        font-size: 0.6875rem;
+        color: var(--color-text-muted);
+      }
+
+      .item-total-val {
+        font-size: 0.8125rem;
+        color: var(--color-onyx);
+      }
+
+      /* Financial Summary */
+      .drawer-financial-summary {
+        margin-top: 4px;
+        padding-top: 10px;
+        border-top: 1px dashed var(--color-border);
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+      }
+
+      .fin-row {
+        display: flex;
+        justify-content: space-between;
+        font-size: 0.8125rem;
+        color: var(--color-text-secondary);
+
+        &.discount-row {
+          color: #2e7d32;
+          font-weight: 600;
+        }
+      }
+
+      .fin-total-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding-top: 8px;
+        margin-top: 4px;
+        border-top: 1px solid var(--color-border);
+
+        .total-lbl {
+          font-size: 0.9375rem;
+          font-weight: 800;
+          color: var(--color-onyx);
+        }
+
+        .total-amt {
+          font-size: 1.125rem;
+          font-weight: 900;
+          color: var(--color-crimson);
+        }
+      }
+
+      /* Quick Actions */
+      .drawer-quick-actions {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        padding-top: 4px;
+      }
+
+      .btn-danger-outline {
+        background: transparent;
+        border: 1px solid rgba(186, 12, 47, 0.4);
+        color: var(--color-crimson);
+        font-weight: 600;
+        padding: 8px 14px;
+        border-radius: var(--radius-sm);
+        cursor: pointer;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+        transition: all var(--transition-fast);
+
+        &:hover {
+          background: rgba(186, 12, 47, 0.08);
+          border-color: var(--color-crimson);
+        }
+      }
     `,
   ],
 })
@@ -3150,13 +4668,104 @@ export class OrderQueueComponent {
   private mock = this.dataService;
   private toastService = inject(ToastService);
   private adminAuth = inject(AdminAuthService);
+  private router = inject(Router);
+
+  // Order side panel drawer state
+  selectedSidePanelOrderId = signal<string | null>(null);
+  selectedSidePanelOrder = computed(() => {
+    const id = this.selectedSidePanelOrderId();
+    if (!id) return null;
+    return this.orders().find((o) => o.id === id) || null;
+  });
+
+  openOrderSidePanel(ord: Order): void {
+    this.selectedSidePanelOrderId.set(ord.id);
+  }
+
+  closeOrderSidePanel(): void {
+    this.selectedSidePanelOrderId.set(null);
+  }
+
+  printOrderReceipt(ord: Order): void {
+    if ((ord.printCount || 0) > 0) {
+      this.router.navigate(['/admin/billing', ord.id], { queryParams: { reprint: 'true' } });
+    } else {
+      this.router.navigate(['/admin/billing', ord.id]);
+    }
+  }
+
+  isOrderPaid(order: Order | null | undefined): boolean {
+    if (!order) return false;
+    const ps = (order.paymentStatus || '').toUpperCase();
+    if (ps === 'PAID' || ps === 'COMPLETED') return true;
+    if (order.status === 'COMPLETED' || !!order.settledAt) return true;
+    if (order.isSplit && this.areAllSplitBillsPaid(order.id)) return true;
+    return false;
+  }
+
+  @HostListener('document:keydown.escape')
+  onEscapeKey(): void {
+    if (this.selectedSidePanelOrderId()) {
+      this.closeOrderSidePanel();
+    }
+  }
 
   orders = this.mock.orders;
   tables = this.mock.tables;
   menuItems = this.mock.menuItems;
+  staffMembers = this.dataService.staffMembers;
 
-  selectedStatus = signal<string>('ALL');
+  selectedStatus = signal<string>('ACTIVE');
   searchQuery = signal<string>('');
+  latestNewOrderId = signal<string | null>(null);
+  soundEnabled = signal<boolean>(true);
+
+  constructor() {
+    effect(() => {
+      const ev = this.dataService.liveOrderEvent();
+      if (ev && ev.type === 'ORDER_CREATED' && ev.order) {
+        const order = ev.order;
+        this.latestNewOrderId.set(order.id);
+        const loc =
+          order.orderType === 'TAKEAWAY'
+            ? 'Takeaway'
+            : `Table ${order.tableNumber || '?'}`;
+        this.toastService.info(
+          `New live QR order ${order.orderNumber} placed for ${loc} (${order.items.length} dishes)`,
+          '🔔 Real-time Live Order',
+        );
+        if (this.soundEnabled()) {
+          this.playOrderNotificationSound();
+        }
+        setTimeout(() => {
+          if (this.latestNewOrderId() === order.id) {
+            this.latestNewOrderId.set(null);
+          }
+        }, 8000);
+      }
+    });
+  }
+
+  private playOrderNotificationSound(): void {
+    try {
+      const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+      if (!AudioCtx) return;
+      const ctx = new AudioCtx();
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(587.33, ctx.currentTime);
+      osc.frequency.exponentialRampToValueAtTime(880, ctx.currentTime + 0.12);
+      gain.gain.setValueAtTime(0.15, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.35);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start();
+      osc.stop(ctx.currentTime + 0.35);
+    } catch {
+      // Audio autoplay policy fallback
+    }
+  }
 
   showManualModal = false;
   manualTableId = 'counter';
@@ -3194,6 +4803,13 @@ export class OrderQueueComponent {
   pendingEditOrder = signal<Order | null>(null);
   isManagerOverrideActive = signal<boolean>(false);
 
+  // Admin Password Override for Changing Server on Completed Orders
+  showServerAdminModal = signal<boolean>(false);
+  pendingServerOrder = signal<Order | null>(null);
+  selectedNewStaffId = signal<string>('');
+  serverAdminPasswordInput = signal<string>('');
+  serverAdminPasswordError = signal<string>('');
+
   // Edit Order Modal state
   showEditModal = signal<boolean>(false);
   editingOrder = signal<Order | null>(null);
@@ -3229,10 +4845,21 @@ export class OrderQueueComponent {
     return Math.max(0, this.editSubtotal() + this.editTax() - discount);
   });
 
+  isOrderActive(o: Order): boolean {
+    if (o.status === 'CANCELLED') return false;
+    // Keep in active if status is in active kitchen/floor dispatch progression
+    if (['PENDING', 'ACCEPTED', 'PREPARING', 'READY', 'DISPATCHED', 'SERVED'].includes(o.status)) {
+      return true;
+    }
+    // Also keep in active if order has not been fully paid/settled
+    if (!this.isOrderPaid(o)) {
+      return true;
+    }
+    return false;
+  }
+
   activeOrdersCount = computed(() => {
-    return this.orders().filter((o) =>
-      ['PENDING', 'ACCEPTED', 'PREPARING', 'READY'].includes(o.status),
-    ).length;
+    return this.orders().filter((o) => this.isOrderActive(o)).length;
   });
 
   countByStatus(status: OrderStatus): number {
@@ -3243,7 +4870,7 @@ export class OrderQueueComponent {
     let list = this.orders();
     const st = this.selectedStatus();
     if (st === 'ACTIVE') {
-      list = list.filter((o) => ['PENDING', 'ACCEPTED', 'PREPARING', 'READY'].includes(o.status));
+      list = list.filter((o) => this.isOrderActive(o));
     } else if (st !== 'ALL') {
       list = list.filter((o) => o.status === st);
     }
@@ -3415,8 +5042,17 @@ export class OrderQueueComponent {
       : this.tables().find((t) => t.id === this.manualTableId);
     const orderNum = `#ORD-${Math.floor(100 + Math.random() * 900)}`;
 
+    const orderUuid =
+      typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+        ? crypto.randomUUID()
+        : 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+            const r = (Math.random() * 16) | 0;
+            const v = c === 'x' ? r : (r & 0x3) | 0x8;
+            return v.toString(16);
+          });
+
     const newOrder: Order = {
-      id: `ord-${Date.now().toString().slice(-5)}`,
+      id: orderUuid,
       orderNumber: orderNum,
       orderType: this.manualOrderType,
       pickupReference: isTakeaway ? this.manualPickupRef : undefined,
@@ -3455,6 +5091,9 @@ export class OrderQueueComponent {
     // Reserve stock for the newly accepted manual order
     this.mock.reserveStockForOrder(newOrder.id);
 
+    // Persist to backend database via API
+    this.dataService.addOrder(newOrder);
+
     // If dining at a table, mark table as OCCUPIED
     if (!isTakeaway && selectedTable) {
       const updatedTables = this.mock
@@ -3470,6 +5109,96 @@ export class OrderQueueComponent {
         : `Manual order ${newOrder.orderNumber} placed for Table ${newOrder.tableNumber}`,
     );
     this.showManualModal = false;
+  }
+
+  getServerStaffName(staffId: string | undefined): string {
+    if (!staffId) return '';
+    const staff = this.staffMembers().find((s) => s.id === staffId);
+    return staff ? `${staff.name} (${staff.role})` : staffId;
+  }
+
+  promptChangeCompletedServer(ord: Order): void {
+    this.pendingServerOrder.set(ord);
+    this.selectedNewStaffId.set(ord.serverStaffId || '');
+    this.serverAdminPasswordInput.set('');
+    this.serverAdminPasswordError.set('');
+    this.showServerAdminModal.set(true);
+  }
+
+  confirmChangeCompletedServer(): void {
+    const ord = this.pendingServerOrder();
+    if (!ord) return;
+
+    const pwd = this.serverAdminPasswordInput().trim();
+    if (!this.adminAuth.verifyAdminPassword(pwd)) {
+      this.serverAdminPasswordError.set(
+        'Incorrect admin password. Authorization required to change serving staff on completed orders.',
+      );
+      return;
+    }
+
+    const newStaffId = this.selectedNewStaffId();
+    const res = this.dataService.assignOrderServer(
+      ord.id,
+      newStaffId ? newStaffId : null,
+      pwd,
+    );
+
+    if (res.success) {
+      const staffName = this.getServerStaffName(newStaffId) || 'Unassigned';
+      this.toastService.success(
+        `Serving staff for completed order ${ord.orderNumber} updated to ${staffName} (Admin Authorized)`,
+      );
+      this.closeServerAdminModal();
+    } else {
+      this.serverAdminPasswordError.set(res.error || 'Failed to update serving staff');
+    }
+  }
+
+  closeServerAdminModal(): void {
+    this.showServerAdminModal.set(false);
+    this.pendingServerOrder.set(null);
+    this.selectedNewStaffId.set('');
+    this.serverAdminPasswordInput.set('');
+    this.serverAdminPasswordError.set('');
+  }
+
+  onAssignOrderServer(ord: Order, staffIdStr: string): void {
+    if (this.isOrderPaid(ord)) {
+      this.promptChangeCompletedServer(ord);
+      return;
+    }
+    const staffId = staffIdStr && staffIdStr.trim().length > 0 ? staffIdStr : null;
+    const res = this.dataService.assignOrderServer(ord.id, staffId);
+    if (res.success) {
+      this.toastService.success('Order server assigned');
+    } else {
+      this.toastService.error(res.error || 'Could not assign server');
+    }
+  }
+
+  getOrderStageIndex(status: OrderStatus | string): number {
+    const s = (status || '').toUpperCase();
+    switch (s) {
+      case 'PENDING':
+      case 'DRAFT':
+        return 0;
+      case 'ACCEPTED':
+      case 'CONFIRMED':
+        return 1;
+      case 'PREPARING':
+      case 'IN_PREPARATION':
+        return 2;
+      case 'READY':
+        return 3;
+      case 'DISPATCHED':
+        return 4;
+      case 'SERVED':
+      case 'COMPLETED':
+        return 5;
+      default:
+        return 0;
+    }
   }
 
   advanceStatus(order: Order, nextStatus: OrderStatus): void {
@@ -3692,8 +5421,12 @@ export class OrderQueueComponent {
       this.toastService.warning('Cancelled orders cannot be modified.');
       return;
     }
+    if (order.status === 'COMPLETED') {
+      this.toastService.warning('Completed orders are finalized and cannot be modified.');
+      return;
+    }
 
-    if (order.paymentStatus === 'PAID') {
+    if (this.isOrderPaid(order)) {
       this.pendingEditOrder.set(order);
       this.adminPasswordInput.set('');
       this.adminPasswordError.set('');
@@ -3736,7 +5469,7 @@ export class OrderQueueComponent {
     this.isManagerOverrideActive.set(isManagerOverride);
     this.editingOrder.set(order);
     this.editCustomerName.set(order.customerName);
-    this.editCustomerPhone.set(order.customerPhone);
+    this.editCustomerPhone.set(order.customerPhone || '');
     this.editItems.set(order.items.map((i) => ({ ...i })));
     this.editDishSearch.set('');
     this.isSavingEdit.set(false);
@@ -3827,7 +5560,7 @@ export class OrderQueueComponent {
     const halfTax = Math.round((tax / 2) * 100) / 100;
     const tot = this.editTotal();
 
-    const isOverride = this.isManagerOverrideActive() || ord.paymentStatus === 'PAID';
+    const isOverride = this.isManagerOverrideActive() || this.isOrderPaid(ord);
     const noteText = isOverride
       ? `Order modified with Admin Override after settlement (New Total: ₹${tot})`
       : `Order modified by Dispatch: Items updated (New Total: ₹${tot})`;
@@ -3879,6 +5612,8 @@ export class OrderQueueComponent {
         this.closeEditOrderModal();
       } else if (modalType === 'admin-password') {
         this.cancelAdminPasswordModal();
+      } else if (modalType === 'server-admin-password') {
+        this.closeServerAdminModal();
       } else {
         this.showManualModal = false;
       }

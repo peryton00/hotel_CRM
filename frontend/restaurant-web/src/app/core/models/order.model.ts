@@ -1,7 +1,14 @@
 import { PortionSize } from './menu.model';
 
 export type OrderStatus =
-  'PENDING' | 'ACCEPTED' | 'PREPARING' | 'READY' | 'SERVED' | 'COMPLETED' | 'CANCELLED';
+  | 'PENDING'
+  | 'ACCEPTED'
+  | 'PREPARING'
+  | 'READY'
+  | 'DISPATCHED'
+  | 'SERVED'
+  | 'COMPLETED'
+  | 'CANCELLED';
 
 export type PaymentStatus = 'UNPAID' | 'PARTIALLY_PAID' | 'PAID' | 'REFUNDED';
 export type PaymentMethod = 'CASH' | 'UPI' | 'CARD' | 'NET_BANKING';
@@ -10,11 +17,14 @@ export interface SelectedVariant {
   groupName: string;
   optionName: string;
   priceDelta: number;
+  priceModifier?: number;
 }
 
 export interface SelectedAddon {
   name: string;
   priceDelta: number;
+  addonName?: string;
+  price?: number;
 }
 
 export interface OrderItem {
@@ -28,6 +38,7 @@ export interface OrderItem {
   quantity: number;
   itemTotal: number;
   specialInstructions?: string;
+  customInstructions?: string;
 }
 
 export interface OrderTimelineEvent {
@@ -66,6 +77,7 @@ export interface Order {
   status: OrderStatus;
   paymentStatus: PaymentStatus;
   paymentMethod?: PaymentMethod;
+  serverStaffId?: string;
   createdAt: string;
   updatedAt: string;
   timeline: OrderTimelineEvent[];

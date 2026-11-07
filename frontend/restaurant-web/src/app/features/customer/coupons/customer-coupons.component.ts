@@ -22,7 +22,7 @@ import { normalizeToE164, maskPhone } from '../../../core/utils/phone.util';
         </a>
         <h1 class="heading-section">Promotional Offers & Coupons</h1>
         <p class="text-sm text-muted">
-          Enjoy handcrafted culinary savings on your dining table order.
+          Available discount offers for your order.
         </p>
       </div>
 
@@ -30,10 +30,10 @@ import { normalizeToE164, maskPhone } from '../../../core/utils/phone.util';
       <div class="vip-lookup-card">
         <div class="lookup-label">
           <i class="ph ph-crown text-gold"></i>
-          <span>Check VIP Patron Privileges & Targeted Entitlements</span>
+          <span>Check Member Offers & Discounts</span>
         </div>
         <p class="text-xs text-muted">
-          All coupon eligibility and discounts are verified authoritatively on the server.
+          Discounts are calculated and applied at checkout.
           @if (maskedPhone()) {
             Linked Phone: <strong>{{ maskedPhone() }}</strong>
           }
@@ -48,7 +48,7 @@ import { normalizeToE164, maskPhone } from '../../../core/utils/phone.util';
             (ngModelChange)="onPhoneChange()"
           />
           <button class="btn btn-secondary btn-sm" (click)="checkPersonalizedOffers()">
-            Verify Patron
+            Check Offers
           </button>
         </div>
       </div>
@@ -324,7 +324,7 @@ export class CustomerCouponsComponent {
         .couponAssignments()
         .filter((a) => a.customerId === cust.id && a.status === 'ACTIVE');
       this.toastService.success(
-        `Welcome ${cust.name}! Found ${activeAssignments.length} targeted VIP coupon entitlements.`,
+        `Welcome ${cust.name}! Found ${activeAssignments.length} available offer(s).`,
       );
     } else {
       this.toastService.info('Standard dining promotions are available below.');

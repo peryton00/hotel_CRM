@@ -18,21 +18,20 @@ type ViewTab = 'campaigns' | 'entitlements' | 'redemptions';
       <!-- Header -->
       <div class="page-header">
         <div>
-          <h1 class="heading-display">Promotions & Targeted Coupons</h1>
+          <h1 class="heading-display">Promotions & Coupons</h1>
           <p class="text-muted">
-            Configure master discount campaigns, assign targeted entitlements to verified VIP
-            patrons, and review immutable redemption records.
+            Create discount coupons, assign offers to customer accounts, and review redemption history.
           </p>
         </div>
 
         <div class="header-actions">
           <button class="btn btn-secondary" (click)="openAssignModal()">
             <i class="ph ph-user-plus"></i>
-            <span>Assign to Patron</span>
+            <span>Assign to Customer</span>
           </button>
           <button class="btn btn-primary" (click)="openCreateModal()">
             <i class="ph ph-plus-circle"></i>
-            <span>Create Campaign</span>
+            <span>Create Coupon</span>
           </button>
         </div>
       </div>
@@ -45,7 +44,7 @@ type ViewTab = 'campaigns' | 'entitlements' | 'redemptions';
           (click)="activeTab = 'campaigns'"
         >
           <i class="ph ph-tag"></i>
-          <span>Campaign Definitions ({{ coupons().length }})</span>
+          <span>Coupons ({{ coupons().length }})</span>
         </button>
 
         <button
@@ -54,7 +53,7 @@ type ViewTab = 'campaigns' | 'entitlements' | 'redemptions';
           (click)="activeTab = 'entitlements'"
         >
           <i class="ph ph-identification-badge"></i>
-          <span>Targeted Entitlements ({{ assignments().length }})</span>
+          <span>Customer Assignments ({{ assignments().length }})</span>
         </button>
 
         <button
@@ -63,7 +62,7 @@ type ViewTab = 'campaigns' | 'entitlements' | 'redemptions';
           (click)="activeTab = 'redemptions'"
         >
           <i class="ph ph-clock-counter-clockwise"></i>
-          <span>Redemption Audit Trail ({{ redemptions().length }})</span>
+          <span>Redemption History ({{ redemptions().length }})</span>
         </button>
       </div>
 
@@ -129,7 +128,7 @@ type ViewTab = 'campaigns' | 'entitlements' | 'redemptions';
                 <div class="cond-item">
                   <i class="ph ph-user-circle"></i>
                   <span
-                    >Limit: <strong>{{ coup.perCustomerLimit }}</strong> per patron</span
+                    >Limit: <strong>{{ coup.perCustomerLimit }}</strong> per customer</span
                   >
                 </div>
               </div>
@@ -140,7 +139,7 @@ type ViewTab = 'campaigns' | 'entitlements' | 'redemptions';
                   (click)="openAssignModal(coup)"
                 >
                   <i class="ph ph-user-plus"></i>
-                  <span>Grant to Customer</span>
+                  <span>Assign to Customer</span>
                 </button>
               </div>
             </div>
@@ -153,18 +152,18 @@ type ViewTab = 'campaigns' | 'entitlements' | 'redemptions';
         <div class="table-container">
           <div class="table-card">
             <div class="table-header-info">
-              <h3 class="heading-card">Explicit Patron Entitlements</h3>
+              <h3 class="heading-card">Customer Coupon Assignments</h3>
               <p class="text-xs text-muted">
-                Targeted coupon privileges explicitly tied to verified customer UUIDs.
+                Coupons linked to customer phone numbers.
               </p>
             </div>
 
             <table class="data-table">
               <thead>
                 <tr>
-                  <th>Patron</th>
+                  <th>Customer</th>
                   <th>Coupon</th>
-                  <th>Quota Used</th>
+                  <th>Used</th>
                   <th>Valid Until</th>
                   <th>Status</th>
                   <th>Assigned By</th>
@@ -176,7 +175,7 @@ type ViewTab = 'campaigns' | 'entitlements' | 'redemptions';
                   <tr>
                     <td>
                       <div class="patron-cell">
-                        <span class="p-name">{{ asgn.customerName || 'Verified Patron' }}</span>
+                        <span class="p-name">{{ asgn.customerName || 'Customer' }}</span>
                         <span class="p-phone">{{ maskPhone(asgn.customerPhoneE164) }}</span>
                       </div>
                     </td>
@@ -207,7 +206,7 @@ type ViewTab = 'campaigns' | 'entitlements' | 'redemptions';
                         <button
                           class="btn-revoke"
                           (click)="revokeAssignment(asgn.id)"
-                          title="Revoke this privilege"
+                          title="Revoke this assignment"
                         >
                           Revoke
                         </button>
@@ -220,8 +219,8 @@ type ViewTab = 'campaigns' | 'entitlements' | 'redemptions';
                 @if (assignments().length === 0) {
                   <tr>
                     <td colspan="7" class="text-center py-4 text-muted">
-                      No targeted customer entitlements recorded yet. Click "Assign to Patron" to
-                      grant privileges.
+                      No customer coupon assignments recorded yet. Click "Assign to Customer" to
+                      assign.
                     </td>
                   </tr>
                 }
@@ -236,9 +235,9 @@ type ViewTab = 'campaigns' | 'entitlements' | 'redemptions';
         <div class="table-container">
           <div class="table-card">
             <div class="table-header-info">
-              <h3 class="heading-card">Immutable Redemption Audit Log</h3>
+              <h3 class="heading-card">Redemption History Log</h3>
               <p class="text-xs text-muted">
-                Cryptographically tracked coupon redemptions tied to orders and idempotency tokens.
+                Log of redeemed coupons tied to orders.
               </p>
             </div>
 
@@ -369,14 +368,14 @@ type ViewTab = 'campaigns' | 'entitlements' | 'redemptions';
                 <label class="checkbox-label">
                   <input type="checkbox" [(ngModel)]="couponForm.isTargeted" />
                   <span
-                    ><strong>Targeted VIP Coupon:</strong> Requires explicit administrator
-                    entitlement assignment before patron can redeem.</span
+                    ><strong>Targeted Customer Coupon:</strong> Requires customer
+                    assignment before it can be redeemed.</span
                   >
                 </label>
               </div>
 
               <div class="form-group">
-                <label class="form-label">Description / Dining Terms</label>
+                <label class="form-label">Description / Terms</label>
                 <textarea
                   class="form-textarea"
                   rows="2"
@@ -398,7 +397,7 @@ type ViewTab = 'campaigns' | 'entitlements' | 'redemptions';
         <div class="modal-overlay" (click)="onAssignBackdropClick($event)">
           <div class="modal-card" role="dialog" aria-modal="true">
             <div class="modal-header">
-              <h3 class="heading-card">Grant Targeted Entitlement</h3>
+              <h3 class="heading-card">Assign Coupon to Customer</h3>
               <button class="close-btn" (click)="showAssignModal = false">
                 <i class="ph ph-x"></i>
               </button>
@@ -414,7 +413,7 @@ type ViewTab = 'campaigns' | 'entitlements' | 'redemptions';
               </div>
 
               <div class="form-group">
-                <label class="form-label">Select Verified Patron *</label>
+                <label class="form-label">Select Customer *</label>
                 <select class="form-select" [(ngModel)]="assignForm.customerId">
                   @for (cust of customers(); track cust.id) {
                     <option [value]="cust.id">
@@ -442,18 +441,18 @@ type ViewTab = 'campaigns' | 'entitlements' | 'redemptions';
               </div>
 
               <div class="form-group">
-                <label class="form-label">Internal Notes / Privilege Reason</label>
+                <label class="form-label">Internal Notes / Reason</label>
                 <input
                   type="text"
                   class="form-input"
-                  placeholder="e.g. Platinum Anniversary Courtesy"
+                  placeholder="e.g. Loyalty Anniversary"
                   [(ngModel)]="assignForm.notes"
                 />
               </div>
             </div>
             <div class="modal-footer">
               <button class="btn btn-secondary" (click)="showAssignModal = false">Cancel</button>
-              <button class="btn btn-primary" (click)="saveAssignment()">Grant Entitlement</button>
+              <button class="btn btn-primary" (click)="saveAssignment()">Assign Coupon</button>
             </div>
           </div>
         </div>
@@ -956,7 +955,7 @@ export class CouponManagementComponent {
 
   revokeAssignment(assignmentId: string): void {
     this.mock.revokeCouponAssignment(assignmentId);
-    this.toastService.info('Entitlement revoked');
+    this.toastService.info('Coupon assignment revoked');
   }
 
   onBackdropClick(event: MouseEvent): void {

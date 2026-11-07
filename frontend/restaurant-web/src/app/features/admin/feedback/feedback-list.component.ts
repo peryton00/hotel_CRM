@@ -15,7 +15,7 @@ import { ToastService } from '../../../core/services/toast.service';
         <div>
           <h1 class="heading-display">Guest Reviews & Feedback</h1>
           <p class="text-muted">
-            Monitor diner satisfaction, culinary ratings, and submit managerial responses.
+            View customer ratings, review comments, and send replies.
           </p>
         </div>
 
@@ -92,7 +92,7 @@ import { ToastService } from '../../../core/services/toast.service';
               <div class="reply-action-row">
                 <button class="btn btn-secondary btn-sm" (click)="openReplyModal(fb)">
                   <i class="ph ph-chat-teardrop-text"></i>
-                  <span>Submit Managerial Reply</span>
+                  <span>Reply to Feedback</span>
                 </button>
               </div>
             }

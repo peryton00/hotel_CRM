@@ -34,13 +34,11 @@ import { AdminAuthService } from '../../../core/services/admin-auth.service';
             <div class="title-row">
               <h1 class="heading-display">{{ ord.orderNumber }}</h1>
               @if (ord.orderType === 'TAKEAWAY') {
-                <span
-                  class="tbl-pill takeaway-pill"
-                  style="background: rgba(212, 175, 55, 0.15); border-color: rgba(212, 175, 55, 0.4); color: #8b6508;"
-                  ><i class="ph ph-bag"></i> Takeaway ({{
+                <span class="tbl-pill takeaway-pill">
+                  <i class="ph ph-bag"></i> Takeaway ({{
                     ord.pickupReference || ord.orderNumber
-                  }})</span
-                >
+                  }})
+                </span>
               } @else {
                 <span class="tbl-pill">Table {{ ord.tableNumber }}</span>
               }
@@ -61,7 +59,7 @@ import { AdminAuthService } from '../../../core/services/admin-auth.service';
           </div>
 
           <div class="header-actions">
-            @if (ord.status !== 'CANCELLED') {
+            @if (ord.status !== 'CANCELLED' && ord.status !== 'COMPLETED') {
               <button
                 class="btn btn-secondary btn-edit-order"
                 [class.paid-locked]="ord.paymentStatus === 'PAID'"
@@ -118,33 +116,35 @@ import { AdminAuthService } from '../../../core/services/admin-auth.service';
                 <span>Record Refund</span>
               </button>
             }
-            @if (!ord.printCount || ord.printCount === 0) {
-              <button
-                class="btn btn-secondary"
-                (click)="printOrderReceipt()"
-                title="Print bill receipt (Original - Copy #1)"
-              >
-                <i class="ph ph-printer"></i>
-                <span>Print</span>
-              </button>
-            } @else {
-              <button
-                class="btn btn-secondary btn-reprint"
-                (click)="openReprintReceiptModal()"
-                [title]="
-                  'Invoice already printed ' +
-                  ord.printCount +
-                  ' time(s) — Admin Password required to reprint'
-                "
-              >
-                <i class="ph ph-lock-key"></i>
-                <span>Reprint (Copy #{{ ord.printCount + 1 }})</span>
-              </button>
+            @if (ord.status !== 'CANCELLED') {
+              @if (!ord.printCount || ord.printCount === 0) {
+                <button
+                  class="btn btn-secondary"
+                  (click)="printOrderReceipt()"
+                  title="Print bill receipt (Original - Copy #1)"
+                >
+                  <i class="ph ph-printer"></i>
+                  <span>Print</span>
+                </button>
+              } @else {
+                <button
+                  class="btn btn-secondary btn-reprint"
+                  (click)="openReprintReceiptModal()"
+                  [title]="
+                    'Invoice already printed ' +
+                    ord.printCount +
+                    ' time(s) — Admin Password required to reprint'
+                  "
+                >
+                  <i class="ph ph-lock-key"></i>
+                  <span>Reprint (Copy #{{ ord.printCount + 1 }})</span>
+                </button>
+              }
+              <a [routerLink]="['/admin/billing', ord.id]" class="btn btn-primary">
+                <i class="ph ph-receipt"></i>
+                <span>Invoice & Billing Preview</span>
+              </a>
             }
-            <a [routerLink]="['/admin/billing', ord.id]" class="btn btn-primary">
-              <i class="ph ph-receipt"></i>
-              <span>Invoice & Billing Preview</span>
-            </a>
           </div>
         </div>
 
@@ -155,7 +155,7 @@ import { AdminAuthService } from '../../../core/services/admin-auth.service';
             <div class="panel-box">
               <div class="panel-header-row">
                 <h2 class="heading-card">Itemized Order Bill</h2>
-                @if (ord.status !== 'CANCELLED') {
+                @if (ord.status !== 'CANCELLED' && ord.status !== 'COMPLETED') {
                   <button
                     class="btn btn-secondary btn-xs"
                     [class.paid-locked]="ord.paymentStatus === 'PAID'"
@@ -276,7 +276,7 @@ import { AdminAuthService } from '../../../core/services/admin-auth.service';
             <div class="panel-box">
               <h2 class="heading-card">Order Status Action</h2>
 
-              <!-- 1. Dispatch Status Chips -->
+              <!-- 1. Dispatch Status Chips (Active Workflow or Cancelled Display) -->
               <div class="selector-group">
                 <div class="selector-header">
                   <label class="form-label">Dispatch Status</label>
@@ -284,74 +284,152 @@ import { AdminAuthService } from '../../../core/services/admin-auth.service';
                     >Active: <strong>{{ ord.status }}</strong></span
                   >
                 </div>
-                <div class="status-option-grid">
-                  @for (st of statusOptions; track st.value) {
-                    <button
-                      type="button"
-                      class="status-chip"
-                      [class.active]="ord.status === st.value"
-                      [class.chip-pending]="st.value === 'PENDING'"
-                      [class.chip-accepted]="st.value === 'ACCEPTED'"
-                      [class.chip-preparing]="st.value === 'PREPARING'"
-                      [class.chip-ready]="st.value === 'READY'"
-                      [class.chip-served]="st.value === 'SERVED'"
-                      [class.chip-completed]="st.value === 'COMPLETED'"
-                      [class.chip-cancelled]="st.value === 'CANCELLED'"
-                      (click)="onStatusChipClick(st.value)"
-                    >
-                      <i [class]="st.icon"></i>
-                      <span>{{ st.label }}</span>
-                    </button>
-                  }
-                </div>
+                @if (ord.status === 'CANCELLED') {
+                  <div class="cancelled-status-badge-box">
+                    <span class="status-chip chip-cancelled active" style="cursor: default;">
+                      <i class="ph ph-x-circle"></i>
+                      <span>Cancelled</span>
+                    </span>
+                    <span class="text-xs text-muted" style="margin-left: 8px;">Order has been cancelled; modifications disabled.</span>
+                  </div>
+                } @else if (ord.status === 'COMPLETED') {
+                  <div class="completed-status-badge-box">
+                    <div class="completed-chips-cluster">
+                      <span class="status-chip chip-completed-pill">
+                        <i class="ph ph-check-circle"></i>
+                        <span>Completed</span>
+                      </span>
+                      <span class="status-chip chip-paid-pill">
+                        <i class="ph ph-money"></i>
+                        <span>Paid ({{ ord.paymentMethod || 'UPI' }})</span>
+                      </span>
+                      <span class="status-chip chip-printed-pill">
+                        <i class="ph ph-printer"></i>
+                        <span>Printed ({{ ord.printCount || 1 }}x)</span>
+                      </span>
+                    </div>
+                    <div class="completed-hint-text">
+                      <i class="ph ph-lock-key"></i> Order finalized: marked completed, settled, and invoice printed.
+                    </div>
+                  </div>
+                } @else {
+                  <div class="status-option-grid">
+                    @for (st of statusOptions; track st.value) {
+                      <button
+                        type="button"
+                        class="status-chip"
+                        [class.active]="ord.status === st.value"
+                        [class.chip-pending]="st.value === 'PENDING'"
+                        [class.chip-accepted]="st.value === 'ACCEPTED'"
+                        [class.chip-preparing]="st.value === 'PREPARING'"
+                        [class.chip-ready]="st.value === 'READY'"
+                        [class.chip-dispatched]="st.value === 'DISPATCHED'"
+                        [class.chip-served]="st.value === 'SERVED'"
+                        [class.chip-completed]="st.value === 'COMPLETED'"
+                        [class.chip-cancelled]="st.value === 'CANCELLED'"
+                        (click)="onStatusChipClick(st.value)"
+                      >
+                        <i [class]="st.icon"></i>
+                        <span>{{ st.label }}</span>
+                      </button>
+                    }
+                  </div>
+                }
               </div>
 
-              <!-- 2. Payment Settlement Status Selector -->
-              <div class="selector-group">
-                <div class="selector-header">
-                  <label class="form-label">Payment Settlement</label>
-                  <span class="selector-curr-status"
-                    >Status: <strong>{{ ord.paymentStatus }}</strong></span
-                  >
-                </div>
-                <div class="pill-option-row">
-                  @for (ps of paymentStatusOptions; track ps.value) {
-                    <button
-                      type="button"
-                      class="pill-choice-btn"
-                      [class.active]="ord.paymentStatus === ps.value"
-                      (click)="updatePaymentStatus(ps.value)"
-                    >
-                      <i [class]="ps.icon"></i>
-                      <span>{{ ps.label }}</span>
-                    </button>
-                  }
-                </div>
-              </div>
+              @if (ord.status !== 'CANCELLED') {
+                @if (ord.status !== 'COMPLETED') {
+                  <!-- 2. Payment Settlement Status Selector -->
+                  <div class="selector-group">
+                    <div class="selector-header">
+                      <label class="form-label">Payment Settlement</label>
+                      <span class="selector-curr-status"
+                        >Status: <strong>{{ ord.paymentStatus }}</strong></span
+                      >
+                    </div>
+                    <div class="pill-option-row">
+                      @for (ps of paymentStatusOptions; track ps.value) {
+                        <button
+                          type="button"
+                          class="pill-choice-btn"
+                          [class.active]="ord.paymentStatus === ps.value"
+                          (click)="updatePaymentStatus(ps.value)"
+                        >
+                          <i [class]="ps.icon"></i>
+                          <span>{{ ps.label }}</span>
+                        </button>
+                      }
+                    </div>
+                  </div>
 
-              <!-- 3. Payment Method Tender Selector -->
-              <div class="selector-group">
-                <label class="form-label">Tender Method</label>
-                <div class="tender-option-row">
-                  @for (pm of paymentMethodOptions; track pm.value) {
-                    <button
-                      type="button"
-                      class="tender-choice-btn"
-                      [class.active]="(ord.paymentMethod || 'UPI') === pm.value"
-                      (click)="updatePaymentMethod(pm.value)"
-                    >
-                      <i [class]="pm.icon"></i>
-                      <span>{{ pm.label }}</span>
-                    </button>
-                  }
+                  <!-- 3. Payment Method Tender Selector -->
+                  <div class="selector-group">
+                    <label class="form-label">Tender Method</label>
+                    <div class="tender-option-row">
+                      @for (pm of paymentMethodOptions; track pm.value) {
+                        <button
+                          type="button"
+                          class="tender-choice-btn"
+                          [class.active]="(ord.paymentMethod || 'UPI') === pm.value"
+                          (click)="updatePaymentMethod(pm.value)"
+                        >
+                          <i [class]="pm.icon"></i>
+                          <span>{{ pm.label }}</span>
+                        </button>
+                      }
+                    </div>
+                  </div>
+                }
+
+                <!-- 4. Direct Invoice Print & Action from Details Page -->
+                <div class="selector-group print-action-group">
+                  <label class="form-label">Tax Invoice & Billing</label>
+                  <div class="invoice-box-actions">
+                    <div class="invoice-status-info">
+                      <span class="text-xs text-muted">
+                        @if (!ord.printCount || ord.printCount === 0) {
+                          <i class="ph ph-receipt"></i> Ready to print Original Invoice
+                        } @else {
+                          <i class="ph ph-check-circle text-success"></i> Printed {{ ord.printCount }} time{{ ord.printCount > 1 ? 's' : '' }}
+                        }
+                      </span>
+                    </div>
+                    <div class="invoice-buttons-row">
+                      @if (!ord.printCount || ord.printCount === 0) {
+                        <button
+                          class="btn btn-primary btn-sm flex-1"
+                          (click)="printOrderReceipt()"
+                          title="Print Original Tax Invoice"
+                        >
+                          <i class="ph ph-printer"></i>
+                          <span>Print Invoice</span>
+                        </button>
+                      } @else {
+                        <button
+                          class="btn btn-secondary btn-sm flex-1 btn-reprint"
+                          (click)="openReprintReceiptModal()"
+                          title="Reprint Invoice (Admin authorization required)"
+                        >
+                          <i class="ph ph-lock-key"></i>
+                          <span>Reprint (Copy #{{ ord.printCount + 1 }})</span>
+                        </button>
+                      }
+                      <a [routerLink]="['/admin/billing', ord.id]" class="btn btn-secondary btn-sm" title="Detailed Invoice View">
+                        <i class="ph ph-arrow-square-out"></i>
+                        <span>Full Invoice</span>
+                      </a>
+                    </div>
+                  </div>
                 </div>
-              </div>
+              }
             </div>
 
             <!-- Guest & Table Info -->
             <div class="panel-box">
               <div class="panel-header-row">
-                <h2 class="heading-card">Dine-In Guest Details</h2>
+                <h2 class="heading-card">
+                  {{ ord.orderType === 'TAKEAWAY' ? 'Takeaway Customer Details' : 'Dine-In Guest Details' }}
+                </h2>
                 @if (ord.status !== 'COMPLETED' && ord.status !== 'CANCELLED') {
                   <button
                     class="btn btn-secondary btn-xs"
@@ -393,6 +471,40 @@ import { AdminAuthService } from '../../../core/services/admin-auth.service';
                       ? 'Takeaway / Counter (' + (ord.pickupReference || ord.orderNumber) + ')'
                       : 'Table ' + ord.tableNumber
                   }}</span>
+                </div>
+                <div class="info-row">
+                  <span class="info-label"><i class="ph ph-user-check"></i> Serving Staff</span>
+                  @if (isOrderPaid(ord)) {
+                    <div class="server-detail-locked-group">
+                      <span class="info-val font-semibold">
+                        <i class="ph ph-lock-key text-muted"></i>
+                        {{ getServerStaffName(ord.serverStaffId) || 'Unassigned' }}
+                      </span>
+                      <button
+                        type="button"
+                        class="btn-unlock-server-xs"
+                        (click)="promptChangeCompletedServer()"
+                        title="Change serving staff for paid order (Admin Password required)"
+                      >
+                        <i class="ph ph-lock-key"></i>
+                        <span>Change</span>
+                      </button>
+                    </div>
+                  } @else {
+                    <div class="server-select-wrap">
+                      <select
+                        class="server-select-control"
+                        [ngModel]="ord.serverStaffId || ''"
+                        (ngModelChange)="onAssignOrderServer($event)"
+                        title="Assign staff handling this order"
+                      >
+                        <option value="">Unassigned</option>
+                        @for (s of staffMembers(); track s.id) {
+                          <option [value]="s.id">{{ s.name }} ({{ s.role }})</option>
+                        }
+                      </select>
+                    </div>
+                  }
                 </div>
               </div>
             </div>
@@ -763,6 +875,107 @@ import { AdminAuthService } from '../../../core/services/admin-auth.service';
           </div>
         }
 
+        <!-- Admin Password Authorization Modal for Changing Server on Completed Order -->
+        @if (showServerAdminModal() && order(); as curOrd) {
+          <div class="modal-overlay" (click)="onBackdropClick($event, 'server-admin-password')">
+            <div
+              class="modal-card auth-modal-card"
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="detail-server-admin-dialog-title"
+            >
+              <div class="modal-header">
+                <div class="auth-modal-title-wrap">
+                  <div class="auth-icon-badge">
+                    <i class="ph ph-shield-lock"></i>
+                  </div>
+                  <div>
+                    <h3 id="detail-server-admin-dialog-title" class="heading-card">Admin Password Required</h3>
+                    <span class="text-xs text-muted"
+                      >Authorization required to change serving staff for completed order {{ curOrd.orderNumber }}</span
+                    >
+                  </div>
+                </div>
+                <button
+                  class="close-btn"
+                  (click)="closeServerAdminModal()"
+                  aria-label="Close dialog"
+                >
+                  <i class="ph ph-x"></i>
+                </button>
+              </div>
+
+              <div class="modal-body auth-dialog-body">
+                <div class="auth-warning-box">
+                  <i class="ph ph-warning-circle"></i>
+                  <p>
+                    Order <strong>{{ curOrd.orderNumber }}</strong> is finalized and completed.
+                    Changing the assigned serving staff impacts service records, audit logs, and tip distribution.
+                  </p>
+                </div>
+
+                <div class="form-group">
+                  <label class="form-label" for="detailNewServerSelect">Select New Serving Staff</label>
+                  <select
+                    id="detailNewServerSelect"
+                    class="form-select"
+                    [value]="selectedNewStaffId()"
+                    (change)="selectedNewStaffId.set($any($event.target).value)"
+                  >
+                    <option value="">Unassigned</option>
+                    @for (s of staffMembers(); track s.id) {
+                      <option [value]="s.id">{{ s.name }} ({{ s.role }})</option>
+                    }
+                  </select>
+                </div>
+
+                <div class="form-group">
+                  <label class="form-label" for="detailServerAdminPassword">Enter Admin Password / Staff PIN</label>
+                  <div class="input-with-icon">
+                    <i class="ph ph-lock-key"></i>
+                    <input
+                      id="detailServerAdminPassword"
+                      type="password"
+                      class="form-input"
+                      placeholder="Enter password or 4-digit PIN..."
+                      [value]="serverAdminPasswordInput()"
+                      (input)="serverAdminPasswordInput.set($any($event.target).value)"
+                      (keyup.enter)="confirmChangeCompletedServer()"
+                      autocomplete="current-password"
+                      autofocus
+                    />
+                  </div>
+                  <span class="hint-text"
+                    >Staff/Manager PIN: <strong>1234</strong> or password <strong>admin</strong></span
+                  >
+                </div>
+
+                @if (serverAdminPasswordError()) {
+                  <div class="auth-error-banner">
+                    <i class="ph ph-warning-circle"></i>
+                    <span>{{ serverAdminPasswordError() }}</span>
+                  </div>
+                }
+              </div>
+
+              <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" (click)="closeServerAdminModal()">
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  class="btn btn-primary"
+                  [disabled]="!serverAdminPasswordInput().trim()"
+                  (click)="confirmChangeCompletedServer()"
+                >
+                  <i class="ph ph-lock-key-open"></i>
+                  <span>Authorize & Reassign Staff</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        }
+
         <!-- Edit Order Modal -->
         @if (showEditModal()) {
           <div class="modal-overlay" (click)="onBackdropClick($event, 'edit')">
@@ -1127,6 +1340,12 @@ import { AdminAuthService } from '../../../core/services/admin-auth.service';
         padding: 4px 12px;
         border-radius: var(--radius-full);
         color: var(--color-crimson);
+
+        &.takeaway-pill {
+          background: var(--color-warning-bg);
+          border-color: rgba(212, 175, 55, 0.4);
+          color: var(--color-warning);
+        }
       }
 
       .detail-grid {
@@ -1249,6 +1468,53 @@ import { AdminAuthService } from '../../../core/services/admin-auth.service';
       }
       .font-bold {
         font-weight: 700;
+      }
+
+      .server-detail-locked-group {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+
+      .btn-unlock-server-xs {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        padding: 2px 7px;
+        border-radius: var(--radius-xs);
+        border: 1px solid var(--color-border);
+        background: var(--color-surface);
+        color: var(--color-text-secondary);
+        font-size: 0.7rem;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all var(--transition-fast);
+
+        &:hover {
+          background: #eff6ff;
+          border-color: #3b82f6;
+          color: #1d4ed8;
+        }
+
+        i {
+          font-size: 0.75rem;
+        }
+      }
+
+      .server-select-wrap {
+        display: inline-flex;
+        align-items: center;
+      }
+
+      .server-select-control {
+        font-size: 0.75rem;
+        padding: 2px 6px;
+        border: 1px solid var(--color-border);
+        border-radius: var(--radius-xs);
+        background: var(--color-surface);
+        color: var(--color-text-primary);
+        outline: none;
+        cursor: pointer;
       }
 
       .timeline-stream {
@@ -1491,6 +1757,79 @@ import { AdminAuthService } from '../../../core/services/admin-auth.service';
         }
       }
 
+      .cancelled-status-badge-box {
+        display: flex;
+        align-items: center;
+        padding: 8px 12px;
+        background: #fef2f2;
+        border: 1px solid rgba(220, 38, 38, 0.2);
+        border-radius: var(--radius-xs);
+      }
+
+      .completed-status-badge-box {
+        padding: 10px 14px;
+        background: rgba(27, 99, 62, 0.08);
+        border: 1px solid rgba(27, 99, 62, 0.25);
+        border-radius: var(--radius-xs);
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+
+      .completed-chips-cluster {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex-wrap: wrap;
+      }
+
+      .chip-completed-pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        padding: 4px 10px;
+        background: var(--color-success);
+        color: #ffffff;
+        border-radius: var(--radius-full);
+        font-size: 0.75rem;
+        font-weight: 700;
+        letter-spacing: 0.02em;
+      }
+
+      .chip-paid-pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        padding: 4px 10px;
+        background: rgba(27, 99, 62, 0.15);
+        color: var(--color-success);
+        border: 1px solid rgba(27, 99, 62, 0.3);
+        border-radius: var(--radius-full);
+        font-size: 0.75rem;
+        font-weight: 700;
+      }
+
+      .chip-printed-pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        padding: 4px 10px;
+        background: rgba(184, 134, 11, 0.12);
+        color: #8b6508;
+        border: 1px solid rgba(184, 134, 11, 0.3);
+        border-radius: var(--radius-full);
+        font-size: 0.75rem;
+        font-weight: 700;
+      }
+
+      .completed-hint-text {
+        font-size: 0.75rem;
+        color: var(--color-text-secondary);
+        display: flex;
+        align-items: center;
+        gap: 4px;
+      }
+
       .pill-option-row {
         display: grid;
         grid-template-columns: repeat(auto-fit, minmax(90px, 1fr));
@@ -1566,6 +1905,34 @@ import { AdminAuthService } from '../../../core/services/admin-auth.service';
           color: var(--color-crimson);
           font-weight: 700;
         }
+      }
+
+      /* Invoice Actions Box inside Details Panel */
+      .print-action-group {
+        border-top: 1px dashed var(--color-border);
+        padding-top: 14px;
+        margin-top: 8px;
+      }
+
+      .invoice-box-actions {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        background: var(--color-bone-light);
+        border: 1px solid var(--color-border);
+        border-radius: var(--radius-sm);
+        padding: 12px;
+      }
+
+      .invoice-status-info {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+      }
+
+      .invoice-buttons-row {
+        display: flex;
+        gap: 8px;
       }
 
       .info-val-wrap {
@@ -2095,6 +2462,7 @@ export class OrderDetailComponent implements OnInit {
     { value: 'ACCEPTED', label: 'Accepted', icon: 'ph ph-check' },
     { value: 'PREPARING', label: 'Preparing', icon: 'ph ph-cooking-pot' },
     { value: 'READY', label: 'Ready', icon: 'ph ph-bell-ringing' },
+    { value: 'DISPATCHED', label: 'Dispatched', icon: 'ph ph-moped' },
     { value: 'SERVED', label: 'Served', icon: 'ph ph-hand-waving' },
     { value: 'COMPLETED', label: 'Completed', icon: 'ph ph-check-circle' },
     { value: 'CANCELLED', label: 'Cancelled', icon: 'ph ph-x-circle' },
@@ -2132,6 +2500,14 @@ export class OrderDetailComponent implements OnInit {
   adminPasswordError = signal<string>('');
   isManagerOverrideActive = signal<boolean>(false);
   isReprintFlow = signal<boolean>(false);
+
+  staffMembers = this.dataService.staffMembers;
+
+  // Admin Password Override for Changing Server on Completed Orders
+  showServerAdminModal = signal<boolean>(false);
+  selectedNewStaffId = signal<string>('');
+  serverAdminPasswordInput = signal<string>('');
+  serverAdminPasswordError = signal<string>('');
 
   // Edit Order State
   showEditModal = signal<boolean>(false);
@@ -2214,6 +2590,11 @@ export class OrderDetailComponent implements OnInit {
   }
 
   onStatusChipClick(status: OrderStatus): void {
+    const ord = this.order();
+    if (ord?.status === 'COMPLETED') {
+      this.toastService.warning('Completed orders are finalized and cannot be modified.');
+      return;
+    }
     if (status === 'CANCELLED') {
       this.openCancelModal();
     } else {
@@ -2248,14 +2629,25 @@ export class OrderDetailComponent implements OnInit {
       return;
     }
 
+    const isPrinted = (ord.printCount || 0) > 0;
+    const nextStatus = status === 'PAID' && isPrinted ? 'COMPLETED' : ord.status;
+
     const updated = this.mock
       .orders()
       .map((o) =>
-        o.id === ord.id ? { ...o, paymentStatus: status, updatedAt: new Date().toISOString() } : o,
+        o.id === ord.id ? { ...o, paymentStatus: status, status: nextStatus, updatedAt: new Date().toISOString() } : o,
       );
     this.mock.orders.set(updated);
     this.mock.saveLocal('orders', updated);
-    this.toastService.success(`Payment status marked as ${status}`);
+
+    if (status === 'PAID' && isPrinted && ord.status !== 'COMPLETED') {
+      this.mock.updateOrderStatusAtomic(ord.id, 'COMPLETED', {
+        note: 'Order paid and invoice already printed; marked COMPLETED',
+      });
+      this.toastService.success(`Payment marked as PAID & order COMPLETED`);
+    } else {
+      this.toastService.success(`Payment status marked as ${status}`);
+    }
   }
 
   updatePaymentMethod(method: PaymentMethod): void {
@@ -2272,11 +2664,94 @@ export class OrderDetailComponent implements OnInit {
     this.toastService.info(`Payment method updated to ${method}`);
   }
 
+  isOrderPaid(order: Order | null | undefined): boolean {
+    if (!order) return false;
+    const ps = (order.paymentStatus || '').toUpperCase();
+    return ps === 'PAID' || ps === 'COMPLETED' || order.status === 'COMPLETED' || !!order.settledAt;
+  }
+
+  getServerStaffName(staffId: string | undefined): string {
+    if (!staffId) return '';
+    const staff = this.staffMembers().find((s) => s.id === staffId);
+    return staff ? `${staff.name} (${staff.role})` : staffId;
+  }
+
+  promptChangeCompletedServer(): void {
+    const ord = this.order();
+    if (!ord) return;
+    this.selectedNewStaffId.set(ord.serverStaffId || '');
+    this.serverAdminPasswordInput.set('');
+    this.serverAdminPasswordError.set('');
+    this.showServerAdminModal.set(true);
+  }
+
+  confirmChangeCompletedServer(): void {
+    const ord = this.order();
+    if (!ord) return;
+
+    const pwd = this.serverAdminPasswordInput().trim();
+    if (!this.adminAuth.verifyAdminPassword(pwd)) {
+      this.serverAdminPasswordError.set(
+        'Incorrect admin password. Authorization required to change serving staff on completed orders.',
+      );
+      return;
+    }
+
+    const newStaffId = this.selectedNewStaffId();
+    const res = this.dataService.assignOrderServer(
+      ord.id,
+      newStaffId ? newStaffId : null,
+      pwd,
+    );
+
+    if (res.success) {
+      const staffName = this.getServerStaffName(newStaffId) || 'Unassigned';
+      this.toastService.success(
+        `Serving staff for completed order ${ord.orderNumber} updated to ${staffName} (Admin Authorized)`,
+      );
+      this.closeServerAdminModal();
+    } else {
+      this.serverAdminPasswordError.set(res.error || 'Failed to update serving staff');
+    }
+  }
+
+  closeServerAdminModal(): void {
+    this.showServerAdminModal.set(false);
+    this.selectedNewStaffId.set('');
+    this.serverAdminPasswordInput.set('');
+    this.serverAdminPasswordError.set('');
+  }
+
+  onAssignOrderServer(staffIdStr: string): void {
+    const ord = this.order();
+    if (!ord) return;
+    if (this.isOrderPaid(ord)) {
+      this.promptChangeCompletedServer();
+      return;
+    }
+    const staffId = staffIdStr && staffIdStr.trim().length > 0 ? staffIdStr : null;
+    const res = this.dataService.assignOrderServer(ord.id, staffId);
+    if (res.success) {
+      this.toastService.success('Order server assigned');
+    } else {
+      this.toastService.error(res.error || 'Could not assign server');
+    }
+  }
+
   printOrderReceipt(): void {
     const ord = this.order();
     if (!ord) return;
+    if (ord.printCount && ord.printCount > 0) {
+      this.openReprintReceiptModal();
+      return;
+    }
     const res = this.mock.recordOrderPrint(ord.id, false, 'Floor Staff');
     if (res.success) {
+      if (ord.paymentStatus === 'PAID' && ord.status !== 'COMPLETED') {
+        this.mock.updateOrderStatusAtomic(ord.id, 'COMPLETED', {
+          note: 'Tax Invoice printed and payment already settled; marked COMPLETED',
+        });
+      }
       this.toastService.success(`Bill receipt printed (Original - Copy #1).`);
       window.print();
     }
@@ -2295,6 +2770,10 @@ export class OrderDetailComponent implements OnInit {
     if (!ord) return;
     if (ord.status === 'CANCELLED') {
       this.toastService.warning('Cancelled orders cannot be modified.');
+      return;
+    }
+    if (ord.status === 'COMPLETED') {
+      this.toastService.warning('Completed orders are finalized and cannot be modified.');
       return;
     }
 
@@ -2330,6 +2809,11 @@ export class OrderDetailComponent implements OnInit {
       if (ord) {
         const res = this.mock.recordOrderPrint(ord.id, true, 'Admin Override');
         if (res.success) {
+          if (ord.paymentStatus === 'PAID' && ord.status !== 'COMPLETED') {
+            this.mock.updateOrderStatusAtomic(ord.id, 'COMPLETED', {
+              note: 'Invoice reprinted and payment already settled; marked COMPLETED',
+            });
+          }
           this.toastService.info(
             `Admin authorization verified. Printing reprint (Copy #${res.printCount}).`,
           );
@@ -2354,7 +2838,7 @@ export class OrderDetailComponent implements OnInit {
     if (!ord) return;
     this.isManagerOverrideActive.set(isManagerOverride);
     this.editCustomerName.set(ord.customerName);
-    this.editCustomerPhone.set(ord.customerPhone);
+    this.editCustomerPhone.set(ord.customerPhone || '');
     this.editItems.set(ord.items.map((i) => ({ ...i })));
     this.editDishSearch.set('');
     this.showEditModal.set(true);
@@ -2647,7 +3131,7 @@ export class OrderDetailComponent implements OnInit {
 
   onBackdropClick(
     event: MouseEvent,
-    type: 'transfer' | 'refund' | 'edit' | 'cancel' | 'admin-password',
+    type: 'transfer' | 'refund' | 'edit' | 'cancel' | 'admin-password' | 'server-admin-password',
   ): void {
     if ((event.target as HTMLElement).classList.contains('modal-overlay')) {
       if (type === 'transfer') this.closeTransferModal();
@@ -2655,6 +3139,7 @@ export class OrderDetailComponent implements OnInit {
       if (type === 'edit') this.closeEditOrderModal();
       if (type === 'cancel') this.closeCancelModal();
       if (type === 'admin-password') this.cancelAdminPasswordModal();
+      if (type === 'server-admin-password') this.closeServerAdminModal();
     }
   }
 }

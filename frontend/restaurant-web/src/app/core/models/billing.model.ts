@@ -15,7 +15,7 @@ export interface Invoice {
   pickupReference?: string;
   tableNumber?: string;
   customerName: string;
-  customerPhone: string;
+  customerPhone?: string;
   issuedAt: string;
   items: OrderItem[];
   subtotal: number;
