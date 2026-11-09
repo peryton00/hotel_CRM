@@ -54,7 +54,8 @@ where
                     }
                 }
 
-                let decoding_key = DecodingKey::from_secret(config.supabase_jwt_secret.as_bytes());
+                let decoding_key = DecodingKey::from_base64_secret(&config.supabase_jwt_secret)
+                    .unwrap_or_else(|_| DecodingKey::from_secret(config.supabase_jwt_secret.as_bytes()));
 
                 match decode::<SupabaseClaims>(token, &decoding_key, &validation) {
                     Ok(token_data) => {

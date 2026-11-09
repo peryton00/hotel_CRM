@@ -1,7 +1,10 @@
 pub mod auth;
 pub mod config;
 pub mod error;
+pub mod gateway;
 pub mod models;
 pub mod repositories;
 pub mod routes;
+pub mod server;
 pub mod services;
+pub mod sync;

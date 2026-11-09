@@ -1,7 +1,11 @@
 use sqlx::PgPool;
 use uuid::Uuid;
 
-use crate::{error::AppError, models::table::RestaurantTable};
+use crate::{
+    error::AppError,
+    models::table::RestaurantTable,
+    services::outbox_service::OutboxService,
+};
 
 pub struct TableRepository;
 
@@ -216,9 +220,34 @@ impl TableRepository {
         .bind(active_order_id)
         .bind(from_table_id)
         .bind(to_table_id)
-        .bind(reason)
+        .bind(&reason)
         .bind(performed_by)
         .execute(&mut *tx)
+        .await?;
+
+        // 7. Emit outbox event for sync
+        let outbox_payload = serde_json::json!({
+            "order_id": active_order_id,
+            "restaurant_id": restaurant_id,
+            "from_table_id": from_table_id,
+            "to_table_id": to_table_id,
+            "reason": reason,
+            "performed_by": performed_by,
+        });
+        let idem = format!(
+            "table-transfer-{}-{}-{}",
+            active_order_id,
+            to_table_id,
+            chrono::Utc::now().timestamp_millis()
+        );
+        OutboxService::emit_event(
+            &mut tx,
+            "table",
+            from_table_id,
+            "TABLE_TRANSFERRED",
+            outbox_payload,
+            &idem,
+        )
         .await?;
 
         tx.commit().await?;

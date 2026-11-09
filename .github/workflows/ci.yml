@@ -82,25 +82,22 @@ jobs:
         run: npm run build
 
   # =========================================================================
-  # 3. SUPABASE MIGRATIONS VALIDATION
+  # 3. SUPABASE SCHEMA VALIDATION
   # =========================================================================
   migrations-lint:
-    name: Supabase Database Migrations
+    name: Supabase Database Schemas
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Verify Migration Files Presence
+      - name: Verify Schema Files Presence
         run: |
-          echo "Checking Supabase SQL migrations in supabase/migrations/..."
-          ls -la supabase/migrations/*.sql
-          test -f supabase/migrations/20261027000001_core_schema.sql
-          test -f supabase/migrations/20261027000002_billing_and_payments.sql
-          test -f supabase/migrations/20261027000003_inventory_and_recipes.sql
-          test -f supabase/migrations/20261027000004_coupons_and_reservations.sql
-          test -f supabase/migrations/20261027000005_rls_and_functions.sql
-          echo "All 5 required forward SQL migration files are present and tracked."
+          echo "Checking Supabase SQL schemas in supabase/..."
+          ls -la supabase/*.sql
+          test -f supabase/schema.sql
+          test -f supabase/mock_data.sql
+          echo "All required Supabase SQL files are present and tracked."
 
   # =========================================================================
   # 4. DEPLOYMENT TRIGGER (Render Web Service)

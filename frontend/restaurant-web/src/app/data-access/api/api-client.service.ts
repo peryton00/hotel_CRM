@@ -57,7 +57,64 @@ export class ApiClientService {
       })
       .pipe(
         map((res) => res.data),
-        catchError((err) => this.handleError(err)),
+        catchError((err) => {
+          const fallback = this.fallbackSupabaseGet<T>(endpoint);
+          if (fallback && (err.status === 0 || err.status === 502 || err.status === 503)) {
+            return fallback;
+          }
+          return this.handleError(err);
+        }),
+      );
+  }
+
+  private fallbackSupabaseGet<T>(endpoint: string): Observable<T> | null {
+    if (!environment.supabaseUrl || !environment.supabaseAnonKey) return null;
+
+    const headers = new HttpHeaders({
+      apikey: environment.supabaseAnonKey,
+      Authorization: `Bearer ${environment.supabaseAnonKey}`,
+    });
+
+    const clean = endpoint.split('?')[0].replace(/^\//, '');
+    let table = '';
+    let isSingle = false;
+
+    if (clean === 'restaurants') {
+      table = 'restaurants?select=*&limit=1';
+      isSingle = true;
+    } else if (clean === 'tables') {
+      table = 'tables?select=*&order=number.asc';
+    } else if (clean === 'menu/categories') {
+      table = 'menu_categories?select=*&order=display_order.asc';
+    } else if (clean === 'menu/items') {
+      table = 'menu_items?select=*&order=display_order.asc';
+    } else if (clean === 'orders') {
+      table = 'orders?select=*,order_items(*)&order=created_at.desc';
+    } else if (clean === 'customers') {
+      table = 'customers?select=*&order=created_at.desc';
+    } else if (clean === 'coupons') {
+      table = 'coupons?select=*&order=created_at.desc';
+    } else if (clean === 'reservations') {
+      table = 'reservations?select=*&order=reservation_time.asc';
+    } else if (clean === 'restaurants/staff') {
+      table = 'staff_members?select=*&order=created_at.desc';
+    } else if (clean === 'inventory/items') {
+      table = 'inventory_items?select=*&order=name.asc';
+    } else if (clean === 'inventory/movements') {
+      table = 'stock_movements?select=*&order=created_at.desc&limit=50';
+    } else {
+      return null;
+    }
+
+    return this.http
+      .get<any>(`${environment.supabaseUrl}/rest/v1/${table}`, { headers })
+      .pipe(
+        map((res) => {
+          if (isSingle) {
+            return (Array.isArray(res) ? res[0] : res) as T;
+          }
+          return res as T;
+        }),
       );
   }
 

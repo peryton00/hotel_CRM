@@ -31,6 +31,7 @@ pub struct CreateStaffPayload {
     pub assigned_section: Option<String>,
     pub monthly_salary_paise: Option<i64>,
     pub payroll_cycle_start_day: Option<i32>,
+    pub permissions: Option<Vec<String>>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -46,6 +47,7 @@ pub struct UpdateStaffPayload {
     pub is_active: Option<bool>,
     pub monthly_salary_paise: Option<i64>,
     pub payroll_cycle_start_day: Option<i32>,
+    pub permissions: Option<Vec<String>>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -127,14 +129,22 @@ pub async fn create_staff_member(
     let secret_password = payload.password.trim().to_string();
     let monthly_salary = payload.monthly_salary_paise.unwrap_or(1500000);
     let cycle_start_day = payload.payroll_cycle_start_day.unwrap_or(1).clamp(1, 28);
+    let perms_val = if role.to_uppercase() == "ADMIN" {
+        serde_json::json!(["*"])
+    } else {
+        serde_json::json!(payload.permissions.unwrap_or_else(|| vec![
+            "pos:orders:create".to_string(),
+            "pos:bills:settle".to_string(),
+        ]))
+    };
 
     sqlx::query(
         r#"
         INSERT INTO staff_members (
             id, restaurant_id, name, role, email, phone, phone_e164,
-            pin_hash, is_active, shift, assigned_section, login_id, monthly_salary_paise, payroll_cycle_start_day, updated_at
+            pin_hash, is_active, shift, assigned_section, login_id, monthly_salary_paise, payroll_cycle_start_day, permissions, updated_at
         ) VALUES (
-            $1, $2, $3, $4, $5, $6, $7, $8, true, $9, $10, $11, $12, $13, NOW()
+            $1, $2, $3, $4, $5, $6, $7, $8, true, $9, $10, $11, $12, $13, $14, NOW()
         )
         "#,
     )
@@ -151,6 +161,7 @@ pub async fn create_staff_member(
     .bind(&login_id)
     .bind(monthly_salary)
     .bind(cycle_start_day)
+    .bind(&perms_val)
     .execute(&pool)
     .await?;
 
@@ -168,6 +179,7 @@ pub async fn create_staff_member(
         login_id: Some(login_id),
         monthly_salary_paise: Some(monthly_salary),
         payroll_cycle_start_day: Some(cycle_start_day),
+        permissions: Some(perms_val),
         created_at: Utc::now(),
         updated_at: Utc::now(),
     };
@@ -232,6 +244,18 @@ pub async fn update_staff_member(
     .bind(tenant.restaurant_id)
     .execute(&pool)
     .await?;
+
+    if let Some(ref perms) = payload.permissions {
+        let perms_val = serde_json::json!(perms);
+        sqlx::query(
+            "UPDATE staff_members SET permissions = $1, updated_at = NOW() WHERE id = $2 AND restaurant_id = $3",
+        )
+        .bind(perms_val)
+        .bind(id)
+        .bind(tenant.restaurant_id)
+        .execute(&pool)
+        .await?;
+    }
 
     let staff = RestaurantRepository::get_staff_by_id(&pool, id, tenant.restaurant_id).await?;
     match staff {

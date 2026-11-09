@@ -5,7 +5,14 @@
   "description": "Premium Restaurant CRM and Digital Ordering Platform",
   "scripts": {
     "start": "npm --prefix frontend/restaurant-web start",
+    "start:admin": "npm --prefix frontend/restaurant-web start",
+    "start:customer": "npm --prefix frontend/restaurant-web run start:customer",
+    "start:server": "cargo run --manifest-path backend/api/Cargo.toml",
     "build": "npm --prefix frontend/restaurant-web run build",
+    "build:desktop": "npm --prefix frontend/restaurant-web run build:desktop",
+    "build:customer": "npm --prefix frontend/restaurant-web run build:customer",
+    "tauri:dev": "npx @tauri-apps/cli dev",
+    "tauri:build": "npx @tauri-apps/cli build",
     "test": "npm --prefix frontend/restaurant-web test -- --watch=false",
     "lint": "npm --prefix frontend/restaurant-web run lint"
   },
@@ -20,5 +27,9 @@
     "signals"
   ],
   "author": "Antigravity Engineering",
-  "license": "UNLICENSED"
+  "license": "UNLICENSED",
+  "dependencies": {
+    "@fontsource/inter": "^5.3.0",
+    "@fontsource/libre-baskerville": "^5.3.0"
+  }
 }

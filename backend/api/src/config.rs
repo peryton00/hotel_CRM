@@ -19,6 +19,8 @@ pub struct AppConfig {
 impl AppConfig {
     pub fn from_env() -> Self {
         dotenvy::dotenv().ok();
+        dotenvy::from_path("backend/api/.env").ok();
+        dotenvy::from_path("../backend/api/.env").ok();
 
         let port = env::var("PORT")
             .ok()

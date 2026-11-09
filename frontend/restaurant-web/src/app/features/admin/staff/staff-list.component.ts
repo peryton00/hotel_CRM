@@ -4,6 +4,7 @@ import { FormsModule } from '@angular/forms';
 import { RestaurantDataService } from '../../../data-access/services/restaurant-data.service';
 import { STAFF_REPO } from '../../../data-access/repositories';
 import { StaffMember, StaffRole } from '../../../core/models/staff.model';
+import { ALL_PERMISSIONS, DEFAULT_ROLE_PERMISSIONS, PermissionDefinition } from '../../../core/models/permissions.model';
 import { AttendanceStatus, StaffPerformanceSummary } from '../../../core/models/attendance.model';
 import { AdminAuthService } from '../../../core/services/admin-auth.service';
 import { ToastService } from '../../../core/services/toast.service';
@@ -777,7 +778,11 @@ import { CurrencyInrPipe } from '../../../shared/pipes/currency-inr.pipe';
 
                 <div class="form-group">
                   <label class="form-label">Operational Role *</label>
-                  <select class="form-select" [(ngModel)]="staffForm.role">
+                  <select
+                    class="form-select"
+                    [(ngModel)]="staffForm.role"
+                    (ngModelChange)="onRoleChange($event)"
+                  >
                     <option value="MANAGER">Restaurant Manager (Controlled Management)</option>
                     <option value="CAPTAIN">Floor Captain / Steward (Tables & Orders)</option>
                     <option value="EXECUTIVE_CHEF">Head Chef (Kitchen & KDS)</option>
@@ -897,6 +902,53 @@ import { CurrencyInrPipe } from '../../../shared/pipes/currency-inr.pipe';
                 </div>
               </div>
 
+              <!-- Permissions & Access Control Section -->
+              <div class="permissions-section">
+                <div class="permissions-header">
+                  <div>
+                    <label class="form-label font-bold">
+                      <i class="ph ph-shield-check"></i> Modular Access Permissions
+                    </label>
+                    <span class="field-hint">
+                      Select the specific modules and actions this staff member can access.
+                    </span>
+                  </div>
+                  @if (staffForm.role !== 'ADMIN') {
+                    <div class="perm-bulk-actions">
+                      <button type="button" class="btn-text-action" (click)="selectAllPermissions()">Select All</button>
+                      <button type="button" class="btn-text-action" (click)="deselectAllPermissions()">Clear All</button>
+                    </div>
+                  }
+                </div>
+
+                <div class="permissions-groups-grid">
+                  @for (group of permissionGroups; track group.name) {
+                    <div class="permission-group-card">
+                      <div class="group-header">
+                        <i class="ph" [class]="group.icon"></i>
+                        <span>{{ group.name }}</span>
+                      </div>
+                      <div class="group-items-list">
+                        @for (perm of group.items; track perm.key) {
+                          <label class="permission-item-label">
+                            <input
+                              type="checkbox"
+                              [checked]="isPermissionSelected(perm.key)"
+                              (change)="togglePermission(perm.key)"
+                              [disabled]="staffForm.role === 'ADMIN'"
+                            />
+                            <div class="perm-text">
+                              <span class="perm-title">{{ perm.label }}</span>
+                              <span class="perm-subtitle">{{ perm.description }}</span>
+                            </div>
+                          </label>
+                        }
+                      </div>
+                    </div>
+                  }
+                </div>
+              </div>
+
               @if (staffForm.loginId && staffForm.password) {
                 <div class="secret-share-box">
                   <div class="share-header">
@@ -971,6 +1023,7 @@ import { CurrencyInrPipe } from '../../../shared/pipes/currency-inr.pipe';
                   <select
                     class="form-select"
                     [(ngModel)]="editForm.role"
+                    (ngModelChange)="onRoleChange($event, true)"
                     [disabled]="editingMember.role === 'ADMIN'"
                   >
                     <option value="ADMIN">Administrator (Full Access)</option>
@@ -1068,6 +1121,53 @@ import { CurrencyInrPipe } from '../../../shared/pipes/currency-inr.pipe';
                     placeholder="e.g. Main Dining Floor"
                     [(ngModel)]="editForm.assignedSection"
                   />
+                </div>
+              </div>
+
+              <!-- Permissions & Access Control Section (Edit) -->
+              <div class="permissions-section">
+                <div class="permissions-header">
+                  <div>
+                    <label class="form-label font-bold">
+                      <i class="ph ph-shield-check"></i> Modular Access Permissions
+                    </label>
+                    <span class="field-hint">
+                      Select the specific modules and actions this staff member can access.
+                    </span>
+                  </div>
+                  @if (editForm.role !== 'ADMIN') {
+                    <div class="perm-bulk-actions">
+                      <button type="button" class="btn-text-action" (click)="selectAllPermissions(true)">Select All</button>
+                      <button type="button" class="btn-text-action" (click)="deselectAllPermissions(true)">Clear All</button>
+                    </div>
+                  }
+                </div>
+
+                <div class="permissions-groups-grid">
+                  @for (group of permissionGroups; track group.name) {
+                    <div class="permission-group-card">
+                      <div class="group-header">
+                        <i class="ph" [class]="group.icon"></i>
+                        <span>{{ group.name }}</span>
+                      </div>
+                      <div class="group-items-list">
+                        @for (perm of group.items; track perm.key) {
+                          <label class="permission-item-label">
+                            <input
+                              type="checkbox"
+                              [checked]="isPermissionSelected(perm.key, true)"
+                              (change)="togglePermission(perm.key, true)"
+                              [disabled]="editForm.role === 'ADMIN'"
+                            />
+                            <div class="perm-text">
+                              <span class="perm-title">{{ perm.label }}</span>
+                              <span class="perm-subtitle">{{ perm.description }}</span>
+                            </div>
+                          </label>
+                        }
+                      </div>
+                    </div>
+                  }
                 </div>
               </div>
             </div>
@@ -2827,6 +2927,128 @@ import { CurrencyInrPipe } from '../../../shared/pipes/currency-inr.pipe';
           border-radius: 4px;
         }
       }
+
+      .permissions-section {
+        background: rgba(0, 0, 0, 0.02);
+        border: 1px solid var(--color-border);
+        border-radius: var(--radius-md);
+        padding: 16px;
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+      }
+
+      .permissions-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        flex-wrap: wrap;
+        gap: 8px;
+
+        .form-label {
+          margin-bottom: 2px;
+          display: flex;
+          align-items: center;
+          gap: 6px;
+          color: var(--color-primary);
+          font-weight: 700;
+        }
+      }
+
+      .perm-bulk-actions {
+        display: flex;
+        gap: 8px;
+
+        .btn-text-action {
+          background: none;
+          border: none;
+          font-size: 0.75rem;
+          font-weight: 600;
+          color: var(--color-primary);
+          cursor: pointer;
+          padding: 2px 6px;
+          border-radius: 4px;
+
+          &:hover {
+            background: rgba(139, 21, 21, 0.08);
+          }
+        }
+      }
+
+      .permissions-groups-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+        gap: 12px;
+      }
+
+      .permission-group-card {
+        background: var(--color-bg-card, #ffffff);
+        border: 1px solid var(--color-border);
+        border-radius: var(--radius-sm);
+        padding: 12px;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+
+        .group-header {
+          display: flex;
+          align-items: center;
+          gap: 6px;
+          font-size: 0.8125rem;
+          font-weight: 700;
+          color: var(--color-text-primary);
+          border-bottom: 1px solid var(--color-border);
+          padding-bottom: 6px;
+
+          i {
+            color: var(--color-primary);
+            font-size: 1rem;
+          }
+        }
+
+        .group-items-list {
+          display: flex;
+          flex-direction: column;
+          gap: 6px;
+        }
+
+        .permission-item-label {
+          display: flex;
+          align-items: flex-start;
+          gap: 8px;
+          cursor: pointer;
+          font-size: 0.75rem;
+          padding: 4px;
+          border-radius: 4px;
+          transition: background 0.15s ease;
+
+          &:hover {
+            background: rgba(0, 0, 0, 0.03);
+          }
+
+          input[type="checkbox"] {
+            margin-top: 2px;
+            accent-color: var(--color-primary);
+            cursor: pointer;
+          }
+
+          .perm-text {
+            display: flex;
+            flex-direction: column;
+            gap: 1px;
+
+            .perm-title {
+              font-weight: 600;
+              color: var(--color-text-primary);
+            }
+
+            .perm-subtitle {
+              color: var(--color-text-muted);
+              font-size: 0.7rem;
+            }
+          }
+        }
+      }
     `,
   ],
 })
@@ -3093,6 +3315,7 @@ export class StaffListComponent {
     assignedSection: string;
     monthlySalary: number;
     payrollCycleStartDay: number;
+    permissions: string[];
   } = {
     name: '',
     role: 'CAPTAIN',
@@ -3104,6 +3327,7 @@ export class StaffListComponent {
     assignedSection: 'Main Dining Floor',
     monthlySalary: 15000,
     payrollCycleStartDay: 1,
+    permissions: [...(DEFAULT_ROLE_PERMISSIONS['CAPTAIN'] || [])],
   };
 
   editForm: {
@@ -3116,6 +3340,7 @@ export class StaffListComponent {
     assignedSection: string;
     monthlySalary: number;
     payrollCycleStartDay: number;
+    permissions: string[];
   } = {
     name: '',
     role: 'CAPTAIN',
@@ -3126,7 +3351,83 @@ export class StaffListComponent {
     assignedSection: '',
     monthlySalary: 15000,
     payrollCycleStartDay: 1,
+    permissions: [],
   };
+
+  readonly permissionGroups = [
+    {
+      name: 'POS & Billing',
+      icon: 'ph-receipt',
+      items: ALL_PERMISSIONS.filter((p) => p.group === 'POS & Billing'),
+    },
+    {
+      name: 'Kitchen & KOT',
+      icon: 'ph-cooking-pot',
+      items: ALL_PERMISSIONS.filter((p) => p.group === 'Kitchen & KOT'),
+    },
+    {
+      name: 'Menu Management',
+      icon: 'ph-fork-knife',
+      items: ALL_PERMISSIONS.filter((p) => p.group === 'Menu'),
+    },
+    {
+      name: 'Inventory & Stock',
+      icon: 'ph-package',
+      items: ALL_PERMISSIONS.filter((p) => p.group === 'Inventory'),
+    },
+    {
+      name: 'Reports & Analytics',
+      icon: 'ph-chart-line-up',
+      items: ALL_PERMISSIONS.filter((p) => p.group === 'Reports'),
+    },
+    {
+      name: 'Administration',
+      icon: 'ph-gear',
+      items: ALL_PERMISSIONS.filter((p) => p.group === 'Administration'),
+    },
+  ];
+
+  isPermissionSelected(key: string, isEdit = false): boolean {
+    const list = isEdit ? this.editForm.permissions : this.staffForm.permissions;
+    const role = isEdit ? this.editForm.role : this.staffForm.role;
+    if (role === 'ADMIN' || (list && list.includes('*'))) {
+      return true;
+    }
+    return (list || []).includes(key);
+  }
+
+  togglePermission(key: string, isEdit = false): void {
+    const target = isEdit ? this.editForm : this.staffForm;
+    if (target.role === 'ADMIN') return;
+    const current = new Set(target.permissions || []);
+    if (current.has(key)) {
+      current.delete(key);
+    } else {
+      current.add(key);
+    }
+    target.permissions = Array.from(current);
+  }
+
+  onRoleChange(newRole: StaffRole, isEdit = false): void {
+    const target = isEdit ? this.editForm : this.staffForm;
+    target.role = newRole;
+    if (newRole === 'ADMIN') {
+      target.permissions = ['*'];
+    } else {
+      target.permissions = [...(DEFAULT_ROLE_PERMISSIONS[newRole] || [])];
+    }
+  }
+
+  selectAllPermissions(isEdit = false): void {
+    const target = isEdit ? this.editForm : this.staffForm;
+    target.permissions = ALL_PERMISSIONS.map((p) => p.key);
+  }
+
+  deselectAllPermissions(isEdit = false): void {
+    const target = isEdit ? this.editForm : this.staffForm;
+    if (target.role === 'ADMIN') return;
+    target.permissions = [];
+  }
 
   formatRole(role: string): string {
     return (role || 'STAFF').replace(/_/g, ' ');
@@ -3291,6 +3592,7 @@ export class StaffListComponent {
       assignedSection: 'Main Dining Floor',
       monthlySalary: 15000,
       payrollCycleStartDay: 1,
+      permissions: [...(DEFAULT_ROLE_PERMISSIONS['CAPTAIN'] || [])],
     };
     this.generatePassword();
     this.showSecretPassword = true;
@@ -3309,6 +3611,7 @@ export class StaffListComponent {
       assignedSection: member.assignedSection || 'Main Dining Floor',
       monthlySalary: member.monthlySalary || 15000,
       payrollCycleStartDay: member.payrollCycleStartDay || 1,
+      permissions: member.permissions ? [...member.permissions] : [...(DEFAULT_ROLE_PERMISSIONS[member.role] || [])],
     };
     this.showEditModal = true;
   }
@@ -3333,6 +3636,7 @@ export class StaffListComponent {
       monthly_salary_paise: (this.editForm.monthlySalary || 15000) * 100,
       payrollCycleStartDay: Number(this.editForm.payrollCycleStartDay) || 1,
       payroll_cycle_start_day: Number(this.editForm.payrollCycleStartDay) || 1,
+      permissions: this.editForm.role === 'ADMIN' ? ['*'] : this.editForm.permissions,
     };
 
     this.staffRepo.updateStaff(memberId, updates).subscribe({
@@ -3351,6 +3655,7 @@ export class StaffListComponent {
                 assignedSection: updates.assigned_section,
                 monthlySalary: updates.monthlySalary,
                 payrollCycleStartDay: updates.payrollCycleStartDay,
+                permissions: updates.permissions,
               }
             : s,
         );
@@ -3442,6 +3747,7 @@ export class StaffListComponent {
       assigned_section: this.staffForm.assignedSection || 'Main Dining Floor',
       monthly_salary_paise: (this.staffForm.monthlySalary || 15000) * 100,
       payroll_cycle_start_day: Number(this.staffForm.payrollCycleStartDay) || 1,
+      permissions: this.staffForm.role === 'ADMIN' ? ['*'] : this.staffForm.permissions,
     };
 
     this.staffRepo.createStaff(payload as any).subscribe({
@@ -3459,6 +3765,7 @@ export class StaffListComponent {
           status: 'ACTIVE',
           monthlySalary: this.staffForm.monthlySalary || 15000,
           payrollCycleStartDay: payload.payroll_cycle_start_day,
+          permissions: payload.permissions,
         };
 
         const list = [...this.staff(), newStaff];
@@ -3482,6 +3789,7 @@ export class StaffListComponent {
           status: 'ACTIVE',
           monthlySalary: this.staffForm.monthlySalary || 15000,
           payrollCycleStartDay: payload.payroll_cycle_start_day,
+          permissions: payload.permissions,
         };
         const list = [...this.staff(), newStaff];
         this.staff.set(list);

@@ -127,8 +127,16 @@ pub fn create_router(state: AppState) -> Router {
         // Health check routes
         .route("/health/live", get(health::liveness))
         .route("/health/ready", get(health::readiness))
+        .route(
+            "/health/restaurant/:id",
+            get(health::check_restaurant_availability),
+        )
         // API v1 prefix
         .nest("/api/v1", api_v1)
+        .route(
+            "/api/v1/health/restaurant/:id",
+            get(health::check_restaurant_availability),
+        )
         .layer(cors)
         .with_state(state)
 }

@@ -323,4 +323,40 @@ describe('AdminAuthService & Controlled Access RBAC System', () => {
       expect(routerMock.navigate).toHaveBeenCalledWith(['/admin/login']);
     });
   });
+
+  describe('5. Granular Dynamic Permissions Checking', () => {
+    it('grants Admin universal access regardless of specific permission key', () => {
+      service.loginWithToken('admin-token', 'ADMIN');
+      expect(service.hasPermission('pos:orders:create')).toBe(true);
+      expect(service.hasPermission('reports:financials:view')).toBe(true);
+      expect(service.hasPermission('settings:edit')).toBe(true);
+      expect(service.hasPermission('random:custom:permission')).toBe(true);
+    });
+
+    it('grants staff access only to explicit permissions in their profile', () => {
+      const cashierStaff = {
+        id: 'stf-001',
+        name: 'Vikas Cashier',
+        role: 'CASHIER' as const,
+        email: 'vikas@test.com',
+        phone: '+919876543210',
+        shift: 'Morning',
+        status: 'ACTIVE' as const,
+        permissions: ['pos:orders:create', 'pos:bills:settle'],
+      };
+      localStorage.setItem('staff_user', JSON.stringify(cashierStaff));
+      service.loginWithToken('cashier-token', 'CASHIER');
+      service.currentUser.set(cashierStaff);
+
+      expect(service.hasPermission('pos:orders:create')).toBe(true);
+      expect(service.hasPermission('pos:bills:settle')).toBe(true);
+      expect(service.hasPermission('reports:financials:view')).toBe(false);
+      expect(service.hasPermission('staff:manage')).toBe(false);
+    });
+
+    it('returns false when no user is authenticated', () => {
+      service.logout();
+      expect(service.hasPermission('pos:orders:create')).toBe(false);
+    });
+  });
 });

@@ -13,6 +13,7 @@ use crate::{
         paise::Paise,
         restaurant::Restaurant,
     },
+    services::outbox_service::OutboxService,
 };
 
 pub struct BillingRepository;
@@ -135,6 +136,30 @@ impl BillingRepository {
         .bind(order.total_amount_paise)
         .execute(&mut *tx)
         .await;
+
+        // 6. Emit outbox event for sync
+        let outbox_payload = serde_json::json!({
+            "payment_id": payment.id,
+            "order_id": order.id,
+            "restaurant_id": restaurant_id,
+            "amount_paise": payment.amount_paise,
+            "payment_method": payment.payment_method,
+            "settled_at": payment.settled_at,
+            "order_number": order.order_number,
+        });
+        let idem = payment
+            .idempotency_key
+            .clone()
+            .unwrap_or_else(|| format!("pay-settle-{}", payment.id));
+        OutboxService::emit_event(
+            &mut tx,
+            "payment",
+            payment.id,
+            "PAYMENT_SETTLED",
+            outbox_payload,
+            &idem,
+        )
+        .await?;
 
         tx.commit().await?;
 
@@ -271,6 +296,31 @@ impl BillingRepository {
         .fetch_one(&mut *tx)
         .await?;
 
+        // Emit outbox event for sync
+        let outbox_payload = serde_json::json!({
+            "refund_id": refund.id,
+            "restaurant_id": restaurant_id,
+            "order_id": order.id,
+            "payment_id": refund.payment_id,
+            "refund_amount_paise": refund.refund_amount_paise,
+            "reason": refund.reason,
+            "status": refund.status,
+            "requested_at": refund.requested_at,
+        });
+        let idem = refund
+            .idempotency_key
+            .clone()
+            .unwrap_or_else(|| format!("refund-req-{}", refund.id));
+        OutboxService::emit_event(
+            &mut tx,
+            "refund",
+            refund.id,
+            "REFUND_REQUESTED",
+            outbox_payload,
+            &idem,
+        )
+        .await?;
+
         tx.commit().await?;
 
         Ok(refund)
@@ -363,6 +413,25 @@ impl BillingRepository {
                     .await?;
             }
         }
+
+        // Emit outbox event for sync
+        let outbox_payload = serde_json::json!({
+            "refund_id": updated_refund.id,
+            "restaurant_id": restaurant_id,
+            "status": new_status,
+            "completed_at": updated_refund.completed_at,
+            "cancelled_at": updated_refund.cancelled_at,
+        });
+        let idem = format!("refund-status-{}-{}", updated_refund.id, Utc::now().timestamp_millis());
+        OutboxService::emit_event(
+            &mut tx,
+            "refund",
+            updated_refund.id,
+            "REFUND_STATUS_UPDATED",
+            outbox_payload,
+            &idem,
+        )
+        .await?;
 
         tx.commit().await?;
 

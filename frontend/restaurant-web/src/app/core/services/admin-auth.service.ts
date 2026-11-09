@@ -56,6 +56,28 @@ export class AdminAuthService {
       this.staffRole().toUpperCase() === 'HEAD CHEF (KDS)',
   );
 
+  /**
+   * Evaluates dynamic granular permissions.
+   * Admins have universal override (*). Staff permissions are evaluated against the assigned permissions list.
+   */
+  hasPermission(permissionKey: string): boolean {
+    if (this.isAdmin()) {
+      return true;
+    }
+    const user = this.currentUser();
+    if (!user) {
+      return false;
+    }
+    if (user.role === 'ADMIN') {
+      return true;
+    }
+    const permissions = user.permissions || [];
+    if (permissions.includes('*')) {
+      return true;
+    }
+    return permissions.includes(permissionKey);
+  }
+
   constructor() {
     this.refreshAdminSecret();
   }

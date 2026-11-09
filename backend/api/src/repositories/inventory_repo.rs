@@ -7,7 +7,7 @@ use crate::{
         CreateInventoryItemRequest, InventoryItem, RecordWastageRequest, StockMovement,
         WastageRecord,
     },
-    services::inventory_service::InventoryService,
+    services::{inventory_service::InventoryService, outbox_service::OutboxService},
 };
 
 pub struct InventoryRepository;
@@ -186,6 +186,31 @@ impl InventoryRepository {
         .bind(wastage.id)
         .bind(format!("Wastage reported: {}", req.reason))
         .execute(&mut *tx)
+        .await?;
+
+        // 6. Emit outbox event for sync
+        let outbox_payload = serde_json::json!({
+            "wastage_id": wastage.id,
+            "restaurant_id": restaurant_id,
+            "inventory_item_id": item.id,
+            "quantity": converted_qty,
+            "unit_of_measure": item.unit_of_measure,
+            "cost_impact_paise": cost_impact,
+            "reason": req.reason,
+            "new_stock": new_stock,
+        });
+        let idem = wastage
+            .idempotency_key
+            .clone()
+            .unwrap_or_else(|| format!("inv-wastage-{}", wastage.id));
+        OutboxService::emit_event(
+            &mut tx,
+            "inventory",
+            wastage.id,
+            "INVENTORY_WASTAGE_RECORDED",
+            outbox_payload,
+            &idem,
+        )
         .await?;
 
         tx.commit().await?;

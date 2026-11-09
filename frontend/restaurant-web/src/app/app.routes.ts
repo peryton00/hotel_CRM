@@ -2,13 +2,37 @@ import { Routes } from '@angular/router';
 import { AdminLayoutComponent } from './layouts/admin-layout/admin-layout.component';
 import { CustomerLayoutComponent } from './layouts/customer-layout/customer-layout.component';
 import { adminGuard } from './core/guards/admin.guard';
+import { environment } from '../environments/environment';
+
+export function resolveDefaultEntry(): string {
+  if (environment.isDesktop || environment.appMode === 'admin') {
+    return 'admin';
+  }
+  if (environment.appMode === 'customer') {
+    return 'menu/gurukripa-dhaba';
+  }
+  if (typeof window !== 'undefined' && window.location) {
+    const host = window.location.hostname.toLowerCase();
+    if (host.startsWith('order') || host.startsWith('menu') || host.includes('customer')) {
+      return 'menu/gurukripa-dhaba';
+    }
+  }
+  return 'admin';
+}
+
+export function resolveFallbackEntry(): string {
+  if (environment.isDesktop || environment.appMode === 'admin') {
+    return 'admin';
+  }
+  return 'menu/gurukripa-dhaba';
+}
 
 export const routes: Routes = [
-  // Public Default Entry goes to Customer Dining Experience
+  // Default Entry
   {
     path: '',
     pathMatch: 'full',
-    redirectTo: 'menu/gurukripa-dhaba',
+    redirectTo: resolveDefaultEntry(),
   },
 
   // Unprotected Staff Login Terminal
@@ -210,6 +234,6 @@ export const routes: Routes = [
   // Catch-all Fallback
   {
     path: '**',
-    redirectTo: 'menu/gurukripa-dhaba',
+    redirectTo: resolveFallbackEntry(),
   },
 ];

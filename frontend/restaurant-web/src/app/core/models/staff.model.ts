@@ -21,6 +21,7 @@ export interface StaffMember {
   loginId?: string;
   password?: string;
   pin_hash?: string;
+  permissions?: string[];
   monthlySalary?: number;
   payrollCycleStartDay?: number;
   created_at?: string;

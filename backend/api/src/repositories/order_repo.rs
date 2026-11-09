@@ -8,7 +8,7 @@ use crate::{
         common::{PaginatedResponse, PaginationQuery},
         order::{CreateOrderRequest, Order, OrderItem, OrderWithItems},
     },
-    services::order_service::OrderService,
+    services::{order_service::OrderService, outbox_service::OutboxService},
 };
 
 pub struct OrderRepository;
@@ -139,6 +139,19 @@ impl OrderRepository {
         .bind(order.id)
         .bind(staff_id)
         .execute(&mut *tx)
+        .await?;
+
+        // 7. Emit outbox event for sync
+        let outbox_payload = serde_json::to_value(&order).unwrap_or_default();
+        let idem_key = format!("order-create-{}", order.id);
+        OutboxService::emit_event(
+            &mut tx,
+            "order",
+            order.id,
+            "ORDER_CREATED",
+            outbox_payload,
+            &idem_key,
+        )
         .await?;
 
         tx.commit().await?;
@@ -379,9 +392,29 @@ impl OrderRepository {
         .bind(order_id)
         .bind(&current_order.status)
         .bind(new_status)
-        .bind(notes)
+        .bind(&notes)
         .bind(staff_id)
         .execute(&mut *tx)
+        .await?;
+
+        // Emit outbox event for sync
+        let outbox_payload = serde_json::json!({
+            "order_id": order_id,
+            "restaurant_id": restaurant_id,
+            "from_status": &current_order.status,
+            "to_status": new_status,
+            "notes": notes,
+            "staff_id": staff_id,
+        });
+        let idem_key = format!("order-status-{}-{}", order_id, Utc::now().timestamp_millis());
+        OutboxService::emit_event(
+            &mut tx,
+            "order",
+            order_id,
+            "ORDER_STATUS_UPDATED",
+            outbox_payload,
+            &idem_key,
+        )
         .await?;
 
         tx.commit().await?;

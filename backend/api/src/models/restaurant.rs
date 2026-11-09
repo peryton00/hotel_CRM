@@ -67,6 +67,8 @@ pub struct StaffMember {
     pub monthly_salary_paise: Option<i64>,
     #[serde(default)]
     pub payroll_cycle_start_day: Option<i32>,
+    #[serde(default)]
+    pub permissions: Option<serde_json::Value>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }
