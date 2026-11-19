@@ -9,6 +9,8 @@ import { MenuItem, MenuCategory, DietaryType } from '../../../core/models/menu.m
 import { CurrencyInrPipe } from '../../../shared/pipes/currency-inr.pipe';
 import { DietaryBadgeComponent } from '../../../shared/components/dietary-badge/dietary-badge.component';
 import { FoodCustomizerModalComponent } from '../../../shared/components/food-customizer-modal/food-customizer-modal.component';
+import { SkeletonLoaderComponent } from '../../../shared/components/loading/skeleton-loader.component';
+import { EmptyStateComponent } from '../../../shared/components/empty-state/empty-state.component';
 
 @Component({
   selector: 'app-menu-catalog',
@@ -20,6 +22,8 @@ import { FoodCustomizerModalComponent } from '../../../shared/components/food-cu
     CurrencyInrPipe,
     DietaryBadgeComponent,
     FoodCustomizerModalComponent,
+    SkeletonLoaderComponent,
+    EmptyStateComponent,
   ],
   template: `
     <div class="menu-catalog-page">
@@ -126,7 +130,10 @@ import { FoodCustomizerModalComponent } from '../../../shared/components/food-cu
 
         <!-- Food Menu Items List -->
         <div class="dishes-container">
-          @for (item of filteredDishes(); track item.id) {
+          @if (isLoading()) {
+            <app-skeleton variant="food-card" [count]="6" />
+          } @else {
+            @for (item of filteredDishes(); track item.id) {
             <div class="food-card" [class.unavailable]="!isItemAvailable(item)">
               <div class="food-details">
                 <div class="food-top">
@@ -176,14 +183,16 @@ import { FoodCustomizerModalComponent } from '../../../shared/components/food-cu
               </div>
             </div>
           } @empty {
-            <div class="empty-menu-card">
-              <i class="ph ph-magnifying-glass"></i>
-              <h3 class="heading-card">No dishes match your filter</h3>
-              <p class="text-sm text-muted">
-                Try clearing the search query or selecting a different dietary filter.
-              </p>
-            </div>
+            <app-empty-state
+              icon="ph-magnifying-glass"
+              title="No Dishes Match Your Filter"
+              message="Try clearing your search query or selecting a different category or dietary filter."
+              actionText="Reset Filters"
+              actionIcon="ph-arrow-counter-clockwise"
+              (actionClick)="resetFilters()"
+            />
           }
+        }
         </div>
 
         <!-- Item Customization Modal -->
@@ -621,6 +630,10 @@ export class MenuCatalogComponent implements OnInit {
   private cartService = inject(CartService);
   private toastService = inject(ToastService);
 
+  readonly isLoading = computed(
+    () => this.dataService.isMenuLoading() || !this.dataService.menuLoaded()
+  );
+
   tableToken = signal<string>('');
   tableNumber = signal<string>('');
   tableInvalid = signal<boolean>(false);
@@ -632,6 +645,12 @@ export class MenuCatalogComponent implements OnInit {
   selectedCategoryId = signal<string>('ALL');
   selectedDietary = signal<'ALL' | 'VEG' | 'NON_VEG'>('ALL');
   searchQuery = signal<string>('');
+
+  resetFilters(): void {
+    this.searchQuery.set('');
+    this.selectedCategoryId.set('ALL');
+    this.selectedDietary.set('ALL');
+  }
 
   isCustomizerOpen = false;
   customizingItem: MenuItem | null = null;

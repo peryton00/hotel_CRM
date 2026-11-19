@@ -4,6 +4,8 @@ import { RouterModule } from '@angular/router';
 import { RestaurantDataService } from '../../../data-access/services/restaurant-data.service';
 import { CurrencyInrPipe } from '../../../shared/pipes/currency-inr.pipe';
 import { StatusBadgeComponent } from '../../../shared/components/status-badge/status-badge.component';
+import { SkeletonLoaderComponent } from '../../../shared/components/loading/skeleton-loader.component';
+import { EmptyStateComponent } from '../../../shared/components/empty-state/empty-state.component';
 import { calculateFinancialSummary } from '../../../core/utils/financial.utils';
 import {
   DateRangeFilter,
@@ -14,15 +16,28 @@ import {
 @Component({
   selector: 'app-admin-dashboard',
   standalone: true,
-  imports: [CommonModule, RouterModule, CurrencyInrPipe, StatusBadgeComponent],
+  imports: [
+    CommonModule,
+    RouterModule,
+    CurrencyInrPipe,
+    StatusBadgeComponent,
+    SkeletonLoaderComponent,
+    EmptyStateComponent,
+  ],
   template: `
     <div class="dashboard-page">
       <!-- Page Header -->
       <div class="page-header">
-        <div>
-          <h1 class="heading-display">Operations Dashboard</h1>
+        <div class="page-title-block">
+          <div class="page-title-row">
+            <h1 class="heading-display">Operations Dashboard</h1>
+            <span class="live-status-pill">
+              <span class="pulse-dot"></span>
+              <span>Floor Active</span>
+            </span>
+          </div>
           <p class="text-muted">
-            Overview of sales, active tables, and live order status.
+            Overview of sales velocity, active dining tables, and live order status.
           </p>
         </div>
 
@@ -50,70 +65,119 @@ import {
               All Time
             </button>
           </div>
-          <a routerLink="/admin/orders" class="btn btn-primary">
+          <a routerLink="/admin/orders" class="btn btn-primary btn-queue-action">
             <i class="ph ph-receipt"></i>
             <span>Live Orders Board</span>
+            @if (activeOrdersCount() > 0) {
+              <span class="queue-counter-badge">{{ activeOrdersCount() }}</span>
+            }
           </a>
         </div>
       </div>
 
       <!-- KPI Metric Cards Grid -->
       <div class="kpi-grid">
-        <div class="kpi-card">
+        <div class="kpi-card card-revenue">
           <div class="kpi-header">
             <span class="kpi-title">Net Revenue</span>
             <div class="kpi-icon revenue"><i class="ph ph-currency-inr"></i></div>
           </div>
           <div class="kpi-value" [class.text-crimson]="totalRevenue() < 0">
-            {{ totalRevenue() | currencyInr }}
+            @if (isOrdersLoading()) {
+              <app-skeleton variant="text" width="110px" height="2rem" />
+            } @else {
+              {{ totalRevenue() | currencyInr }}
+            }
           </div>
           <div
             class="kpi-footer"
             [class.text-success]="totalRevenue() >= 0"
             [class.text-crimson]="totalRevenue() < 0"
           >
-            <i
-              class="ph"
-              [class.ph-trend-up]="totalRevenue() >= 0"
-              [class.ph-trend-down]="totalRevenue() < 0"
-            ></i>
-            <span>{{ revenueComparisonText() }}</span>
-            @if (hasEstimatedSettlements()) {
-              <small class="text-muted">(legacy timestamps)</small>
+            @if (isOrdersLoading()) {
+              <app-skeleton variant="text" width="85px" height="0.875rem" />
+            } @else {
+              <i
+                class="ph"
+                [class.ph-trend-up]="totalRevenue() >= 0"
+                [class.ph-trend-down]="totalRevenue() < 0"
+              ></i>
+              <span>{{ revenueComparisonText() }}</span>
+              @if (hasEstimatedSettlements()) {
+                <small class="text-muted">(legacy timestamps)</small>
+              }
             }
           </div>
         </div>
 
-        <div class="kpi-card">
+        <div class="kpi-card card-orders">
           <div class="kpi-header">
             <span class="kpi-title">Total Orders</span>
             <div class="kpi-icon orders"><i class="ph ph-tray"></i></div>
           </div>
-          <div class="kpi-value">{{ totalOrdersCount() }}</div>
+          <div class="kpi-value">
+            @if (isOrdersLoading()) {
+              <app-skeleton variant="text" width="55px" height="2rem" />
+            } @else {
+              {{ totalOrdersCount() }}
+            }
+          </div>
           <div class="kpi-footer">
-            <span class="active-badge">{{ ordersSubtitleText() }}</span>
+            @if (isOrdersLoading()) {
+              <app-skeleton variant="text" width="70px" height="0.875rem" />
+            } @else {
+              <span class="active-badge">
+                <span class="active-ping-dot"></span>
+                {{ ordersSubtitleText() }}
+              </span>
+            }
           </div>
         </div>
 
-        <div class="kpi-card">
+        <div class="kpi-card card-aov">
           <div class="kpi-header">
             <span class="kpi-title">Avg Order Value (AOV)</span>
             <div class="kpi-icon aov"><i class="ph ph-receipt"></i></div>
           </div>
-          <div class="kpi-value">{{ avgOrderValue() | currencyInr }}</div>
+          <div class="kpi-value">
+            @if (isOrdersLoading()) {
+              <app-skeleton variant="text" width="90px" height="2rem" />
+            } @else {
+              {{ avgOrderValue() | currencyInr }}
+            }
+          </div>
           <div class="kpi-footer text-muted">
-            <span>{{ aovSubtitleText() }}</span>
+            @if (isOrdersLoading()) {
+              <app-skeleton variant="text" width="80px" height="0.875rem" />
+            } @else {
+              <span>{{ aovSubtitleText() }}</span>
+            }
           </div>
         </div>
 
-        <div class="kpi-card">
+        <div class="kpi-card card-tables">
           <div class="kpi-header">
             <span class="kpi-title">Active Tables</span>
             <div class="kpi-icon tables"><i class="ph ph-table"></i></div>
           </div>
-          <div class="kpi-value">{{ occupiedTablesCount() }} / {{ totalTablesCount() }}</div>
+          <div class="kpi-value">
+            @if (isTablesLoading()) {
+              <app-skeleton variant="text" width="75px" height="2rem" />
+            } @else {
+              {{ occupiedTablesCount() }} <span class="kpi-denom">/ {{ totalTablesCount() }}</span>
+            }
+          </div>
           <div class="kpi-footer">
-            <span class="badge badge-gold">{{ tableOccupancyRate() }}% Occupancy</span>
+            @if (isTablesLoading()) {
+              <app-skeleton variant="text" width="95px" height="0.875rem" />
+            } @else {
+              <div class="occupancy-meter">
+                <div class="meter-bar">
+                  <div class="meter-fill" [style.width.%]="tableOccupancyRate()"></div>
+                </div>
+                <span class="meter-label">{{ tableOccupancyRate() }}% Occupancy</span>
+              </div>
+            }
           </div>
         </div>
       </div>
@@ -121,103 +185,120 @@ import {
       <!-- Live Order Flow Summary & Quick Actions -->
       <div class="dashboard-mid-grid">
         <!-- Sales Volume Bar Chart (Pure Responsive SVG) -->
-        <div class="dashboard-panel chart-panel">
-          <div class="panel-header">
-            <div class="panel-title-wrap">
-              <h2 class="heading-card">{{ chartTitle() }}</h2>
-              <span class="text-muted text-xs">{{ chartSubtitle() }}</span>
+        @if (isOrdersLoading()) {
+          <app-skeleton variant="chart" />
+        } @else {
+          <div class="dashboard-panel chart-panel">
+            <div class="panel-header">
+              <div class="panel-title-wrap">
+                <h2 class="heading-card">{{ chartTitle() }}</h2>
+                <span class="text-muted text-xs">{{ chartSubtitle() }}</span>
+              </div>
+              <div class="chart-legend-inline">
+                @for (leg of chartLegend(); track leg.label) {
+                  <span class="legend-item"
+                    ><span class="dot" [class]="leg.dotClass"></span> {{ leg.label }}</span
+                  >
+                }
+              </div>
+            </div>
+
+            <div class="svg-chart-wrap">
+              <svg viewBox="0 0 520 180" class="bar-chart-svg">
+                <line x1="40" y1="140" x2="500" y2="140" class="chart-grid-line" stroke-width="1" />
+                <line x1="40" y1="80" x2="500" y2="80" class="chart-grid-line dashed" stroke-dasharray="3,3" />
+                <line x1="40" y1="20" x2="500" y2="20" stroke="transparent" />
+
+                <text x="32" y="143" font-size="10" class="chart-axis-text" text-anchor="end">0</text>
+                <text x="32" y="83" font-size="10" class="chart-axis-text" text-anchor="end">20k</text>
+                <text x="32" y="23" font-size="10" class="chart-axis-text" text-anchor="end">40k</text>
+
+                <!-- Bars -->
+                <g class="bars-group">
+                  @for (bar of chartBars(); track bar.label) {
+                    <rect
+                      [attr.x]="bar.x"
+                      [attr.y]="bar.y"
+                      width="28"
+                      [attr.height]="bar.height"
+                      rx="4"
+                      [attr.fill]="bar.color"
+                      [attr.opacity]="bar.opacity"
+                      class="chart-bar-rect"
+                    />
+                    <text
+                      [attr.x]="bar.x + 14"
+                      y="156"
+                      font-size="11"
+                      class="chart-bar-label"
+                      text-anchor="middle"
+                    >
+                      {{ bar.label }}
+                    </text>
+                  }
+                </g>
+              </svg>
             </div>
           </div>
-
-          <div class="svg-chart-wrap">
-            <svg viewBox="0 0 520 180" class="bar-chart-svg">
-              <line x1="40" y1="140" x2="500" y2="140" stroke="#E5DED4" stroke-width="1" />
-              <line x1="40" y1="80" x2="500" y2="80" stroke="#F0EAE1" stroke-dasharray="3,3" />
-              <line x1="40" y1="20" x2="500" y2="20" stroke="#F0EAE1" stroke-dasharray="3,3" />
-
-              <text x="32" y="143" font-size="10" fill="#A39181" text-anchor="end">0</text>
-              <text x="32" y="83" font-size="10" fill="#A39181" text-anchor="end">20k</text>
-              <text x="32" y="23" font-size="10" fill="#A39181" text-anchor="end">40k</text>
-
-              <!-- Bars -->
-              <g class="bars-group">
-                @for (bar of chartBars(); track bar.label) {
-                  <rect
-                    [attr.x]="bar.x"
-                    [attr.y]="bar.y"
-                    width="28"
-                    [attr.height]="bar.height"
-                    rx="4"
-                    [attr.fill]="bar.color"
-                    [attr.opacity]="bar.opacity"
-                  />
-                  <text
-                    [attr.x]="bar.x + 14"
-                    y="156"
-                    font-size="11"
-                    fill="#4a453e"
-                    text-anchor="middle"
-                  >
-                    {{ bar.label }}
-                  </text>
-                }
-              </g>
-            </svg>
-          </div>
-          <div class="chart-legend">
-            @for (leg of chartLegend(); track leg.label) {
-              <span class="legend-item"
-                ><span class="dot" [class]="leg.dotClass"></span> {{ leg.label }}</span
-              >
-            }
-          </div>
-        </div>
+        }
 
         <!-- Real-Time Orders Queue Snapshot -->
         <div class="dashboard-panel queue-panel">
           <div class="panel-header">
-            <h2 class="heading-card">Active Orders Dispatch</h2>
+            <div class="panel-header-left">
+              <span class="panel-pulse-dot"></span>
+              <h2 class="heading-card">Active Orders Dispatch</h2>
+            </div>
             <a
               routerLink="/admin/orders"
-              class="text-sm text-crimson font-ui"
-              style="font-weight: 600;"
-              >View All ({{ orders().length }})</a
+              class="panel-action-link"
+              >View All @if (!isOrdersLoading()) { ({{ orders().length }}) }</a
             >
           </div>
 
           <div class="queue-list">
-            @for (order of recentOrders(); track order.id) {
-              <div class="queue-item">
-                <div class="queue-info">
-                  <div class="queue-top">
-                    <span class="order-num">{{ order.orderNumber }}</span>
-                    @if (order.orderType === 'TAKEAWAY') {
-                      <span class="tbl-badge takeaway-badge">
-                        <i class="ph ph-bag"></i> Takeaway
-                      </span>
-                    } @else {
-                      <span class="tbl-badge">Table {{ order.tableNumber }}</span>
-                    }
-                    <app-status-badge [status]="order.status"></app-status-badge>
+            @if (isOrdersLoading()) {
+              <app-skeleton variant="table-row" [count]="4" />
+            } @else {
+              @for (order of recentOrders(); track order.id) {
+                <div class="queue-item">
+                  <div class="queue-info">
+                    <div class="queue-top">
+                      <span class="order-num">{{ order.orderNumber }}</span>
+                      @if (order.orderType === 'TAKEAWAY') {
+                        <span class="tbl-badge takeaway-badge">
+                          <i class="ph ph-bag"></i> Takeaway
+                        </span>
+                      } @else {
+                        <span class="tbl-badge">Table {{ order.tableNumber }}</span>
+                      }
+                      <app-status-badge [status]="order.status"></app-status-badge>
+                    </div>
+                    <div class="guest-line">
+                      <span>{{ order.customerName }}</span>
+                      <span class="divider-dot">•</span>
+                      <span>{{ order.items.length }} dishes</span>
+                      <span class="divider-dot">•</span>
+                      <span class="order-price">{{ order.totalAmount | currencyInr }}</span>
+                    </div>
                   </div>
-                  <div class="guest-line">
-                    <span>{{ order.customerName }}</span>
-                    <span class="divider-dot">•</span>
-                    <span>{{ order.items.length }} dishes</span>
-                    <span class="divider-dot">•</span>
-                    <span class="order-price">{{ order.totalAmount | currencyInr }}</span>
-                  </div>
+                  <a
+                    [routerLink]="['/admin/orders', order.id]"
+                    class="btn btn-secondary btn-sm queue-open-btn"
+                    aria-label="Manage order"
+                  >
+                    <i class="ph ph-arrow-right"></i>
+                  </a>
                 </div>
-                <a
-                  [routerLink]="['/admin/orders', order.id]"
-                  class="btn btn-secondary btn-sm"
-                  aria-label="Manage order"
-                >
-                  <i class="ph ph-arrow-right"></i>
-                </a>
-              </div>
-            } @empty {
-              <div class="empty-state">No orders in current filter.</div>
+              } @empty {
+                <app-empty-state
+                  [compact]="true"
+                  [bordered]="false"
+                  icon="ph-tray"
+                  title="No Active Orders"
+                  message="Live dining and takeaway orders will appear here automatically."
+                />
+              }
             }
           </div>
         </div>
@@ -230,8 +311,7 @@ import {
             <h2 class="heading-card">Top Selling Dishes</h2>
             <a
               routerLink="/admin/menu"
-              class="text-sm text-crimson font-ui"
-              style="font-weight: 600;"
+              class="panel-action-link"
               >Manage Menu</a
             >
           </div>
@@ -242,30 +322,47 @@ import {
                 <tr>
                   <th>Dish Name</th>
                   <th>Category</th>
-                  <th>Orders Count</th>
-                  <th>Total Revenue</th>
+                  <th class="text-right">Orders Count</th>
+                  <th class="text-right">Total Revenue</th>
                 </tr>
               </thead>
               <tbody>
-                @for (item of popularItems(); track item.name) {
+                @if (isOrdersLoading() || isMenuLoading()) {
                   <tr>
-                    <td>
-                      <strong>{{ item.name }}</strong>
-                    </td>
-                    <td>
-                      <span class="badge badge-outline">{{ item.category }}</span>
-                    </td>
-                    <td>{{ item.ordersCount }} orders</td>
-                    <td>
-                      <span class="text-price">{{ item.revenue | currencyInr }}</span>
+                    <td colspan="4" class="p-0">
+                      <app-skeleton variant="table-row" [count]="4" />
                     </td>
                   </tr>
-                } @empty {
-                  <tr>
-                    <td colspan="4" class="text-center py-4 text-muted" style="text-align: center; padding: 20px;">
-                      No dish sales recorded in this timeframe.
-                    </td>
-                  </tr>
+                } @else {
+                  @for (item of popularItems(); track item.name; let idx = $index) {
+                    <tr>
+                      <td>
+                        <div class="dish-name-cell">
+                          <span class="dish-rank-badge" [class.rank-gold]="idx === 0" [class.rank-silver]="idx === 1" [class.rank-bronze]="idx === 2">{{ idx + 1 }}</span>
+                          <strong>{{ item.name }}</strong>
+                        </div>
+                      </td>
+                      <td>
+                        <span class="badge badge-outline">{{ item.category }}</span>
+                      </td>
+                      <td class="text-right font-mono">{{ item.ordersCount }} orders</td>
+                      <td class="text-right">
+                        <span class="text-price font-mono font-bold">{{ item.revenue | currencyInr }}</span>
+                      </td>
+                    </tr>
+                  } @empty {
+                    <tr>
+                      <td colspan="4" class="p-0">
+                        <app-empty-state
+                          [compact]="true"
+                          [bordered]="false"
+                          icon="ph-cooking-pot"
+                          title="No Dish Sales Recorded"
+                          message="Dishes will rank here as dining orders are completed."
+                        />
+                      </td>
+                    </tr>
+                  }
                 }
               </tbody>
             </table>
@@ -274,46 +371,94 @@ import {
 
         <div class="dashboard-panel tables-summary-panel">
           <div class="panel-header">
-            <h2 class="heading-card">Table Status Distribution</h2>
+            <h2 class="heading-card">Table Status</h2>
             <a
               routerLink="/admin/tables"
-              class="text-sm text-crimson font-ui"
-              style="font-weight: 600;"
-              >View Tables</a
-            >
+              class="panel-action-link"
+              title="Open Floor Map"
+              ><span>Manage Tables</span> <i class="ph ph-arrow-up-right"></i
+            ></a>
+          </div>
+
+          <div class="floor-capacity-meter">
+            <div class="meter-meta">
+              <span class="meter-title">Floor Utilization</span>
+              <span class="meter-stat">
+                <strong>{{ occupiedTablesCount() }}</strong> / {{ totalTablesCount() }} Seated ({{ tableOccupancyRate() }}%)
+              </span>
+            </div>
+            <div class="capacity-bar-track">
+              <div class="capacity-seg seg-occupied" [style.width.%]="tableOccupiedPercent()" [title]="'Occupied: ' + occupiedTablesCount()"></div>
+              <div class="capacity-seg seg-reserved" [style.width.%]="tableReservedPercent()" [title]="'Reserved: ' + reservedTablesCount()"></div>
+              <div class="capacity-seg seg-dirty" [style.width.%]="tableDirtyPercent()" [title]="'Cleaning: ' + dirtyTablesCount()"></div>
+              <div class="capacity-seg seg-available" [style.width.%]="tableAvailablePercent()" [title]="'Available: ' + availableTablesCount()"></div>
+            </div>
           </div>
 
           <div class="tables-status-grid">
             <div class="status-box available">
-              <span class="status-num">{{ availableTablesCount() }}</span>
+              <i class="ph ph-chair status-icon"></i>
+              <span class="status-num">
+                @if (isTablesLoading()) {
+                  <app-skeleton variant="text" width="28px" height="1.5rem" />
+                } @else {
+                  {{ availableTablesCount() }}
+                }
+              </span>
               <span class="status-label">Available</span>
             </div>
+
             <div class="status-box occupied">
-              <span class="status-num">{{ occupiedTablesCount() }}</span>
+              <i class="ph ph-users status-icon"></i>
+              <span class="status-num">
+                @if (isTablesLoading()) {
+                  <app-skeleton variant="text" width="28px" height="1.5rem" />
+                } @else {
+                  {{ occupiedTablesCount() }}
+                }
+              </span>
               <span class="status-label">Occupied</span>
             </div>
+
             <div class="status-box reserved">
-              <span class="status-num">{{ reservedTablesCount() }}</span>
+              <i class="ph ph-calendar-check status-icon"></i>
+              <span class="status-num">
+                @if (isTablesLoading()) {
+                  <app-skeleton variant="text" width="28px" height="1.5rem" />
+                } @else {
+                  {{ reservedTablesCount() }}
+                }
+              </span>
               <span class="status-label">Reserved</span>
             </div>
+
             <div class="status-box dirty">
-              <span class="status-num">{{ dirtyTablesCount() }}</span>
+              <i class="ph ph-broom status-icon"></i>
+              <span class="status-num">
+                @if (isTablesLoading()) {
+                  <app-skeleton variant="text" width="28px" height="1.5rem" />
+                } @else {
+                  {{ dirtyTablesCount() }}
+                }
+              </span>
               <span class="status-label">Cleaning</span>
             </div>
           </div>
 
           <div class="quick-links-box">
-            <div class="quick-title">Quick Operational Actions:</div>
             <div class="quick-actions-row">
-              <a routerLink="/admin/tables" class="btn btn-secondary btn-sm"
-                ><i class="ph ph-qr-code"></i> Print Table QR</a
-              >
-              <a routerLink="/admin/billing" class="btn btn-secondary btn-sm"
-                ><i class="ph ph-receipt"></i> Generate Invoice</a
-              >
-              <a routerLink="/admin/coupons" class="btn btn-secondary btn-sm"
-                ><i class="ph ph-tag"></i> Create Promo</a
-              >
+              <a routerLink="/admin/tables" class="action-btn">
+                <i class="ph ph-qr-code"></i>
+                <span>Table QR</span>
+              </a>
+              <a routerLink="/admin/billing" class="action-btn">
+                <i class="ph ph-receipt"></i>
+                <span>POS Invoice</span>
+              </a>
+              <a routerLink="/admin/coupons" class="action-btn">
+                <i class="ph ph-tag"></i>
+                <span>Coupons</span>
+              </a>
             </div>
           </div>
         </div>
@@ -336,6 +481,49 @@ import {
         gap: 16px;
       }
 
+      .page-title-block {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+      }
+
+      .page-title-row {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+      }
+
+      .live-status-pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 3px 10px;
+        border-radius: var(--radius-full);
+        font-size: 0.7rem;
+        font-weight: 700;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        background: rgba(34, 197, 94, 0.1);
+        border: 1px solid rgba(34, 197, 94, 0.3);
+        color: #16a34a;
+
+        .pulse-dot {
+          width: 6px;
+          height: 6px;
+          border-radius: 50%;
+          background: #22c55e;
+          box-shadow: 0 0 6px #22c55e;
+          animation: pulseGlow 1.8s infinite;
+        }
+      }
+
+      .theme-dark .live-status-pill,
+      [data-theme='dark'] .live-status-pill {
+        background: rgba(34, 197, 94, 0.15);
+        border-color: rgba(34, 197, 94, 0.4);
+        color: #4ade80;
+      }
+
       .header-actions {
         display: flex;
         align-items: center;
@@ -343,30 +531,73 @@ import {
       }
 
       .time-filter {
-        display: flex;
+        display: inline-flex;
+        align-items: center;
+        gap: 2px;
         background: var(--color-surface);
         border: 1px solid var(--color-border);
-        border-radius: var(--radius-sm);
-        overflow: hidden;
+        border-radius: 8px;
+        padding: 3px;
       }
 
       .filter-btn {
-        padding: 8px 14px;
-        font-size: 0.8125rem;
+        padding: 6px 14px;
+        border-radius: 6px;
+        font-size: 0.78rem;
         font-weight: 600;
+        border: none;
+        background: transparent;
         color: var(--color-text-secondary);
+        cursor: pointer;
         transition: all var(--transition-fast);
+
+        &:hover {
+          color: var(--color-text);
+          background: rgba(0, 0, 0, 0.04);
+        }
 
         &.active {
           background: var(--color-onyx);
           color: #ffffff;
+          box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
+        }
+      }
+
+      .theme-dark .filter-btn,
+      [data-theme='dark'] .filter-btn {
+        &:hover {
+          background: rgba(255, 255, 255, 0.06);
+        }
+
+        &.active {
+          background: rgba(255, 255, 255, 0.15);
+          color: #ffffff;
+        }
+      }
+
+      .btn-queue-action {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 8px 16px;
+        border-radius: 8px;
+        font-weight: 600;
+
+        .queue-counter-badge {
+          background: #ffffff;
+          color: var(--color-crimson, #c21807);
+          font-size: 0.7rem;
+          font-weight: 800;
+          padding: 1px 6px;
+          border-radius: 9999px;
+          box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
         }
       }
 
       .kpi-grid {
         display: grid;
         grid-template-columns: repeat(4, 1fr);
-        gap: 20px;
+        gap: 18px;
 
         @media (max-width: 1100px) {
           grid-template-columns: repeat(2, 1fr);
@@ -380,12 +611,19 @@ import {
       .kpi-card {
         background: var(--color-surface);
         border: 1px solid var(--color-border);
-        border-radius: var(--radius-md);
-        padding: 20px;
-        box-shadow: var(--shadow-xs);
+        border-radius: 12px;
+        padding: 18px 20px;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
         display: flex;
         flex-direction: column;
         gap: 8px;
+        transition: all var(--transition-fast);
+
+        &:hover {
+          transform: translateY(-2px);
+          box-shadow: 0 6px 18px rgba(0, 0, 0, 0.07);
+          border-color: rgba(212, 175, 55, 0.4);
+        }
       }
 
       .kpi-header {
@@ -395,45 +633,53 @@ import {
       }
 
       .kpi-title {
-        font-size: 0.8125rem;
-        font-weight: 600;
+        font-size: 0.75rem;
+        font-weight: 700;
         color: var(--color-text-muted);
         text-transform: uppercase;
-        letter-spacing: 0.05em;
+        letter-spacing: 0.06em;
       }
 
       .kpi-icon {
-        width: 36px;
-        height: 36px;
-        border-radius: var(--radius-sm);
+        width: 34px;
+        height: 34px;
+        border-radius: 8px;
         display: flex;
         align-items: center;
         justify-content: center;
-        font-size: 1.2rem;
+        font-size: 1.15rem;
 
         &.revenue {
-          background: var(--color-crimson-subtle);
-          color: var(--color-crimson);
+          background: rgba(245, 158, 11, 0.12);
+          color: #d97706;
         }
         &.orders {
-          background: var(--color-info-bg);
-          color: var(--color-info);
+          background: rgba(59, 130, 246, 0.12);
+          color: #2563eb;
         }
         &.aov {
-          background: var(--color-gold-subtle);
-          color: #855300;
+          background: rgba(16, 185, 129, 0.12);
+          color: #059669;
         }
         &.tables {
-          background: var(--color-success-bg);
-          color: var(--color-success);
+          background: rgba(139, 92, 246, 0.12);
+          color: #7c3aed;
         }
       }
 
       .kpi-value {
-        font-size: 1.875rem;
+        font-size: 1.85rem;
         font-weight: 800;
         letter-spacing: -0.02em;
-        color: var(--color-text-primary);
+        color: var(--color-text);
+        line-height: 1.15;
+        font-family: var(--font-display, inherit);
+      }
+
+      .kpi-denom {
+        font-size: 1.1rem;
+        font-weight: 500;
+        color: var(--color-text-muted);
       }
 
       .kpi-footer {
@@ -444,18 +690,68 @@ import {
       }
 
       .text-success {
-        color: var(--color-success);
+        color: #16a34a;
       }
+
       .active-badge {
         font-weight: 600;
-        color: var(--color-info);
+        color: #2563eb;
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+      }
+
+      .active-ping-dot {
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        background: #3b82f6;
+        animation: pulseGlow 1.5s infinite;
+      }
+
+      .occupancy-meter {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        width: 100%;
+      }
+
+      .meter-bar {
+        flex: 1;
+        height: 6px;
+        background: rgba(0, 0, 0, 0.06);
+        border-radius: 9999px;
+        overflow: hidden;
+      }
+
+      .theme-dark .meter-bar,
+      [data-theme='dark'] .meter-bar {
+        background: rgba(255, 255, 255, 0.1);
+      }
+
+      .meter-fill {
+        height: 100%;
+        background: linear-gradient(90deg, #f59e0b, #d97706);
+        border-radius: 9999px;
+        transition: width 0.3s ease;
+      }
+
+      .meter-label {
+        font-size: 0.72rem;
+        font-weight: 700;
+        color: #d97706;
+      }
+
+      .theme-dark .meter-label,
+      [data-theme='dark'] .meter-label {
+        color: #fbbf24;
       }
 
       .dashboard-mid-grid,
       .dashboard-bottom-grid {
         display: grid;
         grid-template-columns: 3fr 2fr;
-        gap: 24px;
+        gap: 20px;
 
         @media (max-width: 1024px) {
           grid-template-columns: 1fr;
@@ -465,9 +761,9 @@ import {
       .dashboard-panel {
         background: var(--color-surface);
         border: 1px solid var(--color-border);
-        border-radius: var(--radius-md);
-        padding: 22px;
-        box-shadow: var(--shadow-xs);
+        border-radius: 12px;
+        padding: 20px;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
         display: flex;
         flex-direction: column;
         gap: 16px;
@@ -477,6 +773,49 @@ import {
         display: flex;
         justify-content: space-between;
         align-items: center;
+      }
+
+      .panel-header-left {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+
+      .panel-pulse-dot {
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+        background: #22c55e;
+        animation: pulseGlow 1.8s infinite;
+      }
+
+      .panel-action-link {
+        font-size: 0.8125rem;
+        font-weight: 600;
+        color: #d97706;
+        text-decoration: none;
+        transition: color var(--transition-fast);
+
+        &:hover {
+          color: #b45309;
+          text-decoration: underline;
+        }
+      }
+
+      .theme-dark .panel-action-link,
+      [data-theme='dark'] .panel-action-link {
+        color: #fbbf24;
+        &:hover {
+          color: #fde68a;
+        }
+      }
+
+      .chart-legend-inline {
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        font-size: 0.75rem;
+        color: var(--color-text-secondary);
       }
 
       .svg-chart-wrap {
@@ -490,14 +829,40 @@ import {
         overflow: visible;
       }
 
-      .chart-legend {
-        display: flex;
-        align-items: center;
-        gap: 20px;
-        padding-top: 10px;
-        border-top: 1px solid var(--color-border-subtle);
-        font-size: 0.75rem;
-        color: var(--color-text-secondary);
+      .chart-grid-line {
+        stroke: #e2e8f0;
+
+        &.dashed {
+          stroke: #f1f5f9;
+        }
+      }
+
+      .chart-axis-text {
+        fill: #94a3b8;
+      }
+
+      .chart-bar-label {
+        fill: var(--color-text-secondary);
+        font-weight: 600;
+      }
+
+      .theme-dark .chart-grid-line,
+      [data-theme='dark'] .chart-grid-line {
+        stroke: rgba(255, 255, 255, 0.08);
+
+        &.dashed {
+          stroke: rgba(255, 255, 255, 0.04);
+        }
+      }
+
+      .theme-dark .chart-axis-text,
+      [data-theme='dark'] .chart-axis-text {
+        fill: #64748b;
+      }
+
+      .theme-dark .chart-bar-label,
+      [data-theme='dark'] .chart-bar-label {
+        fill: #94a3b8;
       }
 
       .legend-item {
@@ -517,31 +882,46 @@ import {
           background: #d4af37;
         }
         &.dark {
-          background: #121212;
+          background: #94a3b8;
         }
       }
 
       .queue-list {
         display: flex;
         flex-direction: column;
-        gap: 12px;
+        gap: 10px;
       }
 
       .queue-item {
         display: flex;
         align-items: center;
         justify-content: space-between;
-        padding: 12px 14px;
-        background: var(--color-bone-light);
-        border: 1px solid var(--color-border-subtle);
-        border-radius: var(--radius-sm);
+        padding: 10px 14px;
+        background: rgba(0, 0, 0, 0.02);
+        border: 1px solid var(--color-border);
+        border-radius: 8px;
         gap: 12px;
+        transition: all var(--transition-fast);
+
+        &:hover {
+          background: rgba(0, 0, 0, 0.04);
+          border-color: rgba(212, 175, 55, 0.4);
+        }
+      }
+
+      .theme-dark .queue-item,
+      [data-theme='dark'] .queue-item {
+        background: rgba(255, 255, 255, 0.03);
+
+        &:hover {
+          background: rgba(255, 255, 255, 0.06);
+        }
       }
 
       .queue-info {
         display: flex;
         flex-direction: column;
-        gap: 4px;
+        gap: 3px;
       }
 
       .queue-top {
@@ -552,26 +932,27 @@ import {
 
       .order-num {
         font-weight: 700;
-        font-size: 0.875rem;
+        font-size: 0.85rem;
+        color: var(--color-text);
       }
 
       .tbl-badge {
-        font-size: 0.75rem;
+        font-size: 0.72rem;
         font-weight: 600;
         background: var(--color-surface);
         border: 1px solid var(--color-border);
-        padding: 2px 8px;
-        border-radius: var(--radius-xs);
+        padding: 1px 7px;
+        border-radius: 4px;
 
         &.takeaway-badge {
-          background: var(--color-warning-bg);
-          border-color: rgba(212, 175, 55, 0.4);
-          color: var(--color-warning);
+          background: rgba(245, 158, 11, 0.1);
+          border-color: rgba(245, 158, 11, 0.3);
+          color: #d97706;
         }
       }
 
       .guest-line {
-        font-size: 0.8125rem;
+        font-size: 0.78rem;
         color: var(--color-text-secondary);
         display: flex;
         align-items: center;
@@ -579,78 +960,287 @@ import {
       }
 
       .divider-dot {
-        opacity: 0.5;
+        opacity: 0.4;
       }
+
       .order-price {
         font-weight: 700;
-        color: var(--color-onyx);
+        color: var(--color-text);
+      }
+
+      .queue-open-btn {
+        width: 32px;
+        height: 32px;
+        padding: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 6px;
+      }
+
+      .dish-name-cell {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+
+      .dish-rank-badge {
+        width: 20px;
+        height: 20px;
+        border-radius: 50%;
+        font-size: 0.68rem;
+        font-weight: 800;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: rgba(0, 0, 0, 0.05);
+        color: var(--color-text-muted);
+
+        &.rank-gold {
+          background: rgba(245, 158, 11, 0.2);
+          color: #d97706;
+        }
+        &.rank-silver {
+          background: rgba(148, 163, 184, 0.2);
+          color: #475569;
+        }
+        &.rank-bronze {
+          background: rgba(180, 83, 9, 0.15);
+          color: #92400e;
+        }
+      }
+
+      .tables-summary-panel {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+      }
+
+      .floor-capacity-meter {
+        padding: 2px 0;
+      }
+
+      .meter-meta {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        font-size: 0.78rem;
+        margin-bottom: 6px;
+      }
+
+      .meter-title {
+        font-weight: 600;
+        color: #64748b;
+      }
+
+      .meter-stat {
+        font-size: 0.78rem;
+        color: #334155;
+
+        strong {
+          font-weight: 700;
+          color: #d97706;
+        }
+      }
+
+      .capacity-bar-track {
+        height: 7px;
+        border-radius: 999px;
+        background: #e2e8f0;
+        display: flex;
+        overflow: hidden;
+        gap: 2px;
+      }
+
+      .capacity-seg {
+        height: 100%;
+        transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+
+        &.seg-occupied {
+          background: #f59e0b;
+        }
+        &.seg-reserved {
+          background: #6366f1;
+        }
+        &.seg-dirty {
+          background: #ef4444;
+        }
+        &.seg-available {
+          background: #10b981;
+        }
       }
 
       .tables-status-grid {
         display: grid;
-        grid-template-columns: repeat(2, 1fr);
-        gap: 12px;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 8px;
+        margin-top: 2px;
+
+        @media (max-width: 600px) {
+          grid-template-columns: repeat(2, 1fr);
+        }
       }
 
       .status-box {
-        padding: 16px;
-        border-radius: var(--radius-sm);
+        padding: 10px 4px;
+        border-radius: 10px;
         text-align: center;
         border: 1px solid;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 3px;
+        transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+
+        &:hover {
+          transform: translateY(-1px);
+        }
+
+        .status-icon {
+          font-size: 1.15rem;
+          line-height: 1;
+        }
+
+        .status-num {
+          display: block;
+          font-size: 1.35rem;
+          font-weight: 800;
+          line-height: 1.1;
+          font-family: monospace;
+        }
+
+        .status-label {
+          font-size: 0.65rem;
+          font-weight: 700;
+          text-transform: uppercase;
+          letter-spacing: 0.04em;
+        }
 
         &.available {
-          background: var(--color-success-bg);
-          border-color: rgba(27, 99, 62, 0.2);
-          color: var(--color-success);
+          background: #ecfdf5;
+          border-color: #a7f3d0;
+          color: #047857;
         }
         &.occupied {
-          background: var(--color-warning-bg);
-          border-color: rgba(133, 83, 0, 0.2);
-          color: var(--color-warning);
+          background: #fffbeb;
+          border-color: #fde68a;
+          color: #b45309;
         }
         &.reserved {
-          background: var(--color-info-bg);
-          border-color: rgba(27, 79, 126, 0.2);
-          color: var(--color-info);
+          background: #eef2ff;
+          border-color: #c7d2fe;
+          color: #4338ca;
         }
         &.dirty {
-          background: var(--color-danger-bg);
-          border-color: rgba(169, 28, 18, 0.2);
-          color: var(--color-danger);
+          background: #fef2f2;
+          border-color: #fecaca;
+          color: #b91c1c;
         }
-      }
-
-      .status-num {
-        display: block;
-        font-size: 1.75rem;
-        font-weight: 800;
-        line-height: 1.1;
-      }
-
-      .status-label {
-        font-size: 0.75rem;
-        font-weight: 700;
-        text-transform: uppercase;
-        letter-spacing: 0.05em;
       }
 
       .quick-links-box {
-        margin-top: 8px;
-        padding-top: 14px;
-        border-top: 1px solid var(--color-border-subtle);
-      }
-
-      .quick-title {
-        font-size: 0.8125rem;
-        font-weight: 600;
-        color: var(--color-text-muted);
-        margin-bottom: 8px;
+        margin-top: 4px;
+        padding-top: 10px;
+        border-top: 1px solid var(--color-border);
       }
 
       .quick-actions-row {
-        display: flex;
-        flex-wrap: wrap;
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
         gap: 8px;
+        width: 100%;
+      }
+
+      .action-btn {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+        padding: 8px 6px;
+        border-radius: 8px;
+        text-decoration: none;
+        font-size: 0.75rem;
+        font-weight: 600;
+        text-align: center;
+        white-space: nowrap;
+        background: #f8fafc;
+        border: 1px solid #e2e8f0;
+        color: #1e293b;
+        transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+
+        i {
+          font-size: 0.95rem;
+          color: #d97706;
+          flex-shrink: 0;
+        }
+
+        &:hover {
+          border-color: #d97706;
+          background: #ffffff;
+          color: #d97706;
+          transform: translateY(-1px);
+          box-shadow: 0 3px 8px rgba(0, 0, 0, 0.05);
+        }
+      }
+
+      .theme-dark,
+      [data-theme='dark'] {
+        .meter-title {
+          color: #94a3b8;
+        }
+
+        .meter-stat {
+          color: #f1f5f9;
+
+          strong {
+            color: #fbbf24;
+          }
+        }
+
+        .capacity-bar-track {
+          background: rgba(255, 255, 255, 0.12);
+        }
+
+        .status-box {
+          &.available {
+            background: rgba(16, 185, 129, 0.14);
+            border-color: rgba(52, 211, 153, 0.35);
+            color: #34d399;
+          }
+          &.occupied {
+            background: rgba(245, 158, 11, 0.14);
+            border-color: rgba(251, 191, 36, 0.35);
+            color: #fbbf24;
+          }
+          &.reserved {
+            background: rgba(99, 102, 241, 0.14);
+            border-color: rgba(165, 180, 252, 0.35);
+            color: #a5b4fc;
+          }
+          &.dirty {
+            background: rgba(239, 68, 68, 0.14);
+            border-color: rgba(248, 113, 113, 0.35);
+            color: #f87171;
+          }
+        }
+
+        .action-btn {
+          background: #1a1e27;
+          border-color: rgba(255, 255, 255, 0.14);
+          color: #f1f5f9;
+
+          i {
+            color: #fbbf24;
+          }
+
+          &:hover {
+            border-color: #fbbf24;
+            background: #232834;
+            color: #fbbf24;
+            box-shadow: 0 3px 8px rgba(0, 0, 0, 0.3);
+          }
+        }
       }
     `,
   ],
@@ -658,6 +1248,17 @@ import {
 export class AdminDashboardComponent {
   private dataService = inject(RestaurantDataService);
   private mock = this.dataService;
+
+  readonly isOrdersLoading = computed(
+    () => this.dataService.isOrdersLoading() || !this.dataService.ordersLoaded()
+  );
+  readonly isTablesLoading = computed(
+    () => this.dataService.isTablesLoading() || !this.dataService.tablesLoaded()
+  );
+  readonly isMenuLoading = computed(
+    () => this.dataService.isMenuLoading() || !this.dataService.menuLoaded()
+  );
+  readonly isLoading = computed(() => this.isOrdersLoading() || this.isTablesLoading());
 
   selectedTimeframe = signal<'today' | 'week' | 'all'>('today');
 
@@ -729,6 +1330,26 @@ export class AdminDashboardComponent {
   tableOccupancyRate = computed(() => {
     const total = this.totalTablesCount();
     return total > 0 ? Math.round((this.occupiedTablesCount() / total) * 100) : 0;
+  });
+
+  tableOccupiedPercent = computed(() => {
+    const total = this.totalTablesCount();
+    return total > 0 ? (this.occupiedTablesCount() / total) * 100 : 0;
+  });
+
+  tableReservedPercent = computed(() => {
+    const total = this.totalTablesCount();
+    return total > 0 ? (this.reservedTablesCount() / total) * 100 : 0;
+  });
+
+  tableDirtyPercent = computed(() => {
+    const total = this.totalTablesCount();
+    return total > 0 ? (this.dirtyTablesCount() / total) * 100 : 0;
+  });
+
+  tableAvailablePercent = computed(() => {
+    const total = this.totalTablesCount();
+    return total > 0 ? (this.availableTablesCount() / total) * 100 : 0;
   });
 
   recentOrders = computed(() => {

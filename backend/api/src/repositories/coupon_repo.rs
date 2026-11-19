@@ -6,8 +6,8 @@ use crate::{
     error::AppError,
     models::{
         coupon::{
-            Coupon, CouponRedemption, RedeemCouponRequest, ValidateCouponRequest,
-            ValidateCouponResponse,
+            Coupon, CouponRedemption, CreateCouponRequest, RedeemCouponRequest,
+            ValidateCouponRequest, ValidateCouponResponse,
         },
         paise::Paise,
     },
@@ -19,11 +19,13 @@ impl CouponRepository {
     pub async fn list_coupons(pool: &PgPool, restaurant_id: Uuid) -> Result<Vec<Coupon>, AppError> {
         let coupons = sqlx::query_as::<_, Coupon>(
             r#"
-            SELECT id, restaurant_id, code, description, discount_type, discount_value,
+            SELECT id, restaurant_id, code, description,
+                   discount_type::text AS discount_type,
+                   discount_value::float8 AS discount_value,
                    min_order_amount_paise, max_discount_amount_paise, one_time_per_customer,
                    is_active, start_date, end_date, created_at, updated_at
             FROM coupons
-            WHERE restaurant_id = $1 AND is_active = true
+            WHERE restaurant_id = $1
             ORDER BY code ASC
             "#,
         )
@@ -32,6 +34,93 @@ impl CouponRepository {
         .await?;
 
         Ok(coupons)
+    }
+
+    pub async fn create_coupon(
+        pool: &PgPool,
+        restaurant_id: Uuid,
+        req: CreateCouponRequest,
+    ) -> Result<Coupon, AppError> {
+        let code_upper = req.code.trim().to_uppercase();
+        let title = req
+            .title
+            .as_deref()
+            .map(|s| s.trim())
+            .filter(|s| !s.is_empty())
+            .unwrap_or(&code_upper);
+        let discount_type = req
+            .discount_type
+            .unwrap_or_else(|| "PERCENTAGE".to_string())
+            .to_uppercase();
+        let coupon = sqlx::query_as::<_, Coupon>(
+            r#"
+            INSERT INTO coupons (
+                restaurant_id, code, title, description, discount_type, discount_value,
+                min_order_amount_paise, max_discount_amount_paise, one_time_per_customer,
+                is_active
+            )
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, true)
+            RETURNING id, restaurant_id, code, description,
+                      discount_type::text AS discount_type,
+                      discount_value::float8 AS discount_value,
+                      min_order_amount_paise, max_discount_amount_paise, one_time_per_customer,
+                      is_active, start_date, end_date, created_at, updated_at
+            "#,
+        )
+        .bind(restaurant_id)
+        .bind(&code_upper)
+        .bind(title)
+        .bind(req.description)
+        .bind(discount_type)
+        .bind(req.discount_value)
+        .bind(req.min_order_amount_paise.unwrap_or(0))
+        .bind(req.max_discount_amount_paise)
+        .bind(req.one_time_per_customer.unwrap_or(true))
+        .fetch_one(pool)
+        .await?;
+
+        Ok(coupon)
+    }
+
+    pub async fn update_status(
+        pool: &PgPool,
+        restaurant_id: Uuid,
+        coupon_id: Uuid,
+        is_active: bool,
+    ) -> Result<Coupon, AppError> {
+        let coupon = sqlx::query_as::<_, Coupon>(
+            r#"
+            UPDATE coupons
+            SET is_active = $3, updated_at = NOW()
+            WHERE restaurant_id = $1 AND id = $2
+            RETURNING id, restaurant_id, code, description,
+                      discount_type::text AS discount_type,
+                      discount_value::float8 AS discount_value,
+                      min_order_amount_paise, max_discount_amount_paise, one_time_per_customer,
+                      is_active, start_date, end_date, created_at, updated_at
+            "#,
+        )
+        .bind(restaurant_id)
+        .bind(coupon_id)
+        .bind(is_active)
+        .fetch_one(pool)
+        .await?;
+
+        Ok(coupon)
+    }
+
+    pub async fn delete_coupon(
+        pool: &PgPool,
+        restaurant_id: Uuid,
+        coupon_id: Uuid,
+    ) -> Result<(), AppError> {
+        sqlx::query("DELETE FROM coupons WHERE restaurant_id = $1 AND id = $2")
+            .bind(restaurant_id)
+            .bind(coupon_id)
+            .execute(pool)
+            .await?;
+
+        Ok(())
     }
 
     pub async fn validate_coupon(
@@ -43,7 +132,9 @@ impl CouponRepository {
 
         let coupon = sqlx::query_as::<_, Coupon>(
             r#"
-            SELECT id, restaurant_id, code, description, discount_type, discount_value,
+            SELECT id, restaurant_id, code, description,
+                   discount_type::text AS discount_type,
+                   discount_value::float8 AS discount_value,
                    min_order_amount_paise, max_discount_amount_paise, one_time_per_customer,
                    is_active, start_date, end_date, created_at, updated_at
             FROM coupons
@@ -128,7 +219,7 @@ impl CouponRepository {
         }
 
         // Calculate discount
-        let raw_discount_paise = if coupon.discount_type == "percentage" {
+        let raw_discount_paise = if coupon.discount_type.to_lowercase() == "percentage" {
             Paise(req.order_amount_paise)
                 .percentage(coupon.discount_value)
                 .0

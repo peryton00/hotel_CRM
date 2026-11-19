@@ -7,6 +7,8 @@ pub struct Restaurant {
     pub id: Uuid,
     pub name: String,
     pub slug: String,
+    pub tagline: Option<String>,
+    pub description: Option<String>,
     pub phone: Option<String>,
     pub email: Option<String>,
     pub address: Option<String>,
@@ -20,6 +22,21 @@ pub struct Restaurant {
     pub is_active: bool,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct UpdateRestaurantPayload {
+    pub name: Option<String>,
+    pub tagline: Option<String>,
+    pub description: Option<String>,
+    pub phone: Option<String>,
+    pub email: Option<String>,
+    pub address: Option<String>,
+    pub city: Option<String>,
+    pub state: Option<String>,
+    pub postal_code: Option<String>,
+    pub gstin: Option<String>,
+    pub fssai_license: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

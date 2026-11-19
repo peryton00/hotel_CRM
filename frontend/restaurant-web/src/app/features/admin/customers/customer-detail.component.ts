@@ -1,17 +1,29 @@
 import { Component, inject, computed, signal, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { RouterModule, ActivatedRoute } from '@angular/router';
+import { RouterModule, ActivatedRoute, Router } from '@angular/router';
 import { FormsModule } from '@angular/forms';
 import { RestaurantDataService } from '../../../data-access/services/restaurant-data.service';
 import { Customer } from '../../../core/models/customer.model';
 import { CurrencyInrPipe } from '../../../shared/pipes/currency-inr.pipe';
 import { StatusBadgeComponent } from '../../../shared/components/status-badge/status-badge.component';
+import { SkeletonLoaderComponent } from '../../../shared/components/loading/skeleton-loader.component';
+import { LoadingButtonDirective } from '../../../shared/components/loading/loading-button.directive';
+import { EmptyStateComponent } from '../../../shared/components/empty-state/empty-state.component';
 import { ToastService } from '../../../core/services/toast.service';
 
 @Component({
   selector: 'app-customer-detail',
   standalone: true,
-  imports: [CommonModule, RouterModule, FormsModule, CurrencyInrPipe, StatusBadgeComponent],
+  imports: [
+    CommonModule,
+    RouterModule,
+    FormsModule,
+    CurrencyInrPipe,
+    StatusBadgeComponent,
+    SkeletonLoaderComponent,
+    LoadingButtonDirective,
+    EmptyStateComponent,
+  ],
   template: `
     @if (customer(); as cust) {
       <div class="customer-detail-page">
@@ -103,12 +115,14 @@ import { ToastService } from '../../../core/services/toast.service';
                     </tr>
                   } @empty {
                     <tr>
-                      <td
-                        colspan="6"
-                        class="text-center"
-                        style="padding: 24px; color: var(--color-text-muted);"
-                      >
-                        No dining orders placed by this guest yet.
+                      <td colspan="6" style="padding: 0;">
+                        <app-empty-state
+                          [compact]="true"
+                          [bordered]="false"
+                          icon="ph-receipt"
+                          title="No Dining Orders"
+                          message="No dining orders placed by this guest yet."
+                        />
                       </td>
                     </tr>
                   }
@@ -155,7 +169,13 @@ import { ToastService } from '../../../core/services/toast.service';
                     <div class="chip-desc">{{ coup.name }}</div>
                   </div>
                 } @empty {
-                  <p class="text-sm text-muted">No exclusive coupons assigned to this customer.</p>
+                  <app-empty-state
+                    [compact]="true"
+                    [bordered]="false"
+                    icon="ph-ticket"
+                    title="No Coupons Assigned"
+                    message="No exclusive coupons assigned to this customer."
+                  />
                 }
               </div>
             </div>
@@ -196,6 +216,8 @@ import { ToastService } from '../../../core/services/toast.service';
                 <button class="btn btn-secondary" (click)="showPointsModal = false">Cancel</button>
                 <button
                   class="btn btn-primary"
+                  [appLoadingButton]="isSavingPoints()"
+                  loadingText="Updating..."
                   (click)="savePointsAdjustment()"
                   [disabled]="!pointsDelta || !pointsReason.trim()"
                 >
@@ -206,12 +228,31 @@ import { ToastService } from '../../../core/services/toast.service';
           </div>
         }
       </div>
-    } @else {
-      <div class="empty-state-card">
-        <h2 class="heading-card">Customer Not Found</h2>
-        <p class="text-muted">The requested customer record does not exist in the mock dataset.</p>
-        <a routerLink="/admin/customers" class="btn btn-secondary">Return to Customer Directory</a>
+    } @else if (isLoading()) {
+      <div class="customer-detail-page">
+        <div class="detail-header">
+          <div style="display: flex; align-items: center; gap: 16px;">
+            <app-skeleton variant="circle" width="56px" />
+            <div style="display: flex; flex-direction: column; gap: 8px;">
+              <app-skeleton variant="title" width="220px" height="28px" />
+              <app-skeleton variant="text" width="160px" height="14px" />
+            </div>
+          </div>
+        </div>
+        <div class="metrics-row">
+          <app-skeleton variant="stat-card" [count]="4" />
+        </div>
+        <app-skeleton variant="rect" height="320px" borderRadius="12px" />
       </div>
+    } @else {
+      <app-empty-state
+        icon="ph-user-focus"
+        title="Customer Not Found"
+        message="The requested guest profile does not exist or may have been deleted."
+        actionText="Return to Customer Directory"
+        actionIcon="ph-arrow-left"
+        (actionClick)="router.navigate(['/admin/customers'])"
+      />
     }
   `,
   styles: [
@@ -436,9 +477,15 @@ import { ToastService } from '../../../core/services/toast.service';
 })
 export class CustomerDetailComponent implements OnInit {
   private route = inject(ActivatedRoute);
+  readonly router = inject(Router);
   private dataService = inject(RestaurantDataService);
   private mock = this.dataService;
   private toastService = inject(ToastService);
+
+  readonly isLoading = computed(
+    () => this.dataService.isCustomersLoading() || !this.dataService.customersLoaded()
+  );
+  readonly isSavingPoints = signal<boolean>(false);
 
   customerId = signal<string>('');
 
@@ -480,13 +527,8 @@ export class CustomerDetailComponent implements OnInit {
     const cust = this.customer();
     if (!cust || !this.pointsDelta) return;
 
+    this.mock.awardLoyaltyPoints(cust.id, this.pointsDelta, this.pointsReason || 'Manual adjustment');
     const newPoints = Math.max(0, cust.loyaltyPoints + this.pointsDelta);
-    const updatedCusts = this.mock
-      .customers()
-      .map((c) => (c.id === cust.id ? { ...c, loyaltyPoints: newPoints } : c));
-    this.mock.customers.set(updatedCusts);
-    this.mock.saveLocal('customers', updatedCusts);
-
     this.toastService.success(`Updated loyalty balance for ${cust.name}: ${newPoints} pts`);
     this.showPointsModal = false;
   }

@@ -3,6 +3,9 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { RestaurantDataService } from '../../../data-access/services/restaurant-data.service';
 import { CurrencyInrPipe } from '../../../shared/pipes/currency-inr.pipe';
+import { SkeletonLoaderComponent } from '../../../shared/components/loading/skeleton-loader.component';
+import { LoadingButtonDirective } from '../../../shared/components/loading/loading-button.directive';
+import { EmptyStateComponent } from '../../../shared/components/empty-state/empty-state.component';
 import { ToastService } from '../../../core/services/toast.service';
 import {
   calculateFinancialSummary,
@@ -29,7 +32,14 @@ export type ReportViewTab = 'overview' | 'revenue' | 'cogs' | 'wastage';
 @Component({
   selector: 'app-reports',
   standalone: true,
-  imports: [CommonModule, FormsModule, CurrencyInrPipe],
+  imports: [
+    CommonModule,
+    FormsModule,
+    CurrencyInrPipe,
+    SkeletonLoaderComponent,
+    LoadingButtonDirective,
+    EmptyStateComponent,
+  ],
   template: `
     <div class="reports-page">
       <!-- Header -->
@@ -46,7 +56,12 @@ export type ReportViewTab = 'overview' | 'revenue' | 'cogs' | 'wastage';
             <i class="ph ph-trash"></i>
             <span>Log Wastage</span>
           </button>
-          <button class="btn btn-secondary" (click)="exportReport()">
+          <button
+            class="btn btn-secondary"
+            [appLoadingButton]="isExporting()"
+            loadingText="Exporting..."
+            (click)="exportReport()"
+          >
             <i class="ph ph-file-csv"></i>
             <span>Export CSV</span>
           </button>
@@ -231,39 +246,83 @@ export type ReportViewTab = 'overview' | 'revenue' | 'cogs' | 'wastage';
             <div class="kpi-grid">
               <div class="kpi-card">
                 <span class="kpi-title">Gross Sales (Billed)</span>
-                <span class="kpi-val">{{ grossSales() | currencyInr }}</span>
-                <span class="kpi-sub">{{ filteredOrders().length }} orders placed</span>
+                <span class="kpi-val">
+                  @if (isOrdersLoading()) {
+                    <app-skeleton variant="text" width="90px" height="1.5rem" />
+                  } @else {
+                    {{ grossSales() | currencyInr }}
+                  }
+                </span>
+                <span class="kpi-sub">
+                  @if (isOrdersLoading()) {
+                    <app-skeleton variant="text" width="70px" height="0.8rem" />
+                  } @else {
+                    {{ filteredOrders().length }} orders placed
+                  }
+                </span>
               </div>
 
               <div class="kpi-card">
                 <span class="kpi-title">Promotional Discounts</span>
-                <span class="kpi-val text-crimson">-{{ totalDiscounts() | currencyInr }}</span>
+                <span class="kpi-val text-crimson">
+                  @if (isOrdersLoading()) {
+                    <app-skeleton variant="text" width="70px" height="1.5rem" />
+                  } @else {
+                    -{{ totalDiscounts() | currencyInr }}
+                  }
+                </span>
                 <span class="kpi-sub">Redeemed promotional discounts</span>
               </div>
 
               <div class="kpi-card">
                 <span class="kpi-title">Net Sales</span>
-                <span class="kpi-val text-onyx font-bold">{{
-                  netSales() | currencyInr
-                }}</span>
+                <span class="kpi-val text-onyx font-bold">
+                  @if (isOrdersLoading()) {
+                    <app-skeleton variant="text" width="90px" height="1.5rem" />
+                  } @else {
+                    {{ netSales() | currencyInr }}
+                  }
+                </span>
                 <span class="kpi-sub">Billed sales (net of promotions)</span>
               </div>
 
               <div class="kpi-card">
                 <span class="kpi-title">Collected Revenue</span>
-                <span class="kpi-val text-success">{{ collectedRevenue() | currencyInr }}</span>
+                <span class="kpi-val text-success">
+                  @if (isOrdersLoading()) {
+                    <app-skeleton variant="text" width="90px" height="1.5rem" />
+                  } @else {
+                    {{ collectedRevenue() | currencyInr }}
+                  }
+                </span>
                 <span class="kpi-sub">
-                  {{ paidOrdersCount() }} settled orders
-                  @if (hasEstimatedSettlements()) {
-                    <small class="text-muted">(legacy timestamps)</small>
+                  @if (isOrdersLoading()) {
+                    <app-skeleton variant="text" width="80px" height="0.8rem" />
+                  } @else {
+                    {{ paidOrdersCount() }} settled orders
+                    @if (hasEstimatedSettlements()) {
+                      <small class="text-muted">(legacy timestamps)</small>
+                    }
                   }
                 </span>
               </div>
 
               <div class="kpi-card">
                 <span class="kpi-title">Completed Refunds</span>
-                <span class="kpi-val text-crimson">-{{ totalRefunds() | currencyInr }}</span>
-                <span class="kpi-sub">{{ completedRefundsCount() }} recorded refunds</span>
+                <span class="kpi-val text-crimson">
+                  @if (isOrdersLoading()) {
+                    <app-skeleton variant="text" width="70px" height="1.5rem" />
+                  } @else {
+                    -{{ totalRefunds() | currencyInr }}
+                  }
+                </span>
+                <span class="kpi-sub">
+                  @if (isOrdersLoading()) {
+                    <app-skeleton variant="text" width="80px" height="0.8rem" />
+                  } @else {
+                    {{ completedRefundsCount() }} recorded refunds
+                  }
+                </span>
               </div>
 
               <div class="kpi-card highlight-card">
@@ -272,8 +331,13 @@ export type ReportViewTab = 'overview' | 'revenue' | 'cogs' | 'wastage';
                   class="kpi-val font-extrabold"
                   [class.text-success]="netRevenue() >= 0"
                   [class.text-crimson]="netRevenue() < 0"
-                  >{{ netRevenue() | currencyInr }}</span
                 >
+                  @if (isOrdersLoading()) {
+                    <app-skeleton variant="text" width="100px" height="1.6rem" />
+                  } @else {
+                    {{ netRevenue() | currencyInr }}
+                  }
+                </span>
                 <span class="kpi-sub">
                   Collected cash/UPI minus completed refunds
                   @if (hasEstimatedSettlements()) {
@@ -284,7 +348,13 @@ export type ReportViewTab = 'overview' | 'revenue' | 'cogs' | 'wastage';
 
               <div class="kpi-card">
                 <span class="kpi-title">Outstanding Receivables</span>
-                <span class="kpi-val text-onyx">{{ outstandingReceivables() | currencyInr }}</span>
+                <span class="kpi-val text-onyx">
+                  @if (isOrdersLoading()) {
+                    <app-skeleton variant="text" width="85px" height="1.5rem" />
+                  } @else {
+                    {{ outstandingReceivables() | currencyInr }}
+                  }
+                </span>
                 <span class="kpi-sub">Unsettled orders & split shares</span>
               </div>
             </div>
@@ -301,10 +371,20 @@ export type ReportViewTab = 'overview' | 'revenue' | 'cogs' | 'wastage';
             <div class="kpi-grid grid-3-col">
               <div class="kpi-card">
                 <span class="kpi-title">Recipe COGS (Fulfilled)</span>
-                <span class="kpi-val text-onyx">{{ cogsSummary().totalCogs | currencyInr }}</span>
-                <span class="kpi-sub"
-                  >{{ cogsSummary().fulfilledPortionsCount }} served/completed portions</span
-                >
+                <span class="kpi-val text-onyx">
+                  @if (isInventoryLoading() || isOrdersLoading()) {
+                    <app-skeleton variant="text" width="85px" height="1.5rem" />
+                  } @else {
+                    {{ cogsSummary().totalCogs | currencyInr }}
+                  }
+                </span>
+                <span class="kpi-sub">
+                  @if (isInventoryLoading() || isOrdersLoading()) {
+                    <app-skeleton variant="text" width="80px" height="0.8rem" />
+                  } @else {
+                    {{ cogsSummary().fulfilledPortionsCount }} served/completed portions
+                  }
+                </span>
               </div>
 
               <div class="kpi-card highlight-gold">
@@ -314,7 +394,11 @@ export type ReportViewTab = 'overview' | 'revenue' | 'cogs' | 'wastage';
                   [class.text-success]="cogsSummary().grossProfit >= 0"
                   [class.text-crimson]="cogsSummary().grossProfit < 0"
                 >
-                  {{ cogsSummary().grossProfit | currencyInr }}
+                  @if (isInventoryLoading() || isOrdersLoading()) {
+                    <app-skeleton variant="text" width="85px" height="1.5rem" />
+                  } @else {
+                    {{ cogsSummary().grossProfit | currencyInr }}
+                  }
                 </span>
                 <span class="kpi-sub">Net Collections minus COGS</span>
               </div>
@@ -326,7 +410,11 @@ export type ReportViewTab = 'overview' | 'revenue' | 'cogs' | 'wastage';
                   [class.text-success]="cogsSummary().grossMarginPercentage >= 40"
                   [class.text-crimson]="cogsSummary().grossMarginPercentage < 40"
                 >
-                  {{ cogsSummary().grossMarginPercentage }}%
+                  @if (isInventoryLoading() || isOrdersLoading()) {
+                    <app-skeleton variant="text" width="60px" height="1.5rem" />
+                  } @else {
+                    {{ cogsSummary().grossMarginPercentage }}%
+                  }
                 </span>
                 <span class="kpi-sub">(Gross Profit ÷ Net Collections) × 100</span>
               </div>
@@ -344,18 +432,32 @@ export type ReportViewTab = 'overview' | 'revenue' | 'cogs' | 'wastage';
             <div class="kpi-grid grid-2-col">
               <div class="kpi-card">
                 <span class="kpi-title">Total GST Collected</span>
-                <span class="kpi-val text-onyx">{{ totalTaxCollected() | currencyInr }}</span>
+                <span class="kpi-val text-onyx">
+                  @if (isOrdersLoading()) {
+                    <app-skeleton variant="text" width="80px" height="1.5rem" />
+                  } @else {
+                    {{ totalTaxCollected() | currencyInr }}
+                  }
+                </span>
                 <span class="kpi-sub">CGST (2.5%) + SGST (2.5%)</span>
               </div>
 
               <div class="kpi-card highlight-crimson">
                 <span class="kpi-title">Inventory Wastage</span>
-                <span class="kpi-val text-crimson font-bold">{{
-                  wastageSummary().totalWastageValue | currencyInr
-                }}</span>
-                <span class="kpi-sub"
-                  >{{ wastageSummary().totalMovementsCount }} wastage movements recorded</span
-                >
+                <span class="kpi-val text-crimson font-bold">
+                  @if (isInventoryLoading()) {
+                    <app-skeleton variant="text" width="80px" height="1.5rem" />
+                  } @else {
+                    {{ wastageSummary().totalWastageValue | currencyInr }}
+                  }
+                </span>
+                <span class="kpi-sub">
+                  @if (isInventoryLoading()) {
+                    <app-skeleton variant="text" width="80px" height="0.8rem" />
+                  } @else {
+                    {{ wastageSummary().totalMovementsCount }} wastage movements recorded
+                  }
+                </span>
               </div>
             </div>
           </div>
@@ -363,19 +465,15 @@ export type ReportViewTab = 'overview' | 'revenue' | 'cogs' | 'wastage';
       </div>
 
       <!-- Empty State if no records found -->
-      @if (filteredOrders().length === 0 && rangeMovements().length === 0) {
-        <div class="empty-state-box">
-          <i class="ph ph-calendar-x empty-icon"></i>
-          <h3>No Operational Records in Selected Window</h3>
-          <p class="text-muted">
-            There are no orders, refunds, or inventory movements matching the period
-            <strong>{{ dateRange().label }}</strong
-            >.
-          </p>
-          <button class="btn btn-secondary btn-sm" (click)="setPreset('this_month')">
-            Reset to This Month
-          </button>
-        </div>
+      @if (!isOrdersLoading() && !isInventoryLoading() && filteredOrders().length === 0 && rangeMovements().length === 0) {
+        <app-empty-state
+          icon="ph-calendar-x"
+          title="No Operational Records in Selected Window"
+          [message]="'There are no orders, refunds, or inventory movements matching the period ' + dateRange().label + '.'"
+          actionText="Reset to This Month"
+          actionIcon="ph-calendar"
+          (actionClick)="setPreset('this_month')"
+        />
       }
 
       <!-- Interactive Graphics & Visual Canvas Section -->
@@ -397,76 +495,82 @@ export type ReportViewTab = 'overview' | 'revenue' | 'cogs' | 'wastage';
               </div>
             </div>
 
-            <div class="svg-trend-canvas-wrap">
-              <svg viewBox="0 0 640 220" class="trend-canvas-svg" preserveAspectRatio="none">
-                <defs>
-                  <linearGradient id="revenueGradient" x1="0%" y1="0%" x2="0%" y2="100%">
-                    <stop offset="0%" stop-color="#C21807" stop-opacity="0.32" />
-                    <stop offset="100%" stop-color="#C21807" stop-opacity="0.0" />
-                  </linearGradient>
-                </defs>
+            @if (isOrdersLoading()) {
+              <div style="padding: 24px 0;">
+                <app-skeleton variant="chart" height="200px" />
+              </div>
+            } @else {
+              <div class="svg-trend-canvas-wrap">
+                <svg viewBox="0 0 640 220" class="trend-canvas-svg" preserveAspectRatio="none">
+                  <defs>
+                    <linearGradient id="revenueGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+                      <stop offset="0%" stop-color="#C21807" stop-opacity="0.32" />
+                      <stop offset="100%" stop-color="#C21807" stop-opacity="0.0" />
+                    </linearGradient>
+                  </defs>
 
-                <!-- Gridlines -->
-                @for (gl of revenueTrendPoints().gridLines; track gl.y) {
-                  <line
-                    x1="45"
-                    [attr.y1]="gl.y"
-                    x2="615"
-                    [attr.y2]="gl.y"
-                    stroke="var(--color-border)"
-                    stroke-width="1"
-                    stroke-dasharray="3,3"
-                  />
-                  <text
-                    x="40"
-                    [attr.y]="gl.y + 4"
-                    font-size="9"
-                    fill="var(--color-text-muted)"
-                    text-anchor="end"
-                  >
-                    {{ gl.val >= 1000 ? (gl.val / 1000 | number: '1.0-0') + 'k' : gl.val }}
-                  </text>
-                }
+                  <!-- Gridlines -->
+                  @for (gl of revenueTrendPoints().gridLines; track gl.y) {
+                    <line
+                      x1="45"
+                      [attr.y1]="gl.y"
+                      x2="615"
+                      [attr.y2]="gl.y"
+                      stroke="var(--color-border)"
+                      stroke-width="1"
+                      stroke-dasharray="3,3"
+                    />
+                    <text
+                      x="40"
+                      [attr.y]="gl.y + 4"
+                      font-size="9"
+                      fill="var(--color-text-muted)"
+                      text-anchor="end"
+                    >
+                      {{ gl.val >= 1000 ? (gl.val / 1000 | number: '1.0-0') + 'k' : gl.val }}
+                    </text>
+                  }
 
-                <!-- Area Fill -->
-                @if (revenueTrendPoints().areaD) {
-                  <path [attr.d]="revenueTrendPoints().areaD" fill="url(#revenueGradient)" />
-                }
+                  <!-- Area Fill -->
+                  @if (revenueTrendPoints().areaD) {
+                    <path [attr.d]="revenueTrendPoints().areaD" fill="url(#revenueGradient)" />
+                  }
 
-                <!-- Path Line -->
-                @if (revenueTrendPoints().pathD) {
-                  <path
-                    [attr.d]="revenueTrendPoints().pathD"
-                    fill="none"
-                    stroke="var(--color-crimson)"
-                    stroke-width="2.5"
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                  />
-                }
+                  <!-- Path Line -->
+                  @if (revenueTrendPoints().pathD) {
+                    <path
+                      [attr.d]="revenueTrendPoints().pathD"
+                      fill="none"
+                      stroke="var(--color-crimson)"
+                      stroke-width="2.5"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    />
+                  }
 
-                <!-- Data Dots -->
-                @for (p of revenueTrendPoints().points; track p.label) {
-                  <circle
-                    [attr.cx]="p.x"
-                    [attr.cy]="p.y"
-                    r="4"
-                    fill="var(--color-crimson)"
-                    stroke="var(--color-surface)"
-                    stroke-width="2"
-                  />
-                  <text
-                    [attr.x]="p.x"
-                    [attr.y]="revenueTrendPoints().baselineY + 16"
-                    font-size="9"
-                    fill="var(--color-text-secondary)"
-                    text-anchor="middle"
-                  >
-                    {{ p.label }}
-                  </text>
-                }
-              </svg>
-            </div>
+                  <!-- Data Dots -->
+                  @for (p of revenueTrendPoints().points; track p.label) {
+                    <circle
+                      [attr.cx]="p.x"
+                      [attr.cy]="p.y"
+                      r="4"
+                      fill="var(--color-crimson)"
+                      stroke="var(--color-surface)"
+                      stroke-width="2"
+                    />
+                    <text
+                      [attr.x]="p.x"
+                      [attr.y]="revenueTrendPoints().baselineY + 16"
+                      font-size="9"
+                      fill="var(--color-text-secondary)"
+                      text-anchor="middle"
+                    >
+                      {{ p.label }}
+                    </text>
+                  }
+                </svg>
+              </div>
+            }
           </div>
 
           <!-- Canvas 2: Cost, Margin & Taxes Financial Allocation Graphic -->
@@ -480,27 +584,33 @@ export type ReportViewTab = 'overview' | 'revenue' | 'cogs' | 'wastage';
               </div>
             </div>
 
-            <div class="financial-bars-flow">
-              @for (bar of costProfitComparison(); track bar.label) {
-                <div class="flow-bar-row">
-                  <div class="flow-bar-head">
-                    <span class="flow-label">{{ bar.label }}</span>
-                    <div class="flow-val-group">
-                      <strong class="flow-val">{{ bar.value | currencyInr }}</strong>
-                      <span class="flow-pct">({{ bar.pct }}%)</span>
+            @if (isOrdersLoading() || isInventoryLoading()) {
+              <div style="padding: 24px 16px;">
+                <app-skeleton variant="stat-card" [count]="3" />
+              </div>
+            } @else {
+              <div class="financial-bars-flow">
+                @for (bar of costProfitComparison(); track bar.label) {
+                  <div class="flow-bar-row">
+                    <div class="flow-bar-head">
+                      <span class="flow-label">{{ bar.label }}</span>
+                      <div class="flow-val-group">
+                        <strong class="flow-val">{{ bar.value | currencyInr }}</strong>
+                        <span class="flow-pct">({{ bar.pct }}%)</span>
+                      </div>
                     </div>
+                    <div class="flow-bar-track">
+                      <div
+                        class="flow-bar-fill"
+                        [style.width.%]="bar.pct"
+                        [style.background]="bar.color"
+                      ></div>
+                    </div>
+                    <div class="flow-bar-sub">{{ bar.sub }}</div>
                   </div>
-                  <div class="flow-bar-track">
-                    <div
-                      class="flow-bar-fill"
-                      [style.width.%]="bar.pct"
-                      [style.background]="bar.color"
-                    ></div>
-                  </div>
-                  <div class="flow-bar-sub">{{ bar.sub }}</div>
-                </div>
-              }
-            </div>
+                }
+              </div>
+            }
           </div>
         </div>
       }
@@ -1396,7 +1506,8 @@ export type ReportViewTab = 'overview' | 'revenue' | 'cogs' | 'wastage';
 
       .report-table {
         width: 100%;
-        border-collapse: collapse;
+        border-collapse: separate;
+        border-spacing: 0;
         font-size: 0.8125rem;
 
         th,
@@ -1984,6 +2095,15 @@ export class ReportsComponent {
   private dataService = inject(RestaurantDataService);
   private mock = this.dataService;
   private toastService = inject(ToastService);
+
+  readonly isOrdersLoading = computed(
+    () => this.dataService.isOrdersLoading() || !this.dataService.ordersLoaded()
+  );
+  readonly isInventoryLoading = computed(
+    () => this.dataService.isInventoryLoading() || !this.dataService.inventoryLoaded()
+  );
+  readonly isLoading = computed(() => this.isOrdersLoading() || this.isInventoryLoading());
+  readonly isExporting = signal<boolean>(false);
 
   orders = this.mock.orders;
   categories = this.mock.categories;

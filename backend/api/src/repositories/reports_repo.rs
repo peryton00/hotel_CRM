@@ -254,7 +254,7 @@ impl ReportsRepository {
         .await?;
 
         let occupied_tables_row: (i64,) = sqlx::query_as(
-            "SELECT COUNT(*) FROM tables WHERE restaurant_id = $1 AND status = 'occupied'",
+            "SELECT COUNT(*) FROM tables WHERE restaurant_id = $1 AND status = 'OCCUPIED'::table_status",
         )
         .bind(restaurant_id)
         .fetch_one(pool)

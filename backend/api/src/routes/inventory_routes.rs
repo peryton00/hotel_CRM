@@ -1,5 +1,5 @@
 use axum::{
-    extract::{Query, State},
+    extract::{Path, Query, State},
     response::IntoResponse,
     Json,
 };
@@ -12,7 +12,7 @@ use crate::{
     error::AppError,
     models::{
         common::ApiResponse,
-        inventory::{CreateInventoryItemRequest, RecordWastageRequest},
+        inventory::{CreateInventoryItemRequest, RecordWastageRequest, UpdateInventoryItemRequest},
     },
     repositories::InventoryRepository,
 };
@@ -36,6 +36,16 @@ pub async fn create_item(
     Json(req): Json<CreateInventoryItemRequest>,
 ) -> Result<impl IntoResponse, AppError> {
     let item = InventoryRepository::create_item(&pool, tenant.restaurant_id, req).await?;
+    Ok(Json(ApiResponse::success(item)))
+}
+
+pub async fn update_item(
+    State(pool): State<PgPool>,
+    tenant: TenantContext,
+    Path(item_id): Path<Uuid>,
+    Json(req): Json<UpdateInventoryItemRequest>,
+) -> Result<impl IntoResponse, AppError> {
+    let item = InventoryRepository::update_item(&pool, tenant.restaurant_id, item_id, req).await?;
     Ok(Json(ApiResponse::success(item)))
 }
 

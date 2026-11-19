@@ -1565,7 +1565,12 @@ export class MockDataService {
    * Authoritative settlement for a full dining order.
    * Rejects split orders to prevent bypass of split-bill reconciliation.
    */
-  settleOrder(req: { orderId: string; paymentMethod: 'CASH' | 'UPI' | 'CARD' }): {
+  settleOrder(req: {
+    orderId: string;
+    paymentMethod: 'CASH' | 'UPI' | 'CARD';
+    discountAmount?: number;
+    appliedCouponCode?: string;
+  }): {
     success: boolean;
     error?: string;
     order?: Order;
@@ -1588,11 +1593,23 @@ export class MockDataService {
     const now = new Date().toISOString();
     const isPrinted = (order.printCount || 0) > 0;
     const nextStatus = isPrinted ? 'COMPLETED' : order.status;
+
+    const grossTotal = Math.round(((order.subtotal || 0) + (order.taxAmount || 0)) * 100) / 100;
+    const finalDiscount = Math.min(
+      grossTotal,
+      Math.max(0, req.discountAmount !== undefined ? req.discountAmount : (order.discountAmount || 0)),
+    );
+    const totalAmount = Math.max(0, Math.round((grossTotal - finalDiscount) * 100) / 100);
+
     const updatedOrder: Order = {
       ...order,
       status: nextStatus,
       paymentStatus: 'PAID',
       paymentMethod: req.paymentMethod,
+      discountAmount: finalDiscount,
+      appliedCouponCode:
+        req.appliedCouponCode !== undefined ? req.appliedCouponCode : order.appliedCouponCode,
+      totalAmount,
       settledAt: now,
       updatedAt: now,
       timeline: [
@@ -1601,8 +1618,8 @@ export class MockDataService {
           status: nextStatus === 'COMPLETED' ? 'COMPLETED' : 'PAID',
           timestamp: now,
           note: isPrinted
-            ? `Dining bill settled via ${req.paymentMethod} (₹${order.totalAmount}) and invoice printed; marked COMPLETED`
-            : `Dining bill settled via ${req.paymentMethod} (₹${order.totalAmount})`,
+            ? `Dining bill settled via ${req.paymentMethod} (₹${totalAmount}${finalDiscount > 0 ? `, discount: ₹${finalDiscount}` : ''}) and invoice printed; marked COMPLETED`
+            : `Dining bill settled via ${req.paymentMethod} (₹${totalAmount}${finalDiscount > 0 ? `, discount: ₹${finalDiscount}` : ''})`,
         },
       ],
     };
@@ -1631,6 +1648,14 @@ export class MockDataService {
               orderType: order.orderType,
               pickupReference: order.pickupReference,
               tableNumber: order.tableNumber,
+              discount: updatedOrder.discountAmount,
+              appliedCouponCode: updatedOrder.appliedCouponCode,
+              taxBreakdown: [
+                { name: 'CGST (2.5%)', rate: 2.5, amount: updatedOrder.cgstAmount },
+                { name: 'SGST (2.5%)', rate: 2.5, amount: updatedOrder.sgstAmount },
+              ],
+              totalTax: updatedOrder.taxAmount,
+              finalTotal: updatedOrder.totalAmount,
               paymentStatus: 'PAID' as const,
               paymentMethod: req.paymentMethod,
               issuedAt: now,
@@ -1650,15 +1675,15 @@ export class MockDataService {
         customerPhone: order.customerPhone || '',
         issuedAt: now,
         items: order.items,
-        subtotal: order.subtotal,
-        discount: order.discountAmount,
-        appliedCouponCode: order.appliedCouponCode,
+        subtotal: updatedOrder.subtotal,
+        discount: updatedOrder.discountAmount,
+        appliedCouponCode: updatedOrder.appliedCouponCode,
         taxBreakdown: [
-          { name: 'CGST (2.5%)', rate: 2.5, amount: order.cgstAmount },
-          { name: 'SGST (2.5%)', rate: 2.5, amount: order.sgstAmount },
+          { name: 'CGST (2.5%)', rate: 2.5, amount: updatedOrder.cgstAmount },
+          { name: 'SGST (2.5%)', rate: 2.5, amount: updatedOrder.sgstAmount },
         ],
-        totalTax: order.taxAmount,
-        finalTotal: order.totalAmount,
+        totalTax: updatedOrder.taxAmount,
+        finalTotal: updatedOrder.totalAmount,
         paymentStatus: 'PAID',
         paymentMethod: req.paymentMethod,
       };

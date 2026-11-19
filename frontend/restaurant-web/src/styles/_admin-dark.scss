@@ -1,0 +1,1887 @@
+// =============================================================================
+// Admin CRM Luxury Dark Theme (Scoped strictly to Admin CRM Shell)
+// =============================================================================
+
+.admin-shell[data-theme='dark'],
+.admin-shell.theme-dark {
+  // Deep obsidian atmosphere for Admin CRM
+  --color-background: #090a0d;
+  --color-surface: #121418;
+  --color-surface-hover: #181b21;
+  --color-bone: #15181d;
+  --color-bone-light: #191c23;
+  --color-bone-dark: #0d0e11;
+
+  --color-text-primary: #f2f4f8;
+  --color-text-secondary: #9aa2ae;
+  --color-text-muted: #6b7280;
+
+  // Onyx & Taupe remapped for dark theme text/icon contrast
+  --color-onyx: #f2f4f8;
+  --color-onyx-subtle: #9aa2ae;
+  --color-onyx-light: #222731;
+  --color-taupe: #9aa2ae;
+  --color-taupe-light: #4b5563;
+  --color-taupe-subtle: #1f242d;
+
+  // Hairline precision borders
+  --color-border: rgba(255, 255, 255, 0.08);
+  --color-border-subtle: rgba(255, 255, 255, 0.04);
+
+  // Status tokens calibrated for dark background with high contrast
+  --color-success-bg: rgba(34, 197, 94, 0.14);
+  --color-success: #4ade80;
+  --color-warning-bg: rgba(234, 179, 8, 0.14);
+  --color-warning: #facc15;
+  --color-danger-bg: rgba(239, 68, 68, 0.16);
+  --color-danger: #f87171;
+  --color-info-bg: rgba(59, 130, 246, 0.16);
+  --color-info: #60a5fa;
+
+  --color-crimson-subtle: rgba(194, 24, 7, 0.22);
+  --color-gold-subtle: rgba(212, 175, 55, 0.16);
+
+  // Loading & Skeleton Tokens (Obsidian Dark)
+  --skeleton-bg: #1a1e27;
+  --skeleton-shimmer: rgba(255, 255, 255, 0.08);
+
+  // Elevation and ambient dark shadows
+  --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.5);
+  --shadow-sm: 0 2px 6px rgba(0, 0, 0, 0.6);
+  --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.7);
+  --shadow-lg: 0 12px 32px rgba(0, 0, 0, 0.85);
+  --shadow-card: 0 2px 8px rgba(0, 0, 0, 0.55);
+  --shadow-card-hover: 0 6px 22px rgba(0, 0, 0, 0.75);
+
+  --scrollbar-thumb: rgba(255, 255, 255, 0.15);
+  --scrollbar-thumb-hover: rgba(255, 255, 255, 0.25);
+
+  background-color: var(--color-background);
+  color: var(--color-text-primary);
+  transition: background-color 320ms cubic-bezier(0.32, 0.72, 0, 1),
+              color 320ms cubic-bezier(0.32, 0.72, 0, 1);
+
+  // Admin Topbar
+  .admin-topbar {
+    background: #111317;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.35);
+  }
+
+  // Admin Sidebar
+  .admin-sidebar {
+    background-color: #08090b;
+    border-right: 1px solid rgba(255, 255, 255, 0.06);
+    box-shadow: 4px 0 24px rgba(0, 0, 0, 0.65);
+  }
+
+  .sidebar-brand {
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+
+    .brand-title {
+      color: #ffffff !important;
+    }
+  }
+
+  .sidebar-footer {
+    border-top: 1px solid rgba(255, 255, 255, 0.06);
+  }
+
+  // Text overrides for elements with hardcoded or onyx references
+  .text-onyx,
+  .text-price,
+  strong:not(.invoice-paper strong):not(.thermal-modal-card strong):not(.receipt-paper strong),
+  b:not(.invoice-paper b):not(.thermal-modal-card b):not(.receipt-paper b) {
+    color: var(--color-text-primary);
+  }
+
+  h1:not(.invoice-paper h1):not(.thermal-modal-card h1),
+  h2:not(.invoice-paper h2):not(.thermal-modal-card h2),
+  h3:not(.invoice-paper h3):not(.thermal-modal-card h3),
+  h4:not(.invoice-paper h4):not(.thermal-modal-card h4),
+  h5:not(.invoice-paper h5):not(.thermal-modal-card h5),
+  h6:not(.invoice-paper h6):not(.thermal-modal-card h6) {
+    color: var(--color-text-primary);
+  }
+
+  // Preserve high-contrast ink on printable paper sheets and receipt previews
+  .invoice-paper,
+  .receipt-paper,
+  .thermal-modal-card {
+    background-color: #ffffff;
+    color: #0f172a;
+
+    h1, h2, h3, h4, h5, h6 {
+      color: #0f172a;
+    }
+
+    strong:not(.auth-title), b {
+      color: #0f172a;
+    }
+
+    p, span, td, th, div, label {
+      color: inherit;
+    }
+  }
+
+  .data-table,
+  .report-table,
+  .performance-table,
+  .sub-data-table,
+  .recipe-form-table {
+    th:first-child:not([colspan]),
+    td:first-child:not([colspan]) {
+      box-shadow: 4px 0 10px -2px rgba(0, 0, 0, 0.65) !important;
+    }
+  }
+
+  .dining-room-tag {
+    background: #16191f;
+    border-color: rgba(255, 255, 255, 0.08);
+    color: var(--color-text-secondary);
+  }
+
+  .connection-status-pill {
+    &.is-online {
+      background: rgba(34, 197, 94, 0.16);
+      border-color: rgba(34, 197, 94, 0.35);
+      color: #4ade80;
+    }
+
+    &.is-offline {
+      background: rgba(239, 68, 68, 0.16);
+      border-color: rgba(239, 68, 68, 0.4);
+      color: #f87171;
+    }
+  }
+
+  .mobile-toggle-btn {
+    color: var(--color-text-primary);
+  }
+
+  // Universal button icon inheritance
+  button,
+  .btn {
+    i,
+    .ph {
+      color: inherit;
+    }
+  }
+
+  // Sound toggle button (order queue chime)
+  .sound-toggle-btn {
+    background: #15181d;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    color: #f2f4f8;
+
+    i,
+    .ph {
+      color: #f2f4f8;
+    }
+
+    &:hover {
+      background: #1d2128;
+      border-color: rgba(255, 255, 255, 0.24);
+      color: #ffffff;
+
+      i,
+      .ph {
+        color: #ffffff;
+      }
+    }
+
+    &.muted {
+      background: #101216;
+      border-color: rgba(255, 255, 255, 0.06);
+      color: #6b7280;
+
+      i,
+      .ph {
+        color: #6b7280;
+      }
+
+      &:hover {
+        background: #181b21;
+        border-color: rgba(255, 255, 255, 0.14);
+        color: #9aa2ae;
+
+        i,
+        .ph {
+          color: #9aa2ae;
+        }
+      }
+    }
+  }
+
+  // Card utility buttons (order cards: details, edit, invoice, print)
+  .card-util-btn {
+    background: #15181d;
+    border-color: rgba(255, 255, 255, 0.1);
+    color: var(--color-text-secondary);
+
+    i,
+    .ph {
+      color: inherit;
+    }
+
+    &:hover {
+      background: #1c2027;
+      border-color: rgba(255, 255, 255, 0.22);
+      color: #ffffff;
+
+      i,
+      .ph {
+        color: #ffffff;
+      }
+    }
+
+    &.paid-locked {
+      background: rgba(212, 175, 55, 0.1);
+      border-color: rgba(212, 175, 55, 0.25);
+      color: #facc15;
+
+      i,
+      .ph {
+        color: #facc15;
+      }
+
+      &:hover {
+        background: rgba(212, 175, 55, 0.18);
+        border-color: #d4af37;
+        color: #ffffff;
+
+        i,
+        .ph {
+          color: #ffffff;
+        }
+      }
+    }
+
+    &.btn-cancel-order {
+      color: #f87171;
+
+      i,
+      .ph {
+        color: #f87171;
+      }
+
+      &:hover {
+        background: rgba(239, 68, 68, 0.15);
+        border-color: rgba(239, 68, 68, 0.3);
+        color: #fca5a5;
+
+        i,
+        .ph {
+          color: #fca5a5;
+        }
+      }
+    }
+  }
+
+  // Close & modal dismiss buttons
+  .close-btn,
+  .modal-close-btn,
+  .drawer-close-btn,
+  .panel-close-btn {
+    color: var(--color-text-secondary);
+
+    i,
+    .ph {
+      color: inherit;
+    }
+
+    &:hover {
+      background: rgba(255, 255, 255, 0.08);
+      color: #ffffff;
+
+      i,
+      .ph {
+        color: #ffffff;
+      }
+    }
+  }
+
+  // General icon buttons & micro actions across admin
+  .btn-icon,
+  .btn-icon-only,
+  .icon-action-btn,
+  .copy-mini-btn,
+  .mini-edit-btn,
+  .btn-reprint,
+  .btn-revoke,
+  .btn-unlock-server,
+  .btn-unlock-server-xs,
+  .add-dish-btn,
+  .quick-add-btn,
+  .btn-reset-filters,
+  .status-toggle-btn,
+  .assign-quick-btn,
+  .btn-tel-call {
+    background: #15181d;
+    border-color: rgba(255, 255, 255, 0.1);
+    color: var(--color-text-secondary);
+
+    i,
+    .ph {
+      color: inherit;
+    }
+
+    &:hover:not(:disabled) {
+      background: #1c2027;
+      border-color: rgba(255, 255, 255, 0.22);
+      color: #ffffff;
+
+      i,
+      .ph {
+        color: #ffffff;
+      }
+    }
+  }
+
+  // Quantity steppers, remove & trash controls
+  .qty-btn,
+  .stepper-btn,
+  .search-clear-btn,
+  .toggle-visibility-btn,
+  .dish-picker-trigger-btn,
+  .btn-cal-nav {
+    background: #181b22;
+    border-color: rgba(255, 255, 255, 0.1);
+    color: var(--color-text-primary);
+
+    i,
+    .ph {
+      color: inherit;
+    }
+
+    &:hover:not(:disabled) {
+      background: #222731;
+      border-color: rgba(255, 255, 255, 0.22);
+      color: #ffffff;
+
+      i,
+      .ph {
+        color: #ffffff;
+      }
+    }
+  }
+
+  .trash-btn,
+  .remove-btn,
+  .btn-icon-danger {
+    color: #f87171;
+
+    i,
+    .ph {
+      color: #f87171;
+    }
+
+    &:hover:not(:disabled) {
+      background: rgba(239, 68, 68, 0.16);
+      border-color: rgba(239, 68, 68, 0.35);
+      color: #fca5a5;
+
+      i,
+      .ph {
+        color: #fca5a5;
+      }
+    }
+  }
+
+  // Tab & segmented choice buttons
+  .tab-btn,
+  .tab-toggle-btn,
+  .mode-tab-btn,
+  .pill-choice-btn,
+  .preset-btn,
+  .tender-choice-btn {
+    color: var(--color-text-secondary);
+
+    i,
+    .ph {
+      color: inherit;
+    }
+
+    &:hover:not(:disabled) {
+      color: var(--color-text-primary);
+      background: rgba(255, 255, 255, 0.05);
+
+      i,
+      .ph {
+        color: var(--color-text-primary);
+      }
+    }
+
+    &.active {
+      background: #222731;
+      border-color: rgba(255, 255, 255, 0.16);
+      color: #ffffff;
+
+      i,
+      .ph {
+        color: #ffffff;
+      }
+    }
+  }
+
+  // Standalone icons and input icons
+  .input-with-icon,
+  .search-input-wrap,
+  .search-wrap {
+    i,
+    .ph {
+      color: var(--color-text-muted);
+    }
+
+    &:focus-within {
+      i,
+      .ph {
+        color: var(--color-text-primary);
+      }
+    }
+  }
+
+  .auth-icon-badge {
+    background: rgba(212, 175, 55, 0.18);
+    color: #facc15;
+
+    i,
+    .ph {
+      color: #facc15;
+    }
+  }
+
+  // Buttons & Controls
+  .btn-secondary {
+    background: #15181d;
+    border-color: rgba(255, 255, 255, 0.08);
+    color: var(--color-text-primary);
+
+    &:hover:not(:disabled) {
+      background: #1c2027;
+      border-color: rgba(255, 255, 255, 0.16);
+      color: #ffffff;
+    }
+  }
+
+  .btn-ghost {
+    color: var(--color-text-primary);
+
+    &:hover:not(:disabled) {
+      background: rgba(255, 255, 255, 0.06);
+    }
+  }
+
+  .btn-dark {
+    background: #1d212a;
+    border-color: rgba(255, 255, 255, 0.12);
+    color: #ffffff;
+
+    &:hover:not(:disabled) {
+      background: #252b36;
+    }
+  }
+
+  // Gold buttons maintain dark text and dark icons for high contrast against gold background
+  .btn-gold,
+  .badge-gold,
+  .avatar-admin,
+  .admin-badge .avatar-circle {
+    color: #121212 !important;
+
+    i,
+    .ph {
+      color: #121212 !important;
+    }
+  }
+
+  // Form Controls
+  .form-input,
+  .form-select,
+  .form-textarea {
+    background: #15181d;
+    border-color: rgba(255, 255, 255, 0.09);
+    color: var(--color-text-primary);
+
+    &:focus {
+      border-color: var(--color-crimson);
+      box-shadow: 0 0 0 3px rgba(194, 24, 7, 0.25);
+    }
+
+    &::placeholder {
+      color: var(--color-text-muted);
+    }
+  }
+
+  .form-label {
+    color: var(--color-text-primary);
+  }
+
+  // Data Tables
+  .table-container {
+    background: #121418;
+    border-color: rgba(255, 255, 255, 0.08);
+  }
+
+  .data-table {
+    th {
+      background: #171a20;
+      color: var(--color-text-secondary);
+      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    td {
+      color: var(--color-text-primary);
+      border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+    }
+
+    tr:hover td {
+      background-color: #181c22;
+    }
+  }
+
+  // Filter Bars & Tabs
+  .time-filter {
+    background: #15181d;
+    border-color: rgba(255, 255, 255, 0.08);
+  }
+
+  .filter-btn {
+    color: var(--color-text-secondary);
+
+    &.active {
+      background: #222731;
+      color: #ffffff;
+    }
+  }
+
+  .settings-tabs-bar {
+    background: #15181d;
+    border-color: rgba(255, 255, 255, 0.08);
+  }
+
+  .settings-tab-btn {
+    color: var(--color-text-secondary);
+
+    &.active {
+      background: #222731;
+      color: #f2f4f8;
+    }
+  }
+
+  // Modals & Panels
+  .modal-card {
+    background: #131519;
+    border-color: rgba(255, 255, 255, 0.1);
+    box-shadow: 0 20px 48px rgba(0, 0, 0, 0.85);
+
+    .modal-header {
+      border-bottom-color: rgba(255, 255, 255, 0.08);
+
+      h2,
+      h3,
+      .heading-card {
+        color: var(--color-text-primary);
+      }
+
+      // Preserve dark text on the thermal modal header which retains a light surface
+      #thermal-dialog-title.modal-title,
+      .thermal-modal-card .modal-title {
+        color: #0f172a !important;
+      }
+    }
+
+    .modal-footer {
+      background: #131519;
+      border-top-color: rgba(255, 255, 255, 0.08);
+
+      // Lighten status hint text on dark footer
+      .footer-status-hint,
+      .hint-text {
+        color: #94a3b8 !important;
+
+        strong {
+          color: #f1f5f9 !important;
+        }
+      }
+
+      // High-contrast dark mode styling for ghost actions
+      .btn.btn-ghost {
+        background: rgba(255, 255, 255, 0.08) !important;
+        color: #e2e8f0 !important;
+        border: 1px solid rgba(255, 255, 255, 0.16) !important;
+
+        &:hover {
+          background: rgba(255, 255, 255, 0.14) !important;
+          color: #ffffff !important;
+          border-color: rgba(255, 255, 255, 0.28) !important;
+          box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3) !important;
+        }
+      }
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Luxury Dark Card & Panel Architecture
+  // ---------------------------------------------------------------------------
+  .card,
+  .panel,
+  .order-board-card,
+  .table-card,
+  .dish-card,
+  .coupon-mgmt-card,
+  .staff-card,
+  .recipe-card,
+  .kpi-card,
+  .dashboard-panel,
+  .panel-box,
+  .toolbar-card,
+  .section-card,
+  .empty-card,
+  .empty-state-card,
+  .empty-orders-panel,
+  .auth-modal-card {
+    background-color: #121418;
+    border-color: rgba(255, 255, 255, 0.08);
+    color: var(--color-text-primary);
+  }
+
+  .card-footer {
+    background: #15181e;
+    border-top-color: rgba(255, 255, 255, 0.06);
+  }
+
+  .card-header {
+    border-bottom-color: rgba(255, 255, 255, 0.06);
+  }
+
+  // Authoritative Card Hover Contrast Rules
+  // (Prevents card backgrounds from washing out / whitening and mixing with text)
+  .card-hover:hover,
+  .order-board-card:hover,
+  .table-card:hover,
+  .dish-card:hover,
+  .coupon-mgmt-card:hover,
+  .staff-card:hover,
+  .recipe-card:hover,
+  .kpi-card:hover {
+    background-color: #161920;
+    border-color: rgba(255, 255, 255, 0.18);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.65);
+
+    // Primary headings, titles, prices, and emphasis remain pristine & high-contrast
+    .ord-num,
+    .table-number,
+    .dish-title,
+    .coupon-code,
+    .staff-name,
+    .recipe-title,
+    .kpi-value,
+    .line-cost,
+    .payable-val,
+    .code-tag,
+    h1, h2, h3, h4, h5, h6,
+    strong,
+    b {
+      color: #ffffff;
+    }
+
+    // Secondary indicators retain crisp legibility without washing out
+    .ord-time,
+    .table-capacity,
+    .table-section-tag,
+    .dish-desc,
+    .dish-sub-text,
+    .portion-label,
+    .phone-sub,
+    .meta-tag,
+    .kpi-title,
+    .kpi-footer,
+    .token-label {
+      color: #9aa2ae;
+    }
+  }
+
+  // Order Board Card hover accentuates crimson border
+  .order-board-card:hover {
+    border-color: var(--color-crimson);
+  }
+
+  // Completed Order Board Card (Obsidian Theme)
+  .completed-board-card {
+    background-color: #121418 !important;
+    border-color: rgba(255, 255, 255, 0.08) !important;
+
+    &:hover {
+      background-color: #161920 !important;
+      border-color: rgba(255, 255, 255, 0.18) !important;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.65) !important;
+    }
+
+    .completed-row-2 {
+      .completed-tbl-badge {
+        background: #191c23 !important;
+        border-color: rgba(255, 255, 255, 0.1) !important;
+        color: #f87171 !important;
+      }
+    }
+
+    .completed-row-3 {
+      .completed-ord-num {
+        color: #9aa2ae !important;
+      }
+
+      .completed-server-cell {
+        background: #181b22 !important;
+        border-color: rgba(255, 255, 255, 0.08) !important;
+
+        .server-label-mini {
+          color: #6b7280 !important;
+        }
+
+        .server-name-text {
+          color: #f2f4f8 !important;
+        }
+
+        .btn-unlock-server-xs {
+          color: #9aa2ae !important;
+
+          &:hover {
+            color: #f87171 !important;
+            background: rgba(239, 68, 68, 0.15) !important;
+          }
+        }
+      }
+    }
+
+    .completed-row-4 {
+      border-color: rgba(255, 255, 255, 0.08) !important;
+
+      .meta-pill {
+        &.pill-paid {
+          background: rgba(34, 197, 94, 0.16) !important;
+          color: #4ade80 !important;
+          border-color: rgba(34, 197, 94, 0.3) !important;
+        }
+
+        &.pill-printed {
+          background: rgba(212, 175, 55, 0.16) !important;
+          color: #facc15 !important;
+          border-color: rgba(250, 204, 21, 0.35) !important;
+        }
+      }
+
+      .btn-invoice-action {
+        background: #1c2028 !important;
+        border-color: rgba(239, 68, 68, 0.35) !important;
+        color: #f87171 !important;
+
+        &:hover {
+          background: var(--color-crimson) !important;
+          color: #ffffff !important;
+          border-color: var(--color-crimson) !important;
+        }
+      }
+    }
+
+    .completed-items-inset-box {
+      background: #0d0f13 !important;
+      border-color: rgba(255, 255, 255, 0.06) !important;
+
+      .qty-pill {
+        background: #181b22 !important;
+        border-color: rgba(255, 255, 255, 0.1) !important;
+        color: #f87171 !important;
+      }
+
+      .dish-name,
+      .line-cost {
+        color: #f2f4f8 !important;
+      }
+
+      .portion-label {
+        color: #9aa2ae !important;
+      }
+    }
+
+    .completed-total-strip {
+      .total-label-compact {
+        color: #9aa2ae !important;
+      }
+
+      .payable-val-highlight {
+        color: #f87171 !important;
+      }
+    }
+  }
+
+  // POS Dish Card (Quick POS order & Add Items modal)
+  .pos-dish-card {
+    background: #15181d;
+    border-color: rgba(255, 255, 255, 0.08);
+    color: var(--color-text-primary);
+
+    .dish-title {
+      color: #f2f4f8;
+    }
+
+    .dish-cost {
+      color: #f2f4f8;
+    }
+
+    &:hover:not(.is-out-of-stock) {
+      background: #1c2028 !important;
+      border-color: var(--color-crimson) !important;
+      box-shadow: 0 4px 14px rgba(0, 0, 0, 0.55) !important;
+
+      .dish-title {
+        color: #ffffff !important;
+      }
+
+      .dish-cost {
+        color: #ffffff !important;
+      }
+    }
+
+    &.in-tray {
+      background: rgba(212, 175, 55, 0.14) !important;
+      border-color: rgba(212, 175, 55, 0.6) !important;
+    }
+
+    &.is-out-of-stock {
+      background: #0e1013 !important;
+      border-color: rgba(255, 255, 255, 0.04) !important;
+      opacity: 0.45;
+    }
+  }
+
+  // Dish picker trigger button in Recipe modal
+  .dish-picker-trigger-btn {
+    background: #15181d;
+    border-color: rgba(255, 255, 255, 0.12);
+    color: var(--color-text-primary);
+
+    &:hover {
+      background: #1c2028 !important;
+      border-color: var(--color-gold) !important;
+      color: #ffffff !important;
+    }
+  }
+
+  // Payment method selection tiles
+  .method-tile {
+    background: #15181d;
+    border-color: rgba(255, 255, 255, 0.1);
+    color: var(--color-text-primary);
+
+    &:hover {
+      background: #1d212a !important;
+      border-color: rgba(255, 255, 255, 0.22) !important;
+
+      .tile-name,
+      .tile-desc {
+        color: #ffffff !important;
+      }
+    }
+
+    &.selected {
+      background: rgba(194, 24, 7, 0.16) !important;
+      border-color: var(--color-crimson) !important;
+      color: #ffffff !important;
+
+      .tile-icon {
+        color: var(--color-crimson) !important;
+      }
+
+      .tile-name {
+        color: #ffffff !important;
+      }
+    }
+  }
+
+  // Server unlock controls & locked row
+  .btn-unlock-server,
+  .btn-unlock-server-xs {
+    background: #181b22 !important;
+    border-color: rgba(59, 130, 246, 0.3) !important;
+    color: #60a5fa !important;
+
+    &:hover {
+      background: rgba(59, 130, 246, 0.2) !important;
+      border-color: #60a5fa !important;
+      color: #93c5fd !important;
+    }
+  }
+
+  .locked-server-row {
+    background: rgba(212, 175, 55, 0.12) !important;
+    border-color: rgba(212, 175, 55, 0.3) !important;
+    color: #facc15 !important;
+  }
+
+  // Cancel order action buttons
+  .btn-cancel-order,
+  .btn-cancel-head {
+    background: rgba(239, 68, 68, 0.08);
+    border-color: rgba(239, 68, 68, 0.3);
+    color: #f87171;
+
+    &:hover {
+      background: rgba(239, 68, 68, 0.2) !important;
+      border-color: #f87171 !important;
+      color: #fca5a5 !important;
+    }
+  }
+
+  // Card sub-bars & queue items
+  .guest-bar,
+  .server-bar,
+  .server-bar-locked,
+  .queue-item,
+  .attendance-member-row {
+    background: #161920;
+    border-color: rgba(255, 255, 255, 0.06);
+    color: var(--color-text-primary);
+  }
+
+  .attendance-member-row:hover {
+    background: #1c2028 !important;
+    border-color: rgba(255, 255, 255, 0.16) !important;
+  }
+
+  .queue-item:hover {
+    background: #1c2028;
+  }
+
+  .tbl-badge {
+    background: #1d2128;
+    border-color: rgba(255, 255, 255, 0.1);
+    color: var(--color-crimson);
+  }
+
+  .table-token-box {
+    background: #181b22;
+    color: var(--color-text-secondary);
+  }
+
+  .active-customer-box {
+    background: rgba(34, 197, 94, 0.1) !important;
+    border-color: rgba(34, 197, 94, 0.25) !important;
+  }
+
+  // Drawer dish items (Inventory recipes)
+  .drawer-dishes-stream .drawer-dish-item,
+  .drawer-dish-item {
+    background: #14171d;
+    border-color: rgba(255, 255, 255, 0.06);
+
+    &:hover {
+      background: #1c2028 !important;
+      border-color: var(--color-gold) !important;
+    }
+
+    &.is-selected {
+      background: rgba(212, 175, 55, 0.16) !important;
+      border-color: var(--color-gold) !important;
+    }
+  }
+
+  // Coupon pick label in customer modal
+  .coupon-pick-label {
+    background: #14171d;
+    border-color: rgba(255, 255, 255, 0.08);
+
+    &:hover {
+      background: #1c2028 !important;
+      border-color: rgba(255, 255, 255, 0.2) !important;
+    }
+  }
+
+  // Stock tag badges in Menu Management & Dish cards
+  .badge-success {
+    background: rgba(34, 197, 94, 0.14) !important;
+    color: #4ade80 !important;
+    border-color: rgba(34, 197, 94, 0.3) !important;
+  }
+
+  .badge-warning {
+    background: rgba(234, 179, 8, 0.14) !important;
+    color: #facc15 !important;
+    border-color: rgba(234, 179, 8, 0.3) !important;
+  }
+
+  .badge-danger {
+    background: rgba(239, 68, 68, 0.16) !important;
+    color: #f87171 !important;
+    border-color: rgba(239, 68, 68, 0.3) !important;
+  }
+
+  .badge-disabled,
+  .badge-untracked {
+    background: #1c2027 !important;
+    color: #9aa2ae !important;
+    border-color: rgba(255, 255, 255, 0.08) !important;
+  }
+
+  // Error banners in modals
+  .auth-error-banner {
+    background: rgba(239, 68, 68, 0.15) !important;
+    border-color: rgba(239, 68, 68, 0.35) !important;
+    color: #f87171 !important;
+  }
+
+  // Code tag in Customer list
+  .code-tag {
+    background: rgba(212, 175, 55, 0.16) !important;
+    border-color: rgba(212, 175, 55, 0.35) !important;
+    color: #facc15 !important;
+  }
+
+  // Printed chip pill
+  .chip-printed-pill {
+    background: rgba(212, 175, 55, 0.14) !important;
+    border-color: rgba(212, 175, 55, 0.35) !important;
+    color: #facc15 !important;
+  }
+
+  // Filter tabs & status tab hover
+  .status-tab,
+  .cat-tab {
+    color: var(--color-text-secondary);
+
+    &:hover:not(.active) {
+      background: #1c2027;
+      color: #ffffff;
+    }
+
+    &.active {
+      background: var(--color-crimson);
+      color: #ffffff;
+    }
+  }
+
+  // Badges & Pills
+  .badge-outline {
+    border-color: rgba(255, 255, 255, 0.12);
+    color: var(--color-text-secondary);
+  }
+
+  .badge-onyx {
+    background: #222731;
+    color: #f2f4f8;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+  }
+
+  .coupon-code-pill,
+  .kot-pill,
+  .time-badge,
+  .kpi-tag,
+  .shift-tag,
+  .modal-badge,
+  .ing-unit-tag,
+  .recipe-badge,
+  .rating-pill,
+  .table-card-head {
+    background: #20242c;
+    color: #f2f4f8;
+    border-color: rgba(255, 255, 255, 0.12);
+
+    i,
+    .ph {
+      color: #f2f4f8;
+    }
+  }
+
+  .live-counter-badge {
+    background: rgba(34, 197, 94, 0.14);
+    border-color: rgba(34, 197, 94, 0.3);
+    color: #4ade80;
+
+    .pulse-indicator {
+      background: #4ade80;
+    }
+
+    &.offline {
+      background: rgba(239, 68, 68, 0.16);
+      border-color: rgba(239, 68, 68, 0.35);
+      color: #f87171;
+
+      .pulse-indicator {
+        background: #f87171;
+      }
+    }
+  }
+
+  // ===========================================================================
+  // Dark Mode High-Contrast Systemic Fixes
+  // (Prevents white-on-white active buttons, invisible canvas elements,
+  //  muddy brown/olive badges, and hidden modal text in dark mode)
+  // ===========================================================================
+
+  // 1. Universal Active Button & Tab Contrast
+  .tab-btn.active,
+  .filter-btn.active,
+  .place-tab.active,
+  .tab-toggle-btn.active,
+  .settings-tab-btn.active,
+  .inv-tab-btn.active,
+  .drawer-cat-tab.active,
+  .diet-filter-pill.active,
+  .shape-btn.active,
+  .btn-active-toggle,
+  .time-filter .filter-btn.active,
+  .status-tabs .status-tab.active:not(.cat-tab) {
+    background: #252b36 !important;
+    color: #ffffff !important;
+    border-color: rgba(255, 255, 255, 0.22) !important;
+
+    i, .ph, span, strong {
+      color: #ffffff !important;
+    }
+  }
+
+  // 2. Crimson Active Tabs (Menu Categories & Live Orders)
+  .cat-tab.active,
+  .orders-page .status-tab.active,
+  .dish-catalog .cat-tab.active {
+    background: var(--color-crimson) !important;
+    color: #ffffff !important;
+    border-color: var(--color-crimson) !important;
+
+    i, .ph, span, strong {
+      color: #ffffff !important;
+    }
+  }
+
+  // 3. Avatars & Profile Badges (High Contrast Obsidian & Gold)
+  .avatar-sm,
+  .avatar-lg,
+  .profile-avatar,
+  .customer-avatar,
+  .guest-avatar {
+    background: #1c2027 !important;
+    color: #facc15 !important;
+    border: 1px solid rgba(255, 255, 255, 0.1) !important;
+
+    &.avatar-admin {
+      background: linear-gradient(135deg, #d4af37 0%, #aa8c2c 100%) !important;
+      color: #121212 !important;
+    }
+  }
+
+  // 4. Floor Plan Canvas & Table List (Dark Obsidian Architecture)
+  .canvas-toolbar {
+    background: #14171d !important;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08) !important;
+
+    .mode-switch-group {
+      background: #0d0f13 !important;
+      border: 1px solid rgba(255, 255, 255, 0.08) !important;
+
+      .mode-btn {
+        color: #9aa2ae !important;
+        background: transparent !important;
+
+        i, .ph, span {
+          color: inherit !important;
+        }
+
+        &:hover:not(.active) {
+          color: #ffffff !important;
+          background: rgba(255, 255, 255, 0.06) !important;
+        }
+
+        &.active {
+          background: #252b36 !important;
+          color: #ffffff !important;
+          border: 1px solid rgba(255, 255, 255, 0.18) !important;
+          box-shadow: 0 2px 6px rgba(0, 0, 0, 0.5) !important;
+
+          i, .ph, span {
+            color: #ffffff !important;
+          }
+        }
+      }
+    }
+
+    .zoom-controls {
+      background: #14171d !important;
+      border: 1px solid rgba(255, 255, 255, 0.1) !important;
+
+      .zoom-btn {
+        color: #9aa2ae !important;
+
+        &:hover:not(:disabled) {
+          background: #222731 !important;
+          color: #ffffff !important;
+        }
+
+        &:disabled {
+          opacity: 0.3 !important;
+        }
+      }
+
+      .zoom-label {
+        color: #ffffff !important;
+      }
+    }
+
+    .element-picker-group {
+      .group-label {
+        color: #9aa2ae !important;
+      }
+    }
+  }
+
+  .place-assign-strip {
+    background: #121418 !important;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08) !important;
+
+    .assign-strip-label {
+      color: #9aa2ae !important;
+
+      strong {
+        color: var(--color-crimson) !important;
+      }
+    }
+
+    .assign-tbl-btn {
+      background: #1a1d24 !important;
+      border: 1px solid rgba(255, 255, 255, 0.12) !important;
+      color: #f2f4f8 !important;
+
+      .chip-curr-sec {
+        color: #9aa2ae !important;
+      }
+
+      &:hover {
+        border-color: var(--color-crimson) !important;
+        color: var(--color-crimson) !important;
+        background: rgba(220, 38, 38, 0.15) !important;
+      }
+    }
+  }
+
+  .canvas-section-box {
+    background: rgba(18, 20, 24, 0.94) !important;
+    border-color: rgba(255, 255, 255, 0.16) !important;
+    box-shadow: 0 4px 24px rgba(0, 0, 0, 0.6) !important;
+
+    &:hover {
+      border-color: rgba(255, 255, 255, 0.28) !important;
+      box-shadow: 0 6px 28px rgba(0, 0, 0, 0.75) !important;
+    }
+
+    &.is-dragging {
+      border-color: var(--color-crimson) !important;
+      box-shadow: 0 12px 32px rgba(220, 38, 38, 0.3) !important;
+    }
+
+    .section-box-header {
+      background: #161920 !important;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.08) !important;
+
+      .sec-name {
+        color: #ffffff !important;
+      }
+
+      .sec-badge,
+      .sec-drag-pill {
+        background: #20242c !important;
+        color: #9aa2ae !important;
+        border: 1px solid rgba(255, 255, 255, 0.12) !important;
+
+        &:hover {
+          background: #252b36 !important;
+          color: #ffffff !important;
+          border-color: rgba(255, 255, 255, 0.25) !important;
+        }
+      }
+
+      .sec-add-tbl-btn {
+        background: #1c2028 !important;
+        color: #f87171 !important;
+        border: 1px solid rgba(239, 68, 68, 0.35) !important;
+
+        &:hover {
+          background: rgba(239, 68, 68, 0.18) !important;
+          color: #fca5a5 !important;
+          border-color: #ef4444 !important;
+        }
+      }
+    }
+
+    .section-fixtures-bar {
+      background: #14171d !important;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.06) !important;
+    }
+  }
+
+  // Floor Architectural Elements (Glowing Fixture Rings)
+  .floor-element {
+    background: #1a1d24 !important;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4) !important;
+
+    &.elem-entrance {
+      border-color: rgba(52, 211, 153, 0.6) !important;
+      color: #34d399 !important;
+      background: rgba(16, 185, 129, 0.14) !important;
+    }
+    &.elem-kitchen {
+      border-color: rgba(251, 146, 60, 0.6) !important;
+      color: #fb923c !important;
+      background: rgba(234, 88, 12, 0.14) !important;
+    }
+    &.elem-bar {
+      border-color: rgba(167, 139, 250, 0.6) !important;
+      color: #a78bfa !important;
+      background: rgba(124, 58, 237, 0.14) !important;
+    }
+    &.elem-restroom {
+      border-color: rgba(96, 165, 250, 0.6) !important;
+      color: #60a5fa !important;
+      background: rgba(37, 99, 235, 0.14) !important;
+    }
+    &.elem-wall {
+      border-color: rgba(156, 163, 175, 0.6) !important;
+      color: #d1d5db !important;
+      background: rgba(75, 85, 99, 0.2) !important;
+    }
+  }
+
+  // Floor Canvas Tables (Obsidian Table Surfaces with Neon Status Rings)
+  .canvas-table {
+    .table-surface {
+      background: #181b22 !important;
+      border-color: rgba(255, 255, 255, 0.14) !important;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5) !important;
+
+      .tbl-num {
+        color: #f2f4f8 !important;
+      }
+      .tbl-capacity {
+        color: #9aa2ae !important;
+      }
+    }
+
+    .table-chairs .chair {
+      background: #252b36 !important;
+      border-color: rgba(255, 255, 255, 0.12) !important;
+    }
+
+    &.status-available {
+      .table-surface {
+        background: #15221b !important;
+        border-color: #10b981 !important;
+        box-shadow: 0 0 0 1px rgba(16, 185, 129, 0.3), 0 4px 14px rgba(0, 0, 0, 0.55) !important;
+        .tbl-num { color: #34d399 !important; }
+        .tbl-capacity { color: #6ee7b7 !important; }
+      }
+      .chair {
+        background: #134e4a !important;
+        border-color: #10b981 !important;
+      }
+    }
+
+    &.status-occupied {
+      .table-surface {
+        background: #291215 !important;
+        border: 2.5px solid #ef4444 !important;
+        box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.3), 0 8px 18px rgba(0, 0, 0, 0.65) !important;
+        .tbl-num { color: #fca5a5 !important; }
+        .tbl-capacity { color: #f87171 !important; }
+      }
+      .chair {
+        background: #991b1b !important;
+        border-color: #ef4444 !important;
+      }
+      .tbl-active-pill {
+        background: #dc2626 !important;
+        color: #ffffff !important;
+        box-shadow: 0 2px 6px rgba(220, 38, 38, 0.5) !important;
+      }
+    }
+
+    &.status-reserved {
+      .table-surface {
+        background: #271f11 !important;
+        border-color: #f59e0b !important;
+        box-shadow: 0 0 0 1px rgba(245, 158, 11, 0.3), 0 4px 14px rgba(0, 0, 0, 0.55) !important;
+        .tbl-num { color: #fbbf24 !important; }
+        .tbl-capacity { color: #fcd34d !important; }
+      }
+      .chair {
+        background: #78350f !important;
+        border-color: #f59e0b !important;
+      }
+    }
+
+    &.status-dirty {
+      .table-surface {
+        background: #1c2027 !important;
+        border-color: #6b7280 !important;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5) !important;
+        .tbl-num { color: #d1d5db !important; }
+        .tbl-capacity { color: #9ca3af !important; }
+      }
+      .chair {
+        background: #374151 !important;
+        border-color: #6b7280 !important;
+      }
+    }
+
+    .table-drag-handle {
+      background: #252b36 !important;
+      color: #ffffff !important;
+      border: 1px solid rgba(255, 255, 255, 0.2) !important;
+    }
+  }
+
+  // Table Drawer Status Pills & Active Order Card
+  .active-order-card {
+    background: rgba(220, 38, 38, 0.12) !important;
+    border-color: rgba(220, 38, 38, 0.35) !important;
+  }
+
+  .status-btn {
+    &.available.selected { color: #34d399 !important; background: rgba(16, 185, 129, 0.16) !important; border-color: #10b981 !important; }
+    &.occupied.selected { color: #f87171 !important; background: rgba(239, 68, 68, 0.16) !important; border-color: #ef4444 !important; }
+    &.reserved.selected { color: #fbbf24 !important; background: rgba(245, 158, 11, 0.16) !important; border-color: #f59e0b !important; }
+    &.dirty.selected { color: #d1d5db !important; background: #252b36 !important; border-color: #6b7280 !important; }
+  }
+
+  // 5. Dark Gold, Amber & Olive Text Contrast Adjustments
+  .takeaway-tag,
+  .takeaway-badge,
+  .takeaway-pill,
+  .print-meta-badge,
+  .print-meta-pill,
+  .print-count-badge,
+  .pickup-ref-input {
+    color: #facc15 !important;
+    background: rgba(212, 175, 55, 0.16) !important;
+    border-color: rgba(250, 204, 21, 0.35) !important;
+
+    i, .ph {
+      color: #facc15 !important;
+    }
+  }
+
+  .chip-code,
+  .code-tag {
+    color: #facc15 !important;
+    background: rgba(212, 175, 55, 0.16) !important;
+    border-color: rgba(250, 204, 21, 0.35) !important;
+  }
+
+  .btn-edit-order.paid-locked,
+  .btn-xs.paid-locked,
+  .card-util-btn.paid-locked,
+  .btn-reprint {
+    color: #facc15 !important;
+    background: rgba(212, 175, 55, 0.14) !important;
+    border-color: rgba(212, 175, 55, 0.35) !important;
+
+    &:hover {
+      background: rgba(212, 175, 55, 0.24) !important;
+      border-color: #facc15 !important;
+    }
+  }
+
+  .override-warning-box,
+  .reprint-auth-box,
+  .admin-override-box {
+    background: rgba(212, 175, 55, 0.1) !important;
+    border-color: rgba(212, 175, 55, 0.3) !important;
+
+    strong,
+    i {
+      color: #facc15 !important;
+    }
+
+    p, span {
+      color: #d1d5db !important;
+    }
+  }
+
+  .filter-group.filter-active {
+    .filter-select {
+      border-color: rgba(212, 175, 55, 0.6) !important;
+      background: rgba(212, 175, 55, 0.14) !important;
+      color: #facc15 !important;
+    }
+
+    .select-lead-icon,
+    .select-caret-icon {
+      color: #facc15 !important;
+    }
+  }
+
+  // 6. Modals & Authorization Dialogs Contrast
+  .auth-warning-box {
+    background: rgba(212, 175, 55, 0.12) !important;
+    border-color: rgba(212, 175, 55, 0.3) !important;
+    color: #f2f4f8 !important;
+
+    strong,
+    i {
+      color: #facc15 !important;
+    }
+
+    p {
+      color: #d1d5db !important;
+    }
+  }
+
+  .modal-card .form-group .form-label,
+  .auth-dialog-card .form-group .form-label,
+  .modal-body .form-label {
+    color: #f2f4f8 !important;
+  }
+
+  // 7. Menu Management Badges & Overlays
+  .dish-badges {
+    background: rgba(18, 20, 24, 0.9) !important;
+    border: 1px solid rgba(255, 255, 255, 0.1) !important;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5) !important;
+  }
+
+  .inventory-status-pill {
+    &.badge-success {
+      background: rgba(34, 197, 94, 0.16) !important;
+      color: #4ade80 !important;
+      border: 1px solid rgba(34, 197, 94, 0.35) !important;
+    }
+
+    &.badge-warning {
+      background: rgba(234, 179, 8, 0.16) !important;
+      color: #facc15 !important;
+      border: 1px solid rgba(234, 179, 8, 0.35) !important;
+    }
+
+    &.badge-danger {
+      background: rgba(239, 68, 68, 0.16) !important;
+      color: #f87171 !important;
+      border: 1px solid rgba(239, 68, 68, 0.35) !important;
+    }
+
+    &.badge-disabled,
+    &.badge-untracked {
+      background: #1c2027 !important;
+      color: #9aa2ae !important;
+      border: 1px solid rgba(255, 255, 255, 0.1) !important;
+    }
+  }
+
+  // 8. Staff Attendance, Working Days & Payroll High Contrast
+  .count-pill,
+  .attendance-tag {
+    &.present {
+      background: rgba(34, 197, 94, 0.16) !important;
+      color: #4ade80 !important;
+    }
+
+    &.half-day {
+      background: rgba(234, 179, 8, 0.16) !important;
+      color: #facc15 !important;
+    }
+
+    &.absent {
+      background: rgba(239, 68, 68, 0.16) !important;
+      color: #f87171 !important;
+    }
+
+    &.leave {
+      background: rgba(59, 130, 246, 0.16) !important;
+      color: #60a5fa !important;
+    }
+  }
+
+  .calculated-salary-text {
+    color: #4ade80 !important;
+  }
+
+  .payroll-status-pill {
+    background: rgba(34, 197, 94, 0.14) !important;
+    color: #4ade80 !important;
+  }
+
+  .calendar-day.is-selected {
+    background: #252b36 !important;
+    color: #ffffff !important;
+
+    .day-num {
+      color: #ffffff !important;
+    }
+  }
+
+  .staff-order-tag {
+    &.completed,
+    &.served,
+    &.delivered {
+      background: rgba(34, 197, 94, 0.16) !important;
+      color: #4ade80 !important;
+    }
+
+    &.preparing,
+    &.accepted,
+    &.ready {
+      background: rgba(234, 179, 8, 0.16) !important;
+      color: #facc15 !important;
+    }
+
+    &.pending {
+      background: rgba(59, 130, 246, 0.16) !important;
+      color: #60a5fa !important;
+    }
+  }
+
+  // ===========================================================================
+  // Strict Light Mode Enforcement for Printable Documents & Receipts
+  // (Bills, Invoices, Split Receipts, Standees MUST always remain light mode)
+  // ===========================================================================
+  .invoice-paper,
+  #invoicePaper,
+  .qr-standee,
+  [data-printable-receipt] {
+    --color-background: #ffffff;
+    --color-surface: #ffffff;
+    --color-surface-hover: #fbf9f5;
+    --color-bone: #f6f2eb;
+    --color-bone-light: #faf8f4;
+    --color-bone-dark: #eae3d7;
+    --color-text-primary: #121212;
+    --color-text-secondary: #555555;
+    --color-text-muted: #777777;
+    --color-onyx: #121212;
+    --color-border: #e5ded4;
+    --color-border-subtle: #f0eae1;
+
+    background: #ffffff !important;
+    background-color: #ffffff !important;
+    color: #121212 !important;
+    border: 1px solid #e5ded4 !important;
+    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.45) !important;
+
+    // Reset all text and headings inside receipt paper to dark ink
+    h1, h2, h3, h4, h5, h6,
+    .invoice-brand-title,
+    .standee-brand,
+    strong,
+    b,
+    .text-onyx,
+    .text-price,
+    .dish-item-name,
+    .m-item,
+    .t-row,
+    p,
+    span:not(.grand-label):not(.grand-val):not(.badge):not(.service-pill),
+    td,
+    th {
+      color: #121212;
+    }
+
+    .grand-total-line {
+      background: linear-gradient(135deg, #1e2430 0%, #0f131a 100%) !important;
+      border: 1px solid rgba(255, 255, 255, 0.18) !important;
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4) !important;
+      border-radius: 8px !important;
+      padding: 10px 14px !important;
+
+      .grand-label {
+        color: #cbd5e1 !important;
+      }
+
+      .grand-val {
+        color: #ffffff !important;
+      }
+    }
+
+    .invoice-brand-title {
+      color: #121212 !important;
+      font-family: var(--font-display);
+    }
+
+    .standee-table-num {
+      color: var(--color-crimson) !important;
+    }
+
+    .invoice-sub-brand,
+    .invoice-address,
+    .dish-sub-text,
+    .receipt-footer,
+    .f-sub,
+    .standee-inst,
+    .standee-url,
+    .standee-sub {
+      color: #666666 !important;
+    }
+
+    .invoice-divider {
+      background: #e5ded4 !important;
+
+      &.thick {
+        background: #121212 !important;
+      }
+    }
+
+    .table-callout {
+      color: var(--color-crimson) !important;
+    }
+
+    // Receipt itemized table
+    .receipt-table {
+      th {
+        background: #ffffff !important;
+        color: #121212 !important;
+        border-bottom: 1px solid #121212 !important;
+        font-weight: 700 !important;
+      }
+
+      td {
+        background: #ffffff !important;
+        color: #121212 !important;
+        border-bottom: 1px solid #f0eae1 !important;
+      }
+    }
+
+    // Brand crest icon on paper
+    .brand-crest,
+    .standee-crest {
+      background: #121212 !important;
+      color: #d4af37 !important;
+
+      i,
+      .ph {
+        color: #d4af37 !important;
+      }
+    }
+
+    // Watermarks, badges & stamps
+    .split-slip-badge-row span {
+      background: rgba(212, 175, 55, 0.15) !important;
+      border-color: rgba(212, 175, 55, 0.35) !important;
+      color: #8b6508 !important;
+    }
+
+    .reprint-watermark-ribbon {
+      color: #8b6508 !important;
+      background: rgba(212, 175, 55, 0.12) !important;
+      border-color: rgba(212, 175, 55, 0.3) !important;
+
+      &.unpaid-ribbon {
+        background: #fffbeb !important;
+        border-color: #f59e0b !important;
+        color: #b45309 !important;
+      }
+    }
+
+    .t-row {
+      &.discount {
+        color: #1b633e !important;
+      }
+
+      &.final-grand-total {
+        color: #c21807 !important;
+      }
+    }
+
+    .stamp {
+      &.paid {
+        border-color: #1b633e !important;
+        color: #1b633e !important;
+      }
+
+      &.unpaid {
+        border-color: #c21807 !important;
+        color: #c21807 !important;
+      }
+    }
+
+    .qr-image-container {
+      background: #f9f9f9 !important;
+      border: 1px solid #e5ded4 !important;
+    }
+  }
+}
+
+// =============================================================================
+// Universal Print Override (Always Light Mode for All Printouts)
+// =============================================================================
+@media print {
+  html,
+  body,
+  .admin-shell,
+  .admin-shell[data-theme='dark'],
+  .admin-shell.theme-dark,
+  .admin-main,
+  .admin-content,
+  .invoice-page,
+  .invoice-paper,
+  #invoicePaper,
+  .qr-standee,
+  .qr-modal-overlay {
+    --color-background: #ffffff !important;
+    --color-surface: #ffffff !important;
+    --color-text-primary: #000000 !important;
+    --color-text-secondary: #333333 !important;
+    --color-onyx: #000000 !important;
+    --color-border: #cccccc !important;
+
+    background: #ffffff !important;
+    background-color: #ffffff !important;
+    color: #000000 !important;
+    box-shadow: none !important;
+  }
+
+  .admin-shell[data-theme='dark'] .invoice-paper,
+  .admin-shell.theme-dark .invoice-paper,
+  .invoice-paper {
+    border: none !important;
+    box-shadow: none !important;
+    padding: 0 !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    background: #ffffff !important;
+    color: #000000 !important;
+
+    h1, h2, h3, h4, h5, h6,
+    .invoice-brand-title,
+    strong, b, p, span, td, th {
+      color: #000000 !important;
+    }
+
+    .invoice-sub-brand,
+    .invoice-address,
+    .dish-sub-text,
+    .receipt-footer,
+    .f-sub {
+      color: #444444 !important;
+    }
+
+    .receipt-table {
+      th, td {
+        background: #ffffff !important;
+        color: #000000 !important;
+      }
+      th {
+        border-bottom: 1px solid #000000 !important;
+      }
+      td {
+        border-bottom: 1px solid #e0e0e0 !important;
+      }
+    }
+  }
+
+  .no-print,
+  .admin-sidebar,
+  .admin-topbar,
+  .theme-toggle-bezel,
+  .action-bar,
+  .actions-bar,
+  .header-actions,
+  .btn,
+  .modal-footer {
+    display: none !important;
+  }
+}

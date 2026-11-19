@@ -2,6 +2,7 @@ pub mod auth_routes;
 pub mod billing_routes;
 pub mod coupon_routes;
 pub mod customer_routes;
+pub mod feedback_routes;
 pub mod health;
 pub mod inventory_routes;
 pub mod menu_routes;
@@ -11,7 +12,7 @@ pub mod restaurant_routes;
 pub mod table_routes;
 
 use axum::{
-    routing::{get, post, put},
+    routing::{delete, get, post, put},
     Router,
 };
 use tower_http::cors::{Any, CorsLayer};
@@ -36,7 +37,12 @@ pub fn create_router(state: AppState) -> Router {
         // Restaurant & staff
         .route(
             "/restaurants",
-            get(restaurant_routes::get_current_restaurant),
+            get(restaurant_routes::get_current_restaurant)
+                .put(restaurant_routes::update_current_restaurant),
+        )
+        .route(
+            "/restaurants/settings",
+            put(restaurant_routes::update_current_restaurant),
         )
         .route(
             "/restaurants/staff",
@@ -58,15 +64,30 @@ pub fn create_router(state: AppState) -> Router {
                 .delete(restaurant_routes::delete_staff_member),
         )
         // Tables
-        .route("/tables", get(table_routes::list_tables))
+        .route(
+            "/tables",
+            get(table_routes::list_tables).post(table_routes::create_table),
+        )
+        .route("/tables/:id", delete(table_routes::delete_table))
         .route("/tables/:id/status", put(table_routes::update_table_status))
         .route("/tables/:id/assign", put(table_routes::assign_table_staff))
         .route("/tables/transfer", post(table_routes::transfer_table))
         // Menu
-        .route("/menu/categories", get(menu_routes::list_categories))
+        .route(
+            "/menu/categories",
+            get(menu_routes::list_categories).post(menu_routes::create_category),
+        )
+        .route(
+            "/menu/categories/:id",
+            delete(menu_routes::delete_category),
+        )
         .route(
             "/menu/items",
             get(menu_routes::list_items).post(menu_routes::create_item),
+        )
+        .route(
+            "/menu/items/:id",
+            put(menu_routes::update_item).delete(menu_routes::delete_item),
         )
         .route(
             "/menu/items/:id/availability",
@@ -94,13 +115,25 @@ pub fn create_router(state: AppState) -> Router {
             "/inventory/items",
             get(inventory_routes::list_items).post(inventory_routes::create_item),
         )
+        .route(
+            "/inventory/items/:id",
+            put(inventory_routes::update_item),
+        )
         .route("/inventory/wastage", post(inventory_routes::record_wastage))
         .route(
             "/inventory/movements",
             get(inventory_routes::list_movements),
         )
         // Coupons
-        .route("/coupons", get(coupon_routes::list_coupons))
+        .route(
+            "/coupons",
+            get(coupon_routes::list_coupons).post(coupon_routes::create_coupon),
+        )
+        .route("/coupons/:id", delete(coupon_routes::delete_coupon))
+        .route(
+            "/coupons/:id/status",
+            put(coupon_routes::update_coupon_status),
+        )
         .route("/coupons/validate", post(coupon_routes::validate_coupon))
         .route("/coupons/redeem", post(coupon_routes::redeem_coupon))
         // Customers & Reservations
@@ -108,6 +141,7 @@ pub fn create_router(state: AppState) -> Router {
             "/customers",
             get(customer_routes::list_customers).post(customer_routes::create_customer),
         )
+        .route("/customers/:id/points", post(customer_routes::award_points))
         .route(
             "/reservations",
             get(customer_routes::list_reservations).post(customer_routes::create_reservation),
@@ -116,17 +150,33 @@ pub fn create_router(state: AppState) -> Router {
             "/reservations/:id/status",
             put(customer_routes::update_reservation_status),
         )
+        // Feedback
+        .route(
+            "/feedback",
+            get(feedback_routes::list_feedback).post(feedback_routes::create_feedback),
+        )
+        .route(
+            "/feedback/:id/reply",
+            put(feedback_routes::reply_feedback),
+        )
         // Reports & Dashboard
         .route("/reports/period", get(reports_routes::get_period_report))
         .route(
             "/dashboard/summary",
             get(reports_routes::get_dashboard_summary),
-        );
+        )
+        // System utilities
+        .route("/system/open-external", post(system_open_external))
+        // Hardware / Thermal Printer
+        .route("/printer/list", get(crate::printer::list_printers_route))
+        .route("/printer/print", post(crate::printer::print_escpos_route));
 
     Router::new()
         // Health check routes
         .route("/health/live", get(health::liveness))
         .route("/health/ready", get(health::readiness))
+        .route("/api/v1/health/live", get(health::liveness))
+        .route("/api/v1/health/ready", get(health::readiness))
         .route(
             "/health/restaurant/:id",
             get(health::check_restaurant_availability),
@@ -139,4 +189,39 @@ pub fn create_router(state: AppState) -> Router {
         )
         .layer(cors)
         .with_state(state)
+}
+
+#[derive(serde::Deserialize)]
+pub struct OpenExternalRequest {
+    pub url: String,
+}
+
+pub async fn system_open_external(
+    axum::Json(payload): axum::Json<OpenExternalRequest>,
+) -> Result<axum::Json<serde_json::Value>, (axum::http::StatusCode, axum::Json<serde_json::Value>)> {
+    let url = payload.url.trim().to_string();
+    if !url.starts_with("https://") && !url.starts_with("http://") && !url.starts_with("whatsapp://") {
+        return Err((
+            axum::http::StatusCode::BAD_REQUEST,
+            axum::Json(serde_json::json!({ "error": "Invalid URL protocol. Only http, https, and whatsapp URLs allowed." })),
+        ));
+    }
+
+    #[cfg(target_os = "windows")]
+    {
+        let escaped = url.replace('\'', "''");
+        let _ = std::process::Command::new("powershell")
+            .args(["-NoProfile", "-NonInteractive", "-Command", &format!("Start-Process '{}'", escaped)])
+            .spawn();
+    }
+    #[cfg(target_os = "macos")]
+    {
+        let _ = std::process::Command::new("open").arg(&url).spawn();
+    }
+    #[cfg(target_os = "linux")]
+    {
+        let _ = std::process::Command::new("xdg-open").arg(&url).spawn();
+    }
+
+    Ok(axum::Json(serde_json::json!({ "success": true })))
 }

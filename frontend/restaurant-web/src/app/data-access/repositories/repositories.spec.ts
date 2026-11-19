@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import { TestBed } from '@angular/core/testing';
 import { provideHttpClient } from '@angular/common/http';
 import { MockDataService } from '../mock/mock-data.service';
+import { RestaurantDataService } from '../services/restaurant-data.service';
 import {
   MockTableRepository,
   MockOrderRepository,
@@ -22,6 +23,7 @@ describe('Data Access Repositories', () => {
       providers: [
         provideHttpClient(),
         MockDataService,
+        RestaurantDataService,
         MockTableRepository,
         MockOrderRepository,
         MockCouponRepository,
@@ -213,6 +215,76 @@ describe('Data Access Repositories', () => {
         expect(ord.paymentStatus).toBe('PAID');
         expect(ord.paymentMethod).toBe('UPI');
       });
+    });
+  });
+
+  describe('RestaurantDataService Mutations & Persistence', () => {
+    let service: RestaurantDataService;
+
+    beforeEach(() => {
+      service = TestBed.inject(RestaurantDataService);
+    });
+
+    it('creates, toggles ordering, and deletes a table', () => {
+      const res = service.createTable({
+        number: 'T-99',
+        capacity: 6,
+        section: 'Terrace Garden',
+        shape: 'ROUND',
+      });
+      expect(res.success).toBe(true);
+      expect(res.table?.number).toBe('T-99');
+      expect(service.tables().some((t) => t.number === 'T-99')).toBe(true);
+
+      const tableId = res.table!.id;
+      service.toggleTableOrdering(tableId, false);
+      expect(service.tables().find((t) => t.id === tableId)?.orderingEnabled).toBe(false);
+
+      service.deleteTable(tableId);
+      expect(service.tables().some((t) => t.id === tableId)).toBe(false);
+    });
+
+    it('creates, updates, toggles availability, and deletes a menu item', () => {
+      const res = service.createMenuItem({
+        name: 'Paneer Butter Tikka Special',
+        price: 380,
+        categoryId: 'cat-01',
+        dietary: 'VEG',
+        prepTimeMinutes: 20,
+      });
+      expect(res.success).toBe(true);
+      expect(res.item?.name).toBe('Paneer Butter Tikka Special');
+      expect(service.menuItems().some((m) => m.name === 'Paneer Butter Tikka Special')).toBe(true);
+
+      const itemId = res.item!.id;
+      service.updateMenuItem(itemId, { price: 420 });
+      expect(service.menuItems().find((m) => m.id === itemId)?.price).toBe(420);
+
+      service.toggleMenuItemAvailability(itemId, false);
+      expect(service.menuItems().find((m) => m.id === itemId)?.isAvailable).toBe(false);
+
+      service.deleteMenuItem(itemId);
+      expect(service.menuItems().some((m) => m.id === itemId)).toBe(false);
+    });
+
+    it('creates a menu category', () => {
+      const res = service.createMenuCategory('Mocktails & Coolers');
+      expect(res.success).toBe(true);
+      expect(res.category?.name).toBe('Mocktails & Coolers');
+      expect(res.category?.slug).toBe('mocktails---coolers');
+      expect(service.categories().some((c) => c.name === 'Mocktails & Coolers')).toBe(true);
+    });
+
+    it('creates a reservation with optimistic persistence', () => {
+      const res = service.createReservation({
+        customerName: 'Rahul Sharma',
+        customerPhone: '+91 98765 43210',
+        guestCount: 4,
+        tableNumber: 'T-01',
+        reservationTime: new Date().toISOString(),
+      });
+      expect(res.success).toBe(true);
+      expect(service.reservations().some((r) => r.customerName === 'Rahul Sharma')).toBe(true);
     });
   });
 });

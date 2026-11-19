@@ -248,9 +248,7 @@ export class CustomerFeedbackComponent implements OnInit {
       status: 'PUBLISHED',
     };
 
-    const updated = [newFeedback, ...this.mock.feedbacks()];
-    this.mock.feedbacks.set(updated);
-    this.mock.saveLocal('feedbacks', updated);
+    this.mock.createFeedback(newFeedback);
 
     this.isSubmitted = true;
     this.toastService.success('Review submitted successfully!');

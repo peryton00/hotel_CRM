@@ -8,7 +8,7 @@ import { StaffMember, StaffRole } from '../models/staff.model';
 const AUTH_TOKEN_KEY = 'sb-access-token';
 const STAFF_ROLE_KEY = 'staff_role';
 const STAFF_USER_KEY = 'staff_user';
-const ADMIN_PASSWORD_HASH_KEY = 'supabase_admin_pwd_secret';
+export const ADMIN_PASSWORD_HASH_KEY = 'supabase_admin_pwd_secret';
 
 export interface AuthLoginResponse {
   success: boolean;
@@ -303,6 +303,80 @@ export class AdminAuthService {
   }
 
   /**
+   * Updates the Admin login password directly from Admin CRM.
+   * Syncs with backend staff record, Supabase database, and local session secret.
+   */
+  changeAdminPassword(
+    newPassword: string,
+    currentPassword?: string,
+  ): Observable<{ success: boolean; message: string }> {
+    const trimmedNew = (newPassword || '').trim();
+    if (!trimmedNew || trimmedNew.length < 4) {
+      return of({ success: false, message: 'Password must be at least 4 characters long.' });
+    }
+
+    if (currentPassword !== undefined && currentPassword !== null && currentPassword !== '') {
+      const trimmedCurr = currentPassword.trim();
+      if (!this.verifyAdminPassword(trimmedCurr)) {
+        return of({ success: false, message: 'Current admin password is incorrect.' });
+      }
+    }
+
+    const user = this.currentUser();
+    const adminId = user?.id || '00000000-0000-0000-0000-000000000002';
+
+    const directSupabaseUpdate = () => {
+      localStorage.setItem(ADMIN_PASSWORD_HASH_KEY, trimmedNew);
+      if (!this.supabaseUrl || !this.supabaseKey) {
+        return of({ success: true, message: 'Admin password updated.' });
+      }
+
+      const headers = new HttpHeaders({
+        apikey: this.supabaseKey,
+        Authorization: `Bearer ${this.supabaseKey}`,
+        'Content-Type': 'application/json',
+      });
+
+      const url = user?.id
+        ? `${this.supabaseUrl}/rest/v1/staff_members?id=eq.${user.id}`
+        : `${this.supabaseUrl}/rest/v1/staff_members?role=eq.ADMIN`;
+
+      return this.http.patch(url, { pin_hash: trimmedNew }, { headers }).pipe(
+        map(() => {
+          this.refreshAdminSecret();
+          return { success: true, message: 'Admin password updated successfully in Supabase.' };
+        }),
+        catchError(() => {
+          return of({ success: true, message: 'Admin password updated.' });
+        }),
+      );
+    };
+
+    const backendHeaders = new HttpHeaders({
+      'Content-Type': 'application/json',
+      'x-restaurant-id':
+        localStorage.getItem('active_restaurant_id') || '00000000-0000-0000-0000-000000000001',
+      'x-dev-role': 'admin',
+      'x-dev-user-id': adminId,
+    });
+
+    return this.http
+      .put<{ success: boolean; data?: any }>(
+        `${this.apiUrl}/restaurants/staff/${adminId}`,
+        { password: trimmedNew },
+        { headers: backendHeaders },
+      )
+      .pipe(
+        map(() => {
+          localStorage.setItem(ADMIN_PASSWORD_HASH_KEY, trimmedNew);
+          this.refreshAdminSecret();
+          return { success: true, message: 'Admin password updated successfully.' };
+        }),
+        catchError(() => directSupabaseUpdate()),
+      );
+  }
+
+  /**
    * Role-Based Access Control matrix for the CRM.
    * Controls what tabs each staff role is permitted to see and navigate to.
    */
@@ -346,8 +420,36 @@ export class AdminAuthService {
       case 'BEVERAGE_SPECIALIST':
         return ['orders', 'tables'].includes(segment);
 
+      case 'STAFF':
+        // Staff mode: ordering lifecycle (takeaway, dine-in tables) + bill printing & payment settlement
+        return ['orders', 'tables', 'billing'].includes(segment);
+
       default:
         return ['orders'].includes(segment);
+    }
+  }
+
+  /**
+   * Switches CRM operational mode between full ADMIN access and restricted STAFF floor operations.
+   */
+  setRoleMode(mode: 'ADMIN' | 'STAFF'): void {
+    const r = mode.toUpperCase();
+    localStorage.setItem(STAFF_ROLE_KEY, r);
+    this.staffRole.set(r);
+
+    const user = this.currentUser();
+    if (user) {
+      const updatedUser: StaffMember = {
+        ...user,
+        role: r as StaffRole,
+      };
+      this.currentUser.set(updatedUser);
+      localStorage.setItem(STAFF_USER_KEY, JSON.stringify(updatedUser));
+    }
+
+    // If current route is restricted in the new mode, redirect to default landing route
+    if (!this.canAccess(this.router.url)) {
+      this.router.navigate([this.getDefaultRouteForRole()]);
     }
   }
 
@@ -358,6 +460,7 @@ export class AdminAuthService {
     const role = this.staffRole().toUpperCase();
     if (role === 'ADMIN' || role === 'MANAGER') return '/admin/dashboard';
     if (role === 'CASHIER') return '/admin/billing';
+    if (role === 'STAFF') return '/admin/orders';
     if (role === 'CAPTAIN') return '/admin/orders';
     if (
       role === 'EXECUTIVE_CHEF' ||

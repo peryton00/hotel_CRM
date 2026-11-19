@@ -56,3 +56,20 @@ pub struct RedeemCouponRequest {
     pub customer_phone: Option<String>,
     pub customer_id: Option<Uuid>,
 }
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct CreateCouponRequest {
+    pub code: String,
+    pub title: Option<String>,
+    pub description: Option<String>,
+    pub discount_type: Option<String>,
+    pub discount_value: f64,
+    pub min_order_amount_paise: Option<i64>,
+    pub max_discount_amount_paise: Option<i64>,
+    pub one_time_per_customer: Option<bool>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct UpdateCouponStatusRequest {
+    pub is_active: bool,
+}

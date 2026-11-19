@@ -37,6 +37,7 @@ export interface OrderItem {
   unitPrice: number;
   quantity: number;
   itemTotal: number;
+  notes?: string;
   specialInstructions?: string;
   customInstructions?: string;
 }
@@ -77,6 +78,7 @@ export interface Order {
   status: OrderStatus;
   paymentStatus: PaymentStatus;
   paymentMethod?: PaymentMethod;
+  notes?: string;
   serverStaffId?: string;
   createdAt: string;
   updatedAt: string;

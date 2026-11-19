@@ -4,12 +4,22 @@ import { FormsModule } from '@angular/forms';
 import { RestaurantDataService } from '../../../data-access/services/restaurant-data.service';
 import { Reservation, ReservationStatus } from '../../../core/models/reservation.model';
 import { StatusBadgeComponent } from '../../../shared/components/status-badge/status-badge.component';
+import { SkeletonLoaderComponent } from '../../../shared/components/loading/skeleton-loader.component';
+import { LoadingButtonDirective } from '../../../shared/components/loading/loading-button.directive';
+import { EmptyStateComponent } from '../../../shared/components/empty-state/empty-state.component';
 import { ToastService } from '../../../core/services/toast.service';
 
 @Component({
   selector: 'app-reservation-list',
   standalone: true,
-  imports: [CommonModule, FormsModule, StatusBadgeComponent],
+  imports: [
+    CommonModule,
+    FormsModule,
+    StatusBadgeComponent,
+    SkeletonLoaderComponent,
+    LoadingButtonDirective,
+    EmptyStateComponent,
+  ],
   template: `
     <div class="reservations-page">
       <div class="page-header">
@@ -73,56 +83,68 @@ import { ToastService } from '../../../core/services/toast.service';
             </tr>
           </thead>
           <tbody>
-            @for (res of filteredReservations(); track res.id) {
+            @if (isLoading()) {
               <tr>
-                <td>
-                  <strong>{{ res.customerName }}</strong>
-                  <div class="text-xs text-muted">{{ res.customerPhone }}</div>
-                </td>
-                <td>{{ res.reservationDate | date: 'medium' }}</td>
-                <td>
-                  <span class="badge badge-outline"
-                    ><i class="ph ph-users"></i> {{ res.partySize }} Guests</span
-                  >
-                </td>
-                <td>
-                  <strong>{{ res.tableNumber || 'Auto Assign' }}</strong>
-                  <div class="text-xs text-muted">{{ res.section || 'Main Dining' }}</div>
-                </td>
-                <td>
-                  <span class="text-sm text-secondary">{{ res.specialRequests || 'None' }}</span>
-                </td>
-                <td><app-status-badge [status]="res.status"></app-status-badge></td>
-                <td>
-                  <div class="actions-cell">
-                    @if (res.status === 'CONFIRMED') {
-                      <button
-                        class="btn btn-secondary btn-sm"
-                        (click)="updateStatus(res, 'SEATED')"
-                      >
-                        Seat Guest
-                      </button>
-                    } @else if (res.status === 'SEATED') {
-                      <button
-                        class="btn btn-secondary btn-sm"
-                        (click)="updateStatus(res, 'COMPLETED')"
-                      >
-                        Complete
-                      </button>
-                    }
-                  </div>
+                <td colspan="7" style="padding: 0;">
+                  <app-skeleton variant="reservation-row" [count]="5" />
                 </td>
               </tr>
-            } @empty {
-              <tr>
-                <td
-                  colspan="7"
-                  class="text-center"
-                  style="padding: 32px; color: var(--color-text-muted);"
-                >
-                  No reservations found for selected filter.
-                </td>
-              </tr>
+            } @else {
+              @for (res of filteredReservations(); track res.id) {
+                <tr>
+                  <td>
+                    <strong>{{ res.customerName }}</strong>
+                    <div class="text-xs text-muted">{{ res.customerPhone }}</div>
+                  </td>
+                  <td>{{ res.reservationDate | date: 'medium' }}</td>
+                  <td>
+                    <span class="badge badge-outline"
+                      ><i class="ph ph-users"></i> {{ res.partySize }} Guests</span
+                    >
+                  </td>
+                  <td>
+                    <strong>{{ res.tableNumber || 'Auto Assign' }}</strong>
+                    <div class="text-xs text-muted">{{ res.section || 'Main Dining' }}</div>
+                  </td>
+                  <td>
+                    <span class="text-sm text-secondary">{{ res.specialRequests || 'None' }}</span>
+                  </td>
+                  <td><app-status-badge [status]="res.status"></app-status-badge></td>
+                  <td>
+                    <div class="actions-cell">
+                      @if (res.status === 'CONFIRMED') {
+                        <button
+                          class="btn btn-secondary btn-sm"
+                          (click)="updateStatus(res, 'SEATED')"
+                        >
+                          Seat Guest
+                        </button>
+                      } @else if (res.status === 'SEATED') {
+                        <button
+                          class="btn btn-secondary btn-sm"
+                          (click)="updateStatus(res, 'COMPLETED')"
+                        >
+                          Complete
+                        </button>
+                      }
+                    </div>
+                  </td>
+                </tr>
+              } @empty {
+                <tr>
+                  <td colspan="7" style="padding: 0;">
+                    <app-empty-state
+                      icon="ph-calendar-x"
+                      title="No Reservations Found"
+                      message="No table bookings found matching your selected status filter."
+                      actionText="New Reservation"
+                      actionIcon="ph-calendar-plus"
+                      (actionClick)="openAddModal()"
+                      [bordered]="false"
+                    />
+                  </td>
+                </tr>
+              }
             }
           </tbody>
         </table>
@@ -205,6 +227,8 @@ import { ToastService } from '../../../core/services/toast.service';
               <button class="btn btn-secondary" (click)="showAddModal = false">Cancel</button>
               <button
                 class="btn btn-primary"
+                [appLoadingButton]="isSaving()"
+                loadingText="Confirming..."
                 (click)="saveReservation()"
                 [disabled]="
                   !resForm.customerName?.trim() ||
@@ -302,6 +326,11 @@ export class ReservationListComponent {
   private mock = this.dataService;
   private toastService = inject(ToastService);
 
+  readonly isLoading = computed(
+    () => this.dataService.isReservationsLoading() || !this.dataService.reservationsLoaded()
+  );
+  readonly isSaving = signal<boolean>(false);
+
   reservations = this.mock.reservations;
   tables = this.mock.tables;
   selectedStatus = signal<string>('ALL');
@@ -317,20 +346,14 @@ export class ReservationListComponent {
   });
 
   updateStatus(res: Reservation, status: ReservationStatus): void {
-    // 1. Update reservation status
-    const updated = this.mock.reservations().map((r) => (r.id === res.id ? { ...r, status } : r));
-    this.mock.reservations.set(updated);
-    this.mock.saveLocal('reservations', updated);
+    // 1. Update reservation status and persist to backend
+    this.dataService.updateReservationStatus(res.id, status);
 
     // 2. Seating updates table occupancy consistently
     if (status === 'SEATED') {
       const targetTable = this.mock.tables().find((t) => t.number === res.tableNumber);
       if (targetTable) {
-        const updatedTables = this.mock
-          .tables()
-          .map((t) => (t.id === targetTable.id ? { ...t, status: 'OCCUPIED' as const } : t));
-        this.mock.tables.set(updatedTables);
-        this.mock.saveLocal('tables', updatedTables);
+        this.dataService.updateTableStatus(targetTable.id, 'OCCUPIED');
       }
     } else if (status === 'CANCELLED' || status === 'COMPLETED') {
       // Safe release: only mark available if no active order or other seated reservation occupies the table
@@ -350,11 +373,7 @@ export class ReservationListComponent {
             (r) => r.id !== res.id && r.tableNumber === targetTable.number && r.status === 'SEATED',
           );
         if (!hasActiveOrder && !hasOtherSeated) {
-          const updatedTables = this.mock
-            .tables()
-            .map((t) => (t.id === targetTable.id ? { ...t, status: 'AVAILABLE' as const } : t));
-          this.mock.tables.set(updatedTables);
-          this.mock.saveLocal('tables', updatedTables);
+          this.dataService.updateTableStatus(targetTable.id, 'AVAILABLE');
         }
       }
     }
@@ -420,23 +439,19 @@ export class ReservationListComponent {
       return;
     }
 
-    const newRes: Reservation = {
-      id: `res-${Date.now().toString().slice(-4)}`,
+    this.mock.createReservation({
       customerName: this.resForm.customerName.trim(),
       customerPhone: this.resForm.customerPhone.trim(),
       partySize: Number(this.resForm.partySize) || 2,
+      tableId: targetTable.id,
       tableNumber: targetTable.number,
+      reservationTime: isoDateTime,
       reservationDate: isoDateTime,
       specialRequests: this.resForm.specialRequests || '',
       status: 'CONFIRMED',
-      createdAt: new Date().toISOString(),
-    };
+    });
 
-    const updated = [newRes, ...this.mock.reservations()];
-    this.mock.reservations.set(updated);
-    this.mock.saveLocal('reservations', updated);
-
-    this.toastService.success(`Reservation confirmed for ${newRes.customerName}`);
+    this.toastService.success(`Reservation confirmed for ${this.resForm.customerName.trim()}`);
     this.showAddModal = false;
   }
 

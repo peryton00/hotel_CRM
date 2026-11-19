@@ -1,6 +1,7 @@
 pub mod billing_repo;
 pub mod coupon_repo;
 pub mod customer_repo;
+pub mod feedback_repo;
 pub mod inventory_repo;
 pub mod menu_repo;
 pub mod order_repo;
@@ -11,6 +12,7 @@ pub mod table_repo;
 pub use billing_repo::BillingRepository;
 pub use coupon_repo::CouponRepository;
 pub use customer_repo::CustomerRepository;
+pub use feedback_repo::FeedbackRepository;
 pub use inventory_repo::InventoryRepository;
 pub use menu_repo::MenuRepository;
 pub use order_repo::OrderRepository;

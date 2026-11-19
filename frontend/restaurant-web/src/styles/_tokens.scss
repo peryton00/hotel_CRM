@@ -48,6 +48,11 @@
   --color-info: #1b4f7e;
   --color-info-bg: #ecf3f9;
 
+  // Loading & Skeleton Tokens
+  --skeleton-bg: #eae3d7;
+  --skeleton-shimmer: rgba(255, 255, 255, 0.65);
+  --loading-bar-gradient: linear-gradient(90deg, #c21807 0%, #d4af37 50%, #c21807 100%);
+
   // Typography Tokens
   --font-display: 'Libre Baskerville', Georgia, serif;
   --font-ui: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;

@@ -105,12 +105,22 @@ pub struct Order {
     pub restaurant_id: Uuid,
     pub order_number: String,
     pub order_type: String,
+    #[sqlx(default)]
+    pub pickup_reference: Option<String>,
     pub status: String,
     pub payment_status: String,
+    #[sqlx(default)]
+    pub payment_method: Option<String>,
     pub table_id: Option<Uuid>,
     pub customer_id: Option<Uuid>,
+    #[sqlx(default)]
+    pub customer_name: Option<String>,
+    #[sqlx(default)]
+    pub customer_phone_e164: Option<String>,
     pub subtotal_paise: i64,
     pub discount_paise: i64,
+    #[sqlx(default)]
+    pub applied_coupon_code: Option<String>,
     pub tax_paise: i64,
     pub service_charge_paise: i64,
     pub round_off_paise: i64,
@@ -160,11 +170,15 @@ pub struct CreateOrderItemInput {
 #[derive(Debug, Clone, Deserialize)]
 pub struct CreateOrderRequest {
     pub order_type: String,
+    pub pickup_reference: Option<String>,
     pub table_id: Option<Uuid>,
     pub customer_id: Option<Uuid>,
+    pub customer_name: Option<String>,
+    pub customer_phone: Option<String>,
     pub items: Vec<CreateOrderItemInput>,
     pub notes: Option<String>,
     pub discount_paise: Option<i64>,
+    pub applied_coupon_code: Option<String>,
 }
 
 #[derive(Debug, Clone, Deserialize)]

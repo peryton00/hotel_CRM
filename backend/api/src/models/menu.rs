@@ -50,3 +50,24 @@ pub struct CreateMenuItemRequest {
 pub struct UpdateItemAvailabilityRequest {
     pub is_available: bool,
 }
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct UpdateMenuItemRequest {
+    pub category_id: Option<Uuid>,
+    pub name: Option<String>,
+    pub description: Option<String>,
+    pub base_price_paise: Option<i64>,
+    pub tax_rate_percent: Option<f64>,
+    pub is_veg: Option<bool>,
+    pub is_available: Option<bool>,
+    pub image_url: Option<String>,
+    pub preparation_time_minutes: Option<i32>,
+    pub display_order: Option<i32>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct CreateMenuCategoryRequest {
+    pub name: String,
+    pub slug: Option<String>,
+    pub display_order: Option<i32>,
+}

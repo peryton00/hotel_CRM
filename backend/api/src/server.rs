@@ -185,6 +185,10 @@ pub async fn apply_local_migrations(pool: &sqlx::PgPool) {
             "005_sync_outbox_inbox",
             include_str!("../migrations_local/005_sync_outbox_inbox.sql"),
         ),
+        (
+            "006_orders_compatibility",
+            include_str!("../migrations_local/006_orders_compatibility.sql"),
+        ),
         ("000_seed", include_str!("../migrations_local/000_seed.sql")),
     ];
 
@@ -255,8 +259,14 @@ pub async fn ensure_schema_and_seed(pool: &sqlx::PgPool) {
         UPDATE customers SET phone = COALESCE(phone, phone_e164) WHERE phone IS NULL;
         ALTER TABLE reservations ADD COLUMN IF NOT EXISTS customer_phone VARCHAR(50);
         ALTER TABLE reservations ADD COLUMN IF NOT EXISTS guest_count INT DEFAULT 2;
+        ALTER TABLE reservations ADD COLUMN IF NOT EXISTS table_id UUID;
+        ALTER TABLE reservations ADD COLUMN IF NOT EXISTS customer_id UUID;
+        ALTER TABLE reservations ADD COLUMN IF NOT EXISTS assigned_table_id UUID;
+        ALTER TABLE reservations ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW();
         UPDATE reservations SET customer_phone = COALESCE(customer_phone, customer_phone_e164) WHERE customer_phone IS NULL;
         UPDATE reservations SET guest_count = COALESCE(guest_count, party_size) WHERE guest_count IS NULL;
+        UPDATE reservations SET table_id = COALESCE(table_id, assigned_table_id) WHERE table_id IS NULL;
+        UPDATE reservations SET updated_at = COALESCE(updated_at, created_at, NOW()) WHERE updated_at IS NULL;
         ALTER TABLE stock_movements ADD COLUMN IF NOT EXISTS inventory_item_id UUID;
         ALTER TABLE stock_movements ADD COLUMN IF NOT EXISTS reference_order_id UUID;
         ALTER TABLE stock_movements ADD COLUMN IF NOT EXISTS reference_wastage_id UUID;
@@ -289,6 +299,14 @@ pub async fn ensure_schema_and_seed(pool: &sqlx::PgPool) {
         UPDATE invoices SET discount_paise = COALESCE(discount_paise, discount_amount_paise) WHERE discount_paise IS NULL;
         UPDATE invoices SET tax_paise = COALESCE(tax_paise, tax_amount_paise) WHERE tax_paise IS NULL;
         ALTER TABLE orders DROP CONSTRAINT IF EXISTS chk_dinein_table;
+        ALTER TABLE orders ADD COLUMN IF NOT EXISTS customer_name VARCHAR(100);
+        ALTER TABLE orders ADD COLUMN IF NOT EXISTS customer_phone_e164 VARCHAR(20);
+        ALTER TABLE orders ADD COLUMN IF NOT EXISTS customer_phone VARCHAR(50);
+        ALTER TABLE orders ADD COLUMN IF NOT EXISTS pickup_reference VARCHAR(50);
+        ALTER TABLE orders ADD COLUMN IF NOT EXISTS applied_coupon_code VARCHAR(50);
+        ALTER TABLE orders ADD COLUMN IF NOT EXISTS order_number VARCHAR(50);
+        ALTER TABLE orders ADD COLUMN IF NOT EXISTS payment_method VARCHAR(50);
+        UPDATE orders SET order_number = 'ORD-' || UPPER(SUBSTRING(id::text, 1, 8)) WHERE order_number IS NULL;
         ALTER TABLE orders ALTER COLUMN customer_name DROP NOT NULL;
         ALTER TABLE orders ALTER COLUMN customer_phone_e164 DROP NOT NULL;
         ALTER TABLE orders ALTER COLUMN order_type TYPE VARCHAR(50) USING order_type::text;
@@ -301,6 +319,7 @@ pub async fn ensure_schema_and_seed(pool: &sqlx::PgPool) {
         ALTER TABLE orders ADD COLUMN IF NOT EXISTS notes TEXT;
         ALTER TABLE orders ADD COLUMN IF NOT EXISTS server_staff_id UUID;
         ALTER TABLE orders ADD COLUMN IF NOT EXISTS cancelled_at TIMESTAMPTZ;
+        ALTER TABLE orders ADD COLUMN IF NOT EXISTS settled_at TIMESTAMPTZ;
         ALTER TABLE orders ADD COLUMN IF NOT EXISTS legacy_unknown_timestamp BOOLEAN DEFAULT FALSE;
         ALTER TABLE orders ALTER COLUMN legacy_unknown_timestamp TYPE BOOLEAN USING FALSE;
         ALTER TABLE orders ALTER COLUMN legacy_unknown_timestamp SET DEFAULT FALSE;
@@ -313,16 +332,29 @@ pub async fn ensure_schema_and_seed(pool: &sqlx::PgPool) {
         ALTER TABLE order_items ADD COLUMN IF NOT EXISTS notes TEXT;
         ALTER TABLE order_items ADD COLUMN IF NOT EXISTS status VARCHAR(50) DEFAULT 'confirmed';
         ALTER TABLE order_items ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT NOW();
+        ALTER TABLE order_items ALTER COLUMN menu_item_id DROP NOT NULL;
+        DO $$
+        BEGIN
+            IF EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'order_items_menu_item_id_fkey') THEN
+                ALTER TABLE order_items DROP CONSTRAINT order_items_menu_item_id_fkey;
+            END IF;
+            ALTER TABLE order_items ADD CONSTRAINT order_items_menu_item_id_fkey
+                FOREIGN KEY (menu_item_id) REFERENCES menu_items(id) ON DELETE SET NULL;
+        EXCEPTION WHEN OTHERS THEN
+            NULL;
+        END $$;
         ALTER TABLE order_timeline_events ADD COLUMN IF NOT EXISTS from_status VARCHAR(50);
         ALTER TABLE order_timeline_events ADD COLUMN IF NOT EXISTS to_status VARCHAR(50);
         ALTER TABLE order_timeline_events ADD COLUMN IF NOT EXISTS notes TEXT;
         ALTER TABLE order_timeline_events ADD COLUMN IF NOT EXISTS performed_by UUID;
         ALTER TABLE order_timeline_events ALTER COLUMN status DROP NOT NULL;
         ALTER TABLE payments ADD COLUMN IF NOT EXISTS upi_transaction_ref VARCHAR(100);
+        ALTER TABLE payments ADD COLUMN IF NOT EXISTS settled_at TIMESTAMPTZ DEFAULT NOW();
         ALTER TABLE payments ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW();
         ALTER TABLE payments ADD COLUMN IF NOT EXISTS legacy_unknown_timestamp BOOLEAN DEFAULT FALSE;
         ALTER TABLE payments ALTER COLUMN legacy_unknown_timestamp TYPE BOOLEAN USING FALSE;
         ALTER TABLE payments ALTER COLUMN legacy_unknown_timestamp SET DEFAULT FALSE;
+        ALTER TABLE split_bills ADD COLUMN IF NOT EXISTS settled_at TIMESTAMPTZ;
         ALTER TABLE inventory_items ADD COLUMN IF NOT EXISTS sku VARCHAR(50);
         ALTER TABLE inventory_items ADD COLUMN IF NOT EXISTS unit_of_measure VARCHAR(20);
         ALTER TABLE inventory_items ADD COLUMN IF NOT EXISTS reorder_level NUMERIC(12, 4) DEFAULT 0.0000;
@@ -330,12 +362,33 @@ pub async fn ensure_schema_and_seed(pool: &sqlx::PgPool) {
         UPDATE inventory_items SET unit_of_measure = COALESCE(unit_of_measure, unit) WHERE unit_of_measure IS NULL;
         UPDATE inventory_items SET reorder_level = COALESCE(reorder_level, min_threshold) WHERE reorder_level IS NULL;
         UPDATE inventory_items SET cost_per_unit_paise = COALESCE(cost_per_unit_paise, unit_cost_paise) WHERE cost_per_unit_paise IS NULL;
+        ALTER TABLE coupons ADD COLUMN IF NOT EXISTS title VARCHAR(150);
+        ALTER TABLE coupons ALTER COLUMN title DROP NOT NULL;
         ALTER TABLE coupons ADD COLUMN IF NOT EXISTS discount_value DOUBLE PRECISION DEFAULT 0;
         ALTER TABLE coupons ADD COLUMN IF NOT EXISTS min_order_amount_paise BIGINT DEFAULT 0;
+        ALTER TABLE coupons ADD COLUMN IF NOT EXISTS max_discount_amount_paise BIGINT;
+        ALTER TABLE coupons ADD COLUMN IF NOT EXISTS max_discount_paise BIGINT;
         ALTER TABLE coupons ADD COLUMN IF NOT EXISTS one_time_per_customer BOOLEAN DEFAULT TRUE;
         ALTER TABLE coupons ADD COLUMN IF NOT EXISTS start_date TIMESTAMPTZ DEFAULT NOW();
         ALTER TABLE coupons ADD COLUMN IF NOT EXISTS end_date TIMESTAMPTZ DEFAULT NOW() + INTERVAL '1 year';
         ALTER TABLE coupons ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW();
+        UPDATE coupons SET title = COALESCE(title, code, 'Discount') WHERE title IS NULL;
+
+        -- Customer feedback compatibility
+        ALTER TABLE customer_feedback ADD COLUMN IF NOT EXISTS customer_id UUID;
+        ALTER TABLE customer_feedback ADD COLUMN IF NOT EXISTS customer_name VARCHAR(100);
+        ALTER TABLE customer_feedback ADD COLUMN IF NOT EXISTS customer_phone VARCHAR(50);
+        ALTER TABLE customer_feedback ADD COLUMN IF NOT EXISTS food_rating INT;
+        ALTER TABLE customer_feedback ADD COLUMN IF NOT EXISTS service_rating INT;
+        ALTER TABLE customer_feedback ADD COLUMN IF NOT EXISTS ambience_rating INT;
+        ALTER TABLE customer_feedback ADD COLUMN IF NOT EXISTS resolution_note TEXT;
+        ALTER TABLE customer_feedback ADD COLUMN IF NOT EXISTS is_resolved BOOLEAN DEFAULT FALSE;
+        ALTER TABLE customer_feedback ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW();
+        UPDATE customer_feedback f
+        SET customer_name = COALESCE(f.customer_name, c.name, 'Valued Guest'),
+            customer_phone = COALESCE(f.customer_phone, c.phone, c.phone_e164, '')
+        FROM customers c
+        WHERE f.customer_id = c.id AND f.customer_name IS NULL;
 
         CREATE TABLE IF NOT EXISTS sync_outbox (
             event_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

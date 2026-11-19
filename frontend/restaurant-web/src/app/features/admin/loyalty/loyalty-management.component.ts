@@ -1,15 +1,23 @@
-import { Component, inject, signal } from '@angular/core';
+import { Component, inject, signal, computed } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { RestaurantDataService } from '../../../data-access/services/restaurant-data.service';
 import { LoyaltyTierConfig, LoyaltyTransaction } from '../../../core/models/loyalty.model';
 import { CurrencyInrPipe } from '../../../shared/pipes/currency-inr.pipe';
 import { ToastService } from '../../../core/services/toast.service';
+import { SkeletonLoaderComponent } from '../../../shared/components/loading/skeleton-loader.component';
+import { EmptyStateComponent } from '../../../shared/components/empty-state/empty-state.component';
 
 @Component({
   selector: 'app-loyalty-management',
   standalone: true,
-  imports: [CommonModule, FormsModule, CurrencyInrPipe],
+  imports: [
+    CommonModule,
+    FormsModule,
+    CurrencyInrPipe,
+    SkeletonLoaderComponent,
+    EmptyStateComponent,
+  ],
   template: `
     <div class="loyalty-page">
       <div class="page-header">
@@ -89,33 +97,52 @@ import { ToastService } from '../../../core/services/toast.service';
               </tr>
             </thead>
             <tbody>
-              @for (tx of transactions(); track tx.id) {
+              @if (isLoading()) {
                 <tr>
-                  <td>{{ tx.date | date: 'medium' }}</td>
-                  <td>
-                    <strong>{{ tx.customerName }}</strong>
-                  </td>
-                  <td>
-                    <span
-                      class="badge"
-                      [class.badge-success]="tx.type === 'EARNED'"
-                      [class.badge-danger]="tx.type === 'REDEEMED'"
-                    >
-                      {{ tx.type }}
-                    </span>
-                  </td>
-                  <td>
-                    <strong
-                      [class.text-success]="tx.points > 0"
-                      [class.text-crimson]="tx.points < 0"
-                    >
-                      {{ tx.points > 0 ? '+' + tx.points : tx.points }} pts
-                    </strong>
-                  </td>
-                  <td>
-                    <span class="text-sm text-muted">{{ tx.description }}</span>
+                  <td colspan="5">
+                    <app-skeleton variant="table-row" [count]="4" />
                   </td>
                 </tr>
+              } @else {
+                @for (tx of transactions(); track tx.id) {
+                  <tr>
+                    <td>{{ tx.date | date: 'medium' }}</td>
+                    <td>
+                      <strong>{{ tx.customerName }}</strong>
+                    </td>
+                    <td>
+                      <span
+                        class="badge"
+                        [class.badge-success]="tx.type === 'EARNED'"
+                        [class.badge-danger]="tx.type === 'REDEEMED'"
+                      >
+                        {{ tx.type }}
+                      </span>
+                    </td>
+                    <td>
+                      <strong
+                        [class.text-success]="tx.points > 0"
+                        [class.text-crimson]="tx.points < 0"
+                      >
+                        {{ tx.points > 0 ? '+' + tx.points : tx.points }} pts
+                      </strong>
+                    </td>
+                    <td>
+                      <span class="text-sm text-muted">{{ tx.description }}</span>
+                    </td>
+                  </tr>
+                } @empty {
+                  <tr>
+                    <td colspan="5">
+                      <app-empty-state
+                        icon="ph-receipt"
+                        title="No Loyalty Transactions"
+                        message="No loyalty points credited or redeemed yet."
+                        [compact]="true"
+                      />
+                    </td>
+                  </tr>
+                }
               }
             </tbody>
           </table>
@@ -230,6 +257,10 @@ export class LoyaltyManagementComponent {
   private mock = this.dataService;
   private toastService = inject(ToastService);
 
+  readonly isLoading = computed(
+    () => this.dataService.isCustomersLoading() || !this.dataService.customersLoaded(),
+  );
+
   tiers = this.mock.loyaltyTiers;
   transactions = this.mock.loyaltyTransactions;
   customers = this.mock.customers;
@@ -252,30 +283,11 @@ export class LoyaltyManagementComponent {
     const cust = this.customers().find((c) => c.id === this.selectedCustId);
     if (!cust) return;
 
-    const newTx: LoyaltyTransaction = {
-      id: `lt-${Date.now().toString().slice(-4)}`,
-      customerId: cust.id,
-      customerName: cust.name,
-      type: 'EARNED',
-      points: Number(this.pointsToCredit),
-      description: this.creditReason.trim(),
-      date: new Date().toISOString(),
-    };
-
-    const updatedTx = [newTx, ...this.mock.loyaltyTransactions()];
-    this.mock.loyaltyTransactions.set(updatedTx);
-    this.mock.saveLocal('loyaltyTransactions', updatedTx);
-
-    // Update customer points
-    const updatedCusts = this.mock
-      .customers()
-      .map((c) =>
-        c.id === cust.id
-          ? { ...c, loyaltyPoints: c.loyaltyPoints + Number(this.pointsToCredit) }
-          : c,
-      );
-    this.mock.customers.set(updatedCusts);
-    this.mock.saveLocal('customers', updatedCusts);
+    this.mock.awardLoyaltyPoints(
+      cust.id,
+      Number(this.pointsToCredit),
+      this.creditReason.trim(),
+    );
 
     this.toastService.success(`Awarded ${this.pointsToCredit} points to ${cust.name}`);
     this.showRewardModal = false;

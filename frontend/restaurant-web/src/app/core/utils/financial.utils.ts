@@ -857,3 +857,67 @@ export function calculateWastageSummary(
     movements: wastageMovements,
   };
 }
+
+/**
+ * Converts Indian Rupee currency amount into standard English words for official tax invoices.
+ * e.g., 1218 -> "Rupees One Thousand Two Hundred Eighteen Only"
+ */
+export function amountInWordsINR(num: number): string {
+  if (!num || isNaN(num) || num <= 0) return 'Rupees Zero Only';
+
+  const a = [
+    '',
+    'One ',
+    'Two ',
+    'Three ',
+    'Four ',
+    'Five ',
+    'Six ',
+    'Seven ',
+    'Eight ',
+    'Nine ',
+    'Ten ',
+    'Eleven ',
+    'Twelve ',
+    'Thirteen ',
+    'Fourteen ',
+    'Fifteen ',
+    'Sixteen ',
+    'Seventeen ',
+    'Eighteen ',
+    'Nineteen ',
+  ];
+  const b = ['', '', 'Twenty', 'Thirty', 'Forty', 'Fifty', 'Sixty', 'Seventy', 'Eighty', 'Ninety'];
+
+  const inWords = (n: number): string => {
+    let str = '';
+    const crore = Math.floor(n / 10000000);
+    const lakh = Math.floor((n % 10000000) / 100000);
+    const thousand = Math.floor((n % 100000) / 1000);
+    const hundred = Math.floor((n % 1000) / 100);
+    const remainder = Math.floor(n % 100);
+
+    if (crore > 0) str += inWords(crore) + 'Crore ';
+    if (lakh > 0) str += inWords(lakh) + 'Lakh ';
+    if (thousand > 0) str += inWords(thousand) + 'Thousand ';
+    if (hundred > 0) str += inWords(hundred) + 'Hundred ';
+
+    if (remainder > 0) {
+      if (remainder < 20) {
+        str += a[remainder];
+      } else {
+        str += b[Math.floor(remainder / 10)] + (a[remainder % 10] ? ' ' + a[remainder % 10] : ' ');
+      }
+    }
+    return str;
+  };
+
+  const rupees = Math.floor(num);
+  const paise = Math.round((num - rupees) * 100);
+
+  let result = 'Rupees ' + inWords(rupees).trim();
+  if (paise > 0) {
+    result += ' and ' + inWords(paise).trim() + ' Paise';
+  }
+  return result + ' Only';
+}

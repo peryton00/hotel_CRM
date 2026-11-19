@@ -17,7 +17,9 @@ pub fn run() {
         )
         .invoke_handler(tauri::generate_handler![
             commands::check_system_status,
-            commands::print_receipt
+            commands::print_receipt,
+            commands::print_escpos_raw,
+            commands::open_external_url
         ])
         .setup(|app| {
             log::info!("HOTEL CRM Tauri 2 desktop shell initializing with embedded backend engine...");

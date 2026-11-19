@@ -88,6 +88,8 @@ pub struct SettleOrderRequest {
     pub upi_transaction_ref: Option<String>,
     pub idempotency_key: Option<String>,
     pub notes: Option<String>,
+    pub discount_paise: Option<i64>,
+    pub applied_coupon_code: Option<String>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -127,6 +129,8 @@ pub struct ReceiptData {
     pub order_number: String,
     pub order_type: String,
     pub table_number: Option<String>,
+    pub customer_name: Option<String>,
+    pub customer_phone: Option<String>,
     pub date: DateTime<Utc>,
     pub items: Vec<ReceiptItemData>,
     pub subtotal_paise: i64,

@@ -4,11 +4,12 @@ import { FormsModule } from '@angular/forms';
 import { RestaurantDataService } from '../../../data-access/services/restaurant-data.service';
 import { Feedback } from '../../../core/models/feedback.model';
 import { ToastService } from '../../../core/services/toast.service';
+import { EmptyStateComponent } from '../../../shared/components/empty-state/empty-state.component';
 
 @Component({
   selector: 'app-feedback-list',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, EmptyStateComponent],
   template: `
     <div class="feedback-page">
       <div class="page-header">
@@ -33,7 +34,7 @@ import { ToastService } from '../../../core/services/toast.service';
             [class.active]="ratingFilter() === 0"
             (click)="ratingFilter.set(0)"
           >
-            All Reviews ({{ feedbacks().length }})
+            All Reviews @if (!isLoading()) { ({{ feedbacks().length }}) }
           </button>
           <button
             class="tab-btn"
@@ -53,54 +54,75 @@ import { ToastService } from '../../../core/services/toast.service';
       </div>
 
       <div class="reviews-list">
-        @for (fb of filteredFeedbacks(); track fb.id) {
-          <div class="review-card">
-            <div class="review-header">
-              <div class="guest-info">
-                <div class="avatar-sm">{{ fb.customerName.charAt(0) }}</div>
-                <div>
-                  <h3 class="guest-name">{{ fb.customerName }}</h3>
-                  <div class="order-ref">
-                    Order {{ fb.orderNumber || 'Dine-In' }} •
-                    {{ fb.createdAt | date: 'mediumDate' }}
+        @if (isLoading()) {
+          @for (i of [1, 2, 3]; track i) {
+            <div class="review-card" style="display: flex; flex-direction: column; gap: 14px;">
+              <div style="display: flex; justify-content: space-between; align-items: center;">
+                <div style="display: flex; align-items: center; gap: 12px;">
+                  <div class="skeleton-base skeleton-circle" style="width: 36px; height: 36px; border-radius: 50%;"></div>
+                  <div style="display: flex; flex-direction: column; gap: 6px;">
+                    <div class="skeleton-base" style="width: 120px; height: 16px; border-radius: 4px;"></div>
+                    <div class="skeleton-base" style="width: 180px; height: 12px; border-radius: 4px;"></div>
                   </div>
                 </div>
+                <div class="skeleton-base" style="width: 100px; height: 18px; border-radius: 4px;"></div>
               </div>
-
-              <div class="stars-row">
-                @for (star of [1, 2, 3, 4, 5]; track star) {
-                  <i
-                    class="ph ph-star"
-                    [class.text-gold]="star <= fb.rating"
-                    [class.text-muted]="star > fb.rating"
-                  ></i>
-                }
-              </div>
+              <div class="skeleton-base" style="width: 85%; height: 14px; border-radius: 4px;"></div>
+              <div class="skeleton-base" style="width: 60%; height: 14px; border-radius: 4px;"></div>
             </div>
-
-            <p class="review-comment">"{{ fb.comment }}"</p>
-
-            @if (fb.adminResponse) {
-              <div class="admin-reply-box">
-                <div class="reply-header">
-                  <i class="ph ph-arrow-bend-down-right"></i>
-                  <span>Response from General Manager Ranveer Brar:</span>
+          }
+        } @else {
+          @for (fb of filteredFeedbacks(); track fb.id) {
+            <div class="review-card">
+              <div class="review-header">
+                <div class="guest-info">
+                  <div class="avatar-sm">{{ fb.customerName.charAt(0) }}</div>
+                  <div>
+                    <h3 class="guest-name">{{ fb.customerName }}</h3>
+                    <div class="order-ref">
+                      Order {{ fb.orderNumber || 'Dine-In' }} •
+                      {{ fb.createdAt | date: 'mediumDate' }}
+                    </div>
+                  </div>
                 </div>
-                <p class="reply-text">{{ fb.adminResponse }}</p>
+
+                <div class="stars-row">
+                  @for (star of [1, 2, 3, 4, 5]; track star) {
+                    <i
+                      class="ph ph-star"
+                      [class.text-gold]="star <= fb.rating"
+                      [class.text-muted]="star > fb.rating"
+                    ></i>
+                  }
+                </div>
               </div>
-            } @else {
-              <div class="reply-action-row">
-                <button class="btn btn-secondary btn-sm" (click)="openReplyModal(fb)">
-                  <i class="ph ph-chat-teardrop-text"></i>
-                  <span>Reply to Feedback</span>
-                </button>
-              </div>
-            }
-          </div>
-        } @empty {
-          <div class="empty-state-panel">
-            <h3 class="heading-card">No reviews found</h3>
-          </div>
+
+              <p class="review-comment">"{{ fb.comment }}"</p>
+
+              @if (fb.adminResponse) {
+                <div class="admin-reply-box">
+                  <div class="reply-header">
+                    <i class="ph ph-arrow-bend-down-right"></i>
+                    <span>Response from General Manager Ranveer Brar:</span>
+                  </div>
+                  <p class="reply-text">{{ fb.adminResponse }}</p>
+                </div>
+              } @else {
+                <div class="reply-action-row">
+                  <button class="btn btn-secondary btn-sm" (click)="openReplyModal(fb)">
+                    <i class="ph ph-chat-teardrop-text"></i>
+                    <span>Reply to Feedback</span>
+                  </button>
+                </div>
+              }
+            </div>
+          } @empty {
+            <app-empty-state
+              icon="ph-star"
+              title="No Reviews Found"
+              message="No guest reviews found for this rating filter."
+            />
+          }
         }
       </div>
 
@@ -324,6 +346,11 @@ export class FeedbackListComponent {
   private toastService = inject(ToastService);
 
   feedbacks = this.mock.feedbacks;
+
+  readonly isLoading = computed(
+    () => this.dataService.isCustomersLoading() || !this.dataService.customersLoaded(),
+  );
+
   ratingFilter = signal<number>(0);
 
   respondingFeedback: Feedback | null = null;
@@ -342,18 +369,14 @@ export class FeedbackListComponent {
   submitReply(): void {
     if (!this.respondingFeedback || !this.responseText.trim()) return;
 
-    const updated = this.mock
-      .feedbacks()
-      .map((f) =>
-        f.id === this.respondingFeedback!.id
-          ? { ...f, adminResponse: this.responseText.trim() }
-          : f,
-      );
-    this.mock.feedbacks.set(updated);
-    this.mock.saveLocal('feedbacks', updated);
-
-    this.toastService.success(`Response published for ${this.respondingFeedback.customerName}`);
-    this.respondingFeedback = null;
+    const customerName = this.respondingFeedback.customerName;
+    const res = this.mock.replyFeedback(this.respondingFeedback.id, this.responseText.trim());
+    if (res.success) {
+      this.toastService.success(`Response published for ${customerName}`);
+      this.respondingFeedback = null;
+    } else {
+      this.toastService.error('Failed to publish response');
+    }
   }
 
   onBackdropClick(event: MouseEvent): void {

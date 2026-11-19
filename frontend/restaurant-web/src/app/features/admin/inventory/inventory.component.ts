@@ -19,13 +19,22 @@ import {
 } from '../../../core/models/inventory.model';
 import { MenuItem } from '../../../core/models/menu.model';
 import { DietaryBadgeComponent } from '../../../shared/components/dietary-badge/dietary-badge.component';
+import { SkeletonLoaderComponent } from '../../../shared/components/loading/skeleton-loader.component';
+import { EmptyStateComponent } from '../../../shared/components/empty-state/empty-state.component';
 
 type InventoryTab = 'INGREDIENTS' | 'RECIPES' | 'LEDGER';
 
 @Component({
   selector: 'app-inventory',
   standalone: true,
-  imports: [CommonModule, FormsModule, CurrencyInrPipe, DietaryBadgeComponent],
+  imports: [
+    CommonModule,
+    FormsModule,
+    CurrencyInrPipe,
+    DietaryBadgeComponent,
+    SkeletonLoaderComponent,
+    EmptyStateComponent,
+  ],
   template: `
     <div class="inventory-page">
       <!-- Page Header -->
@@ -74,56 +83,82 @@ type InventoryTab = 'INGREDIENTS' | 'RECIPES' | 'LEDGER';
       </div>
 
       <!-- KPI Summary Cards -->
-      @if (valuationSummary(); as summary) {
-        <div class="kpi-grid">
-          <div class="kpi-card">
-            <div class="kpi-icon"><i class="ph ph-package"></i></div>
-            <div class="kpi-content">
-              <span class="kpi-label">Tracked Ingredients</span>
-              <strong class="kpi-value">{{ summary.totalTracked }}</strong>
-              <span class="kpi-hint">Active raw materials</span>
-            </div>
-          </div>
-
-          <div class="kpi-card" [class.kpi-alert]="summary.lowStockCount > 0">
-            <div class="kpi-icon alert-icon"><i class="ph ph-warning-circle"></i></div>
-            <div class="kpi-content">
-              <span class="kpi-label">Low Stock Alerts</span>
-              <strong class="kpi-value text-amber">{{ summary.lowStockCount }}</strong>
-              <span class="kpi-hint">Below reorder threshold</span>
-            </div>
-          </div>
-
-          <div class="kpi-card" [class.kpi-danger]="summary.outOfStockCount > 0">
-            <div class="kpi-icon danger-icon"><i class="ph ph-x-circle"></i></div>
-            <div class="kpi-content">
-              <span class="kpi-label">Out of Stock</span>
-              <strong class="kpi-value text-crimson">{{ summary.outOfStockCount }}</strong>
-              <span class="kpi-hint">Dishes unable to prepare</span>
-            </div>
-          </div>
-
-          <div class="kpi-card">
-            <div class="kpi-icon value-icon"><i class="ph ph-currency-inr"></i></div>
-            <div class="kpi-content">
-              <span class="kpi-label">Estimated Stock Value</span>
-              <strong class="kpi-value">{{ summary.estimatedValue | currencyInr }}</strong>
-              <span class="kpi-hint">Based on purchase costs</span>
-            </div>
-          </div>
-
-          <div class="kpi-card">
-            <div class="kpi-icon waste-icon"><i class="ph ph-trash"></i></div>
-            <div class="kpi-content">
-              <span class="kpi-label">Recorded Wastage</span>
-              <strong class="kpi-value text-crimson">{{
-                summary.totalWastageCost | currencyInr
-              }}</strong>
-              <span class="kpi-hint">Cumulative kitchen loss</span>
-            </div>
+      <div class="kpi-grid">
+        <div class="kpi-card">
+          <div class="kpi-icon"><i class="ph ph-package"></i></div>
+          <div class="kpi-content">
+            <span class="kpi-label">Tracked Ingredients</span>
+            <strong class="kpi-value">
+              @if (isLoading()) {
+                <app-skeleton variant="text" width="45px" height="1.8rem" />
+              } @else {
+                {{ valuationSummary().totalTracked }}
+              }
+            </strong>
+            <span class="kpi-hint">Active raw materials</span>
           </div>
         </div>
-      }
+
+        <div class="kpi-card" [class.kpi-alert]="valuationSummary().lowStockCount > 0">
+          <div class="kpi-icon alert-icon"><i class="ph ph-warning-circle"></i></div>
+          <div class="kpi-content">
+            <span class="kpi-label">Low Stock Alerts</span>
+            <strong class="kpi-value text-amber">
+              @if (isLoading()) {
+                <app-skeleton variant="text" width="45px" height="1.8rem" />
+              } @else {
+                {{ valuationSummary().lowStockCount }}
+              }
+            </strong>
+            <span class="kpi-hint">Below reorder threshold</span>
+          </div>
+        </div>
+
+        <div class="kpi-card" [class.kpi-danger]="valuationSummary().outOfStockCount > 0">
+          <div class="kpi-icon danger-icon"><i class="ph ph-x-circle"></i></div>
+          <div class="kpi-content">
+            <span class="kpi-label">Out of Stock</span>
+            <strong class="kpi-value text-crimson">
+              @if (isLoading()) {
+                <app-skeleton variant="text" width="45px" height="1.8rem" />
+              } @else {
+                {{ valuationSummary().outOfStockCount }}
+              }
+            </strong>
+            <span class="kpi-hint">Dishes unable to prepare</span>
+          </div>
+        </div>
+
+        <div class="kpi-card">
+          <div class="kpi-icon value-icon"><i class="ph ph-currency-inr"></i></div>
+          <div class="kpi-content">
+            <span class="kpi-label">Estimated Stock Value</span>
+            <strong class="kpi-value">
+              @if (isLoading()) {
+                <app-skeleton variant="text" width="90px" height="1.8rem" />
+              } @else {
+                {{ valuationSummary().estimatedValue | currencyInr }}
+              }
+            </strong>
+            <span class="kpi-hint">Based on purchase costs</span>
+          </div>
+        </div>
+
+        <div class="kpi-card">
+          <div class="kpi-icon waste-icon"><i class="ph ph-trash"></i></div>
+          <div class="kpi-content">
+            <span class="kpi-label">Recorded Wastage</span>
+            <strong class="kpi-value text-crimson">
+              @if (isLoading()) {
+                <app-skeleton variant="text" width="90px" height="1.8rem" />
+              } @else {
+                {{ valuationSummary().totalWastageCost | currencyInr }}
+              }
+            </strong>
+            <span class="kpi-hint">Cumulative kitchen loss</span>
+          </div>
+        </div>
+      </div>
 
       <!-- Main Navigation Tabs -->
       <div class="tabs-nav-bar">
@@ -267,7 +302,14 @@ type InventoryTab = 'INGREDIENTS' | 'RECIPES' | 'LEDGER';
                 </tr>
               </thead>
               <tbody>
-                @for (ing of filteredIngredients(); track ing.id) {
+                @if (isLoading()) {
+                  <tr>
+                    <td colspan="8" style="padding: 0;">
+                      <app-skeleton variant="ingredient-row" [count]="6" />
+                    </td>
+                  </tr>
+                } @else {
+                  @for (ing of filteredIngredients(); track ing.id) {
                   <tr
                     [class.row-alert]="ing.currentStock > 0 && ing.currentStock <= ing.minThreshold"
                     [class.row-danger]="ing.currentStock <= 0"
@@ -371,11 +413,20 @@ type InventoryTab = 'INGREDIENTS' | 'RECIPES' | 'LEDGER';
                   </tr>
                 } @empty {
                   <tr>
-                    <td colspan="8" class="text-center text-muted py-8">
-                      No ingredients found matching your search and filter criteria.
+                    <td colspan="8" style="padding: 0;">
+                      <app-empty-state
+                        icon="ph-package"
+                        title="No Ingredients Found"
+                        message="No raw kitchen materials match your search and category filter."
+                        actionText="New Ingredient"
+                        actionIcon="ph-plus"
+                        (actionClick)="openIngredientModal()"
+                        [bordered]="false"
+                      />
                     </td>
                   </tr>
                 }
+              }
               </tbody>
             </table>
           </div>
@@ -499,12 +550,16 @@ type InventoryTab = 'INGREDIENTS' | 'RECIPES' | 'LEDGER';
                 </div>
               </div>
             } @empty {
-              <div class="empty-card">
-                <i class="ph ph-cooking-pot"></i>
-                <h3>No recipes match your search</h3>
-                <p class="text-sm text-muted">
-                  Create a recipe formulation to track ingredient consumption for this dish.
-                </p>
+              <div style="grid-column: 1 / -1; width: 100%;">
+                <app-empty-state
+                  icon="ph-cooking-pot"
+                  title="No Recipes Found"
+                  message="Define dish recipes and formulations to calculate ingredient costs and food margins."
+                  actionText="New Recipe"
+                  actionIcon="ph-book-open"
+                  (actionClick)="openRecipeModal()"
+                  [bordered]="false"
+                />
               </div>
             }
           </div>
@@ -597,8 +652,13 @@ type InventoryTab = 'INGREDIENTS' | 'RECIPES' | 'LEDGER';
                   </tr>
                 } @empty {
                   <tr>
-                    <td colspan="7" class="text-center text-muted py-8">
-                      No stock movements found for the selected criteria.
+                    <td colspan="7" style="padding: 0;">
+                      <app-empty-state
+                        icon="ph-clipboard-text"
+                        title="No Stock Movements Recorded"
+                        message="Restocks, wastage, and kitchen recipe deductions will be audited here."
+                        [bordered]="false"
+                      />
                     </td>
                   </tr>
                 }
@@ -1717,7 +1777,8 @@ type InventoryTab = 'INGREDIENTS' | 'RECIPES' | 'LEDGER';
 
       .data-table {
         width: 100%;
-        border-collapse: collapse;
+        border-collapse: separate;
+        border-spacing: 0;
         font-size: 0.875rem;
 
         th {
@@ -2300,7 +2361,7 @@ type InventoryTab = 'INGREDIENTS' | 'RECIPES' | 'LEDGER';
 
         &:hover {
           border-color: var(--color-gold);
-          background: #faf7f2;
+          background: var(--color-surface-hover);
         }
 
         .trigger-icon-circle {
@@ -2667,6 +2728,10 @@ export class InventoryComponent {
   private dataService = inject(RestaurantDataService);
   private mock = this.dataService;
   private toastService = inject(ToastService);
+
+  readonly isLoading = computed(
+    () => this.dataService.isInventoryLoading() || !this.dataService.inventoryLoaded()
+  );
 
   readonly ingredients = this.mock.ingredients;
   readonly recipes = this.mock.recipes;

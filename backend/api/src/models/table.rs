@@ -56,6 +56,15 @@ pub struct UpdateTableStatusRequest {
     pub status: Option<String>,
     pub active_order_id: Option<Uuid>,
     pub assigned_staff_id: Option<Uuid>,
+    pub ordering_enabled: Option<bool>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct CreateTableRequest {
+    pub table_number: String,
+    pub capacity: Option<i32>,
+    pub section: Option<String>,
+    pub qr_code_identifier: Option<String>,
 }
 
 #[derive(Debug, Clone, Deserialize)]

@@ -3,7 +3,7 @@ use uuid::Uuid;
 
 use crate::{
     error::AppError,
-    models::table::RestaurantTable,
+    models::table::{CreateTableRequest, RestaurantTable},
     services::outbox_service::OutboxService,
 };
 
@@ -16,11 +16,15 @@ impl TableRepository {
     ) -> Result<Vec<RestaurantTable>, AppError> {
         let tables = sqlx::query_as::<_, RestaurantTable>(
             r#"
-            SELECT id, restaurant_id, table_number, capacity, section, status,
-                   qr_code_identifier, active_order_id, assigned_staff_id, created_at, updated_at
+            SELECT id, restaurant_id,
+                   COALESCE(table_number, number) AS table_number,
+                   capacity, section,
+                   status::text AS status,
+                   COALESCE(qr_code_identifier, qr_token) AS qr_code_identifier,
+                   active_order_id, assigned_staff_id, created_at, updated_at
             FROM tables
             WHERE restaurant_id = $1
-            ORDER BY table_number ASC
+            ORDER BY number ASC
             "#,
         )
         .bind(restaurant_id)
@@ -37,8 +41,12 @@ impl TableRepository {
     ) -> Result<Option<RestaurantTable>, AppError> {
         let table = sqlx::query_as::<_, RestaurantTable>(
             r#"
-            SELECT id, restaurant_id, table_number, capacity, section, status,
-                   qr_code_identifier, active_order_id, assigned_staff_id, created_at, updated_at
+            SELECT id, restaurant_id,
+                   COALESCE(table_number, number) AS table_number,
+                   capacity, section,
+                   status::text AS status,
+                   COALESCE(qr_code_identifier, qr_token) AS qr_code_identifier,
+                   active_order_id, assigned_staff_id, created_at, updated_at
             FROM tables
             WHERE restaurant_id = $1 AND id = $2
             "#,
@@ -58,12 +66,14 @@ impl TableRepository {
         status: Option<&str>,
         active_order_id: Option<Uuid>,
         assigned_staff_id: Option<Option<Uuid>>,
+        ordering_enabled: Option<bool>,
     ) -> Result<RestaurantTable, AppError> {
         let existing = Self::get_by_id(pool, restaurant_id, table_id)
             .await?
             .ok_or_else(|| AppError::NotFound("Table not found".to_string()))?;
 
         let new_status = status.unwrap_or(&existing.status);
+        let normalized_status = new_status.to_uppercase();
         let new_active_order = active_order_id.or(existing.active_order_id);
         let new_assigned_staff = match assigned_staff_id {
             Some(val) => val,
@@ -73,24 +83,82 @@ impl TableRepository {
         let table = sqlx::query_as::<_, RestaurantTable>(
             r#"
             UPDATE tables
-            SET status = $3,
+            SET status = $3::text::table_status,
                 active_order_id = $4,
                 assigned_staff_id = $5,
+                ordering_enabled = COALESCE($6, ordering_enabled),
                 updated_at = NOW()
             WHERE restaurant_id = $1 AND id = $2
-            RETURNING id, restaurant_id, table_number, capacity, section, status,
-                      qr_code_identifier, active_order_id, assigned_staff_id, created_at, updated_at
+            RETURNING id, restaurant_id,
+                      COALESCE(table_number, number) AS table_number,
+                      capacity, section,
+                      status::text AS status,
+                      COALESCE(qr_code_identifier, qr_token) AS qr_code_identifier,
+                      active_order_id, assigned_staff_id, created_at, updated_at
             "#,
         )
         .bind(restaurant_id)
         .bind(table_id)
-        .bind(new_status)
+        .bind(&normalized_status)
         .bind(new_active_order)
         .bind(new_assigned_staff)
+        .bind(ordering_enabled)
         .fetch_one(pool)
         .await?;
 
         Ok(table)
+    }
+
+    pub async fn create_table(
+        pool: &PgPool,
+        restaurant_id: Uuid,
+        req: CreateTableRequest,
+    ) -> Result<RestaurantTable, AppError> {
+        let qr_token = req.qr_code_identifier.clone().unwrap_or_else(|| {
+            format!("QR-{}", &Uuid::new_v4().to_string()[..8].to_uppercase())
+        });
+        let capacity = req.capacity.unwrap_or(4);
+        let section = req.section.unwrap_or_else(|| "Main Dining".to_string());
+        let table = sqlx::query_as::<_, RestaurantTable>(
+            r#"
+            INSERT INTO tables (
+                restaurant_id, number, table_number, capacity, section,
+                qr_token, qr_code_identifier, status, ordering_enabled
+            )
+            VALUES ($1, $2, $2, $3, $4, $5, $5, 'AVAILABLE', true)
+            RETURNING id, restaurant_id,
+                      COALESCE(table_number, number) AS table_number,
+                      capacity, section,
+                      status::text AS status,
+                      COALESCE(qr_code_identifier, qr_token) AS qr_code_identifier,
+                      active_order_id, assigned_staff_id, created_at, updated_at
+            "#,
+        )
+        .bind(restaurant_id)
+        .bind(&req.table_number)
+        .bind(capacity)
+        .bind(&section)
+        .bind(&qr_token)
+        .fetch_one(pool)
+        .await?;
+
+        Ok(table)
+    }
+
+    pub async fn delete_table(
+        pool: &PgPool,
+        restaurant_id: Uuid,
+        table_id: Uuid,
+    ) -> Result<(), AppError> {
+        sqlx::query(
+            "DELETE FROM tables WHERE restaurant_id = $1 AND id = $2"
+        )
+        .bind(restaurant_id)
+        .bind(table_id)
+        .execute(pool)
+        .await?;
+
+        Ok(())
     }
 
     pub async fn assign_staff(
@@ -99,19 +167,34 @@ impl TableRepository {
         table_id: Uuid,
         assigned_staff_id: Option<Uuid>,
     ) -> Result<RestaurantTable, AppError> {
+        let valid_staff_id = match assigned_staff_id {
+            Some(id) => sqlx::query_scalar::<_, Uuid>(
+                "SELECT id FROM staff_members WHERE id = $1 OR auth_user_id = $1 LIMIT 1",
+            )
+            .bind(id)
+            .fetch_optional(pool)
+            .await
+            .unwrap_or(None),
+            None => None,
+        };
+
         let table = sqlx::query_as::<_, RestaurantTable>(
             r#"
             UPDATE tables
             SET assigned_staff_id = $3,
                 updated_at = NOW()
             WHERE restaurant_id = $1 AND id = $2
-            RETURNING id, restaurant_id, table_number, capacity, section, status,
-                      qr_code_identifier, active_order_id, assigned_staff_id, created_at, updated_at
+            RETURNING id, restaurant_id,
+                      COALESCE(table_number, number) AS table_number,
+                      capacity, section,
+                      status::text AS status,
+                      COALESCE(qr_code_identifier, qr_token) AS qr_code_identifier,
+                      active_order_id, assigned_staff_id, created_at, updated_at
             "#,
         )
         .bind(restaurant_id)
         .bind(table_id)
-        .bind(assigned_staff_id)
+        .bind(valid_staff_id)
         .fetch_one(pool)
         .await?;
 
@@ -131,8 +214,12 @@ impl TableRepository {
         // 1. Get from_table active order
         let from_table = sqlx::query_as::<_, RestaurantTable>(
             r#"
-            SELECT id, restaurant_id, table_number, capacity, section, status,
-                   qr_code_identifier, active_order_id, created_at, updated_at
+            SELECT id, restaurant_id,
+                   COALESCE(table_number, number) AS table_number,
+                   capacity, section,
+                   status::text AS status,
+                   COALESCE(qr_code_identifier, qr_token) AS qr_code_identifier,
+                   active_order_id, assigned_staff_id, created_at, updated_at
             FROM tables
             WHERE restaurant_id = $1 AND id = $2 FOR UPDATE
             "#,
@@ -150,8 +237,12 @@ impl TableRepository {
         // 2. Verify target table is available
         let to_table = sqlx::query_as::<_, RestaurantTable>(
             r#"
-            SELECT id, restaurant_id, table_number, capacity, section, status,
-                   qr_code_identifier, active_order_id, created_at, updated_at
+            SELECT id, restaurant_id,
+                   COALESCE(table_number, number) AS table_number,
+                   capacity, section,
+                   status::text AS status,
+                   COALESCE(qr_code_identifier, qr_token) AS qr_code_identifier,
+                   active_order_id, assigned_staff_id, created_at, updated_at
             FROM tables
             WHERE restaurant_id = $1 AND id = $2 FOR UPDATE
             "#,
@@ -162,7 +253,7 @@ impl TableRepository {
         .await?
         .ok_or_else(|| AppError::NotFound("Destination table not found".to_string()))?;
 
-        if to_table.status != "available" {
+        if to_table.status.to_lowercase() != "available" {
             return Err(AppError::Conflict(
                 "Destination table is not available".to_string(),
             ));
@@ -186,7 +277,7 @@ impl TableRepository {
         sqlx::query(
             r#"
             UPDATE tables
-            SET status = 'available', active_order_id = NULL, updated_at = NOW()
+            SET status = 'AVAILABLE', active_order_id = NULL, updated_at = NOW()
             WHERE id = $1 AND restaurant_id = $2
             "#,
         )
@@ -199,7 +290,7 @@ impl TableRepository {
         sqlx::query(
             r#"
             UPDATE tables
-            SET status = 'occupied', active_order_id = $1, updated_at = NOW()
+            SET status = 'OCCUPIED', active_order_id = $1, updated_at = NOW()
             WHERE id = $2 AND restaurant_id = $3
             "#,
         )
@@ -210,18 +301,30 @@ impl TableRepository {
         .await?;
 
         // 6. Record transfer in table_transfers
+        let staff_name = if let Some(staff_id) = performed_by {
+            sqlx::query_scalar::<_, String>(
+                "SELECT name FROM staff_members WHERE id = $1 OR auth_user_id = $1 LIMIT 1",
+            )
+            .bind(staff_id)
+            .fetch_optional(&mut *tx)
+            .await
+            .unwrap_or(None)
+            .unwrap_or_else(|| "Admin / POS".to_string())
+        } else {
+            "Admin / POS".to_string()
+        };
+
         sqlx::query(
             r#"
-            INSERT INTO table_transfers (restaurant_id, order_id, from_table_id, to_table_id, reason, performed_by)
-            VALUES ($1, $2, $3, $4, $5, $6)
+            INSERT INTO table_transfers (restaurant_id, order_id, source_table_id, destination_table_id, staff_name)
+            VALUES ($1, $2, $3, $4, $5)
             "#,
         )
         .bind(restaurant_id)
         .bind(active_order_id)
         .bind(from_table_id)
         .bind(to_table_id)
-        .bind(&reason)
-        .bind(performed_by)
+        .bind(staff_name)
         .execute(&mut *tx)
         .await?;
 

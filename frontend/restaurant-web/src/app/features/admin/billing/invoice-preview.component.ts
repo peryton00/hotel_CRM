@@ -1,401 +1,583 @@
 import { Component, inject, signal, computed, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { RouterModule, ActivatedRoute } from '@angular/router';
+import { RouterModule, ActivatedRoute, Router } from '@angular/router';
 import { FormsModule } from '@angular/forms';
+import { Order } from '../../../core/models/order.model';
 import { RestaurantDataService } from '../../../data-access/services/restaurant-data.service';
 import { CurrencyInrPipe } from '../../../shared/pipes/currency-inr.pipe';
 import { ToastService } from '../../../core/services/toast.service';
 import { AdminAuthService } from '../../../core/services/admin-auth.service';
+import { ThermalPrinterService } from '../../../core/services/thermal-printer.service';
+import { SkeletonLoaderComponent } from '../../../shared/components/loading/skeleton-loader.component';
+import { EmptyStateComponent } from '../../../shared/components/empty-state/empty-state.component';
+import { ThermalReceiptModalComponent } from '../../../shared/components/thermal-receipt-modal/thermal-receipt-modal.component';
+import { amountInWordsINR } from '../../../core/utils/financial.utils';
+import {
+  openWhatsAppBill,
+  buildWhatsAppBillMessage,
+  getWhatsAppWebUrl,
+  getWhatsAppAppUrl,
+  launchExternalUrl,
+} from '../../../core/utils/whatsapp-bill.util';
 
 @Component({
   selector: 'app-invoice-preview',
   standalone: true,
-  imports: [CommonModule, RouterModule, FormsModule, CurrencyInrPipe],
+  imports: [
+    CommonModule,
+    RouterModule,
+    FormsModule,
+    CurrencyInrPipe,
+    SkeletonLoaderComponent,
+    EmptyStateComponent,
+    ThermalReceiptModalComponent,
+  ],
   template: `
     @if (order(); as ord) {
       <div class="invoice-page">
-        <!-- Action Bar (Screen Only) -->
-        <div class="action-bar no-print">
+        <!-- Action Bar (Screen Only Command Toolbar) -->
+        <nav class="action-bar no-print" aria-label="Invoice navigation and actions">
           <div class="actions-left">
-            <a routerLink="/admin/billing" class="back-link">
+            <a routerLink="/admin/billing" class="back-link action-nav-btn">
               <i class="ph ph-arrow-left"></i>
               <span>Back to Billing</span>
             </a>
             @if (splitBill()) {
               <a
                 [routerLink]="['/admin/billing', ord.id]"
-                class="btn btn-secondary btn-sm"
-                style="margin-left: 12px;"
+                class="split-view-full-btn"
+                title="Switch from split slip to master order invoice"
               >
                 <i class="ph ph-receipt"></i>
-                <span>View Full Order Invoice</span>
+                <span>View Full Order</span>
               </a>
             }
           </div>
 
           <div class="actions-right">
+            <button
+              type="button"
+              class="btn btn-secondary btn-action-tool"
+              (click)="openThermalPreviewModal()"
+              title="Preview ESC/POS thermal receipt tape & printer hardware connection"
+            >
+              <i class="ph ph-receipt"></i>
+              <span>Thermal Slip</span>
+            </button>
+
+            <button
+              type="button"
+              class="btn btn-whatsapp btn-action-share"
+              (click)="openWhatsAppModal()"
+              title="Share Digital Invoice to customer on WhatsApp"
+            >
+              <i class="ph ph-whatsapp-logo"></i>
+              <span>WhatsApp</span>
+            </button>
+
             @if (effectivePrintCount() === 0) {
               <button
-                class="btn btn-primary"
-                (click)="printInvoice()"
+                type="button"
+                class="btn btn-primary btn-action-print"
+                (click)="openThermalPreviewModal()"
                 [title]="splitBill() ? 'Print Split Bill Receipt' : 'Print Original Tax Invoice'"
               >
                 <i class="ph ph-printer"></i>
                 <span>{{ splitBill() ? 'Print Split Slip' : 'Print Tax Invoice' }}</span>
               </button>
             } @else {
-              <div class="print-count-indicator">
-                <i class="ph ph-check-circle"></i>
-                <span
-                  >Printed {{ effectivePrintCount() }} time{{
-                    effectivePrintCount() > 1 ? 's' : ''
-                  }}</span
-                >
+              <div class="print-count-indicator print-badge-pill" title="Invoice print history">
+                <span class="badge-dot"></span>
+                <span>Printed {{ effectivePrintCount() }}×</span>
               </div>
               <button
-                class="btn btn-primary btn-reprint"
+                type="button"
+                class="btn btn-primary btn-reprint btn-action-reprint"
                 (click)="openReprintModal()"
                 title="Admin Password required to reprint bill"
               >
                 <i class="ph ph-lock-key"></i>
-                <span>Reprint (Admin Authorized)</span>
+                <span>Reprint</span>
               </button>
             }
           </div>
-        </div>
+        </nav>
 
-        <!-- Printable Thermal / A4 Receipt Card -->
+        <!-- Printable Professional Tax Invoice / Receipt Card -->
         <div class="invoice-paper" id="invoicePaper">
           @if (splitBill(); as split) {
-            <!-- SPLIT BILL RECEIPT SLIP -->
+            <!-- SPLIT BILL INVOICE -->
             @if (split.printCount && split.printCount > 1) {
-              <div class="reprint-watermark-ribbon">
+              <div class="invoice-banner-ribbon duplicate">
                 *** DUPLICATE SPLIT SLIP — REPRINT (COPY #{{ split.printCount }}) ***
               </div>
             } @else if (split.paymentStatus !== 'PAID') {
-              <div
-                class="reprint-watermark-ribbon unpaid-ribbon"
-                style="background: #fffbeb; border-color: #f59e0b; color: #b45309;"
-              >
+              <div class="invoice-banner-ribbon proforma">
                 *** PRO-FORMA SPLIT BILL (AWAITING SETTLEMENT) ***
               </div>
             }
 
-            <div class="invoice-header">
-              <div class="brand-crest"><i class="ph ph-crown"></i></div>
-              <h1 class="invoice-brand-title">{{ restaurant()?.name || 'GuruKripa Dhaba' }}</h1>
-              <p class="invoice-sub-brand">
-                {{ restaurant()?.tagline || 'Artisanal Awadhi & Mughlai Bistro' }}
-              </p>
-              <p class="invoice-address">
-                14 Heritage Promenade, Civil Lines, MG Road, Bengaluru - 560001<br />
-                Tel: +91 80 4912 8800 • GSTIN: 29AAAAA0000A1Z5
-              </p>
-              <div class="invoice-divider"></div>
-            </div>
+            <header class="invoice-header">
+              <div class="brand-top-row">
+                <div class="brand-identity-visual">
+                  @if (restaurant()?.logoUrl && !logoFailed()) {
+                    <img
+                      [src]="restaurant()?.logoUrl"
+                      [alt]="restaurant()?.name || 'Restaurant Logo'"
+                      class="restaurant-logo-img"
+                      (error)="logoFailed.set(true)"
+                    />
+                  } @else {
+                    <div class="brand-crest-fallback">
+                      <i class="ph ph-crown"></i>
+                    </div>
+                  }
+                </div>
 
-            <div class="split-slip-badge-row" style="text-align: center; margin-bottom: 12px;">
-              <span
-                style="display: inline-block; padding: 4px 12px; background: rgba(212, 175, 55, 0.15); border: 1px solid rgba(212, 175, 55, 0.35); border-radius: 4px; font-weight: 700; font-size: 0.8125rem;"
-              >
+                <div class="brand-text-block">
+                  <h1 class="brand-name">{{ restaurant()?.name || 'GuruKripa Dhaba' }}</h1>
+                  <p class="brand-tagline">{{ restaurant()?.tagline || 'Artisanal Awadhi & Mughlai Bistro' }}</p>
+                  <p class="brand-address">{{ restaurantAddress }}</p>
+                  <div class="brand-contacts-row">
+                    <span><i class="ph ph-phone"></i> {{ restaurantPhone }}</span>
+                    <span><i class="ph ph-envelope"></i> {{ restaurantEmail }}</span>
+                  </div>
+                </div>
+
+                <div class="brand-legal-badge-col">
+                  <div class="tax-document-tag split-tag">SPLIT TAX SLIP</div>
+                  <div class="legal-id-card">
+                    <div class="legal-id-row">
+                      <span class="legal-lbl">GSTIN:</span>
+                      <strong class="legal-val">{{ restaurantGstin }}</strong>
+                    </div>
+                    <div class="legal-id-row">
+                      <span class="legal-lbl">FSSAI No:</span>
+                      <strong class="legal-val">{{ fssaiLicense }}</strong>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </header>
+
+            <div class="header-rule"></div>
+
+            <div class="split-slip-badge-row">
+              <span class="split-badge-chip">
                 ITEMIZED SPLIT RECEIPT — PART #{{ split.splitIndex }} OF {{ split.splitTotalCount }}
               </span>
             </div>
 
-            <div class="invoice-meta-grid">
-              <div class="meta-col">
-                <div class="m-item">
-                  <strong>Receipt Slip:</strong> SPLIT-{{
-                    split.orderNumber.replace(/[^0-9]/g, '')
-                  }}-{{ split.splitIndex }}
+            <!-- Two-Column Particulars Section -->
+            <section class="invoice-meta-section">
+              <div class="meta-card invoice-meta-card">
+                <div class="meta-card-title">SPLIT RECEIPT PARTICULARS</div>
+                <div class="meta-field-row">
+                  <span class="m-label">Receipt Slip ID:</span>
+                  <strong class="m-val mono">SPLIT-{{ split.orderNumber.replace(/[^0-9]/g, '') }}-{{ split.splitIndex }}</strong>
                 </div>
-                <div class="m-item"><strong>Parent Order:</strong> {{ split.orderNumber }}</div>
-                <div class="m-item">
-                  <strong>Date:</strong> {{ split.settledAt || ord.createdAt | date: 'mediumDate' }}
-                  {{ split.settledAt || ord.createdAt | date: 'shortTime' }}
+                <div class="meta-field-row">
+                  <span class="m-label">Parent Order No:</span>
+                  <span class="m-val">{{ split.orderNumber }}</span>
+                </div>
+                <div class="meta-field-row">
+                  <span class="m-label">Settlement Date:</span>
+                  <span class="m-val">{{ (split.settledAt || ord.createdAt) | date: 'mediumDate' }}, {{ (split.settledAt || ord.createdAt) | date: 'shortTime' }}</span>
+                </div>
+                <div class="meta-field-row">
+                  <span class="m-label">Split Mode:</span>
+                  <span class="m-val">{{ split.splitType === 'ITEM_BASED' ? 'Itemized Dish Allocation' : 'Equal Proportional Share' }}</span>
                 </div>
               </div>
-              <div class="meta-col text-right">
-                @if (ord.orderType === 'TAKEAWAY' || split.orderType === 'TAKEAWAY') {
-                  <div class="m-item">
-                    <strong
-                      class="table-callout takeaway-callout"
-                      style="color: #8b6508; background: rgba(212, 175, 55, 0.15); padding: 2px 8px; border-radius: 4px;"
-                      >TAKEAWAY •
-                      {{ split.pickupReference || ord.pickupReference || ord.orderNumber }}</strong
-                    >
-                  </div>
-                } @else {
-                  <div class="m-item">
-                    <strong class="table-callout"
-                      >TABLE {{ split.tableNumber || ord.tableNumber }}</strong
-                    >
-                  </div>
-                }
-                <div class="m-item">
-                  <strong>Guest:</strong> {{ split.customerName || ord.customerName }}
+
+              <div class="meta-card guest-meta-card">
+                <div class="meta-card-title">CUSTOMER & SERVICE DETAILS</div>
+                <div class="meta-field-row">
+                  <span class="m-label">Service Type:</span>
+                  @if (ord.orderType === 'TAKEAWAY' || split.orderType === 'TAKEAWAY') {
+                    <span class="service-pill takeaway">
+                      <i class="ph ph-shopping-bag"></i> TAKEAWAY • {{ split.pickupReference || ord.pickupReference || ord.orderNumber }}
+                    </span>
+                  } @else {
+                    <span class="service-pill dinein">
+                      <i class="ph ph-fork-knife"></i> TABLE {{ split.tableNumber || ord.tableNumber || 'DINE-IN' }}
+                    </span>
+                  }
                 </div>
-                <div class="m-item">
-                  <strong>Split Mode:</strong>
-                  {{ split.splitType === 'ITEM_BASED' ? 'Itemized Split' : 'Equal Share Split' }}
+                <div class="meta-field-row">
+                  <span class="m-label">Guest Name:</span>
+                  <strong class="m-val">{{ split.customerName || ord.customerName || 'Walk-in Guest' }}</strong>
+                </div>
+                <div class="meta-field-row">
+                  <span class="m-label">Payment Status:</span>
+                  <span class="m-val payment-status-pill" [class.paid]="split.paymentStatus === 'PAID'">
+                    {{ split.paymentStatus === 'PAID' ? 'PAID (' + (split.paymentMethod || 'SETTLED') + ')' : 'UNPAID' }}
+                  </span>
                 </div>
                 @if (split.printCount && split.printCount > 0) {
-                  <div class="m-item">
-                    <strong>Print Copy:</strong> #{{ split.printCount }}
-                    {{ split.printCount > 1 ? '(Duplicate)' : '(Original)' }}
+                  <div class="meta-field-row">
+                    <span class="m-label">Print Copy:</span>
+                    <span class="m-val">#{{ split.printCount }} {{ split.printCount > 1 ? '(Duplicate Reprint)' : '(Original)' }}</span>
                   </div>
                 }
               </div>
-            </div>
+            </section>
 
-            <div class="invoice-divider"></div>
-
-            <!-- Line Items Table -->
-            <table class="receipt-table">
-              <thead>
-                <tr>
-                  <th class="text-left">Split Description / Dish</th>
-                  <th class="text-center">Qty</th>
-                  <th class="text-right">Rate</th>
-                  <th class="text-right">Amount</th>
-                </tr>
-              </thead>
-              <tbody>
-                @if (
-                  split.splitType === 'ITEM_BASED' &&
-                  split.allocatedItems &&
-                  split.allocatedItems.length > 0
-                ) {
-                  @for (it of split.allocatedItems; track it.orderItemId) {
+            <!-- Table of allocated items -->
+            <section class="invoice-table-section">
+              <table class="invoice-items-table">
+                <thead>
+                  <tr>
+                    <th class="col-num">#</th>
+                    <th class="col-desc">SPLIT DESCRIPTION / DISH</th>
+                    <th class="col-hsn">HSN/SAC</th>
+                    <th class="col-qty">QTY</th>
+                    <th class="col-rate">RATE (₹)</th>
+                    <th class="col-amt">AMOUNT (₹)</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  @if (split.splitType === 'ITEM_BASED' && split.allocatedItems && split.allocatedItems.length > 0) {
+                    @for (it of split.allocatedItems; track it.orderItemId; let i = $index) {
+                      <tr>
+                        <td class="col-num">{{ i + 1 }}</td>
+                        <td class="col-desc">
+                          <div class="item-primary-name">{{ it.name }}</div>
+                        </td>
+                        <td class="col-hsn">996331</td>
+                        <td class="col-qty font-bold">{{ it.quantity }}</td>
+                        <td class="col-rate">{{ it.unitPrice | number: '1.2-2' }}</td>
+                        <td class="col-amt font-bold">{{ (it.quantity * it.unitPrice) | number: '1.2-2' }}</td>
+                      </tr>
+                    }
+                  } @else {
                     <tr>
-                      <td class="text-left">
-                        <div class="dish-item-name">{{ it.name }}</div>
+                      <td class="col-num">1</td>
+                      <td class="col-desc">
+                        <div class="item-primary-name">
+                          Equal Split Share (Part {{ split.splitIndex }} of {{ split.splitTotalCount }})
+                        </div>
+                        <span class="item-micro-spec variant">
+                          Proportionate 1/{{ split.splitTotalCount }} share of parent order #{{ ord.orderNumber }}
+                        </span>
                       </td>
-                      <td class="text-center">{{ it.quantity }}</td>
-                      <td class="text-right">{{ it.unitPrice | currencyInr }}</td>
-                      <td class="text-right font-bold">{{ it.itemTotal | currencyInr }}</td>
+                      <td class="col-hsn">996331</td>
+                      <td class="col-qty font-bold">1</td>
+                      <td class="col-rate">{{ split.subtotal | number: '1.2-2' }}</td>
+                      <td class="col-amt font-bold">{{ split.subtotal | number: '1.2-2' }}</td>
                     </tr>
                   }
-                } @else {
-                  <tr>
-                    <td class="text-left">
-                      <div class="dish-item-name">
-                        Equal Split Share (Part {{ split.splitIndex }} of
-                        {{ split.splitTotalCount }})
-                      </div>
-                      <div class="dish-sub-text">
-                        Proportionate 1/{{ split.splitTotalCount }} share of parent order #{{
-                          ord.orderNumber
-                        }}
-                      </div>
-                    </td>
-                    <td class="text-center">1</td>
-                    <td class="text-right">{{ split.subtotal | currencyInr }}</td>
-                    <td class="text-right font-bold">{{ split.subtotal | currencyInr }}</td>
-                  </tr>
-                }
-              </tbody>
-            </table>
+                </tbody>
+              </table>
+            </section>
 
-            <div class="invoice-divider"></div>
-
-            <!-- Subtotal & GST Calculation -->
-            <div class="totals-breakdown">
-              <div class="t-row">
-                <span>Split Subtotal:</span>
-                <span>{{ split.subtotal | currencyInr }}</span>
-              </div>
-              @if (split.discountAmount > 0) {
-                <div class="t-row discount">
-                  <span>Split Discount:</span>
-                  <span>-{{ split.discountAmount | currencyInr }}</span>
+            <!-- Split Totals & Summary -->
+            <section class="invoice-summary-section">
+              <div class="summary-left-block">
+                <div class="words-card">
+                  <span class="words-label">AMOUNT IN WORDS:</span>
+                  <p class="words-text">{{ amountInWords(split.totalAmount) }}</p>
                 </div>
-              }
-              @if (split.taxBreakdown && split.taxBreakdown.length > 0) {
-                @for (t of split.taxBreakdown; track t.name) {
-                  <div class="t-row">
-                    <span>{{ t.name }}:</span>
-                    <span>{{ t.amount | currencyInr }}</span>
+                <div class="settlement-info-box">
+                  <div class="settlement-row">
+                    <span>Payment Tender:</span>
+                    <strong>{{ split.paymentMethod || 'Direct Tender' }}</strong>
                   </div>
-                }
-              } @else {
-                <div class="t-row">
-                  <span>GST (5%):</span>
-                  <span>{{ split.taxAmount | currencyInr }}</span>
+                  <div class="settlement-badge" [class.paid]="split.paymentStatus === 'PAID'">
+                    <i class="ph ph-seal-check"></i>
+                    <span>{{ split.paymentStatus === 'PAID' ? 'SPLIT SHARE SETTLED' : 'AWAITING PAYMENT' }}</span>
+                  </div>
                 </div>
-              }
-              <div class="invoice-divider thick"></div>
-              <div class="t-row final-grand-total">
-                <span>SPLIT SHARE TOTAL:</span>
-                <span class="grand-val">{{ split.totalAmount | currencyInr }}</span>
               </div>
-              <div class="invoice-divider thick"></div>
-            </div>
 
-            <!-- Payment Stamp -->
-            <div class="payment-stamp-box">
-              @if (split.paymentStatus === 'PAID') {
-                <div class="stamp paid">
-                  <span>PAID</span>
-                  <small>{{ split.paymentMethod || 'UPI' }} SETTLED</small>
+              <div class="summary-right-block">
+                <div class="totals-table">
+                  <div class="total-line">
+                    <span class="t-label">Split Subtotal:</span>
+                    <span class="t-val">{{ split.subtotal | currencyInr }}</span>
+                  </div>
+                  @if (split.discountAmount > 0) {
+                    <div class="total-line discount-line">
+                      <span class="t-label">Split Discount:</span>
+                      <span class="t-val">-{{ split.discountAmount | currencyInr }}</span>
+                    </div>
+                  }
+                  @if (split.taxBreakdown && split.taxBreakdown.length > 0) {
+                    @for (t of split.taxBreakdown; track t.name) {
+                      <div class="total-line tax-line">
+                        <span class="t-label">{{ t.name }}:</span>
+                        <span class="t-val">{{ t.amount | currencyInr }}</span>
+                      </div>
+                    }
+                  } @else {
+                    <div class="total-line tax-line">
+                      <span class="t-label">GST (5%):</span>
+                      <span class="t-val">{{ split.taxAmount | currencyInr }}</span>
+                    </div>
+                  }
+                  <div class="totals-separator"></div>
+                  <div class="total-line grand-total-line">
+                    <span class="grand-label">SPLIT SHARE TOTAL:</span>
+                    <span class="grand-val">{{ split.totalAmount | currencyInr }}</span>
+                  </div>
                 </div>
-              } @else {
-                <div class="stamp unpaid">
-                  <span>UNPAID</span>
-                  <small>AWAITING SETTLEMENT</small>
-                </div>
-              }
-            </div>
+              </div>
+            </section>
 
-            <div class="receipt-footer">
-              <p>Individual Split Receipt • {{ restaurant()?.name || 'GuruKripa Dhaba' }}</p>
-              <p class="f-sub">
-                Parent Order: {{ ord.orderNumber }} • FSSAI Lic No: 11223344556677
-              </p>
-            </div>
+            <footer class="invoice-footer-section">
+              <div class="footer-terms-block">
+                <strong class="terms-title">Terms & Notes:</strong>
+                <p class="terms-text">Itemized split bill for individual dining party share. Parent order: {{ ord.orderNumber }}.</p>
+                <p class="computer-gen-notice">This is a computer-generated tax receipt. No physical signature required.</p>
+              </div>
+              <div class="footer-signatory-block">
+                <div class="signatory-space"></div>
+                <div class="signatory-rule"></div>
+                <span class="signatory-name">For {{ restaurant()?.name || 'GuruKripa Dhaba' }}</span>
+                <span class="signatory-title">Authorized Signatory</span>
+              </div>
+            </footer>
           } @else {
-            <!-- FULL PARENT ORDER INVOICE -->
+            <!-- FULL PARENT ORDER TAX INVOICE -->
             @if (ord.printCount && ord.printCount > 1) {
-              <div class="reprint-watermark-ribbon">
+              <div class="invoice-banner-ribbon duplicate">
                 *** DUPLICATE TAX INVOICE — REPRINT (COPY #{{ ord.printCount }}) ***
+              </div>
+            } @else if (ord.paymentStatus !== 'PAID') {
+              <div class="invoice-banner-ribbon proforma">
+                *** PRO-FORMA INVOICE • PENDING PAYMENT SETTLEMENT ***
               </div>
             }
 
-            <div class="invoice-header">
-              <div class="brand-crest"><i class="ph ph-crown"></i></div>
-              <h1 class="invoice-brand-title">{{ restaurant()?.name || 'GuruKripa Dhaba' }}</h1>
-              <p class="invoice-sub-brand">
-                {{ restaurant()?.tagline || 'Artisanal Awadhi & Mughlai Bistro' }}
-              </p>
-              <p class="invoice-address">
-                14 Heritage Promenade, Civil Lines, MG Road, Bengaluru - 560001<br />
-                Tel: +91 80 4912 8800 • GSTIN: 29AAAAA0000A1Z5
-              </p>
-              <div class="invoice-divider"></div>
-            </div>
-
-            <div class="invoice-meta-grid">
-              <div class="meta-col">
-                <div class="m-item">
-                  <strong>Invoice No:</strong> INV-2026-{{ ord.orderNumber.replace('#ORD-', '') }}
+            <header class="invoice-header">
+              <div class="brand-top-row">
+                <div class="brand-identity-visual">
+                  @if (restaurant()?.logoUrl && !logoFailed()) {
+                    <img
+                      [src]="restaurant()?.logoUrl"
+                      [alt]="restaurant()?.name || 'Restaurant Logo'"
+                      class="restaurant-logo-img"
+                      (error)="logoFailed.set(true)"
+                    />
+                  } @else {
+                    <div class="brand-crest-fallback">
+                      <i class="ph ph-crown"></i>
+                    </div>
+                  }
                 </div>
-                <div class="m-item"><strong>Order Ref:</strong> {{ ord.orderNumber }}</div>
-                <div class="m-item">
-                  <strong>Date:</strong> {{ ord.createdAt | date: 'mediumDate' }}
-                  {{ ord.createdAt | date: 'shortTime' }}
+
+                <div class="brand-text-block">
+                  <h1 class="brand-name">{{ restaurant()?.name || 'GuruKripa Dhaba' }}</h1>
+                  <p class="brand-tagline">{{ restaurant()?.tagline || 'Artisanal Awadhi & Mughlai Bistro' }}</p>
+                  <p class="brand-address">{{ restaurantAddress }}</p>
+                  <div class="brand-contacts-row">
+                    <span><i class="ph ph-phone"></i> {{ restaurantPhone }}</span>
+                    <span><i class="ph ph-envelope"></i> {{ restaurantEmail }}</span>
+                  </div>
+                </div>
+
+                <div class="brand-legal-badge-col">
+                  <div class="tax-document-tag">TAX INVOICE</div>
+                  <div class="legal-id-card">
+                    <div class="legal-id-row">
+                      <span class="legal-lbl">GSTIN:</span>
+                      <strong class="legal-val">{{ restaurantGstin }}</strong>
+                    </div>
+                    <div class="legal-id-row">
+                      <span class="legal-lbl">FSSAI No:</span>
+                      <strong class="legal-val">{{ fssaiLicense }}</strong>
+                    </div>
+                  </div>
                 </div>
               </div>
-              <div class="meta-col text-right">
-                @if (ord.orderType === 'TAKEAWAY') {
-                  <div class="m-item">
-                    <strong
-                      class="table-callout takeaway-callout"
-                      style="color: #8b6508; background: rgba(212, 175, 55, 0.15); padding: 2px 8px; border-radius: 4px;"
-                      >TAKEAWAY • {{ ord.pickupReference || ord.orderNumber }}</strong
-                    >
-                  </div>
-                } @else {
-                  <div class="m-item">
-                    <strong class="table-callout">TABLE {{ ord.tableNumber }}</strong>
-                  </div>
-                }
-                <div class="m-item"><strong>Guest:</strong> {{ ord.customerName }}</div>
-                <div class="m-item"><strong>Mobile:</strong> {{ ord.customerPhone }}</div>
+            </header>
+
+            <div class="header-rule"></div>
+
+            <!-- Two-Column Particulars Section -->
+            <section class="invoice-meta-section">
+              <div class="meta-card invoice-meta-card">
+                <div class="meta-card-title">INVOICE PARTICULARS</div>
+                <div class="meta-field-row">
+                  <span class="m-label">Invoice Number:</span>
+                  <strong class="m-val mono">{{ getInvoiceNumber(ord) }}</strong>
+                </div>
+                <div class="meta-field-row">
+                  <span class="m-label">Order Ref No:</span>
+                  <span class="m-val">{{ ord.orderNumber }}</span>
+                </div>
+                <div class="meta-field-row">
+                  <span class="m-label">Invoice Date:</span>
+                  <span class="m-val">{{ ord.createdAt | date: 'mediumDate' }}, {{ ord.createdAt | date: 'shortTime' }}</span>
+                </div>
+                <div class="meta-field-row">
+                  <span class="m-label">Billed By (Cashier):</span>
+                  <span class="m-val">{{ getBilledByStaff(ord) }}</span>
+                </div>
+              </div>
+
+              <div class="meta-card guest-meta-card">
+                <div class="meta-card-title">CUSTOMER & SERVICE DETAILS</div>
+                <div class="meta-field-row">
+                  <span class="m-label">Service Type:</span>
+                  @if (ord.orderType === 'TAKEAWAY') {
+                    <span class="service-pill takeaway">
+                      <i class="ph ph-shopping-bag"></i> TAKEAWAY • {{ ord.pickupReference || ord.orderNumber }}
+                    </span>
+                  } @else {
+                    <span class="service-pill dinein">
+                      <i class="ph ph-fork-knife"></i> TABLE {{ ord.tableNumber || 'DINE-IN' }}
+                    </span>
+                  }
+                </div>
+                <div class="meta-field-row">
+                  <span class="m-label">Guest Name:</span>
+                  <strong class="m-val">{{ ord.customerName || 'Walk-in Guest' }}</strong>
+                </div>
+                <div class="meta-field-row">
+                  <span class="m-label">Mobile Number:</span>
+                  <span class="m-val">{{ ord.customerPhone || 'Not Provided' }}</span>
+                </div>
+                <div class="meta-field-row">
+                  <span class="m-label">Payment Status:</span>
+                  <span class="m-val payment-status-pill" [class.paid]="ord.paymentStatus === 'PAID'">
+                    {{ ord.paymentStatus === 'PAID' ? 'PAID (' + (ord.paymentMethod || 'SETTLED') + ')' : 'UNPAID' }}
+                  </span>
+                </div>
                 @if (ord.printCount && ord.printCount > 0) {
-                  <div class="m-item">
-                    <strong>Print Copy:</strong> #{{ ord.printCount }}
-                    {{ ord.printCount > 1 ? '(Duplicate)' : '(Original)' }}
+                  <div class="meta-field-row">
+                    <span class="m-label">Print Copy:</span>
+                    <span class="m-val">#{{ ord.printCount }} {{ ord.printCount > 1 ? '(Duplicate Reprint)' : '(Original)' }}</span>
                   </div>
                 }
               </div>
-            </div>
-
-            <div class="invoice-divider"></div>
+            </section>
 
             <!-- Line Items Table -->
-            <table class="receipt-table">
-              <thead>
-                <tr>
-                  <th class="text-left">Item Description</th>
-                  <th class="text-center">Qty</th>
-                  <th class="text-right">Rate</th>
-                  <th class="text-right">Amount</th>
-                </tr>
-              </thead>
-              <tbody>
-                @for (item of ord.items; track item.id) {
+            <section class="invoice-table-section">
+              <table class="invoice-items-table">
+                <thead>
                   <tr>
-                    <td class="text-left">
-                      <div class="dish-item-name">{{ item.name }}</div>
-                      @if (item.selectedPortion) {
-                        <div class="dish-sub-text">Portion: {{ item.selectedPortion.label }}</div>
-                      }
-                      @if (item.selectedVariants && item.selectedVariants.length > 0) {
-                        <div class="dish-sub-text">
-                          @for (v of item.selectedVariants; track v.optionName) {
-                            {{ v.optionName }}
-                          }
-                        </div>
-                      }
-                    </td>
-                    <td class="text-center">{{ item.quantity }}</td>
-                    <td class="text-right">{{ item.unitPrice | currencyInr }}</td>
-                    <td class="text-right font-bold">{{ item.itemTotal | currencyInr }}</td>
+                    <th class="col-num">#</th>
+                    <th class="col-desc">ITEM DESCRIPTION & SPECIFICATION</th>
+                    <th class="col-hsn">HSN/SAC</th>
+                    <th class="col-qty">QTY</th>
+                    <th class="col-rate">RATE (₹)</th>
+                    <th class="col-amt">AMOUNT (₹)</th>
                   </tr>
-                }
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  @for (item of ord.items; track item.id; let i = $index) {
+                    <tr>
+                      <td class="col-num">{{ i + 1 }}</td>
+                      <td class="col-desc">
+                        <div class="item-primary-name">{{ item.name }}</div>
+                        @if (item.selectedPortion) {
+                          <span class="item-micro-spec portion">Portion: {{ item.selectedPortion.label }}</span>
+                        }
+                        @if (item.selectedVariants && item.selectedVariants.length > 0) {
+                          <div class="item-variants-list">
+                            @for (v of item.selectedVariants; track v.optionName) {
+                              <span class="item-micro-spec variant">{{ v.optionName }}</span>
+                            }
+                          </div>
+                        }
+                        @if (item.specialInstructions) {
+                          <span class="item-micro-spec notes">Note: {{ item.specialInstructions }}</span>
+                        }
+                      </td>
+                      <td class="col-hsn">996331</td>
+                      <td class="col-qty font-bold">{{ item.quantity }}</td>
+                      <td class="col-rate">{{ item.unitPrice | number: '1.2-2' }}</td>
+                      <td class="col-amt font-bold">{{ (item.quantity * item.unitPrice) | number: '1.2-2' }}</td>
+                    </tr>
+                  }
+                </tbody>
+              </table>
+            </section>
 
-            <div class="invoice-divider"></div>
-
-            <!-- Subtotal & GST Calculation -->
-            <div class="totals-breakdown">
-              <div class="t-row">
-                <span>Subtotal:</span>
-                <span>{{ ord.subtotal | currencyInr }}</span>
-              </div>
-              @if (ord.discountAmount > 0) {
-                <div class="t-row discount">
-                  <span>Discount ({{ ord.appliedCouponCode }}):</span>
-                  <span>-{{ ord.discountAmount | currencyInr }}</span>
+            <!-- Split Bottom Section: Words + Financial Summary -->
+            <section class="invoice-summary-section">
+              <div class="summary-left-block">
+                <div class="words-card">
+                  <span class="words-label">INVOICE AMOUNT IN WORDS:</span>
+                  <p class="words-text">{{ amountInWords(ord.totalAmount) }}</p>
                 </div>
-              }
-              <div class="t-row">
-                <span>CGST (2.5%):</span>
-                <span>{{ ord.cgstAmount | currencyInr }}</span>
-              </div>
-              <div class="t-row">
-                <span>SGST (2.5%):</span>
-                <span>{{ ord.sgstAmount | currencyInr }}</span>
-              </div>
-              <div class="invoice-divider thick"></div>
-              <div class="t-row final-grand-total">
-                <span>NET PAYABLE AMOUNT:</span>
-                <span class="grand-val">{{ ord.totalAmount | currencyInr }}</span>
-              </div>
-              <div class="invoice-divider thick"></div>
-            </div>
 
-            <!-- Payment Stamp -->
-            <div class="payment-stamp-box">
-              @if (ord.paymentStatus === 'PAID') {
-                <div class="stamp paid">
-                  <span>PAID</span>
-                  <small>{{ ord.paymentMethod || 'UPI' }} SETTLED</small>
+                <div class="settlement-info-box">
+                  <div class="settlement-row">
+                    <span>Payment Tender:</span>
+                    <strong>{{ ord.paymentMethod || 'Cash / Counter' }}</strong>
+                  </div>
+                  <div class="settlement-row">
+                    <span>Settlement Time:</span>
+                    <span>{{ (ord.settledAt || ord.createdAt) | date: 'mediumDate' }}, {{ (ord.settledAt || ord.createdAt) | date: 'shortTime' }}</span>
+                  </div>
+                  <div class="settlement-badge" [class.paid]="ord.paymentStatus === 'PAID'">
+                    <i class="ph ph-seal-check"></i>
+                    <span>{{ ord.paymentStatus === 'PAID' ? 'TRANSACTION SETTLED & VERIFIED' : 'PAYMENT PENDING SETTLEMENT' }}</span>
+                  </div>
                 </div>
-              } @else {
-                <div class="stamp unpaid">
-                  <span>UNPAID</span>
-                  <small>PENDING SETTLEMENT</small>
-                </div>
-              }
-            </div>
+              </div>
 
-            <div class="receipt-footer">
-              <p>Thank you for dining at {{ restaurant()?.name || 'GuruKripa Dhaba' }}!</p>
-              <p class="f-sub">FSSAI Lic No: 11223344556677 • Scan table QR for digital feedback</p>
-            </div>
+              <div class="summary-right-block">
+                <div class="totals-table">
+                  <div class="total-line">
+                    <span class="t-label">Items Subtotal:</span>
+                    <span class="t-val">{{ ord.subtotal | currencyInr }}</span>
+                  </div>
+                  @if (ord.discountAmount > 0) {
+                    <div class="total-line discount-line">
+                      <span class="t-label">Coupon Discount ({{ ord.appliedCouponCode }}):</span>
+                      <span class="t-val">-{{ ord.discountAmount | currencyInr }}</span>
+                    </div>
+                  }
+                  <div class="total-line">
+                    <span class="t-label">Taxable Value:</span>
+                    <span class="t-val">{{ (ord.subtotal - (ord.discountAmount || 0)) | currencyInr }}</span>
+                  </div>
+                  <div class="total-line tax-line">
+                    <span class="t-label">CGST ({{ restaurant()?.taxSettings?.cgstRate ?? 2.5 }}%):</span>
+                    <span class="t-val">{{ ord.cgstAmount | currencyInr }}</span>
+                  </div>
+                  <div class="total-line tax-line">
+                    <span class="t-label">SGST ({{ restaurant()?.taxSettings?.sgstRate ?? 2.5 }}%):</span>
+                    <span class="t-val">{{ ord.sgstAmount | currencyInr }}</span>
+                  </div>
+                  <div class="totals-separator"></div>
+                  <div class="total-line grand-total-line">
+                    <span class="grand-label">NET PAYABLE:</span>
+                    <span class="grand-val">{{ ord.totalAmount | currencyInr }}</span>
+                  </div>
+                </div>
+              </div>
+            </section>
+
+            <!-- Legal Terms & Signatory Section -->
+            <footer class="invoice-footer-section">
+              <div class="footer-terms-block">
+                <strong class="terms-title">Terms & Conditions:</strong>
+                <ol class="terms-list">
+                  <li>All disputes are subject to local state jurisdiction only.</li>
+                  <li>GST is levied as applicable on Restaurant Services under GST Act (SAC 996331).</li>
+                  <li>Food items once delivered cannot be returned or exchanged.</li>
+                </ol>
+                <p class="computer-gen-notice">This is a computer-generated commercial tax invoice. No physical signature is required.</p>
+              </div>
+
+              <div class="footer-signatory-block">
+                <div class="signatory-space"></div>
+                <div class="signatory-rule"></div>
+                <span class="signatory-name">For {{ restaurant()?.name || 'GuruKripa Dhaba' }}</span>
+                <span class="signatory-title">Authorized Signatory</span>
+              </div>
+            </footer>
           }
+
+          <div class="invoice-bottom-bar">
+            <span>Thank you for dining with us! Visit again.</span>
+            <span>FSSAI Lic: {{ fssaiLicense }} • GSTIN: {{ restaurantGstin }}</span>
+          </div>
         </div>
 
         <!-- Admin Password Authorization Modal for Reprinting -->
@@ -495,12 +677,150 @@ import { AdminAuthService } from '../../../core/services/admin-auth.service';
             </div>
           </div>
         }
+
+        <!-- WhatsApp Delivery Modal -->
+        @if (showWhatsAppModal()) {
+          <div class="modal-overlay" (click)="onBackdropClick($event)">
+            <div
+              class="modal-card auth-modal-card whatsapp-dialog-card"
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="whatsapp-dialog-title"
+            >
+              <div class="modal-header">
+                <div class="auth-modal-title-wrap">
+                  <div class="auth-icon-badge whatsapp-badge">
+                    <i class="ph ph-whatsapp-logo"></i>
+                  </div>
+                  <div>
+                    <h3 id="whatsapp-dialog-title" class="heading-card">
+                      Send Bill via WhatsApp
+                    </h3>
+                    <span class="text-xs text-muted"
+                      >Instant digital bill delivery to guest's phone</span
+                    >
+                  </div>
+                </div>
+                <button class="close-btn" (click)="closeWhatsAppModal()" aria-label="Close dialog">
+                  <i class="ph ph-x"></i>
+                </button>
+              </div>
+
+              <div class="modal-body auth-dialog-body">
+                <div class="form-group">
+                  <label class="form-label" for="whatsappPhoneInput">Customer WhatsApp Number</label>
+                  <div class="input-with-icon">
+                    <i class="ph ph-phone"></i>
+                    <input
+                      id="whatsappPhoneInput"
+                      type="tel"
+                      class="form-input"
+                      placeholder="e.g. 9876543210 or +91 98765 43210"
+                      [value]="whatsAppPhone()"
+                      (input)="whatsAppPhone.set($any($event.target).value)"
+                      (keyup.enter)="sendWhatsApp()"
+                      autofocus
+                    />
+                  </div>
+                  <span class="hint-text"
+                    >Enter 10-digit mobile number. Country code defaults to +91 (India) if omitted.</span
+                  >
+                </div>
+
+                <div class="form-group">
+                  <label class="form-label">Message Preview</label>
+                  <pre class="whatsapp-preview-box">{{ whatsAppMessagePreview() }}</pre>
+                </div>
+              </div>
+
+              <div class="modal-footer whatsapp-modal-footer">
+                <button type="button" class="btn btn-secondary" (click)="closeWhatsAppModal()">
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  class="btn btn-secondary"
+                  (click)="copyBillToClipboard()"
+                  title="Copy formatted bill text to clipboard"
+                >
+                  <i class="ph ph-copy"></i>
+                  <span>Copy Text</span>
+                </button>
+                @if (whatsAppAppUrl()) {
+                  <a
+                    [href]="whatsAppAppUrl()"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    class="btn btn-secondary"
+                    (click)="onWhatsAppLinkClicked(whatsAppAppUrl())"
+                    title="Open in WhatsApp Desktop App or Mobile"
+                  >
+                    <i class="ph ph-device-mobile"></i>
+                    <span>WhatsApp App</span>
+                  </a>
+                }
+                @if (whatsAppWebUrl()) {
+                  <a
+                    [href]="whatsAppWebUrl()"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    class="btn btn-whatsapp-action"
+                    (click)="onWhatsAppLinkClicked(whatsAppWebUrl())"
+                    title="Directly launch WhatsApp Web in a new tab"
+                  >
+                    <i class="ph ph-whatsapp-logo"></i>
+                    <span>Open WhatsApp Web</span>
+                  </a>
+                } @else {
+                  <button type="button" class="btn btn-whatsapp-action" disabled>
+                    <i class="ph ph-whatsapp-logo"></i>
+                    <span>Enter Valid 10-Digit Mobile</span>
+                  </button>
+                }
+              </div>
+            </div>
+          </div>
+        }
+
+        <!-- Thermal Receipt Print & Preview Modal (Hardware ESC/POS) -->
+        <app-thermal-receipt-modal
+          [isOpen]="showThermalPreviewModal()"
+          [order]="ord"
+          [splitBill]="splitBill()"
+          [restaurant]="restaurant()"
+          [effectivePrintCount]="effectivePrintCount()"
+          (close)="showThermalPreviewModal.set(false)"
+          (printed)="onThermalReceiptPrinted($event)"
+        />
+      </div>
+    } @else if (isLoading()) {
+      <div class="invoice-page" style="display: flex; flex-direction: column; align-items: center; gap: 20px; padding: 24px;">
+        <div style="width: 100%; max-width: 580px; display: flex; justify-content: space-between; align-items: center;">
+          <div class="skeleton-base" style="width: 120px; height: 16px; border-radius: 4px;"></div>
+          <div class="skeleton-base" style="width: 100px; height: 36px; border-radius: 6px;"></div>
+        </div>
+        <div style="width: 100%; max-width: 580px; background: var(--color-surface, #fff); border: 1px solid var(--color-border, #e5ded4); border-radius: var(--radius-md, 12px); padding: 32px; display: flex; flex-direction: column; gap: 18px;">
+          <div style="display: flex; flex-direction: column; align-items: center; gap: 8px;">
+            <div class="skeleton-base" style="width: 50%; height: 24px; border-radius: 4px;"></div>
+            <div class="skeleton-base" style="width: 70%; height: 14px; border-radius: 4px;"></div>
+          </div>
+          <div class="skeleton-base" style="width: 100%; height: 1px; margin: 8px 0;"></div>
+          <app-skeleton variant="table-row" [count]="4" />
+          <div class="skeleton-base" style="width: 100%; height: 1px; margin: 8px 0;"></div>
+          <div style="display: flex; justify-content: flex-end;">
+            <div class="skeleton-base" style="width: 160px; height: 32px; border-radius: 4px;"></div>
+          </div>
+        </div>
       </div>
     } @else {
-      <div class="empty-state-panel">
-        <h2 class="heading-card">Invoice Not Found</h2>
-        <a routerLink="/admin/billing" class="btn btn-secondary">Return to Billing Queue</a>
-      </div>
+      <app-empty-state
+        icon="ph-receipt"
+        title="Invoice Not Found"
+        message="The requested bill invoice does not exist or has been archived."
+        actionText="Return to Billing Queue"
+        actionIcon="ph-arrow-left"
+        (actionClick)="router.navigate(['/admin/billing'])"
+      />
     }
   `,
   styles: [
@@ -514,228 +834,919 @@ import { AdminAuthService } from '../../../core/services/admin-auth.service';
 
       .action-bar {
         width: 100%;
-        max-width: 580px;
+        max-width: 680px;
         display: flex;
         justify-content: space-between;
         align-items: center;
+        gap: 12px;
+        background: var(--color-surface, #ffffff);
+        border: 1px solid var(--color-border, #e2e8f0);
+        border-radius: 12px;
+        padding: 8px 14px;
+        box-shadow: 0 2px 8px -2px rgba(15, 23, 42, 0.05), 0 1px 3px rgba(15, 23, 42, 0.03);
+        box-sizing: border-box;
+
+        @media (max-width: 680px) {
+          flex-direction: column;
+          align-items: stretch;
+          gap: 10px;
+          padding: 10px 12px;
+        }
       }
 
+      .actions-left {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex-shrink: 0;
+      }
+
+      .action-nav-btn,
       .back-link {
         display: inline-flex;
         align-items: center;
         gap: 6px;
         font-size: 0.8125rem;
-        color: var(--color-text-muted);
+        font-weight: 600;
+        color: var(--color-text-secondary, #475569);
+        text-decoration: none;
+        padding: 6px 10px;
+        border-radius: 8px;
+        background: transparent;
+        border: 1px solid transparent;
+        transition: all 0.15s ease;
+
+        i {
+          font-size: 0.95rem;
+          transition: transform 0.15s ease;
+        }
+
         &:hover {
-          color: var(--color-crimson);
+          background: var(--color-surface-hover, #f1f5f9);
+          color: var(--color-text-primary, #0f172a);
+          i {
+            transform: translateX(-2px);
+          }
+        }
+      }
+
+      .split-view-full-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        font-size: 0.75rem;
+        font-weight: 600;
+        color: #b45309;
+        background: #fef3c7;
+        border: 1px solid #fde68a;
+        padding: 4px 10px;
+        border-radius: 6px;
+        text-decoration: none;
+        transition: all 0.15s ease;
+
+        &:hover {
+          background: #fde68a;
+          color: #92400e;
         }
       }
 
       .actions-right {
         display: flex;
-        gap: 10px;
+        align-items: center;
+        gap: 8px;
+        flex-wrap: wrap;
+        justify-content: flex-end;
+
+        @media (max-width: 680px) {
+          justify-content: stretch;
+          button {
+            flex: 1;
+          }
+        }
+      }
+
+      .btn-action-tool {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 7px 12px;
+        border-radius: 8px;
+        font-size: 0.8125rem;
+        font-weight: 600;
+        color: var(--color-text-primary, #1e293b);
+        background: var(--color-surface, #ffffff);
+        border: 1px solid var(--color-border, #cbd5e1);
+        cursor: pointer;
+        transition: all 0.15s ease;
+
+        &:hover {
+          background: var(--color-surface-hover, #f1f5f9);
+          border-color: #94a3b8;
+          color: #0f172a;
+        }
+
+        i {
+          font-size: 0.95rem;
+          color: #64748b;
+        }
+      }
+
+      .btn-action-share {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 7px 13px;
+        border-radius: 8px;
+        font-size: 0.8125rem;
+        font-weight: 600;
+        color: #ffffff;
+        background: #16a34a;
+        border: 1px solid #15803d;
+        cursor: pointer;
+        box-shadow: 0 1px 2px rgba(22, 163, 74, 0.2);
+        transition: all 0.15s ease;
+
+        &:hover {
+          background: #15803d;
+          box-shadow: 0 2px 5px rgba(22, 163, 74, 0.3);
+        }
+
+        i {
+          font-size: 1.05rem;
+        }
+      }
+
+      .btn-action-print {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 7px 16px;
+        border-radius: 8px;
+        font-size: 0.8125rem;
+        font-weight: 600;
+        color: #ffffff;
+        background: #0284c7;
+        border: 1px solid #0369a1;
+        cursor: pointer;
+        box-shadow: 0 1px 3px rgba(2, 132, 199, 0.25);
+        transition: all 0.15s ease;
+
+        &:hover {
+          background: #0369a1;
+          box-shadow: 0 2px 6px rgba(2, 132, 199, 0.35);
+        }
+
+        i {
+          font-size: 1.05rem;
+        }
+      }
+
+      .print-badge-pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        padding: 4px 10px;
+        background: #fef3c7;
+        border: 1px solid #fde68a;
+        border-radius: 9999px;
+        font-size: 0.72rem;
+        font-weight: 700;
+        color: #92400e;
+
+        .badge-dot {
+          width: 6px;
+          height: 6px;
+          border-radius: 50%;
+          background: #d97706;
+        }
+      }
+
+      .btn-action-reprint {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 7px 14px;
+        border-radius: 8px;
+        font-size: 0.8125rem;
+        font-weight: 600;
+        color: #ffffff;
+        background: #b45309;
+        border: 1px solid #92400e;
+        cursor: pointer;
+        box-shadow: 0 1px 3px rgba(180, 83, 9, 0.25);
+        transition: all 0.15s ease;
+
+        &:hover {
+          background: #92400e;
+        }
+
+        i {
+          font-size: 1.05rem;
+        }
       }
 
       .invoice-paper {
         width: 100%;
-        max-width: 540px;
-        background: #ffffff;
-        color: #121212;
-        border: 1px solid var(--color-border);
-        border-radius: var(--radius-sm);
-        padding: 36px 32px;
-        box-shadow: var(--shadow-md);
-        font-family: var(--font-ui);
+        max-width: 680px;
+        background: #ffffff !important;
+        color: #0f172a !important;
+        border: 1px solid #e2e8f0;
+        border-radius: 12px;
+        padding: 32px 36px;
+        box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.08);
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+        position: relative;
+        overflow: hidden;
+
+        // Prevent theme inversion: invoice sheet always maintains sharp print contrast
+        h1, h2, h3, h4, strong, b {
+          color: #0f172a;
+        }
       }
 
-      .invoice-header {
+      /* Ribbons */
+      .invoice-banner-ribbon {
         text-align: center;
+        padding: 6px 12px;
+        margin: -16px -16px 20px -16px;
+        font-size: 0.75rem;
+        font-weight: 800;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+
+        &.duplicate {
+          background: #fef2f2;
+          border-bottom: 2px dashed #f87171;
+          color: #dc2626;
+        }
+
+        &.proforma {
+          background: #fffbeb;
+          border-bottom: 2px dashed #f59e0b;
+          color: #b45309;
+        }
+      }
+
+      /* Header */
+      .invoice-header {
+        margin-bottom: 12px;
+      }
+
+      .brand-top-row {
+        display: flex;
+        align-items: flex-start;
+        gap: 16px;
+      }
+
+      .brand-identity-visual {
+        flex-shrink: 0;
+
+        .restaurant-logo-img {
+          height: 64px;
+          max-width: 130px;
+          object-fit: contain;
+          border-radius: 8px;
+          border: 1px solid #e2e8f0;
+          padding: 2px;
+          background: #ffffff;
+        }
+
+        .brand-crest-fallback {
+          width: 56px;
+          height: 56px;
+          border-radius: 12px;
+          background: #0f172a;
+          color: #d4af37;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-size: 1.6rem;
+        }
+      }
+
+      .brand-text-block {
+        flex: 1;
+
+        .brand-name {
+          font-size: 1.45rem;
+          font-weight: 800;
+          color: #0f172a;
+          margin: 0 0 2px 0;
+          letter-spacing: -0.02em;
+          line-height: 1.2;
+        }
+
+        .brand-tagline {
+          font-size: 0.75rem;
+          font-weight: 700;
+          color: #b45309;
+          text-transform: uppercase;
+          letter-spacing: 0.05em;
+          margin: 0 0 4px 0;
+        }
+
+        .brand-address {
+          font-size: 0.75rem;
+          color: #475569;
+          line-height: 1.4;
+          margin: 0 0 4px 0;
+        }
+
+        .brand-contacts-row {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 14px;
+          font-size: 0.75rem;
+          color: #475569;
+          font-weight: 500;
+
+          i {
+            color: #b45309;
+            margin-right: 2px;
+          }
+        }
+      }
+
+      .brand-legal-badge-col {
+        display: flex;
+        flex-direction: column;
+        align-items: flex-end;
+        gap: 6px;
+        flex-shrink: 0;
+
+        .tax-document-tag {
+          background: #0f172a;
+          color: #ffffff;
+          padding: 5px 12px;
+          border-radius: 4px;
+          font-size: 0.75rem;
+          font-weight: 800;
+          letter-spacing: 0.08em;
+
+          &.split-tag {
+            background: #b45309;
+          }
+        }
+
+        .legal-id-card {
+          background: #f8fafc;
+          border: 1px solid #e2e8f0;
+          border-radius: 6px;
+          padding: 6px 10px;
+          font-size: 0.6875rem;
+          line-height: 1.4;
+
+          .legal-id-row {
+            display: flex;
+            justify-content: space-between;
+            gap: 8px;
+
+            .legal-lbl {
+              color: #64748b;
+              font-weight: 600;
+            }
+
+            .legal-val {
+              color: #0f172a;
+            }
+          }
+        }
+      }
+
+      .header-rule {
+        height: 2px;
+        background: #0f172a;
+        margin: 12px 0 16px 0;
+      }
+
+      .split-slip-badge-row {
+        text-align: center;
+        margin-bottom: 12px;
+
+        .split-badge-chip {
+          display: inline-block;
+          padding: 4px 14px;
+          background: rgba(180, 83, 9, 0.12);
+          border: 1px solid rgba(180, 83, 9, 0.3);
+          border-radius: 20px;
+          font-size: 0.75rem;
+          font-weight: 700;
+          color: #92400e;
+        }
+      }
+
+      /* Metadata Section */
+      .invoice-meta-section {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 12px;
         margin-bottom: 16px;
       }
 
-      .brand-crest {
-        width: 44px;
-        height: 44px;
-        border-radius: 50%;
-        background: #121212;
-        color: #d4af37;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-size: 1.35rem;
-        margin: 0 auto 10px;
-      }
+      .meta-card {
+        background: #f8fafc;
+        border: 1px solid #e2e8f0;
+        border-radius: 8px;
+        padding: 10px 14px;
 
-      .invoice-brand-title {
-        font-family: var(--font-display);
-        font-size: 1.5rem;
-        letter-spacing: 0.05em;
-        margin-bottom: 2px;
-      }
+        .meta-card-title {
+          font-size: 0.6875rem;
+          font-weight: 800;
+          color: #64748b;
+          letter-spacing: 0.06em;
+          text-transform: uppercase;
+          margin-bottom: 8px;
+          padding-bottom: 4px;
+          border-bottom: 1px solid #e2e8f0;
+        }
 
-      .invoice-sub-brand {
-        font-size: 0.75rem;
-        text-transform: uppercase;
-        letter-spacing: 0.08em;
-        color: #666;
-        margin-bottom: 8px;
-      }
+        .meta-field-row {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          font-size: 0.75rem;
+          line-height: 1.5;
+          margin-bottom: 3px;
 
-      .invoice-address {
-        font-size: 0.75rem;
-        color: #555;
-        line-height: 1.45;
-      }
+          .m-label {
+            color: #64748b;
+            font-weight: 500;
+          }
 
-      .invoice-divider {
-        height: 1px;
-        background: #e5ded4;
-        margin: 14px 0;
+          .m-val {
+            color: #0f172a;
+            font-weight: 600;
 
-        &.thick {
-          height: 2px;
-          background: #121212;
+            &.mono {
+              font-family: 'SF Mono', Consolas, monospace;
+            }
+          }
         }
       }
 
-      .invoice-meta-grid {
-        display: flex;
-        justify-content: space-between;
-        font-size: 0.8125rem;
-        line-height: 1.5;
+      .service-pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        padding: 2px 8px;
+        border-radius: 4px;
+        font-size: 0.75rem;
+        font-weight: 700;
+
+        &.takeaway {
+          background: #fffbeb;
+          border: 1px solid #fde68a;
+          color: #b45309;
+        }
+
+        &.dinein {
+          background: #eff6ff;
+          border: 1px solid #bfdbfe;
+          color: #1d4ed8;
+        }
       }
 
-      .text-right {
-        text-align: right;
+      .payment-status-pill {
+        display: inline-block;
+        padding: 1px 8px;
+        border-radius: 4px;
+        font-size: 0.6875rem;
+        font-weight: 700;
+        background: #fef2f2;
+        color: #b91c1c;
+
+        &.paid {
+          background: #ecfdf5;
+          color: #047857;
+        }
       }
 
-      .table-callout {
-        color: var(--color-crimson);
-        font-size: 0.9375rem;
+      /* Line Items Table */
+      .invoice-table-section {
+        margin-bottom: 16px;
       }
 
-      .receipt-table {
+      .invoice-items-table {
         width: 100%;
         border-collapse: collapse;
         font-size: 0.8125rem;
-        margin: 10px 0;
 
-        th {
-          padding: 8px 4px;
-          border-bottom: 1px solid #121212;
-          font-weight: 700;
-          text-transform: uppercase;
+        thead th {
+          background: #f1f5f9;
+          color: #334155;
+          font-weight: 800;
           font-size: 0.6875rem;
+          text-transform: uppercase;
+          letter-spacing: 0.05em;
+          padding: 8px 6px;
+          border-top: 1px solid #cbd5e1;
+          border-bottom: 1px solid #cbd5e1;
         }
 
-        td {
-          padding: 8px 4px;
+        tbody td {
+          padding: 8px 6px;
           vertical-align: top;
+          border-bottom: 1px solid #f1f5f9;
+        }
+
+        tbody tr:nth-child(even) {
+          background: #fafafa;
+        }
+
+        .col-num {
+          width: 5%;
+          text-align: center;
+          color: #64748b;
+          font-size: 0.75rem;
+        }
+
+        .col-desc {
+          width: 47%;
+          text-align: left;
+        }
+
+        .col-hsn {
+          width: 12%;
+          text-align: center;
+          font-size: 0.75rem;
+          color: #64748b;
+          font-family: 'SF Mono', Consolas, monospace;
+        }
+
+        .col-qty {
+          width: 10%;
+          text-align: center;
+        }
+
+        .col-rate {
+          width: 13%;
+          text-align: right;
+          font-family: 'SF Mono', Consolas, monospace;
+        }
+
+        .col-amt {
+          width: 13%;
+          text-align: right;
+          font-family: 'SF Mono', Consolas, monospace;
+        }
+
+        .item-primary-name {
+          font-weight: 700;
+          color: #0f172a;
+          margin-bottom: 2px;
+        }
+
+        .item-micro-spec {
+          display: inline-block;
+          font-size: 0.6875rem;
+          color: #64748b;
+          margin-right: 6px;
+
+          &.portion {
+            font-weight: 600;
+            color: #b45309;
+          }
+
+          &.variant {
+            background: #f1f5f9;
+            padding: 1px 6px;
+            border-radius: 3px;
+          }
+
+          &.notes {
+            font-style: italic;
+            color: #dc2626;
+          }
         }
       }
 
-      .dish-item-name {
-        font-weight: 600;
+      /* Summary Section */
+      .invoice-summary-section {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 16px;
+        align-items: start;
+        margin-bottom: 16px;
+        padding-top: 6px;
       }
 
-      .dish-sub-text {
-        font-size: 0.6875rem;
-        color: #666;
-      }
-
-      .totals-breakdown {
+      .summary-left-block {
         display: flex;
         flex-direction: column;
-        gap: 5px;
-        font-size: 0.8125rem;
-        margin-left: auto;
-        max-width: 280px;
+        gap: 10px;
+
+        .words-card {
+          background: #f8fafc;
+          border: 1px solid #e2e8f0;
+          border-radius: 6px;
+          padding: 8px 12px;
+
+          .words-label {
+            font-size: 0.625rem;
+            font-weight: 800;
+            color: #64748b;
+            letter-spacing: 0.05em;
+            display: block;
+            margin-bottom: 2px;
+          }
+
+          .words-text {
+            font-size: 0.75rem;
+            font-weight: 700;
+            color: #0f172a;
+            margin: 0;
+            font-style: italic;
+            line-height: 1.35;
+          }
+        }
+
+        .settlement-info-box {
+          background: #f8fafc;
+          border: 1px solid #e2e8f0;
+          border-radius: 6px;
+          padding: 8px 12px;
+          display: flex;
+          flex-direction: column;
+          gap: 6px;
+
+          .settlement-row {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.75rem;
+            color: #475569;
+
+            strong {
+              color: #0f172a;
+            }
+          }
+
+          .settlement-badge {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            padding: 4px 10px;
+            border-radius: 4px;
+            font-size: 0.6875rem;
+            font-weight: 800;
+            letter-spacing: 0.05em;
+            background: #fef2f2;
+            color: #b91c1c;
+            border: 1px solid #fecaca;
+            margin-top: 2px;
+
+            &.paid {
+              background: #ecfdf5;
+              border-color: #a7f3d0;
+              color: #047857;
+            }
+          }
+        }
       }
 
-      .t-row {
+      .summary-right-block {
+        .totals-table {
+          display: flex;
+          flex-direction: column;
+          gap: 4px;
+          font-size: 0.8125rem;
+
+          .total-line {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 2px 0;
+
+            .t-label {
+              color: #475569;
+            }
+
+            .t-val {
+              font-weight: 600;
+              color: #0f172a;
+              font-family: 'SF Mono', Consolas, monospace;
+            }
+
+            &.discount-line {
+              color: #059669;
+              .t-val {
+                color: #059669;
+              }
+            }
+
+            &.tax-line {
+              font-size: 0.75rem;
+              color: #64748b;
+            }
+          }
+
+          .totals-separator {
+            height: 1px;
+            background: #cbd5e1;
+            margin: 4px 0;
+          }
+
+          .grand-total-line {
+            background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+            border: 1px solid #334155;
+            color: #ffffff !important;
+            padding: 10px 14px;
+            border-radius: 8px;
+            margin-top: 6px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: 0 4px 12px rgba(15, 23, 42, 0.12);
+
+            .grand-label {
+              font-size: 0.8125rem;
+              font-weight: 800;
+              letter-spacing: 0.06em;
+              text-transform: uppercase;
+              color: #cbd5e1 !important;
+            }
+
+            .grand-val {
+              font-size: 1.25rem;
+              font-weight: 900;
+              color: #ffffff !important;
+              font-family: 'SF Mono', Consolas, monospace;
+              letter-spacing: -0.01em;
+            }
+          }
+        }
+      }
+
+      /* Legal Terms & Signatory */
+      .invoice-footer-section {
+        display: grid;
+        grid-template-columns: 1.6fr 1fr;
+        gap: 20px;
+        padding-top: 14px;
+        border-top: 1px solid #e2e8f0;
+        margin-bottom: 12px;
+
+        .footer-terms-block {
+          .terms-title {
+            font-size: 0.6875rem;
+            color: #475569;
+            display: block;
+            margin-bottom: 3px;
+          }
+
+          .terms-list {
+            margin: 0 0 6px 0;
+            padding-left: 14px;
+            font-size: 0.6875rem;
+            color: #64748b;
+            line-height: 1.35;
+          }
+
+          .terms-text {
+            margin: 0 0 4px 0;
+            font-size: 0.6875rem;
+            color: #64748b;
+          }
+
+          .computer-gen-notice {
+            font-size: 0.625rem;
+            color: #94a3b8;
+            margin: 0;
+            font-style: italic;
+          }
+        }
+
+        .footer-signatory-block {
+          display: flex;
+          flex-direction: column;
+          align-items: flex-end;
+          justify-content: flex-end;
+
+          .signatory-space {
+            height: 36px;
+          }
+
+          .signatory-rule {
+            height: 1px;
+            background: #475569;
+            width: 140px;
+            margin-bottom: 4px;
+          }
+
+          .signatory-name {
+            font-size: 0.75rem;
+            font-weight: 700;
+            color: #0f172a;
+          }
+
+          .signatory-title {
+            font-size: 0.6875rem;
+            color: #64748b;
+          }
+        }
+      }
+
+      .invoice-bottom-bar {
+        border-top: 1px dashed #cbd5e1;
+        padding-top: 8px;
         display: flex;
         justify-content: space-between;
-
-        &.discount {
-          color: #1b633e;
-          font-weight: 600;
-        }
-
-        &.final-grand-total {
-          font-size: 1rem;
-          font-weight: 900;
-          color: #c21807;
-        }
-      }
-
-      .payment-stamp-box {
-        margin: 20px 0 10px;
-        display: flex;
-        justify-content: center;
-      }
-
-      .stamp {
-        border: 2px solid;
-        padding: 6px 18px;
-        border-radius: 4px;
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        font-weight: 900;
-        letter-spacing: 0.1em;
-        transform: rotate(-3deg);
-
-        &.paid {
-          border-color: #1b633e;
-          color: #1b633e;
-        }
-
-        &.unpaid {
-          border-color: #c21807;
-          color: #c21807;
-        }
-
-        small {
-          font-size: 0.625rem;
-          font-weight: 700;
-        }
-      }
-
-      .receipt-footer {
-        text-align: center;
-        font-size: 0.75rem;
-        color: #666;
-        line-height: 1.45;
-        margin-top: 16px;
-      }
-
-      .f-sub {
         font-size: 0.6875rem;
-        color: #888;
-        margin-top: 2px;
+        color: #64748b;
       }
 
-      // Media Print Styling
+      /* Media Print Overrides */
       @media print {
+        @page {
+          size: A4 portrait;
+          margin: 8mm 10mm;
+        }
+
         body {
           background: #ffffff !important;
+          color: #0f172a !important;
         }
 
-        .no-print {
+        .no-print,
+        .action-bar,
+        .modal-overlay {
           display: none !important;
         }
 
         .invoice-page {
-          margin: 0;
-          padding: 0;
+          margin: 0 !important;
+          padding: 0 !important;
+          display: block !important;
+          width: 100% !important;
         }
 
         .invoice-paper {
-          border: none;
-          box-shadow: none;
-          padding: 0;
-          width: 100%;
-          max-width: 100%;
+          width: 100% !important;
+          max-width: 100% !important;
+          margin: 0 !important;
+          padding: 0 !important;
+          border: none !important;
+          box-shadow: none !important;
+          background: #ffffff !important;
+          color: #0f172a !important;
+          -webkit-print-color-adjust: exact !important;
+          print-color-adjust: exact !important;
+        }
+
+        // Ensure all headings, text, and totals maintain dark ink on paper even if "Background graphics" is disabled
+        .brand-name,
+        .item-primary-name,
+        .item-name-text,
+        .item-total-cell,
+        .net-lbl,
+        .net-val,
+        .m-val,
+        .legal-val,
+        .words-text,
+        strong,
+        b,
+        h1,
+        h2,
+        h3 {
+          color: #0f172a !important;
+        }
+
+        .grand-total-line {
+          background: #f8fafc !important;
+          border: 2px solid #0f172a !important;
+          color: #0f172a !important;
+          -webkit-print-color-adjust: exact !important;
+          print-color-adjust: exact !important;
+
+          .grand-label,
+          .grand-val {
+            color: #0f172a !important;
+          }
+        }
+
+        .tax-document-tag {
+          background: #f8fafc !important;
+          border: 1px solid #0f172a !important;
+          color: #0f172a !important;
+        }
+
+        .brand-crest-fallback {
+          background: #ffffff !important;
+          border: 1px solid #0f172a !important;
+          color: #0f172a !important;
+        }
+
+        .invoice-items-table {
+          page-break-inside: auto;
+          tr {
+            page-break-inside: avoid;
+            page-break-after: auto;
+          }
+        }
+
+        .invoice-summary-section,
+        .invoice-footer-section {
+          page-break-inside: avoid;
         }
       }
 
@@ -847,7 +1858,7 @@ import { AdminAuthService } from '../../../core/services/admin-auth.service';
           border: 1px solid rgba(184, 134, 11, 0.25);
           border-radius: 6px;
           font-size: 0.8125rem;
-          color: #1f2937;
+          color: var(--color-text-primary);
 
           i {
             font-size: 1.25rem;
@@ -870,7 +1881,7 @@ import { AdminAuthService } from '../../../core/services/admin-auth.service';
           .form-label {
             font-size: 0.8125rem;
             font-weight: 600;
-            color: #374151;
+            color: var(--color-text-primary);
           }
 
           .input-with-icon {
@@ -927,23 +1938,149 @@ import { AdminAuthService } from '../../../core/services/admin-auth.service';
           border-top: 1px solid var(--color-border, #e5e7eb);
         }
       }
+
+      .btn-whatsapp {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        background: #25d366;
+        color: #ffffff;
+        font-weight: 500;
+        font-size: 0.875rem;
+        padding: 8px 14px;
+        border-radius: var(--radius-sm, 6px);
+        border: none;
+        cursor: pointer;
+        transition: background 0.15s ease, transform 0.1s ease;
+
+        &:hover {
+          background: #20ba5a;
+        }
+
+        i {
+          font-size: 1.15rem;
+        }
+      }
+
+      .whatsapp-dialog-card {
+        max-width: 480px;
+      }
+
+      .auth-icon-badge.whatsapp-badge {
+        background: rgba(37, 211, 102, 0.12);
+        color: #25d366;
+      }
+
+      .whatsapp-preview-box {
+        margin: 0;
+        padding: 12px;
+        background: #f8fafc;
+        border: 1px solid var(--color-border, #e2e8f0);
+        border-radius: 6px;
+        font-family: monospace;
+        font-size: 0.75rem;
+        line-height: 1.45;
+        color: #334155;
+        white-space: pre-wrap;
+        word-break: break-word;
+        max-height: 180px;
+        overflow-y: auto;
+      }
+
+      .btn-whatsapp-action {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        background: #25d366;
+        color: #ffffff;
+        font-weight: 600;
+        font-size: 0.875rem;
+        padding: 8px 16px;
+        border-radius: var(--radius-sm, 6px);
+        border: none;
+        cursor: pointer;
+        transition: background 0.15s ease;
+
+        &:hover:not(:disabled) {
+          background: #20ba5a;
+        }
+
+        &:disabled {
+          opacity: 0.5;
+          cursor: not-allowed;
+        }
+
+        i {
+          font-size: 1.15rem;
+        }
+      }
+
+      .whatsapp-modal-footer {
+        display: flex;
+        align-items: center;
+        justify-content: flex-end;
+        gap: 8px;
+        flex-wrap: wrap;
+
+        a.btn {
+          text-decoration: none;
+        }
+      }
     `,
   ],
 })
 export class InvoicePreviewComponent implements OnInit {
+  router = inject(Router);
   private route = inject(ActivatedRoute);
   private dataService = inject(RestaurantDataService);
   private mock = this.dataService;
   private toastService = inject(ToastService);
   private adminAuth = inject(AdminAuthService);
+  private thermalPrinter = inject(ThermalPrinterService);
+
+  readonly isLoading = computed(
+    () => this.dataService.isOrdersLoading() || !this.dataService.ordersLoaded(),
+  );
 
   restaurant = this.mock.restaurant;
   orderId = signal<string>('');
   splitBillId = signal<string>('');
 
+  showThermalPreviewModal = signal<boolean>(false);
   showAdminReprintModal = signal<boolean>(false);
   adminPasswordInput = signal<string>('');
   adminPasswordError = signal<string>('');
+
+  showWhatsAppModal = signal<boolean>(false);
+  whatsAppPhone = signal<string>('');
+
+  whatsAppMessagePreview = computed(() => {
+    const ord = this.order();
+    if (!ord) return '';
+    return buildWhatsAppBillMessage(this.restaurant()?.name || 'Restaurant', ord, this.splitBill());
+  });
+
+  whatsAppWebUrl = computed(() => {
+    const ord = this.order();
+    if (!ord) return '';
+    return getWhatsAppWebUrl(
+      this.whatsAppPhone(),
+      this.restaurant()?.name || 'GuruKripa Dhaba',
+      ord,
+      this.splitBill(),
+    );
+  });
+
+  whatsAppAppUrl = computed(() => {
+    const ord = this.order();
+    if (!ord) return '';
+    return getWhatsAppAppUrl(
+      this.whatsAppPhone(),
+      this.restaurant()?.name || 'GuruKripa Dhaba',
+      ord,
+      this.splitBill(),
+    );
+  });
 
   order = computed(() => {
     return (
@@ -964,6 +2101,53 @@ export class InvoicePreviewComponent implements OnInit {
     return this.order()?.printCount || 0;
   });
 
+  get restaurantAddress(): string {
+    const r = this.restaurant();
+    if (!r?.address) return '14 Heritage Promenade, Civil Lines, MG Road, Bengaluru - 560001';
+    const parts = [r.address.street, r.address.area, r.address.city, r.address.zip].filter(Boolean);
+    return parts.length > 0 ? parts.join(', ') : '14 Heritage Promenade, Civil Lines, MG Road, Bengaluru - 560001';
+  }
+
+  get restaurantContactInfo(): string {
+    const r = this.restaurant();
+    const phone = r?.contact?.phone || '+91 80 4912 8800';
+    const gstin = r?.taxSettings?.gstNumber || '29AAAAA0000A1Z5';
+    return `Tel: ${phone} • GSTIN: ${gstin}`;
+  }
+
+  get fssaiLicense(): string {
+    const r = this.restaurant() as any;
+    return r?.taxSettings?.fssaiNumber || r?.fssaiNumber || '11223344556677';
+  }
+
+  logoFailed = signal<boolean>(false);
+
+  get restaurantPhone(): string {
+    return this.restaurant()?.contact?.phone || '+91 80 4912 8800';
+  }
+
+  get restaurantEmail(): string {
+    return this.restaurant()?.contact?.email || 'billing@gurukripadhaba.in';
+  }
+
+  get restaurantGstin(): string {
+    return this.restaurant()?.taxSettings?.gstNumber || '29AAAAA0000A1Z5';
+  }
+
+  amountInWords(amount: number): string {
+    return amountInWordsINR(amount);
+  }
+
+  getBilledByStaff(ord: Order): string {
+    return (ord as any)?.serverStaffName || (ord as any)?.server_staff_name || 'Billing Desk / Supervisor';
+  }
+
+  getInvoiceNumber(ord: Order): string {
+    const year = ord.createdAt ? new Date(ord.createdAt).getFullYear() : new Date().getFullYear();
+    const ref = (ord.orderNumber || '').replace('#ORD-', '').replace('ORD-', '');
+    return `INV-${year}-${ref}`;
+  }
+
   ngOnInit(): void {
     this.route.paramMap.subscribe((params) => {
       this.orderId.set(params.get('invoiceId') || params.get('orderId') || '');
@@ -976,32 +2160,65 @@ export class InvoicePreviewComponent implements OnInit {
     });
   }
 
-  printInvoice(): void {
-    if (this.effectivePrintCount() > 0) {
-      this.openReprintModal();
+  private dispatchThermalOrBrowserPrint(
+    ord: Order,
+    split: any | null,
+    infoMsg: string,
+  ): void {
+    const cfg = this.thermalPrinter.config();
+    if (cfg.target === 'BROWSER') {
+      this.toastService.success(infoMsg);
+      window.print();
       return;
     }
 
+    const rest = this.restaurant() || {};
+    this.thermalPrinter.printOrderReceipt(rest, ord, split).subscribe({
+      next: (res) => {
+        if (res.success) {
+          const targetName =
+            cfg.target === 'NETWORK'
+              ? cfg.networkAddress
+              : cfg.printerName || 'Default Windows Printer';
+          this.toastService.success(`Thermal receipt sent to ${targetName}.`);
+        } else {
+          this.toastService.warning(`Thermal printer error: ${res.message}. Opening standard print.`);
+          window.print();
+        }
+      },
+      error: () => {
+        this.toastService.warning('Thermal printer offline. Opening standard print.');
+        window.print();
+      },
+    });
+  }
+
+  openThermalPreviewModal(): void {
+    this.showThermalPreviewModal.set(true);
+  }
+
+  onThermalReceiptPrinted(event: { method: 'THERMAL' | 'BROWSER'; printCount: number }): void {
     const split = this.splitBill();
     if (split) {
-      const res = this.mock.recordSplitBillPrint(split.id, false, 'Billing Staff');
-      if (res.success) {
-        this.toastService.success(`Split Bill Slip printed (Original - Copy #1).`);
-        window.print();
+      if ((split.printCount || 0) === 0) {
+        this.mock.recordSplitBillPrint(split.id, false, 'Billing Staff');
       }
       return;
     }
 
     const ord = this.order();
     if (!ord) return;
-    const res = this.mock.recordOrderPrint(ord.id, false, 'Billing Staff');
-    if (res.success) {
+
+    if ((ord.printCount || 0) === 0) {
+      this.mock.recordOrderPrint(ord.id, false, 'Billing Staff');
       if (ord.paymentStatus === 'PAID' && ord.status !== 'COMPLETED') {
         this.mock.updateOrderStatusAtomic(ord.id, 'COMPLETED');
       }
-      this.toastService.success(`Tax Invoice printed (Original - Copy #1).`);
-      window.print();
     }
+  }
+
+  printInvoice(): void {
+    this.openThermalPreviewModal();
   }
 
   openReprintModal(): void {
@@ -1032,10 +2249,8 @@ export class InvoicePreviewComponent implements OnInit {
       this.adminPasswordError.set('');
       const res = this.mock.recordSplitBillPrint(split.id, true, 'Admin Override');
       if (res.success) {
-        this.toastService.info(
-          `Admin authorization verified. Printing reprint (Copy #${res.printCount}).`,
-        );
-        window.print();
+        this.showThermalPreviewModal.set(true);
+        this.toastService.success(`Admin authorization verified. Printing duplicate reprint (Copy #${res.printCount}).`);
       }
       return;
     }
@@ -1052,16 +2267,68 @@ export class InvoicePreviewComponent implements OnInit {
       if (ord.paymentStatus === 'PAID' && ord.status !== 'COMPLETED') {
         this.mock.updateOrderStatusAtomic(ord.id, 'COMPLETED');
       }
-      this.toastService.info(
-        `Admin authorization verified. Printing reprint (Copy #${res.printCount}).`,
+      this.showThermalPreviewModal.set(true);
+      this.toastService.success(`Admin authorization verified. Printing duplicate reprint (Copy #${res.printCount}).`);
+    }
+  }
+
+  openWhatsAppModal(): void {
+    const ord = this.order();
+    const existingPhone = ord?.customerPhone || '';
+    this.whatsAppPhone.set(existingPhone);
+    this.showWhatsAppModal.set(true);
+  }
+
+  closeWhatsAppModal(): void {
+    this.showWhatsAppModal.set(false);
+  }
+
+  copyBillToClipboard(): void {
+    const text = this.whatsAppMessagePreview();
+    if (navigator?.clipboard?.writeText) {
+      navigator.clipboard.writeText(text).then(
+        () => this.toastService.success('Bill receipt copied to clipboard!'),
+        () => this.toastService.info('Please select and copy text manually from preview box.'),
       );
-      window.print();
+    } else {
+      this.toastService.info('Please select and copy text manually from preview box.');
+    }
+  }
+
+  onWhatsAppLinkClicked(url?: string): void {
+    if (url) {
+      launchExternalUrl(url);
+    }
+    this.toastService.success('WhatsApp opened with customer bill message!');
+    setTimeout(() => this.closeWhatsAppModal(), 400);
+  }
+
+  sendWhatsApp(): void {
+    const ord = this.order();
+    if (!ord) return;
+    const phone = this.whatsAppPhone().trim();
+    if (!phone) {
+      this.toastService.warning('Please enter customer WhatsApp phone number.');
+      return;
+    }
+    const opened = openWhatsAppBill(
+      phone,
+      this.restaurant()?.name || 'GuruKripa Dhaba',
+      ord,
+      this.splitBill(),
+    );
+    if (opened) {
+      this.toastService.success('WhatsApp opened with customer bill!');
+      this.closeWhatsAppModal();
+    } else {
+      this.toastService.error('Invalid phone number format. Please provide at least 10 digits.');
     }
   }
 
   onBackdropClick(event: MouseEvent): void {
     if ((event.target as HTMLElement).classList.contains('modal-overlay')) {
       this.cancelReprintModal();
+      this.closeWhatsAppModal();
     }
   }
 }

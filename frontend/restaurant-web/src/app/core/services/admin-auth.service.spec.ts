@@ -3,7 +3,7 @@ import { Router } from '@angular/router';
 import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { AdminAuthService } from './admin-auth.service';
+import { AdminAuthService, ADMIN_PASSWORD_HASH_KEY } from './admin-auth.service';
 import { adminGuard } from '../guards/admin.guard';
 import { ToastService } from './toast.service';
 import { ActivatedRouteSnapshot, RouterStateSnapshot } from '@angular/router';
@@ -145,6 +145,99 @@ describe('AdminAuthService & Controlled Access RBAC System', () => {
       expect(service.isCashier()).toBe(true);
       expect(service.isAdmin()).toBe(false);
     });
+
+    it('updates admin password successfully via backend and syncs local secret', () => {
+      service.loginWithToken('admin-token', 'ADMIN');
+      service.currentUser.set({
+        id: 'admin-uuid-001',
+        name: 'Super Admin',
+        role: 'ADMIN',
+        email: 'admin@hotelcrm.com',
+        phone: '+919999999999',
+        shift: 'General Shift',
+        status: 'ACTIVE',
+        loginId: 'admin',
+      });
+      localStorage.setItem(ADMIN_PASSWORD_HASH_KEY, 'Admin@123');
+
+      let response: any;
+      service.changeAdminPassword('NewAdminPass@2026', 'Admin@123').subscribe((res) => {
+        response = res;
+      });
+
+      const putReq = httpMock.expectOne('http://localhost:3000/api/v1/restaurants/staff/admin-uuid-001');
+      expect(putReq.request.method).toBe('PUT');
+      expect(putReq.request.body).toEqual({ password: 'NewAdminPass@2026' });
+      putReq.flush({ success: true, data: { id: 'admin-uuid-001' } });
+
+      // Handle background refreshAdminSecret request triggered on success
+      const refreshReqs = httpMock.match((r) => r.url.includes('staff_members?role=eq.ADMIN'));
+      refreshReqs.forEach((r) => r.flush([{ pin_hash: 'NewAdminPass@2026' }]));
+
+      expect(response.success).toBe(true);
+      expect(localStorage.getItem(ADMIN_PASSWORD_HASH_KEY)).toBe('NewAdminPass@2026');
+      expect(service.verifyAdminPassword('NewAdminPass@2026')).toBe(true);
+    });
+
+    it('updates admin password via direct Supabase fallback when backend fails', () => {
+      service.loginWithToken('admin-token', 'ADMIN');
+      service.currentUser.set({
+        id: 'admin-uuid-001',
+        name: 'Super Admin',
+        role: 'ADMIN',
+        email: 'admin@hotelcrm.com',
+        phone: '+919999999999',
+        shift: 'General Shift',
+        status: 'ACTIVE',
+        loginId: 'admin',
+      });
+      localStorage.setItem(ADMIN_PASSWORD_HASH_KEY, 'Admin@123');
+
+      let response: any;
+      service.changeAdminPassword('FallbackPass@2026').subscribe((res) => {
+        response = res;
+      });
+
+      const putReq = httpMock.expectOne('http://localhost:3000/api/v1/restaurants/staff/admin-uuid-001');
+      putReq.flush('Server error', { status: 500, statusText: 'Internal Server Error' });
+
+      const patchReq = httpMock.expectOne(
+        (r) => r.url.includes('/rest/v1/staff_members?id=eq.admin-uuid-001') && r.method === 'PATCH',
+      );
+      expect(patchReq.request.body).toEqual({ pin_hash: 'FallbackPass@2026' });
+      patchReq.flush([{ id: 'admin-uuid-001', pin_hash: 'FallbackPass@2026' }]);
+
+      const refreshReqs = httpMock.match((r) => r.url.includes('staff_members?role=eq.ADMIN'));
+      refreshReqs.forEach((r) => r.flush([{ pin_hash: 'FallbackPass@2026' }]));
+
+      expect(response.success).toBe(true);
+      expect(localStorage.getItem(ADMIN_PASSWORD_HASH_KEY)).toBe('FallbackPass@2026');
+    });
+
+    it('rejects password update when current password is provided but invalid', () => {
+      service.loginWithToken('admin-token', 'ADMIN');
+      localStorage.setItem(ADMIN_PASSWORD_HASH_KEY, 'Admin@123');
+
+      let response: any;
+      service.changeAdminPassword('NewPass@123', 'WrongOldPass').subscribe((res) => {
+        response = res;
+      });
+
+      httpMock.expectNone('http://localhost:3000/api/v1/restaurants/staff/admin-uuid-001');
+      expect(response.success).toBe(false);
+      expect(response.message).toContain('Current admin password is incorrect');
+      expect(localStorage.getItem(ADMIN_PASSWORD_HASH_KEY)).toBe('Admin@123');
+    });
+
+    it('rejects password update when new password is too short', () => {
+      let response: any;
+      service.changeAdminPassword('12').subscribe((res) => {
+        response = res;
+      });
+
+      expect(response.success).toBe(false);
+      expect(response.message).toContain('at least 4 characters');
+    });
   });
 
   describe('2. Role-Based Controlled Access Matrix (canAccess)', () => {
@@ -237,12 +330,64 @@ describe('AdminAuthService & Controlled Access RBAC System', () => {
       expect(service.canAccess('reports')).toBe(false);
     });
 
+    it('enforces controlled access for Floor Staff (ordering lifecycle & bill printing only)', () => {
+      service.loginWithToken('staff-token', 'STAFF');
+
+      // Staff allowed: entire ordering lifecycle & bill printing
+      expect(service.canAccess('orders')).toBe(true);
+      expect(service.canAccess('/admin/orders')).toBe(true);
+      expect(service.canAccess('tables')).toBe(true);
+      expect(service.canAccess('/admin/tables')).toBe(true);
+      expect(service.canAccess('billing')).toBe(true);
+      expect(service.canAccess('/admin/billing')).toBe(true);
+
+      // Staff strictly prohibited sections:
+      expect(service.canAccess('dashboard')).toBe(false);
+      expect(service.canAccess('menu')).toBe(false);
+      expect(service.canAccess('inventory')).toBe(false);
+      expect(service.canAccess('customers')).toBe(false);
+      expect(service.canAccess('coupons')).toBe(false);
+      expect(service.canAccess('reservations')).toBe(false);
+      expect(service.canAccess('loyalty')).toBe(false);
+      expect(service.canAccess('feedback')).toBe(false);
+      expect(service.canAccess('reports')).toBe(false);
+      expect(service.canAccess('staff')).toBe(false);
+      expect(service.canAccess('settings')).toBe(false);
+    });
+
+    it('toggles operational mode between ADMIN and STAFF via setRoleMode', () => {
+      service.loginWithToken('admin-token', 'ADMIN');
+      expect(service.isAdmin()).toBe(true);
+      expect(service.staffRole()).toBe('ADMIN');
+      expect(service.canAccess('dashboard')).toBe(true);
+
+      // Switch to STAFF mode
+      service.setRoleMode('STAFF');
+      expect(service.isAdmin()).toBe(false);
+      expect(service.staffRole()).toBe('STAFF');
+      expect(service.canAccess('orders')).toBe(true);
+      expect(service.canAccess('tables')).toBe(true);
+      expect(service.canAccess('billing')).toBe(true);
+      expect(service.canAccess('dashboard')).toBe(false);
+      expect(service.canAccess('staff')).toBe(false);
+
+      // Switch back to ADMIN mode
+      service.setRoleMode('ADMIN');
+      expect(service.isAdmin()).toBe(true);
+      expect(service.staffRole()).toBe('ADMIN');
+      expect(service.canAccess('dashboard')).toBe(true);
+      expect(service.canAccess('staff')).toBe(true);
+    });
+
     it('resolves appropriate default landing routes for each role', () => {
       service.loginWithToken('token', 'ADMIN');
       expect(service.getDefaultRouteForRole()).toBe('/admin/dashboard');
 
       service.loginWithToken('token', 'MANAGER');
       expect(service.getDefaultRouteForRole()).toBe('/admin/dashboard');
+
+      service.loginWithToken('token', 'STAFF');
+      expect(service.getDefaultRouteForRole()).toBe('/admin/orders');
 
       service.loginWithToken('token', 'CASHIER');
       expect(service.getDefaultRouteForRole()).toBe('/admin/billing');

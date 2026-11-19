@@ -1,4 +1,4 @@
-import { Component, inject, signal } from '@angular/core';
+import { Component, inject, signal, computed } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { RestaurantDataService } from '../../../data-access/services/restaurant-data.service';
@@ -6,13 +6,21 @@ import { Coupon, CouponAssignment, CouponRedemption } from '../../../core/models
 import { CurrencyInrPipe } from '../../../shared/pipes/currency-inr.pipe';
 import { ToastService } from '../../../core/services/toast.service';
 import { maskPhone } from '../../../core/utils/phone.util';
+import { SkeletonLoaderComponent } from '../../../shared/components/loading/skeleton-loader.component';
+import { EmptyStateComponent } from '../../../shared/components/empty-state/empty-state.component';
 
 type ViewTab = 'campaigns' | 'entitlements' | 'redemptions';
 
 @Component({
   selector: 'app-coupon-management',
   standalone: true,
-  imports: [CommonModule, FormsModule, CurrencyInrPipe],
+  imports: [
+    CommonModule,
+    FormsModule,
+    CurrencyInrPipe,
+    SkeletonLoaderComponent,
+    EmptyStateComponent,
+  ],
   template: `
     <div class="coupons-page">
       <!-- Header -->
@@ -44,7 +52,7 @@ type ViewTab = 'campaigns' | 'entitlements' | 'redemptions';
           (click)="activeTab = 'campaigns'"
         >
           <i class="ph ph-tag"></i>
-          <span>Coupons ({{ coupons().length }})</span>
+          <span>Coupons @if (!isLoading()) { ({{ coupons().length }}) }</span>
         </button>
 
         <button
@@ -53,7 +61,7 @@ type ViewTab = 'campaigns' | 'entitlements' | 'redemptions';
           (click)="activeTab = 'entitlements'"
         >
           <i class="ph ph-identification-badge"></i>
-          <span>Customer Assignments ({{ assignments().length }})</span>
+          <span>Customer Assignments @if (!isLoading()) { ({{ assignments().length }}) }</span>
         </button>
 
         <button
@@ -62,87 +70,100 @@ type ViewTab = 'campaigns' | 'entitlements' | 'redemptions';
           (click)="activeTab = 'redemptions'"
         >
           <i class="ph ph-clock-counter-clockwise"></i>
-          <span>Redemption History ({{ redemptions().length }})</span>
+          <span>Redemption History @if (!isLoading()) { ({{ redemptions().length }}) }</span>
         </button>
       </div>
 
       <!-- TAB 1: CAMPAIGN DEFINITIONS -->
       @if (activeTab === 'campaigns') {
         <div class="coupons-grid">
-          @for (coup of coupons(); track coup.id) {
-            <div class="coupon-mgmt-card" [class.inactive-card]="!coup.isActive">
-              <div class="card-head">
-                <div class="code-tag-group">
-                  <span class="coupon-code-pill">{{ coup.code }}</span>
-                  @if (coup.isTargeted) {
-                    <span class="badge-targeted"><i class="ph ph-lock-key"></i> VIP Targeted</span>
-                  }
-                </div>
-                <button
-                  class="status-toggle"
-                  [class.active]="coup.isActive"
-                  (click)="toggleActive(coup)"
-                  [title]="coup.isActive ? 'Deactivate Coupon' : 'Activate Coupon'"
-                >
-                  <i
-                    class="ph"
-                    [class.ph-toggle-right]="coup.isActive"
-                    [class.ph-toggle-left]="!coup.isActive"
-                  ></i>
-                  <span>{{ coup.isActive ? 'Active' : 'Inactive' }}</span>
-                </button>
-              </div>
-
-              <div class="coupon-main">
-                <h3 class="coupon-title">{{ coup.name }}</h3>
-                <p class="coupon-desc">{{ coup.description }}</p>
-
-                <div class="discount-banner">
-                  <span class="discount-val">
-                    {{
-                      coup.discountType === 'PERCENTAGE'
-                        ? coup.discountValue + '% OFF'
-                        : (coup.discountValue | currencyInr) + ' FLAT OFF'
-                    }}
-                  </span>
-                  @if (coup.maxDiscountAmount) {
-                    <span class="cap-tag">Up to {{ coup.maxDiscountAmount | currencyInr }}</span>
-                  }
-                </div>
-              </div>
-
-              <div class="conditions-list">
-                <div class="cond-item">
-                  <i class="ph ph-shopping-bag"></i>
-                  <span
-                    >Min spend: <strong>{{ coup.minOrderValue | currencyInr }}</strong></span
+          @if (isLoading()) {
+            <app-skeleton variant="coupon-card" [count]="6" />
+          } @else {
+            @for (coup of coupons(); track coup.id) {
+              <div class="coupon-mgmt-card" [class.inactive-card]="!coup.isActive">
+                <div class="card-head">
+                  <div class="code-tag-group">
+                    <span class="coupon-code-pill">{{ coup.code }}</span>
+                    @if (coup.isTargeted) {
+                      <span class="badge-targeted"><i class="ph ph-lock-key"></i> VIP Targeted</span>
+                    }
+                  </div>
+                  <button
+                    class="status-toggle"
+                    [class.active]="coup.isActive"
+                    (click)="toggleActive(coup)"
+                    [title]="coup.isActive ? 'Deactivate Coupon' : 'Activate Coupon'"
                   >
+                    <i
+                      class="ph"
+                      [class.ph-toggle-right]="coup.isActive"
+                      [class.ph-toggle-left]="!coup.isActive"
+                    ></i>
+                    <span>{{ coup.isActive ? 'Active' : 'Inactive' }}</span>
+                  </button>
                 </div>
-                <div class="cond-item">
-                  <i class="ph ph-arrows-clockwise"></i>
-                  <span
-                    >Redeemed <strong>{{ coup.redemptionCount }}</strong> /
-                    {{ coup.usageLimit }} global quota</span
-                  >
-                </div>
-                <div class="cond-item">
-                  <i class="ph ph-user-circle"></i>
-                  <span
-                    >Limit: <strong>{{ coup.perCustomerLimit }}</strong> per customer</span
-                  >
-                </div>
-              </div>
 
-              <div class="card-actions">
-                <button
-                  class="btn btn-secondary btn-sm assign-quick-btn"
-                  (click)="openAssignModal(coup)"
-                >
-                  <i class="ph ph-user-plus"></i>
-                  <span>Assign to Customer</span>
-                </button>
+                <div class="coupon-main">
+                  <h3 class="coupon-title">{{ coup.name }}</h3>
+                  <p class="coupon-desc">{{ coup.description }}</p>
+
+                  <div class="discount-banner">
+                    <span class="discount-val">
+                      {{
+                        coup.discountType === 'PERCENTAGE'
+                          ? coup.discountValue + '% OFF'
+                          : (coup.discountValue | currencyInr) + ' FLAT OFF'
+                      }}
+                    </span>
+                    @if (coup.maxDiscountAmount) {
+                      <span class="cap-tag">Up to {{ coup.maxDiscountAmount | currencyInr }}</span>
+                    }
+                  </div>
+                </div>
+
+                <div class="conditions-list">
+                  <div class="cond-item">
+                    <i class="ph ph-shopping-bag"></i>
+                    <span
+                      >Min spend: <strong>{{ coup.minOrderValue | currencyInr }}</strong></span
+                    >
+                  </div>
+                  <div class="cond-item">
+                    <i class="ph ph-arrows-clockwise"></i>
+                    <span
+                      >Redeemed <strong>{{ coup.redemptionCount }}</strong> /
+                      {{ coup.usageLimit }} global quota</span
+                    >
+                  </div>
+                  <div class="cond-item">
+                    <i class="ph ph-user-circle"></i>
+                    <span
+                      >Limit: <strong>{{ coup.perCustomerLimit }}</strong> per customer</span
+                    >
+                  </div>
+                </div>
+
+                <div class="card-actions">
+                  <button
+                    class="btn btn-secondary btn-sm assign-quick-btn"
+                    (click)="openAssignModal(coup)"
+                  >
+                    <i class="ph ph-user-plus"></i>
+                    <span>Assign to Customer</span>
+                  </button>
+                </div>
               </div>
-            </div>
+            } @empty {
+              <app-empty-state
+                icon="ph-tag"
+                title="No Coupons Found"
+                message="No discount coupons or promotional campaigns created yet."
+                actionText="Create Coupon"
+                actionIcon="ph-plus-circle"
+                (actionClick)="openCreateModal()"
+              />
+            }
           }
         </div>
       }
@@ -171,58 +192,72 @@ type ViewTab = 'campaigns' | 'entitlements' | 'redemptions';
                 </tr>
               </thead>
               <tbody>
-                @for (asgn of assignments(); track asgn.id) {
+                @if (isLoading()) {
                   <tr>
-                    <td>
-                      <div class="patron-cell">
-                        <span class="p-name">{{ asgn.customerName || 'Customer' }}</span>
-                        <span class="p-phone">{{ maskPhone(asgn.customerPhoneE164) }}</span>
-                      </div>
+                    <td colspan="7">
+                      <app-skeleton variant="table-row" [count]="4" />
                     </td>
-                    <td>
-                      <span class="coupon-code-pill small">{{ asgn.couponCode }}</span>
-                    </td>
-                    <td>
-                      <span
-                        class="quota-badge"
-                        [class.exhausted]="asgn.redemptionsUsed >= asgn.maxRedemptions"
-                      >
-                        {{ asgn.redemptionsUsed }} / {{ asgn.maxRedemptions }} used
-                      </span>
-                    </td>
-                    <td class="text-xs text-muted">
-                      {{ asgn.validUntil | date: 'mediumDate' }}
-                    </td>
-                    <td>
-                      <span class="status-badge" [class]="asgn.status.toLowerCase()">
-                        {{ asgn.status }}
-                      </span>
-                    </td>
-                    <td class="text-xs text-muted">
-                      {{ asgn.assignedBy }}
-                    </td>
-                    <td>
-                      @if (asgn.status === 'ACTIVE') {
-                        <button
-                          class="btn-revoke"
-                          (click)="revokeAssignment(asgn.id)"
-                          title="Revoke this assignment"
+                  </tr>
+                } @else {
+                  @for (asgn of assignments(); track asgn.id) {
+                    <tr>
+                      <td>
+                        <div class="patron-cell">
+                          <span class="p-name">{{ asgn.customerName || 'Customer' }}</span>
+                          <span class="p-phone">{{ maskPhone(asgn.customerPhoneE164) }}</span>
+                        </div>
+                      </td>
+                      <td>
+                        <span class="coupon-code-pill small">{{ asgn.couponCode }}</span>
+                      </td>
+                      <td>
+                        <span
+                          class="quota-badge"
+                          [class.exhausted]="asgn.redemptionsUsed >= asgn.maxRedemptions"
                         >
-                          Revoke
-                        </button>
-                      } @else {
-                        <span class="text-xs text-muted">—</span>
-                      }
-                    </td>
-                  </tr>
-                }
-                @if (assignments().length === 0) {
-                  <tr>
-                    <td colspan="7" class="text-center py-4 text-muted">
-                      No customer coupon assignments recorded yet. Click "Assign to Customer" to
-                      assign.
-                    </td>
-                  </tr>
+                          {{ asgn.redemptionsUsed }} / {{ asgn.maxRedemptions }} used
+                        </span>
+                      </td>
+                      <td class="text-xs text-muted">
+                        {{ asgn.validUntil | date: 'mediumDate' }}
+                      </td>
+                      <td>
+                        <span class="status-badge" [class]="asgn.status.toLowerCase()">
+                          {{ asgn.status }}
+                        </span>
+                      </td>
+                      <td class="text-xs text-muted">
+                        {{ asgn.assignedBy }}
+                      </td>
+                      <td>
+                        @if (asgn.status === 'ACTIVE') {
+                          <button
+                            class="btn-revoke"
+                            (click)="revokeAssignment(asgn.id)"
+                            title="Revoke this assignment"
+                          >
+                            Revoke
+                          </button>
+                        } @else {
+                          <span class="text-xs text-muted">—</span>
+                        }
+                      </td>
+                    </tr>
+                  } @empty {
+                    <tr>
+                      <td colspan="7">
+                        <app-empty-state
+                          icon="ph-identification-badge"
+                          title="No Customer Assignments"
+                          message="No customer coupon assignments recorded yet. Click 'Assign to Customer' to assign."
+                          [compact]="true"
+                          actionText="Assign to Customer"
+                          actionIcon="ph-user-plus"
+                          (actionClick)="openAssignModal()"
+                        />
+                      </td>
+                    </tr>
+                  }
                 }
               </tbody>
             </table>
@@ -253,29 +288,40 @@ type ViewTab = 'campaigns' | 'entitlements' | 'redemptions';
                 </tr>
               </thead>
               <tbody>
-                @for (red of redemptions(); track red.id) {
+                @if (isLoading()) {
                   <tr>
-                    <td class="font-mono text-xs">{{ red.id }}</td>
-                    <td>
-                      <span class="coupon-code-pill small">{{ red.couponCode }}</span>
-                    </td>
-                    <td class="font-bold">{{ red.orderId }}</td>
-                    <td class="font-bold text-success">
-                      {{ red.discountAmountApplied | currencyInr }}
-                    </td>
-                    <td class="font-mono text-xs text-muted" [title]="red.idempotencyKey">
-                      {{ red.idempotencyKey.slice(0, 18) }}...
-                    </td>
-                    <td class="text-xs text-muted">{{ red.redeemedAt | date: 'medium' }}</td>
-                  </tr>
-                }
-                @if (redemptions().length === 0) {
-                  <tr>
-                    <td colspan="6" class="text-center py-4 text-muted">
-                      No coupon redemptions recorded yet. Redemptions will appear here when
-                      customers complete checkout.
+                    <td colspan="6">
+                      <app-skeleton variant="table-row" [count]="4" />
                     </td>
                   </tr>
+                } @else {
+                  @for (red of redemptions(); track red.id) {
+                    <tr>
+                      <td class="font-mono text-xs">{{ red.id }}</td>
+                      <td>
+                        <span class="coupon-code-pill small">{{ red.couponCode }}</span>
+                      </td>
+                      <td class="font-bold">{{ red.orderId }}</td>
+                      <td class="font-bold text-success">
+                        {{ red.discountAmountApplied | currencyInr }}
+                      </td>
+                      <td class="font-mono text-xs text-muted" [title]="red.idempotencyKey">
+                        {{ red.idempotencyKey.slice(0, 18) }}...
+                      </td>
+                      <td class="text-xs text-muted">{{ red.redeemedAt | date: 'medium' }}</td>
+                    </tr>
+                  } @empty {
+                    <tr>
+                      <td colspan="6">
+                        <app-empty-state
+                          icon="ph-clock-counter-clockwise"
+                          title="No Redemptions Recorded"
+                          message="No coupon redemptions recorded yet. Redemptions will appear here when customers complete checkout."
+                          [compact]="true"
+                        />
+                      </td>
+                    </tr>
+                  }
                 }
               </tbody>
             </table>
@@ -516,6 +562,10 @@ type ViewTab = 'campaigns' | 'entitlements' | 'redemptions';
         display: grid;
         grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
         gap: 20px;
+
+        app-empty-state {
+          grid-column: 1 / -1;
+        }
       }
 
       .coupon-mgmt-card {
@@ -687,7 +737,8 @@ type ViewTab = 'campaigns' | 'entitlements' | 'redemptions';
 
       .data-table {
         width: 100%;
-        border-collapse: collapse;
+        border-collapse: separate;
+        border-spacing: 0;
         text-align: left;
         font-size: 0.875rem;
 
@@ -839,6 +890,10 @@ export class CouponManagementComponent {
 
   activeTab: ViewTab = 'campaigns';
 
+  readonly isLoading = computed(
+    () => this.dataService.isCouponsLoading() || !this.dataService.couponsLoaded(),
+  );
+
   coupons = this.mock.coupons;
   assignments = this.mock.couponAssignments;
   redemptions = this.mock.couponRedemptions;
@@ -859,13 +914,10 @@ export class CouponManagementComponent {
   maskPhone = maskPhone;
 
   toggleActive(coupon: Coupon): void {
-    const updated = this.mock
-      .coupons()
-      .map((c) => (c.id === coupon.id ? { ...c, isActive: !c.isActive } : c));
-    this.mock.coupons.set(updated);
-    this.mock.saveLocal('coupons', updated);
+    const nextActive = !coupon.isActive;
+    this.mock.toggleCouponStatus(coupon.id, nextActive);
     this.toastService.info(
-      `Coupon ${coupon.code} is now ${!coupon.isActive ? 'Active' : 'Inactive'}`,
+      `Coupon ${coupon.code} is now ${nextActive ? 'Active' : 'Inactive'}`,
     );
   }
 
@@ -889,31 +941,8 @@ export class CouponManagementComponent {
   saveCoupon(): void {
     if (!this.couponForm.code?.trim() || !this.couponForm.discountValue) return;
 
-    const newCoupon: Coupon = {
-      id: `coup-${Date.now().toString().slice(-4)}`,
-      code: this.couponForm.code.trim().toUpperCase(),
-      name: this.couponForm.name?.trim() || 'Dining Discount',
-      description: this.couponForm.description || '',
-      discountType: this.couponForm.discountType || 'PERCENTAGE',
-      discountValue: Number(this.couponForm.discountValue),
-      minOrderValue: Number(this.couponForm.minOrderValue) || 0,
-      maxDiscountAmount: this.couponForm.maxDiscountAmount
-        ? Number(this.couponForm.maxDiscountAmount)
-        : undefined,
-      validFrom: new Date().toISOString(),
-      validUntil: '2026-12-31T23:59:59Z',
-      usageLimit: Number(this.couponForm.usageLimit) || 500,
-      perCustomerLimit: Number(this.couponForm.perCustomerLimit) || 1,
-      redemptionCount: 0,
-      isTargeted: !!this.couponForm.isTargeted,
-      isActive: true,
-    };
-
-    const updated = [...this.mock.coupons(), newCoupon];
-    this.mock.coupons.set(updated);
-    this.mock.saveLocal('coupons', updated);
-
-    this.toastService.success(`Created coupon campaign ${newCoupon.code}`);
+    this.mock.createCoupon(this.couponForm);
+    this.toastService.success(`Created coupon campaign ${this.couponForm.code.trim().toUpperCase()}`);
     this.showCreateModal = false;
   }
 

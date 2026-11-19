@@ -9,9 +9,20 @@ import { MenuStockStatus } from '../../../core/models/inventory.model';
 import { CurrencyInrPipe } from '../../../shared/pipes/currency-inr.pipe';
 import { StatusBadgeComponent } from '../../../shared/components/status-badge/status-badge.component';
 import { DietaryBadgeComponent } from '../../../shared/components/dietary-badge/dietary-badge.component';
+import { SkeletonLoaderComponent } from '../../../shared/components/loading/skeleton-loader.component';
+import { EmptyStateComponent } from '../../../shared/components/empty-state/empty-state.component';
 import { ToastService } from '../../../core/services/toast.service';
 import { SplitBill } from '../../../core/models/billing.model';
 import { AdminAuthService } from '../../../core/services/admin-auth.service';
+import { NetworkStatusService } from '../../../core/services/network-status.service';
+import { SoundService } from '../../../core/services/sound.service';
+import {
+  openWhatsAppBill,
+  buildWhatsAppBillMessage,
+  getWhatsAppWebUrl,
+  getWhatsAppAppUrl,
+  launchExternalUrl,
+} from '../../../core/utils/whatsapp-bill.util';
 
 @Component({
   selector: 'app-order-queue',
@@ -23,15 +34,17 @@ import { AdminAuthService } from '../../../core/services/admin-auth.service';
     CurrencyInrPipe,
     StatusBadgeComponent,
     DietaryBadgeComponent,
+    SkeletonLoaderComponent,
+    EmptyStateComponent,
   ],
   template: `
     <div class="orders-page">
       <!-- Header -->
       <div class="page-header">
         <div>
-          <h1 class="heading-display">Live Order Queue</h1>
+          <h1 class="heading-display">Order Queue</h1>
           <p class="text-muted">
-            Live order queue synchronized across table QR scans, takeaway, and kitchen stations.
+            Real-time orders across dining tables, takeaway, and kitchen line.
           </p>
         </div>
 
@@ -39,19 +52,23 @@ import { AdminAuthService } from '../../../core/services/admin-auth.service';
           <button
             type="button"
             class="sound-toggle-btn"
-            [class.muted]="!soundEnabled()"
-            (click)="soundEnabled.set(!soundEnabled())"
-            [title]="soundEnabled() ? 'Chime sound active (click to mute)' : 'Chime sound muted (click to enable)'"
+            [class.muted]="soundService.isMuted()"
+            (click)="soundService.toggleMute()"
+            [title]="!soundService.isMuted() ? 'Audio alerts active (click to mute)' : 'Audio alerts muted (click to enable)'"
           >
-            <i class="ph" [class.ph-speaker-high]="soundEnabled()" [class.ph-speaker-simple-slash]="!soundEnabled()"></i>
+            <i class="ph" [class.ph-speaker-high]="!soundService.isMuted()" [class.ph-speaker-simple-slash]="soundService.isMuted()"></i>
           </button>
           <button class="btn btn-primary" (click)="openManualOrderModal()">
             <i class="ph ph-plus-circle"></i>
-            <span>Create Manual Order</span>
+            <span>New Order</span>
           </button>
-          <div class="live-counter-badge" title="Zero-overhead real-time stream active across QR ordering and POS stations">
-            <span class="pulse-indicator"></span>
-            <span>Live Order Stream</span>
+          <div
+            class="live-counter-badge"
+            [class.offline]="!network.isOnline()"
+            [attr.title]="streamTooltip()"
+          >
+            <span class="pulse-indicator" [class.offline]="!network.isOnline()"></span>
+            <span>{{ streamStatusText() }}</span>
           </div>
         </div>
       </div>
@@ -60,427 +77,598 @@ import { AdminAuthService } from '../../../core/services/admin-auth.service';
       <div class="toolbar-card">
         <div class="status-tabs">
           <button
-            class="status-tab"
+            class="status-tab tab-active-orders"
             [class.active]="selectedStatus() === 'ACTIVE'"
             (click)="selectedStatus.set('ACTIVE')"
+            type="button"
           >
             <span class="tab-live-dot" *ngIf="activeOrdersCount() > 0"></span>
-            Active Orders ({{ activeOrdersCount() }})
+            <i class="ph ph-lightning tab-icon" *ngIf="activeOrdersCount() === 0"></i>
+            <span class="tab-label">Active Orders</span>
+            <span class="tab-count-badge" [class.has-count]="activeOrdersCount() > 0">
+              {{ activeOrdersCount() }}
+            </span>
           </button>
-          <button
-            class="status-tab"
-            [class.active]="selectedStatus() === 'ALL'"
-            (click)="selectedStatus.set('ALL')"
-          >
-            All Orders ({{ orders().length }})
-          </button>
+
+          <span class="tab-divider" aria-hidden="true"></span>
+
           <button
             class="status-tab"
             [class.active]="selectedStatus() === 'PENDING'"
             (click)="selectedStatus.set('PENDING')"
+            type="button"
           >
-            Pending ({{ countByStatus('PENDING') }})
+            <i class="ph ph-clock-countdown tab-icon status-pending"></i>
+            <span class="tab-label">Pending</span>
+            <span class="tab-count-badge" [class.has-count]="countByStatus('PENDING') > 0">
+              {{ countByStatus('PENDING') }}
+            </span>
           </button>
+
           <button
             class="status-tab"
             [class.active]="selectedStatus() === 'PREPARING'"
             (click)="selectedStatus.set('PREPARING')"
+            type="button"
           >
-            In Kitchen ({{ countByStatus('PREPARING') }})
+            <i class="ph ph-cooking-pot tab-icon status-preparing"></i>
+            <span class="tab-label">In Kitchen</span>
+            <span class="tab-count-badge" [class.has-count]="countByStatus('PREPARING') > 0">
+              {{ countByStatus('PREPARING') }}
+            </span>
           </button>
-          <button
-            class="status-tab"
-            [class.active]="selectedStatus() === 'READY'"
-            (click)="selectedStatus.set('READY')"
-          >
-            Ready to Serve ({{ countByStatus('READY') }})
-          </button>
-          <button
-            class="status-tab"
-            [class.active]="selectedStatus() === 'DISPATCHED'"
-            (click)="selectedStatus.set('DISPATCHED')"
-          >
-            Dispatched ({{ countByStatus('DISPATCHED') }})
-          </button>
+
           <button
             class="status-tab"
             [class.active]="selectedStatus() === 'SERVED'"
             (click)="selectedStatus.set('SERVED')"
+            type="button"
           >
-            Served ({{ countByStatus('SERVED') }})
+            <i class="ph ph-check tab-icon status-served"></i>
+            <span class="tab-label">Served</span>
+            <span class="tab-count-badge" [class.has-count]="countByStatus('SERVED') > 0">
+              {{ countByStatus('SERVED') }}
+            </span>
           </button>
+
           <button
             class="status-tab"
             [class.active]="selectedStatus() === 'COMPLETED'"
             (click)="selectedStatus.set('COMPLETED')"
+            type="button"
           >
-            Completed ({{ countByStatus('COMPLETED') }})
+            <i class="ph ph-check-circle tab-icon status-completed"></i>
+            <span class="tab-label">Completed</span>
+            <span class="tab-count-badge" [class.has-count]="countByStatus('COMPLETED') > 0">
+              {{ countByStatus('COMPLETED') }}
+            </span>
           </button>
         </div>
 
         <div class="search-wrap">
-          <i class="ph ph-magnifying-glass"></i>
+          <i class="ph ph-magnifying-glass search-icon"></i>
           <input
             type="text"
-            class="form-input"
-            placeholder="Search by order #, guest name, or table..."
+            class="form-input search-input"
+            placeholder="Search #, guest, or table..."
             [ngModel]="searchQuery()"
             (ngModelChange)="searchQuery.set($event)"
           />
+          @if (searchQuery()) {
+            <button
+              type="button"
+              class="search-clear-btn"
+              (click)="searchQuery.set('')"
+              title="Clear search"
+              aria-label="Clear search"
+            >
+              <i class="ph ph-x"></i>
+            </button>
+          }
         </div>
       </div>
 
       <!-- Orders Board (Responsive Cards / Table View) -->
       <div class="orders-grid">
-        @for (ord of filteredOrders(); track ord.id) {
-          <div
-            class="order-board-card"
-            [class.pending-highlight]="ord.status === 'PENDING'"
-            [class.new-order-flash]="latestNewOrderId() === ord.id"
-            [class.card-selected]="selectedSidePanelOrderId() === ord.id"
-            (click)="openOrderSidePanel(ord)"
-            title="Click to view full order bill & details in side panel"
-          >
-            <!-- 1. Header: ID & Time + Status Badge & Split Indicator -->
-            <div class="card-top">
-              <div class="order-id-group">
-                <span class="ord-num">{{ ord.orderNumber }}</span>
-                <span class="ord-time">
-                  <i class="ph ph-clock"></i> {{ ord.createdAt | date: 'shortTime' }}
-                </span>
-              </div>
-              <div class="card-status-badges">
-                @if (ord.isSplit && ord.splitCount) {
-                  <span class="split-indicator-pill" title="Split Bill Active">
-                    <i class="ph ph-users"></i> {{ ord.splitCount }}P Split
-                  </span>
-                }
-                <app-status-badge [status]="ord.status"></app-status-badge>
-              </div>
-            </div>
-
-            <!-- 2. Guest & Location Bar -->
-            <div class="guest-bar">
-              @if (ord.orderType === 'TAKEAWAY') {
-                <div class="tbl-badge takeaway-badge">
-                  <i class="ph ph-bag"></i>
-                  <span>Takeaway ({{ ord.pickupReference || ord.orderNumber }})</span>
-                </div>
-              } @else {
-                <div class="tbl-badge">
-                  <i class="ph ph-table"></i>
-                  <span>Table {{ ord.tableNumber }}</span>
-                </div>
-              }
-              <div class="guest-meta">
-                <span class="cust-name" [title]="ord.customerName">{{ ord.customerName }}</span>
-                @if (ord.customerPhone) {
-                  <span class="phone-sub">
-                    <i class="ph ph-phone"></i> {{ ord.customerPhone }}
-                  </span>
-                }
-              </div>
-            </div>
-
-            <!-- Server / Staff Handling Order -->
-            <div class="server-bar" [class.server-bar-locked]="isOrderPaid(ord)">
-              <span class="server-label">
-                <i class="ph" [class.ph-user-check]="!isOrderPaid(ord)" [class.ph-lock-key]="isOrderPaid(ord)"></i> Server:
-              </span>
-              @if (isOrderPaid(ord)) {
-                <div class="server-completed-box">
-                  <span class="server-name-badge" [title]="'Serving Staff: ' + (getServerStaffName(ord.serverStaffId) || 'Unassigned')">
-                    {{ getServerStaffName(ord.serverStaffId) || 'Unassigned' }}
-                  </span>
-                  <button
-                    type="button"
-                    class="btn-unlock-server"
-                    (click)="$event.stopPropagation(); promptChangeCompletedServer(ord)"
-                    title="Change serving staff for paid order (Admin Password required)"
-                  >
-                    <i class="ph ph-lock-key"></i>
-                    <span>Change</span>
-                  </button>
-                </div>
-              } @else {
-                <select
-                  class="server-select"
-                  [ngModel]="ord.serverStaffId || ''"
-                  (ngModelChange)="onAssignOrderServer(ord, $event)"
-                  (click)="$event.stopPropagation()"
-                  title="Assign staff handling this order"
-                >
-                  <option value="">Unassigned</option>
-                  @for (s of staffMembers(); track s.id) {
-                    <option [value]="s.id">{{ s.name }} ({{ s.role }})</option>
-                  }
-                </select>
-              }
-            </div>
-
-            <!-- 3. Ordered Dishes Stream -->
-            <div class="items-summary-list">
-              @for (item of ord.items; track item.id) {
-                <div class="item-line">
-                  <div class="item-info-group">
-                    <span class="qty-pill">{{ item.quantity }}×</span>
-                    <div class="dish-details">
-                      <span class="dish-name" [title]="item.name">{{ item.name }}</span>
-                      @if (item.selectedPortion) {
-                        <span class="portion-label">{{ item.selectedPortion.label }}</span>
-                      }
-                    </div>
-                  </div>
-                  <span class="line-cost">{{ item.itemTotal | currencyInr }}</span>
-                </div>
-              }
-            </div>
-
-            <!-- 4. Financial Summary & Total Breakdown -->
-            <div class="bill-strip">
-              <div class="sub-line">
-                <span class="bill-label"
-                  >Subtotal ({{ ord.items.length }}
-                  {{ ord.items.length === 1 ? 'item' : 'items' }})</span
-                >
-                <span class="bill-val">{{ ord.subtotal | currencyInr }}</span>
-              </div>
-              @if (ord.discountAmount > 0) {
-                <div class="sub-line discount">
-                  <span class="bill-label"
-                    ><i class="ph ph-tag"></i> {{ ord.appliedCouponCode }}</span
-                  >
-                  <span class="bill-val">-{{ ord.discountAmount | currencyInr }}</span>
-                </div>
-              }
-              @if (ord.isSplit && ord.splitCount) {
-                <div class="sub-line split-note">
-                  <span class="bill-label"
-                    ><i class="ph ph-users"></i> Split ({{ ord.splitCount }} ways)</span
-                  >
-                  <span class="bill-val"
-                    >{{ ord.totalAmount / ord.splitCount | currencyInr }}/pers</span
-                  >
-                </div>
-              }
-              <div class="sub-line total-line">
-                <span class="total-label">Final Payable</span>
-                <span class="payable-val">{{ ord.totalAmount | currencyInr }}</span>
-              </div>
-            </div>
-
-            <!-- 5. Progressive Dispatch Stepper Bar & Operational Actions -->
-            <div class="card-footer-actions">
-              <!-- Progressive Step Indicators (Clickable on each stage) -->
-              @if (ord.status !== 'CANCELLED' && ord.status !== 'COMPLETED') {
-                <div class="dispatch-stepper-bar">
-                  <div
-                    class="step-bubble"
-                    [class.completed]="getOrderStageIndex(ord.status) >= 1"
-                    [class.active]="ord.status === 'ACCEPTED'"
-                    (click)="$event.stopPropagation(); advanceStatus(ord, 'ACCEPTED')"
-                    title="Click to mark Accepted"
-                  >
-                    <span class="step-num"><i class="ph ph-check"></i></span>
-                    <span class="step-txt">Accept</span>
-                  </div>
-                  <div class="step-connector" [class.filled]="getOrderStageIndex(ord.status) >= 2"></div>
-
-                  <div
-                    class="step-bubble"
-                    [class.completed]="getOrderStageIndex(ord.status) >= 2"
-                    [class.active]="ord.status === 'PREPARING'"
-                    (click)="$event.stopPropagation(); advanceStatus(ord, 'PREPARING')"
-                    title="Click to send to Kitchen"
-                  >
-                    <span class="step-num"><i class="ph ph-cooking-pot"></i></span>
-                    <span class="step-txt">Prepare</span>
-                  </div>
-                  <div class="step-connector" [class.filled]="getOrderStageIndex(ord.status) >= 3"></div>
-
-                  <div
-                    class="step-bubble"
-                    [class.completed]="getOrderStageIndex(ord.status) >= 3"
-                    [class.active]="ord.status === 'READY'"
-                    (click)="$event.stopPropagation(); advanceStatus(ord, 'READY')"
-                    title="Click to mark Ready"
-                  >
-                    <span class="step-num"><i class="ph ph-bell-ringing"></i></span>
-                    <span class="step-txt">Ready</span>
-                  </div>
-                  <div class="step-connector" [class.filled]="getOrderStageIndex(ord.status) >= 4"></div>
-
-                  <div
-                    class="step-bubble"
-                    [class.completed]="getOrderStageIndex(ord.status) >= 4"
-                    [class.active]="ord.status === 'DISPATCHED'"
-                    (click)="$event.stopPropagation(); advanceStatus(ord, 'DISPATCHED')"
-                    title="Click to mark Dispatched"
-                  >
-                    <span class="step-num"><i class="ph ph-moped"></i></span>
-                    <span class="step-txt">Dispatch</span>
-                  </div>
-                  <div class="step-connector" [class.filled]="getOrderStageIndex(ord.status) >= 5"></div>
-
-                  <div
-                    class="step-bubble"
-                    [class.completed]="getOrderStageIndex(ord.status) >= 5"
-                    [class.active]="ord.status === 'SERVED'"
-                    (click)="$event.stopPropagation(); advanceStatus(ord, 'SERVED')"
-                    title="Click to mark Served / Delivered"
-                  >
-                    <span class="step-num"><i class="ph ph-hand-waving"></i></span>
-                    <span class="step-txt">Serve</span>
-                  </div>
-                </div>
-              }
-
-              <!-- Primary Next-Stage Button -->
-              <div class="action-row-primary">
-                @if (ord.status === 'PENDING') {
-                  <button
-                    class="btn btn-primary btn-sm w-full action-btn-main"
-                    (click)="$event.stopPropagation(); advanceStatus(ord, 'ACCEPTED')"
-                  >
-                    <i class="ph ph-check-bold"></i> Accept Order
-                  </button>
-                } @else if (ord.status === 'ACCEPTED') {
-                  <button
-                    class="btn btn-dark btn-sm w-full action-btn-main"
-                    (click)="$event.stopPropagation(); advanceStatus(ord, 'PREPARING')"
-                  >
-                    <i class="ph ph-cooking-pot"></i> Send to Kitchen
-                  </button>
-                } @else if (ord.status === 'PREPARING') {
-                  <button
-                    class="btn btn-gold btn-sm w-full action-btn-main"
-                    (click)="$event.stopPropagation(); advanceStatus(ord, 'READY')"
-                  >
-                    <i class="ph ph-bell-ringing"></i> Mark Ready
-                  </button>
-                } @else if (ord.status === 'READY') {
-                  <button
-                    class="btn btn-info btn-sm w-full action-btn-main"
-                    (click)="$event.stopPropagation(); advanceStatus(ord, 'DISPATCHED')"
-                  >
-                    <i class="ph ph-moped"></i>
-                    <span>{{ ord.orderType === 'TAKEAWAY' ? 'Dispatch for Delivery/Handover' : 'Dispatch to Table' }}</span>
-                  </button>
-                } @else if (ord.status === 'DISPATCHED') {
-                  <button
-                    class="btn btn-success btn-sm w-full action-btn-main"
-                    (click)="$event.stopPropagation(); advanceStatus(ord, 'SERVED')"
-                  >
-                    <i class="ph ph-check-circle"></i>
-                    <span>{{ ord.orderType === 'TAKEAWAY' ? 'Delivered / Handed Over' : 'Mark Delivered & Served' }}</span>
-                  </button>
-                } @else if (ord.status === 'SERVED') {
-                  <button
-                    type="button"
-                    (click)="$event.stopPropagation(); openSettleModal(ord)"
-                    class="btn btn-primary btn-sm w-full action-btn-main checkout-glow"
-                  >
-                    <i class="ph ph-shopping-bag-open"></i>
-                    <span>Checkout & Print Invoice</span>
-                  </button>
-                } @else if (ord.status === 'COMPLETED') {
-                  <div class="completed-order-badge-strip">
-                    <div class="completed-chips-cluster">
-                      <span class="status-chip chip-completed-pill">
-                        <i class="ph ph-check-circle"></i>
-                        <span>Completed</span>
+        @if (isLoading()) {
+          <app-skeleton variant="order-card" [count]="6" />
+        } @else {
+          @for (ord of filteredOrders(); track ord.id) {
+            @if (ord.status === 'COMPLETED') {
+              <!-- Completed Order Card (Clean Editorial Layout) -->
+              <div
+                class="order-board-card completed-board-card"
+                [class.new-order-flash]="latestNewOrderId() === ord.id"
+                [class.card-selected]="selectedSidePanelOrderId() === ord.id"
+                (click)="openOrderSidePanel(ord)"
+                title="Click to view full order bill & details in side panel"
+              >
+                <!-- Row 1: (customer name) -------------------------------- (status) -->
+                <div class="completed-row-1">
+                  <div class="cust-info">
+                    <span class="cust-name-main" [title]="ord.customerName">
+                      {{ ord.customerName }}
+                    </span>
+                    @if (ord.customerPhone) {
+                      <span class="cust-phone-inline">
+                        · {{ ord.customerPhone }}
                       </span>
-                      <span class="status-chip chip-paid-pill">
-                        <i class="ph ph-money"></i>
-                        <span>Paid ({{ ord.paymentMethod || 'UPI' }})</span>
-                      </span>
-                      <span class="status-chip chip-printed-pill">
-                        <i class="ph ph-printer"></i>
-                        <span>Printed ({{ ord.printCount || 1 }}x)</span>
-                      </span>
-                    </div>
+                    }
                   </div>
-                }
-              </div>
+                  <div class="card-status-badges">
+                    @if (ord.isSplit && ord.splitCount) {
+                      <span class="split-indicator-pill" title="Split Bill Active">
+                        <i class="ph ph-users"></i> {{ ord.splitCount }}P Split
+                      </span>
+                    }
+                    <app-status-badge [status]="ord.status"></app-status-badge>
+                  </div>
+                </div>
 
-              <div class="action-row-secondary">
-                <button
-                  type="button"
-                  (click)="$event.stopPropagation(); openOrderSidePanel(ord)"
-                  class="card-util-btn"
-                  title="View Full Bill & Order Details in Side Panel"
-                >
-                  <i class="ph ph-sidebar-simple"></i>
-                  <span>Details</span>
-                </button>
+                <!-- Row 2: (table number) ---------------------------------- (time) -->
+                <div class="completed-row-2">
+                  <div class="table-info">
+                    @if (ord.orderType === 'TAKEAWAY') {
+                      <span class="tbl-badge takeaway-badge">
+                        <i class="ph ph-bag"></i> Takeaway ({{ ord.pickupReference || ord.orderNumber }})
+                      </span>
+                    } @else {
+                      <span class="tbl-badge completed-tbl-badge" [title]="'Table ' + (ord.tableNumber || 'Unassigned')">
+                        <i class="ph ph-table"></i> Table {{ ord.tableNumber || 'Unassigned' }}
+                      </span>
+                    }
+                  </div>
+                  <span class="ord-time">
+                    <i class="ph ph-clock"></i> {{ ord.createdAt | date: 'shortTime' }}
+                  </span>
+                </div>
 
-                @if (ord.status !== 'CANCELLED' && ord.status !== 'COMPLETED') {
-                  <button
-                    type="button"
-                    class="card-util-btn"
-                    [class.paid-locked]="isOrderPaid(ord)"
-                    (click)="$event.stopPropagation(); openEditOrderModal(ord)"
-                    [title]="
-                      isOrderPaid(ord)
-                        ? 'Order is PAID — Admin Password required to edit'
-                        : 'Edit Order & Add Further Dishes'
-                    "
-                  >
-                    <i
-                      class="ph"
-                      [class.ph-lock-key]="isOrderPaid(ord)"
-                      [class.ph-pencil-simple-line]="!isOrderPaid(ord)"
-                    ></i>
-                    <span>{{ isOrderPaid(ord) ? 'Edit (Paid)' : 'Edit' }}</span>
-                  </button>
-                }
+                <!-- Row 3: (order id) -------------------------------------- (who served) -->
+                <div class="completed-row-3">
+                  <span class="completed-ord-num" title="Order ID">
+                    <i class="ph ph-receipt"></i> {{ ord.orderNumber }}
+                  </span>
+                  <div class="completed-server-cell">
+                    <span class="server-caption">Served by:</span>
+                    <span class="server-name-text" [title]="'Serving Staff: ' + (getServerStaffName(ord.serverStaffId) || 'Unassigned')">
+                      {{ getServerStaffName(ord.serverStaffId) || 'Unassigned' }}
+                    </span>
+                    <button
+                      type="button"
+                      class="btn-unlock-server-xs"
+                      (click)="$event.stopPropagation(); promptChangeCompletedServer(ord)"
+                      title="Change serving staff for paid order (Admin Password required)"
+                    >
+                      <i class="ph ph-pencil-simple"></i>
+                    </button>
+                  </div>
+                </div>
 
-                @if (ord.status !== 'CANCELLED') {
+                <!-- Row 4: (payment method) ------- (printed receipt) ------- (Invoice) -->
+                <div class="completed-row-4">
+                  <span class="meta-pill pill-paid">
+                    <i class="ph ph-check-circle"></i> Paid ({{ ord.paymentMethod || 'PAID' }})
+                  </span>
+                  <span class="meta-pill pill-printed">
+                    <i class="ph ph-printer"></i> Printed ({{ ord.printCount || 1 }}x)
+                  </span>
                   <a
                     [routerLink]="['/admin/billing', ord.id]"
                     [queryParams]="ord.printCount && ord.printCount > 0 ? { reprint: 'true' } : null"
                     (click)="$event.stopPropagation()"
-                    class="card-util-btn"
+                    class="btn-invoice-action"
                     [title]="
                       ord.printCount && ord.printCount > 0
-                        ? 'Tax Invoice printed ' +
-                          ord.printCount +
-                          ' time(s) — Reprint requires Admin authorization'
+                        ? 'Tax Invoice printed ' + ord.printCount + ' time(s) — Reprint requires Admin authorization'
                         : 'Print Tax Invoice'
                     "
                   >
-                    <i class="ph ph-printer"></i>
-                    <span>{{
-                      ord.printCount && ord.printCount > 0
-                        ? 'Invoice (' + ord.printCount + 'x)'
-                        : 'Invoice'
-                    }}</span>
+                    <i class="ph ph-file-text"></i>
+                    <span>Invoice</span>
                   </a>
-                }
-
-                @if (ord.status !== 'COMPLETED' && ord.status !== 'CANCELLED') {
                   <button
                     type="button"
-                    class="card-util-btn btn-cancel-order"
-                    (click)="$event.stopPropagation(); openCancelModal(ord)"
-                    title="Cancel Order"
+                    class="btn-invoice-action btn-wa-action"
+                    (click)="$event.stopPropagation(); openWhatsAppModal(ord)"
+                    title="Send Digital Bill via WhatsApp"
                   >
-                    <i class="ph ph-x-circle text-crimson"></i>
-                    <span>Cancel</span>
+                    <i class="ph ph-whatsapp-logo"></i>
+                    <span>WhatsApp</span>
                   </button>
-                }
+                </div>
+
+                <!-- Row 5 (Inset Box): order details and prices -->
+                <div class="completed-items-inset-box">
+                  <div class="items-summary-list">
+                    @for (item of ord.items; track item.id) {
+                      <div class="item-line">
+                        <div class="item-info-group">
+                          <span class="qty-pill">{{ item.quantity }}×</span>
+                          <span class="dish-name" [title]="item.name">{{ item.name }}</span>
+                          @if (item.selectedPortion) {
+                            <span class="portion-label">{{ item.selectedPortion.label }}</span>
+                          }
+                        </div>
+                        <span class="line-cost">{{ item.itemTotal | currencyInr }}</span>
+                      </div>
+                    }
+                  </div>
+                </div>
+
+                <!-- Row 6: (total amount) -->
+                <div class="completed-total-strip">
+                  <div class="sub-meta-left">
+                    @if (ord.discountAmount > 0) {
+                      <span class="discount-pill">
+                        <i class="ph ph-tag"></i> -{{ ord.discountAmount | currencyInr }}
+                      </span>
+                    }
+                    @if (ord.isSplit && ord.splitCount) {
+                      <span class="split-pill">
+                        <i class="ph ph-users"></i> {{ ord.splitCount }} ways
+                      </span>
+                    }
+                  </div>
+                  <div class="total-amount-box">
+                    <span class="total-label-compact">Total Amount:</span>
+                    <span class="payable-val-highlight">{{ ord.totalAmount | currencyInr }}</span>
+                  </div>
+                </div>
               </div>
-            </div>
-          </div>
-        } @empty {
-          <div class="empty-orders-panel">
-            <i class="ph ph-tray empty-icon"></i>
-            <h3 class="heading-card">No Orders In This Queue</h3>
-            <p class="text-muted">
-              New dine-in and takeaway orders will appear here in real-time.
-            </p>
+            } @else {
+              <!-- Active Orders (Pending, Accepted, Preparing, Ready, Dispatched, Served) -->
+              <div
+                class="order-board-card"
+                [class.pending-highlight]="ord.status === 'PENDING'"
+                [class.new-order-flash]="latestNewOrderId() === ord.id"
+                [class.card-selected]="selectedSidePanelOrderId() === ord.id"
+                (click)="openOrderSidePanel(ord)"
+                title="Click to view full order bill & details in side panel"
+              >
+                <!-- 1. Header: ID & Time + Split Indicator -->
+                <div class="card-top">
+                  <div class="order-id-group">
+                    <span class="ord-num">{{ ord.orderNumber }}</span>
+                    <span class="ord-time">
+                      <i class="ph ph-clock"></i> {{ ord.createdAt | date: 'shortTime' }}
+                    </span>
+                  </div>
+                  @if (ord.isSplit && ord.splitCount) {
+                    <div class="card-status-badges">
+                      <span class="split-indicator-pill" title="Split Bill Active">
+                        <i class="ph ph-users"></i> {{ ord.splitCount }}P Split
+                      </span>
+                    </div>
+                  }
+                </div>
+
+                <!-- 2. Guest & Location Bar -->
+                <div class="guest-bar">
+                  @if (ord.orderType === 'TAKEAWAY') {
+                    <div class="tbl-badge takeaway-badge">
+                      <i class="ph ph-bag"></i>
+                      <span>Takeaway ({{ ord.pickupReference || ord.orderNumber }})</span>
+                    </div>
+                  } @else {
+                    <button
+                      type="button"
+                      class="tbl-badge reallot-clickable"
+                      [disabled]="isOrderPaid(ord)"
+                      (click)="handleTableBadgeClick($event, ord)"
+                      [title]="isOrderPaid(ord) ? 'Table ' + (ord.tableNumber || 'Unassigned') : 'Click to change/reallot table'"
+                    >
+                      <i class="ph ph-table"></i>
+                      <span>{{ ord.tableNumber ? 'Table ' + ord.tableNumber : 'Allot Table' }}</span>
+                      @if (!isOrderPaid(ord)) {
+                        <i class="ph ph-pencil-simple" style="font-size: 0.75rem; margin-left: 2px; opacity: 0.85;"></i>
+                      }
+                    </button>
+                  }
+                  <div class="guest-meta">
+                    <span class="cust-name" [title]="ord.customerName">{{ ord.customerName }}</span>
+                    @if (ord.customerPhone) {
+                      <span class="phone-sub">
+                        <i class="ph ph-phone"></i> {{ ord.customerPhone }}
+                      </span>
+                    }
+                  </div>
+                </div>
+
+                <!-- Server / Staff Handling Order -->
+                <div class="server-bar" [class.server-bar-locked]="isOrderPaid(ord)" [class.has-server]="!!ord.serverStaffId">
+                  <span class="server-label">
+                    <i class="ph" [class.ph-user-check]="!isOrderPaid(ord)" [class.ph-lock-key]="isOrderPaid(ord)"></i>
+                    <span>Server:</span>
+                  </span>
+                  @if (isOrderPaid(ord)) {
+                    <div class="server-completed-box">
+                      <span class="server-name-badge" [title]="'Serving Staff: ' + (getServerStaffName(ord.serverStaffId) || 'Unassigned')">
+                        {{ getServerStaffName(ord.serverStaffId) || 'Unassigned' }}
+                      </span>
+                      <button
+                        type="button"
+                        class="btn-unlock-server"
+                        (click)="$event.stopPropagation(); promptChangeCompletedServer(ord)"
+                        title="Change serving staff for paid order (Admin Password required)"
+                      >
+                        <i class="ph ph-lock-key"></i>
+                        <span>Change</span>
+                      </button>
+                    </div>
+                  } @else {
+                    <div class="server-select-wrapper">
+                      <select
+                        class="server-select"
+                        [class.is-unassigned]="!ord.serverStaffId"
+                        [ngModel]="ord.serverStaffId || ''"
+                        (ngModelChange)="onAssignOrderServer(ord, $event)"
+                        (click)="$event.stopPropagation()"
+                        title="Assign staff handling this order"
+                      >
+                        <option value="">Unassigned</option>
+                        @for (s of staffMembers(); track s.id) {
+                          <option [value]="s.id">{{ s.name }} ({{ s.role }})</option>
+                        }
+                      </select>
+                      <i class="ph ph-caret-down server-select-caret"></i>
+                    </div>
+                  }
+                </div>
+
+                <!-- 3. Ordered Dishes Stream -->
+                <div class="items-summary-list">
+                  @for (item of ord.items; track item.id) {
+                    <div class="item-line">
+                      <div class="item-info-group">
+                        <span class="qty-pill">{{ item.quantity }}×</span>
+                        <div class="dish-details">
+                          <span class="dish-name" [title]="item.name">{{ item.name }}</span>
+                          @if (item.selectedPortion) {
+                            <span class="portion-label">{{ item.selectedPortion.label }}</span>
+                          }
+                        </div>
+                      </div>
+                      <span class="line-cost">{{ item.itemTotal | currencyInr }}</span>
+                    </div>
+                  }
+                </div>
+
+                <!-- 4. Financial Summary & Total Breakdown -->
+                <div class="bill-strip">
+                  <div class="sub-line">
+                    <span class="bill-label"
+                      >Subtotal ({{ ord.items.length }}
+                      {{ ord.items.length === 1 ? 'item' : 'items' }})</span
+                    >
+                    <span class="bill-val">{{ ord.subtotal | currencyInr }}</span>
+                  </div>
+                  @if (ord.discountAmount > 0) {
+                    <div class="sub-line discount">
+                      <span class="bill-label"
+                        ><i class="ph ph-tag"></i> {{ ord.appliedCouponCode }}</span
+                      >
+                      <span class="bill-val">-{{ ord.discountAmount | currencyInr }}</span>
+                    </div>
+                  }
+                  @if (ord.isSplit && ord.splitCount) {
+                    <div class="sub-line split-note">
+                      <span class="bill-label"
+                        ><i class="ph ph-users"></i> Split ({{ ord.splitCount }} ways)</span
+                      >
+                      <span class="bill-val"
+                        >{{ ord.totalAmount / ord.splitCount | currencyInr }}/pers</span
+                      >
+                    </div>
+                  }
+                  <div class="sub-line total-line">
+                    <span class="total-label">Final Payable</span>
+                    <span class="payable-val">{{ ord.totalAmount | currencyInr }}</span>
+                  </div>
+                </div>
+
+                <!-- 5. Progressive Dispatch Stepper Bar & Operational Actions -->
+                <div class="card-footer-actions">
+                  <!-- Progressive Step Indicators (Clickable on each stage) -->
+                  @if (ord.status !== 'CANCELLED') {
+                    <div class="dispatch-stepper-bar">
+                      <div
+                        class="step-bubble"
+                        [class.completed]="getOrderStageIndex(ord.status) >= 1"
+                        [class.active]="ord.status === 'ACCEPTED'"
+                        (click)="$event.stopPropagation(); advanceStatus(ord, 'ACCEPTED')"
+                        title="Click to mark Accepted"
+                      >
+                        <span class="step-num"><i class="ph ph-check"></i></span>
+                        <span class="step-txt">Accept</span>
+                      </div>
+                      <div class="step-connector" [class.filled]="getOrderStageIndex(ord.status) >= 2"></div>
+
+                      <div
+                        class="step-bubble"
+                        [class.completed]="getOrderStageIndex(ord.status) >= 2"
+                        [class.active]="ord.status === 'PREPARING'"
+                        (click)="$event.stopPropagation(); advanceStatus(ord, 'PREPARING')"
+                        title="Click to send to Kitchen"
+                      >
+                        <span class="step-num"><i class="ph ph-cooking-pot"></i></span>
+                        <span class="step-txt">Prepare</span>
+                      </div>
+                      <div class="step-connector" [class.filled]="getOrderStageIndex(ord.status) >= 3"></div>
+
+                      <div
+                        class="step-bubble"
+                        [class.completed]="getOrderStageIndex(ord.status) >= 3"
+                        [class.active]="ord.status === 'READY'"
+                        (click)="$event.stopPropagation(); advanceStatus(ord, 'READY')"
+                        title="Click to mark Ready"
+                      >
+                        <span class="step-num"><i class="ph ph-bell-ringing"></i></span>
+                        <span class="step-txt">Ready</span>
+                      </div>
+                      <div class="step-connector" [class.filled]="getOrderStageIndex(ord.status) >= 4"></div>
+
+                      <div
+                        class="step-bubble"
+                        [class.completed]="getOrderStageIndex(ord.status) >= 4"
+                        [class.active]="ord.status === 'DISPATCHED'"
+                        (click)="$event.stopPropagation(); advanceStatus(ord, 'DISPATCHED')"
+                        title="Click to mark Dispatched"
+                      >
+                        <span class="step-num"><i class="ph ph-moped"></i></span>
+                        <span class="step-txt">Dispatch</span>
+                      </div>
+                      <div class="step-connector" [class.filled]="getOrderStageIndex(ord.status) >= 5"></div>
+
+                      <div
+                        class="step-bubble"
+                        [class.completed]="getOrderStageIndex(ord.status) >= 5"
+                        [class.active]="ord.status === 'SERVED'"
+                        (click)="$event.stopPropagation(); advanceStatus(ord, 'SERVED')"
+                        title="Click to mark Served / Delivered"
+                      >
+                        <span class="step-num"><i class="ph ph-hand-waving"></i></span>
+                        <span class="step-txt">Serve</span>
+                      </div>
+                    </div>
+                  }
+
+                  <!-- Primary Next-Stage Button -->
+                  <div class="action-row-primary">
+                    @if (ord.status === 'PENDING') {
+                      <button
+                        class="btn btn-primary btn-sm w-full action-btn-main"
+                        (click)="$event.stopPropagation(); advanceStatus(ord, 'ACCEPTED')"
+                      >
+                        <i class="ph ph-check-bold"></i> Accept Order
+                      </button>
+                    } @else if (ord.status === 'ACCEPTED') {
+                      <button
+                        class="btn btn-dark btn-sm w-full action-btn-main"
+                        (click)="$event.stopPropagation(); advanceStatus(ord, 'PREPARING')"
+                      >
+                        <i class="ph ph-cooking-pot"></i> Send to Kitchen
+                      </button>
+                    } @else if (ord.status === 'PREPARING') {
+                      <button
+                        class="btn btn-gold btn-sm w-full action-btn-main"
+                        (click)="$event.stopPropagation(); advanceStatus(ord, 'READY')"
+                      >
+                        <i class="ph ph-bell-ringing"></i> Mark Ready
+                      </button>
+                    } @else if (ord.status === 'READY') {
+                      <button
+                        class="btn btn-info btn-sm w-full action-btn-main"
+                        (click)="$event.stopPropagation(); advanceStatus(ord, 'DISPATCHED')"
+                      >
+                        <i class="ph ph-moped"></i>
+                        <span>{{ ord.orderType === 'TAKEAWAY' ? 'Dispatch for Delivery/Handover' : 'Dispatch to Table' }}</span>
+                      </button>
+                    } @else if (ord.status === 'DISPATCHED') {
+                      <button
+                        class="btn btn-success btn-sm w-full action-btn-main"
+                        (click)="$event.stopPropagation(); advanceStatus(ord, 'SERVED')"
+                      >
+                        <i class="ph ph-check-circle"></i>
+                        <span>{{ ord.orderType === 'TAKEAWAY' ? 'Delivered / Handed Over' : 'Mark Delivered & Served' }}</span>
+                      </button>
+                    } @else if (ord.status === 'SERVED') {
+                      <button
+                        type="button"
+                        (click)="$event.stopPropagation(); openSettleModal(ord)"
+                        class="btn btn-primary btn-sm w-full action-btn-main checkout-glow"
+                      >
+                        <i class="ph ph-shopping-bag-open"></i>
+                        <span>Checkout & Print Invoice</span>
+                      </button>
+                    }
+                  </div>
+
+                  <div class="action-row-secondary">
+                    <button
+                      type="button"
+                      (click)="$event.stopPropagation(); openOrderSidePanel(ord)"
+                      class="card-util-btn"
+                      title="View Full Bill & Order Details in Side Panel"
+                    >
+                      <i class="ph ph-sidebar-simple"></i>
+                      <span>Details</span>
+                    </button>
+
+                    @if (ord.status !== 'CANCELLED') {
+                      <button
+                        type="button"
+                        class="card-util-btn"
+                        [class.paid-locked]="isOrderPaid(ord)"
+                        (click)="$event.stopPropagation(); openEditOrderModal(ord)"
+                        [title]="
+                          isOrderPaid(ord)
+                            ? 'Order is PAID — Admin Password required to edit'
+                            : 'Edit Order & Add Further Dishes'
+                        "
+                      >
+                        <i
+                          class="ph"
+                          [class.ph-lock-key]="isOrderPaid(ord)"
+                          [class.ph-pencil-simple-line]="!isOrderPaid(ord)"
+                        ></i>
+                        <span>{{ isOrderPaid(ord) ? 'Edit (Paid)' : 'Edit' }}</span>
+                      </button>
+                    }
+
+                    @if (ord.status !== 'CANCELLED') {
+                      <a
+                        [routerLink]="['/admin/billing', ord.id]"
+                        [queryParams]="ord.printCount && ord.printCount > 0 ? { reprint: 'true' } : null"
+                        (click)="$event.stopPropagation()"
+                        class="card-util-btn"
+                        [title]="
+                          ord.printCount && ord.printCount > 0
+                            ? 'Tax Invoice printed ' +
+                              ord.printCount +
+                              ' time(s) — Reprint requires Admin authorization'
+                            : 'Print Tax Invoice'
+                        "
+                      >
+                        <i class="ph ph-printer"></i>
+                        <span>{{
+                          ord.printCount && ord.printCount > 0
+                            ? 'Invoice (' + ord.printCount + 'x)'
+                            : 'Invoice'
+                        }}</span>
+                      </a>
+                    }
+
+                    @if (ord.status !== 'CANCELLED') {
+                      <button
+                        type="button"
+                        class="card-util-btn btn-cancel-order"
+                        (click)="$event.stopPropagation(); openCancelModal(ord)"
+                        title="Cancel Order"
+                      >
+                        <i class="ph ph-x-circle text-crimson"></i>
+                        <span>Cancel</span>
+                      </button>
+                    }
+                  </div>
+                </div>
+              </div>
+            }
+          } @empty {
+          <div style="grid-column: 1 / -1; width: 100%;">
+            <app-empty-state
+              icon="ph-tray"
+              [title]="emptyStateTitle()"
+              [message]="emptyStateMessage()"
+              [actionText]="emptyStateActionText()"
+              [actionIcon]="emptyStateActionIcon()"
+              (actionClick)="onEmptyStateAction()"
+              [secondaryActionText]="emptyStateSecondaryText()"
+              (secondaryActionClick)="onEmptyStateSecondary()"
+              [bordered]="false"
+            />
           </div>
         }
+      }
       </div>
 
       <!-- Order Quick Details Side Drawer -->
@@ -524,7 +712,18 @@ import { AdminAuthService } from '../../../core/services/admin-auth.service';
             <!-- 1. Customer & Contact Details Card -->
             <div class="drawer-section-card">
               <div class="section-card-header">
-                <span class="section-card-title"><i class="ph ph-user"></i> Customer & Guest Details</span>
+                <span class="section-card-title"><i class="ph ph-user"></i> Guest & Location Details</span>
+                @if (!isOrderPaid(sideOrd)) {
+                  <button
+                    type="button"
+                    class="btn btn-secondary btn-xs"
+                    (click)="openChangeTableModal(sideOrd)"
+                    title="Change or allot dining table for this order"
+                  >
+                    <i class="ph ph-arrows-left-right"></i>
+                    <span>{{ sideOrd.tableNumber ? 'Change Table' : 'Allot Table' }}</span>
+                  </button>
+                }
               </div>
               <div class="drawer-info-grid">
                 <div class="drawer-info-row">
@@ -544,10 +743,23 @@ import { AdminAuthService } from '../../../core/services/admin-auth.service';
                   </div>
                 </div>
                 <div class="drawer-info-row">
-                  <span class="drawer-info-label">Order Type / Location</span>
-                  <span class="drawer-info-value font-bold text-crimson">
-                    {{ sideOrd.orderType === 'TAKEAWAY' ? 'Takeaway Counter (' + (sideOrd.pickupReference || sideOrd.orderNumber) + ')' : 'Table ' + sideOrd.tableNumber }}
-                  </span>
+                  <span class="drawer-info-label">Dining Location</span>
+                  <div class="drawer-location-cell" style="display: flex; align-items: center; justify-content: space-between; gap: 8px; width: 100%;">
+                    <span class="drawer-info-value font-bold text-crimson">
+                      {{ sideOrd.orderType === 'TAKEAWAY' ? 'Takeaway Counter (' + (sideOrd.pickupReference || sideOrd.orderNumber) + ')' : (sideOrd.tableNumber ? 'Table ' + sideOrd.tableNumber : 'Unassigned Table') }}
+                    </span>
+                    @if (!isOrderPaid(sideOrd)) {
+                      <button
+                        type="button"
+                        class="btn-change-table-pill"
+                        (click)="openChangeTableModal(sideOrd)"
+                        title="Change or allot dining table for this order"
+                      >
+                        <i class="ph ph-arrows-left-right"></i>
+                        <span>{{ sideOrd.tableNumber ? 'Change Table' : 'Allot Table' }}</span>
+                      </button>
+                    }
+                  </div>
                 </div>
                 <div class="drawer-info-row">
                   <span class="drawer-info-label">Serving Staff</span>
@@ -668,7 +880,7 @@ import { AdminAuthService } from '../../../core/services/admin-auth.service';
                   [class.status-unpaid]="!isOrderPaid(sideOrd)"
                 >
                   <i class="ph" [class.ph-check-circle]="isOrderPaid(sideOrd)" [class.ph-warning-circle]="!isOrderPaid(sideOrd)"></i>
-                  {{ isOrderPaid(sideOrd) ? 'PAID (' + (sideOrd.paymentMethod || 'UPI') + ')' : 'UNPAID / PENDING' }}
+                  {{ isOrderPaid(sideOrd) ? 'PAID (' + (sideOrd.paymentMethod || 'PAID') + ')' : 'UNPAID / PENDING' }}
                 </span>
               </div>
 
@@ -689,6 +901,9 @@ import { AdminAuthService } from '../../../core/services/admin-auth.service';
                     <button class="btn btn-secondary btn-sm" (click)="printOrderReceipt(sideOrd)" title="Print Bill Receipt">
                       <i class="ph ph-printer"></i> Print Bill
                     </button>
+                    <button class="btn btn-whatsapp btn-sm" (click)="openWhatsAppModal(sideOrd)" title="Send Bill via WhatsApp">
+                      <i class="ph ph-whatsapp-logo"></i> WhatsApp
+                    </button>
                   </div>
                 } @else if (sideOrd.status === 'COMPLETED') {
                   <div class="completed-summary-box">
@@ -697,7 +912,7 @@ import { AdminAuthService } from '../../../core/services/admin-auth.service';
                         <i class="ph ph-check-circle"></i> Completed
                       </span>
                       <span class="status-chip chip-paid-pill">
-                        <i class="ph ph-money"></i> Paid ({{ sideOrd.paymentMethod || 'UPI' }})
+                        <i class="ph ph-money"></i> Paid ({{ sideOrd.paymentMethod || 'PAID' }})
                       </span>
                       <span class="status-chip chip-printed-pill">
                         <i class="ph ph-printer"></i> Printed ({{ sideOrd.printCount || 1 }}x)
@@ -709,6 +924,9 @@ import { AdminAuthService } from '../../../core/services/admin-auth.service';
                     <div class="completed-invoice-actions">
                       <button class="btn btn-secondary btn-sm" (click)="printOrderReceipt(sideOrd)">
                         <i class="ph ph-printer"></i> Reprint Receipt
+                      </button>
+                      <button class="btn btn-whatsapp btn-sm" (click)="openWhatsAppModal(sideOrd)" title="Send Digital Bill via WhatsApp">
+                        <i class="ph ph-whatsapp-logo"></i> WhatsApp
                       </button>
                       <a
                         [routerLink]="['/admin/billing', sideOrd.id]"
@@ -732,11 +950,16 @@ import { AdminAuthService } from '../../../core/services/admin-auth.service';
                   <!-- Paid but not yet marked completed (Needs invoice print) -->
                   <div class="paid-pending-print-box">
                     <p class="text-xs text-muted">
-                      Payment of {{ sideOrd.totalAmount | currencyInr }} is collected via {{ sideOrd.paymentMethod || 'UPI' }}. Print invoice to complete order.
+                      Payment of {{ sideOrd.totalAmount | currencyInr }} is collected via {{ sideOrd.paymentMethod || 'PAID' }}. Print invoice to complete order.
                     </p>
-                    <button class="btn btn-primary btn-sm w-full" (click)="printOrderReceipt(sideOrd)">
-                      <i class="ph ph-printer"></i> Print Invoice to Complete
-                    </button>
+                    <div style="display: flex; gap: 8px;">
+                      <button class="btn btn-primary btn-sm flex-1" (click)="printOrderReceipt(sideOrd)">
+                        <i class="ph ph-printer"></i> Print Invoice to Complete
+                      </button>
+                      <button class="btn btn-whatsapp btn-sm" (click)="openWhatsAppModal(sideOrd)" title="Send Bill via WhatsApp">
+                        <i class="ph ph-whatsapp-logo"></i> WhatsApp
+                      </button>
+                    </div>
                   </div>
                 }
               </div>
@@ -1034,10 +1257,9 @@ import { AdminAuthService } from '../../../core/services/admin-auth.service';
                       <label class="form-label">Pickup Reference</label>
                       <input
                         type="text"
-                        class="form-input"
+                        class="form-input pickup-ref-input"
                         [value]="manualPickupRef"
                         readonly
-                        style="background: var(--color-surface-hover); font-weight: 700; color: #8b6508;"
                       />
                     </div>
                   }
@@ -1150,7 +1372,63 @@ import { AdminAuthService } from '../../../core/services/admin-auth.service';
         </div>
       }
 
-      <!-- Cash / UPI / Card Settlement & Split Bill Modal for Live Order -->
+      <!-- Reallot / Change Table Modal -->
+      @if (showChangeTableModal() && orderForTableChange(); as changeOrd) {
+        <div class="modal-overlay" (click)="closeChangeTableModal()">
+          <div class="modal-card reallot-table-modal" (click)="$event.stopPropagation()" role="dialog" aria-modal="true">
+            <div class="modal-header">
+              <div>
+                <h3 class="heading-card">Change / Allot Dining Table</h3>
+                <p class="text-xs text-muted" style="margin-top: 2px;">
+                  Order <strong>{{ changeOrd.orderNumber }}</strong> ({{ changeOrd.customerName || 'Guest' }})
+                  • Currently: <strong>{{ changeOrd.tableNumber ? 'Table ' + changeOrd.tableNumber : 'Unassigned / Counter' }}</strong>
+                </p>
+              </div>
+              <button class="close-btn" (click)="closeChangeTableModal()">
+                <i class="ph ph-x"></i>
+              </button>
+            </div>
+
+            <div class="modal-body" style="padding: 20px;">
+              <div class="form-group">
+                <label class="form-label" style="font-weight: 600; margin-bottom: 8px; display: block;">Select Destination Table *</label>
+                <select
+                  class="form-select"
+                  [ngModel]="selectedNewTableId()"
+                  (ngModelChange)="selectedNewTableId.set($event)"
+                  style="width: 100%; padding: 10px 12px; font-size: 0.9375rem; border-radius: 8px;"
+                >
+                  <option value="" disabled>-- Choose Table --</option>
+                  @for (tbl of tables(); track tbl.id) {
+                    <option
+                      [value]="tbl.id"
+                      [disabled]="tbl.id === changeOrd.tableId"
+                    >
+                      Table {{ tbl.number }} ({{ tbl.section }}) — {{ tbl.status }} • {{ tbl.capacity }} Seats
+                      {{ tbl.id === changeOrd.tableId ? ' [Current Table]' : '' }}
+                    </option>
+                  }
+                </select>
+                <p class="text-xs text-muted" style="margin-top: 8px;">
+                  Select a table to assign. The guest order and dining bill will immediately transfer to the selected table.
+                </p>
+              </div>
+            </div>
+
+            <div class="modal-footer" style="padding: 16px 20px; display: flex; justify-content: flex-end; gap: 10px;">
+              <button class="btn btn-secondary" (click)="closeChangeTableModal()">Cancel</button>
+              <button
+                class="btn btn-primary"
+                [disabled]="!selectedNewTableId() || selectedNewTableId() === changeOrd.tableId"
+                (click)="confirmChangeTable()"
+              >
+                <i class="ph ph-arrows-left-right"></i>
+                <span>Assign Order to Table</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      }
       @if (showSettleModal() && selectedOrderForSettlement(); as ord) {
         <div class="modal-overlay" (click)="onBackdropClick($event, 'settle')">
           <div
@@ -1224,21 +1502,138 @@ import { AdminAuthService } from '../../../core/services/admin-auth.service';
                     <span>Item Subtotal</span>
                     <span>{{ ord.subtotal | currencyInr }}</span>
                   </div>
-                  @if (ord.discountAmount > 0) {
+                  @if (getEffectiveDiscount(ord) > 0) {
                     <div class="settle-row discount">
-                      <span>Discount Applied</span>
-                      <span>-{{ ord.discountAmount | currencyInr }}</span>
+                      <span>Discount ({{ settleDiscountMode() === 'COUPON' && selectedCouponCode() ? selectedCouponCode() : 'Counter Off' }})</span>
+                      <span class="text-success font-semibold">-{{ getEffectiveDiscount(ord) | currencyInr }}</span>
                     </div>
                   }
                   <div class="settle-row">
                     <span>Taxes (CGST + SGST)</span>
-                    <span>{{ ord.taxAmount | currencyInr }}</span>
+                    <span>{{ getSettlementTax(ord) | currencyInr }}</span>
                   </div>
                   <div class="settle-divider"></div>
                   <div class="settle-row total-highlight">
                     <span>Net Payable Total</span>
-                    <span class="amount-large">{{ ord.totalAmount | currencyInr }}</span>
+                    <span class="amount-large">{{ getSettlementTotal(ord) | currencyInr }}</span>
                   </div>
+                </div>
+
+                <!-- Counter Discount & Coupons Block -->
+                <div class="settle-discount-card">
+                  <div class="discount-header-row">
+                    <span class="discount-title">
+                      <i class="ph ph-tag"></i> Discount & Offers
+                    </span>
+                    <div class="discount-segmented-control">
+                      <button
+                        type="button"
+                        class="seg-btn"
+                        [class.active]="settleDiscountMode() === 'CUSTOM'"
+                        (click)="settleDiscountMode.set('CUSTOM')"
+                      >
+                        <i class="ph ph-currency-inr"></i> Flat ₹ Off
+                      </button>
+                      <button
+                        type="button"
+                        class="seg-btn"
+                        [class.active]="settleDiscountMode() === 'COUPON'"
+                        (click)="settleDiscountMode.set('COUPON')"
+                      >
+                        <i class="ph ph-ticket"></i> Coupon
+                      </button>
+                    </div>
+                  </div>
+
+                  @if (settleDiscountMode() === 'CUSTOM') {
+                    <div class="custom-disc-pane">
+                      <div class="inr-input-wrapper">
+                        <span class="inr-prefix">₹</span>
+                        <input
+                          type="number"
+                          min="0"
+                          [max]="ord.subtotal + ord.taxAmount"
+                          class="inr-input"
+                          placeholder="Enter rupees off..."
+                          [value]="customDiscountRupees() || ''"
+                          (input)="onCustomDiscountChange($event, ord.subtotal + ord.taxAmount)"
+                        />
+                        @if (customDiscountRupees() > 0) {
+                          <button
+                            type="button"
+                            class="btn-disc-clear"
+                            (click)="clearDiscount()"
+                            title="Clear discount"
+                          >
+                            <i class="ph ph-x"></i> Clear
+                          </button>
+                        }
+                      </div>
+                      <div class="quick-disc-chips">
+                        <button
+                          type="button"
+                          class="disc-chip"
+                          [class.chip-active]="customDiscountRupees() === 20"
+                          (click)="applyQuickRupees(20, ord.subtotal + ord.taxAmount)"
+                        >
+                          -₹20
+                        </button>
+                        <button
+                          type="button"
+                          class="disc-chip"
+                          [class.chip-active]="customDiscountRupees() === 50"
+                          (click)="applyQuickRupees(50, ord.subtotal + ord.taxAmount)"
+                        >
+                          -₹50
+                        </button>
+                        <button
+                          type="button"
+                          class="disc-chip"
+                          [class.chip-active]="customDiscountRupees() === 100"
+                          (click)="applyQuickRupees(100, ord.subtotal + ord.taxAmount)"
+                        >
+                          -₹100
+                        </button>
+                        <button
+                          type="button"
+                          class="disc-chip chip-round"
+                          (click)="applyRoundOffDiscount(ord)"
+                          title="Round total down to nearest ₹10"
+                        >
+                          Round Off
+                        </button>
+                      </div>
+                    </div>
+                  }
+
+                  @if (settleDiscountMode() === 'COUPON') {
+                    <div class="coupon-disc-pane">
+                      <div class="coupon-select-wrapper">
+                        <select
+                          class="coupon-select"
+                          [ngModel]="selectedCouponCode()"
+                          (ngModelChange)="onSelectCoupon($event, ord.subtotal)"
+                        >
+                          <option value="">-- Select Active Coupon --</option>
+                          @for (c of activeCoupons(); track c.id) {
+                            <option [value]="c.code">
+                              {{ c.code }} ({{ c.discountType === 'PERCENTAGE' ? c.discountValue + '% OFF' : '₹' + c.discountValue + ' OFF' }}{{ c.minOrderValue ? ', min ₹' + c.minOrderValue : '' }})
+                            </option>
+                          }
+                        </select>
+                        <i class="ph ph-caret-down coupon-caret"></i>
+                      </div>
+                      @if (selectedCouponCode()) {
+                        <div class="applied-coupon-badge">
+                          <i class="ph ph-seal-check"></i>
+                          <span>Coupon <strong>{{ selectedCouponCode() }}</strong> applied: -{{ getEffectiveDiscount(ord) | currencyInr }}</span>
+                          <button type="button" class="btn-disc-clear-pill" (click)="clearDiscount()">
+                            <i class="ph ph-x"></i>
+                          </button>
+                        </div>
+                      }
+                    </div>
+                  }
                 </div>
 
                 <div class="payment-selector-group">
@@ -1370,7 +1765,7 @@ import { AdminAuthService } from '../../../core/services/admin-auth.service';
                           @if (split.paymentStatus === 'PAID') {
                             <span class="badge badge-success"
                               ><i class="ph ph-check"></i> Paid ({{
-                                split.paymentMethod || 'UPI'
+                                split.paymentMethod || 'PAID'
                               }})</span
                             >
                           } @else {
@@ -1915,6 +2310,21 @@ import { AdminAuthService } from '../../../core/services/admin-auth.service';
                       placeholder="+91..."
                     />
                   </div>
+                  <div class="form-group">
+                    <label class="form-label">Dining Table</label>
+                    <select
+                      class="form-select"
+                      [ngModel]="editTableId()"
+                      (ngModelChange)="editTableId.set($event)"
+                    >
+                      <option value="">-- No Table / Takeaway --</option>
+                      @for (tbl of tables(); track tbl.id) {
+                        <option [value]="tbl.id">
+                          Table {{ tbl.number }} ({{ tbl.section }}) — {{ tbl.status }}
+                        </option>
+                      }
+                    </select>
+                  </div>
                 </div>
 
                 <!-- Itemized Draft List -->
@@ -2012,6 +2422,108 @@ import { AdminAuthService } from '../../../core/services/admin-auth.service';
           </div>
         </div>
       }
+
+      <!-- WhatsApp Delivery Modal -->
+      @if (showWhatsAppModal() && whatsAppOrder(); as ord) {
+        <div class="modal-overlay" (click)="onBackdropClick($event, 'whatsapp')">
+          <div
+            class="modal-card auth-modal-card whatsapp-dialog-card"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="oq-wa-title"
+          >
+            <div class="modal-header">
+              <div class="auth-modal-title-wrap">
+                <div class="auth-icon-badge whatsapp-badge">
+                  <i class="ph ph-whatsapp-logo"></i>
+                </div>
+                <div>
+                  <h3 id="oq-wa-title" class="heading-card">Send Bill via WhatsApp</h3>
+                  <span class="text-xs text-muted"
+                    >{{ ord.orderNumber }} • Table {{ ord.tableNumber || 'Dine-In' }}</span
+                  >
+                </div>
+              </div>
+              <button class="close-btn" (click)="closeWhatsAppModal()" aria-label="Close dialog">
+                <i class="ph ph-x"></i>
+              </button>
+            </div>
+
+            <div class="modal-body auth-dialog-body">
+              <div class="form-group">
+                <label class="form-label" for="oq-wa-phone">Customer WhatsApp Phone Number *</label>
+                <div class="input-with-icon">
+                  <i class="ph ph-phone"></i>
+                  <input
+                    id="oq-wa-phone"
+                    type="tel"
+                    class="form-input"
+                    placeholder="e.g. 9876543210 or +91 98765 43210"
+                    [value]="whatsAppPhone()"
+                    (input)="whatsAppPhone.set($any($event.target).value)"
+                    (keyup.enter)="sendWhatsAppBill()"
+                    autofocus
+                  />
+                </div>
+                <span class="hint-text"
+                  >Enter 10-digit mobile number. Defaults to +91 (India) if country code is omitted.</span
+                >
+              </div>
+
+              <div class="form-group">
+                <label class="form-label">Message Preview</label>
+                <pre class="whatsapp-preview-box">{{ whatsAppMessagePreview() }}</pre>
+              </div>
+            </div>
+
+            <div class="modal-footer whatsapp-modal-footer">
+              <button type="button" class="btn btn-secondary" (click)="closeWhatsAppModal()">
+                Cancel
+              </button>
+              <button
+                type="button"
+                class="btn btn-secondary"
+                (click)="copyBillToClipboard()"
+                title="Copy formatted bill text to clipboard"
+              >
+                <i class="ph ph-copy"></i>
+                <span>Copy Text</span>
+              </button>
+              @if (whatsAppAppUrl()) {
+                <a
+                  [href]="whatsAppAppUrl()"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  class="btn btn-secondary"
+                  (click)="onWhatsAppLinkClicked(whatsAppAppUrl())"
+                  title="Open in WhatsApp Desktop App or Mobile"
+                >
+                  <i class="ph ph-device-mobile"></i>
+                  <span>WhatsApp App</span>
+                </a>
+              }
+              @if (whatsAppWebUrl()) {
+                <a
+                  [href]="whatsAppWebUrl()"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  class="btn btn-whatsapp-action"
+                  (click)="onWhatsAppLinkClicked(whatsAppWebUrl())"
+                  title="Directly launch WhatsApp Web in a new tab"
+                >
+                  <i class="ph ph-whatsapp-logo"></i>
+                  <span>Open WhatsApp Web</span>
+                </a>
+              } @else {
+                <button type="button" class="btn btn-whatsapp-action" disabled>
+                  <i class="ph ph-whatsapp-logo"></i>
+                  <span>Enter Valid 10-Digit Mobile</span>
+                </button>
+              }
+            </div>
+          </div>
+        </div>
+      }
     </div>
   `,
   styles: [
@@ -2041,6 +2553,19 @@ import { AdminAuthService } from '../../../core/services/admin-auth.service';
         border-radius: var(--radius-full);
         font-size: 0.8125rem;
         font-weight: 700;
+        transition: all var(--transition-fast);
+
+        &.offline {
+          background: rgba(239, 68, 68, 0.12);
+          border-color: rgba(239, 68, 68, 0.3);
+          color: var(--color-danger);
+
+          .pulse-indicator {
+            background: var(--color-danger);
+            animation: none;
+            box-shadow: none;
+          }
+        }
       }
 
       .pulse-indicator {
@@ -2049,6 +2574,12 @@ import { AdminAuthService } from '../../../core/services/admin-auth.service';
         border-radius: 50%;
         background: var(--color-success);
         animation: pulseGlow 1.5s infinite;
+
+        &.offline {
+          background: var(--color-danger);
+          animation: none;
+          box-shadow: none;
+        }
       }
 
       @keyframes pulseGlow {
@@ -2172,59 +2703,260 @@ import { AdminAuthService } from '../../../core/services/admin-auth.service';
         background: var(--color-surface);
         border: 1px solid var(--color-border);
         border-radius: var(--radius-md);
-        padding: 14px 20px;
+        padding: 10px 16px;
         display: flex;
         align-items: center;
         justify-content: space-between;
-        gap: 16px;
+        gap: 12px;
         flex-wrap: wrap;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
       }
 
       .status-tabs {
         display: flex;
-        gap: 8px;
+        align-items: center;
+        gap: 6px;
         overflow-x: auto;
-        max-width: calc(100% - 280px);
+        padding: 2px 0;
+        scrollbar-width: none;
+        -ms-overflow-style: none;
+        max-width: calc(100% - 260px);
+
+        &::-webkit-scrollbar {
+          display: none;
+        }
 
         @media (max-width: 900px) {
           max-width: 100%;
+          width: 100%;
         }
       }
 
+      .tab-divider {
+        display: inline-block;
+        width: 1px;
+        height: 16px;
+        background: var(--color-border);
+        margin: 0 2px;
+        flex-shrink: 0;
+      }
+
       .status-tab {
-        padding: 8px 14px;
-        font-size: 0.8125rem;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 6px 12px;
+        font-size: 0.78rem;
         font-weight: 600;
-        color: var(--color-text-secondary);
-        border-radius: var(--radius-sm);
+        color: #64748b;
+        background: transparent;
+        border: 1px solid transparent;
+        border-radius: 8px;
         white-space: nowrap;
-        transition: all var(--transition-fast);
+        cursor: pointer;
+        transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+        user-select: none;
+
+        .tab-icon {
+          font-size: 0.95rem;
+          line-height: 1;
+          flex-shrink: 0;
+
+          &.status-pending { color: #f59e0b; }
+          &.status-preparing { color: #f97316; }
+          &.status-ready { color: #10b981; }
+          &.status-dispatched { color: #3b82f6; }
+          &.status-served { color: #8b5cf6; }
+          &.status-completed { color: #6366f1; }
+        }
+
+        .tab-count-badge {
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          min-width: 18px;
+          height: 18px;
+          padding: 0 5px;
+          font-size: 0.68rem;
+          font-weight: 700;
+          font-family: monospace;
+          border-radius: 999px;
+          background: rgba(148, 163, 184, 0.15);
+          color: #64748b;
+          transition: all 0.2s ease;
+
+          &.has-count {
+            background: rgba(217, 119, 6, 0.15);
+            color: #d97706;
+          }
+        }
 
         &:hover {
-          background: var(--color-bone-light);
+          background: #f1f5f9;
+          color: #1e293b;
         }
+
         &.active {
-          background: var(--color-onyx);
+          background: #121212;
+          border-color: #121212;
           color: #ffffff;
+          box-shadow: 0 2px 6px rgba(0, 0, 0, 0.12);
+
+          .tab-count-badge {
+            background: rgba(255, 255, 255, 0.22);
+            color: #ffffff;
+
+            &.has-count {
+              background: #f59e0b;
+              color: #121212;
+            }
+          }
         }
       }
 
       .search-wrap {
         position: relative;
-        min-width: 240px;
+        min-width: 220px;
         flex: 1;
+        max-width: 320px;
 
-        i {
-          position: absolute;
-          left: 12px;
-          top: 50%;
-          transform: translateY(-50%);
-          color: var(--color-text-muted);
-          font-size: 1.1rem;
+        @media (max-width: 900px) {
+          max-width: 100%;
+          width: 100%;
         }
 
-        .form-input {
-          padding-left: 38px;
+        .search-icon {
+          position: absolute;
+          left: 10px;
+          top: 50%;
+          transform: translateY(-50%);
+          color: #94a3b8;
+          font-size: 1rem;
+          pointer-events: none;
+        }
+
+        .search-input {
+          width: 100%;
+          padding: 7px 32px 7px 32px;
+          font-size: 0.78rem;
+          border-radius: 8px;
+          border: 1px solid var(--color-border);
+          background: var(--color-surface);
+          color: var(--color-text-primary);
+          transition: all 0.2s ease;
+
+          &::placeholder {
+            color: #94a3b8;
+          }
+
+          &:focus {
+            outline: none;
+            border-color: #d97706;
+            box-shadow: 0 0 0 2px rgba(217, 119, 6, 0.15);
+          }
+        }
+
+        .search-clear-btn {
+          position: absolute;
+          right: 8px;
+          top: 50%;
+          transform: translateY(-50%);
+          width: 18px;
+          height: 18px;
+          border-radius: 50%;
+          border: none;
+          background: rgba(148, 163, 184, 0.25);
+          color: #64748b;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          font-size: 0.7rem;
+          cursor: pointer;
+          transition: all 0.15s ease;
+
+          &:hover {
+            background: rgba(239, 68, 68, 0.2);
+            color: #dc2626;
+          }
+        }
+      }
+
+      .theme-dark,
+      [data-theme='dark'] {
+        .toolbar-card {
+          background: #121418;
+          border-color: rgba(255, 255, 255, 0.08);
+        }
+
+        .tab-divider {
+          background: rgba(255, 255, 255, 0.1);
+        }
+
+        .status-tab {
+          color: #94a3b8;
+
+          .tab-count-badge {
+            background: rgba(255, 255, 255, 0.08);
+            color: #94a3b8;
+
+            &.has-count {
+              background: rgba(245, 158, 11, 0.18);
+              color: #fbbf24;
+            }
+          }
+
+          &:hover {
+            background: rgba(255, 255, 255, 0.06);
+            color: #f1f5f9;
+          }
+
+          &.active {
+            background: #202632;
+            border-color: rgba(251, 191, 36, 0.4);
+            color: #ffffff;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+
+            .tab-count-badge {
+              background: rgba(255, 255, 255, 0.2);
+              color: #ffffff;
+
+              &.has-count {
+                background: #fbbf24;
+                color: #121418;
+              }
+            }
+          }
+        }
+
+        .search-wrap {
+          .search-icon {
+            color: #64748b;
+          }
+
+          .search-input {
+            background: #181b22;
+            border-color: rgba(255, 255, 255, 0.12);
+            color: #f1f5f9;
+
+            &::placeholder {
+              color: #64748b;
+            }
+
+            &:focus {
+              border-color: #fbbf24;
+              box-shadow: 0 0 0 2px rgba(251, 191, 36, 0.2);
+            }
+          }
+
+          .search-clear-btn {
+            background: rgba(255, 255, 255, 0.15);
+            color: #cbd5e1;
+
+            &:hover {
+              background: rgba(248, 113, 113, 0.3);
+              color: #f87171;
+            }
+          }
         }
       }
 
@@ -2261,6 +2993,324 @@ import { AdminAuthService } from '../../../core/services/admin-auth.service';
         &.card-selected {
           border-color: var(--color-crimson);
           box-shadow: 0 0 0 2px rgba(139, 0, 0, 0.15), 0 8px 24px rgba(0, 0, 0, 0.1);
+        }
+      }
+
+      /* Completed Order Card Editorial Layout */
+      .completed-board-card {
+        padding: 14px 16px;
+        gap: 10px;
+
+        &:hover {
+          border-color: var(--color-border);
+          box-shadow: 0 6px 20px rgba(0, 0, 0, 0.07);
+        }
+
+        /* Row 1: (customer name) ---------------- (status) */
+        .completed-row-1 {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          gap: 10px;
+
+          .cust-info {
+            display: flex;
+            align-items: baseline;
+            gap: 6px;
+            min-width: 0;
+            overflow: hidden;
+
+            .cust-name-main {
+              font-size: 0.9375rem;
+              font-weight: 700;
+              color: var(--color-text-primary);
+              white-space: nowrap;
+              overflow: hidden;
+              text-overflow: ellipsis;
+              letter-spacing: -0.01em;
+            }
+
+            .cust-phone-inline {
+              font-size: 0.75rem;
+              color: var(--color-text-muted);
+              font-weight: 500;
+              white-space: nowrap;
+            }
+          }
+        }
+
+        /* Row 2: (table number) ----------------- (time) */
+        .completed-row-2 {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          gap: 10px;
+
+          .table-info {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+
+            .completed-tbl-badge {
+              font-weight: 700;
+              font-size: 0.8125rem;
+              padding: 2px 8px;
+              border-radius: var(--radius-xs);
+              background: var(--color-bone-light);
+              border: 1px solid var(--color-border-subtle);
+              color: var(--color-text-primary);
+              display: inline-flex;
+              align-items: center;
+              gap: 5px;
+            }
+          }
+
+          .ord-time {
+            font-size: 0.75rem;
+            color: var(--color-text-muted);
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            font-weight: 500;
+          }
+        }
+
+        /* Row 3: (order id) --------------------- (who served) */
+        .completed-row-3 {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          gap: 10px;
+
+          .completed-ord-num {
+            font-size: 0.8125rem;
+            font-weight: 700;
+            font-family: var(--font-mono, monospace);
+            color: var(--color-text-secondary);
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+          }
+
+          .completed-server-cell {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            font-size: 0.75rem;
+
+            .server-caption {
+              color: var(--color-text-muted);
+              font-size: 0.75rem;
+            }
+
+            .server-name-text {
+              font-weight: 600;
+              color: var(--color-text-primary);
+              max-width: 140px;
+              overflow: hidden;
+              text-overflow: ellipsis;
+              white-space: nowrap;
+            }
+
+            .btn-unlock-server-xs {
+              border: none;
+              background: transparent;
+              color: var(--color-text-muted);
+              cursor: pointer;
+              padding: 2px 4px;
+              border-radius: 3px;
+              display: inline-flex;
+              align-items: center;
+              font-size: 0.8rem;
+              transition: all 0.15s;
+
+              &:hover {
+                color: var(--color-crimson);
+                background: rgba(220, 38, 38, 0.1);
+              }
+            }
+          }
+        }
+
+        /* Row 4: (payment method) ------- (printed receipt) ------- (Invoice) */
+        .completed-row-4 {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 8px;
+          padding: 6px 0;
+          border-top: 1px dashed var(--color-border);
+          border-bottom: 1px dashed var(--color-border);
+
+          .meta-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            padding: 3px 8px;
+            border-radius: var(--radius-xs);
+            font-size: 0.75rem;
+            font-weight: 700;
+            white-space: nowrap;
+
+            &.pill-paid {
+              background: var(--color-success-bg, rgba(34, 197, 94, 0.12));
+              color: var(--color-success, #16a34a);
+              border: 1px solid rgba(34, 197, 94, 0.25);
+            }
+
+            &.pill-printed {
+              background: rgba(184, 134, 11, 0.12);
+              color: #7d6514;
+              border: 1px solid rgba(184, 134, 11, 0.3);
+            }
+          }
+
+          .btn-invoice-action {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            padding: 4px 10px;
+            font-size: 0.75rem;
+            font-weight: 700;
+            border-radius: var(--radius-xs);
+            background: var(--color-surface);
+            border: 1px solid var(--color-border);
+            color: var(--color-crimson);
+            text-decoration: none;
+            cursor: pointer;
+            transition: all 0.15s ease;
+
+            &:hover {
+              background: var(--color-crimson);
+              color: #ffffff;
+              border-color: var(--color-crimson);
+            }
+
+            &.btn-wa-action {
+              color: #25d366;
+              border-color: rgba(37, 211, 102, 0.4);
+              &:hover {
+                background: #25d366;
+                color: #ffffff;
+                border-color: #25d366;
+              }
+            }
+          }
+        }
+
+        /* Inset Box: Order Details & Prices */
+        .completed-items-inset-box {
+          background: var(--color-bone-light);
+          border: 1px solid var(--color-border-subtle);
+          border-radius: var(--radius-sm);
+          padding: 8px 10px;
+          margin-top: 2px;
+
+          .items-summary-list {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+            max-height: 140px;
+            overflow-y: auto;
+            padding-right: 2px;
+
+            .item-line {
+              display: flex;
+              align-items: center;
+              justify-content: space-between;
+              font-size: 0.8125rem;
+              gap: 8px;
+
+              .item-info-group {
+                display: flex;
+                align-items: baseline;
+                gap: 5px;
+                min-width: 0;
+                overflow: hidden;
+
+                .qty-pill {
+                  font-weight: 800;
+                  font-size: 0.75rem;
+                  color: var(--color-crimson);
+                  flex-shrink: 0;
+                }
+
+                .dish-name {
+                  font-weight: 600;
+                  color: var(--color-text-primary);
+                  white-space: nowrap;
+                  overflow: hidden;
+                  text-overflow: ellipsis;
+                }
+
+                .portion-label {
+                  font-size: 0.6875rem;
+                  color: var(--color-text-muted);
+                  font-weight: 500;
+                  flex-shrink: 0;
+                }
+              }
+
+              .line-cost {
+                font-weight: 700;
+                color: var(--color-text-primary);
+                font-size: 0.8125rem;
+                flex-shrink: 0;
+                font-variant-numeric: tabular-nums;
+              }
+            }
+          }
+        }
+
+        /* Bottom Row: Total Amount */
+        .completed-total-strip {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          padding-top: 2px;
+
+          .sub-meta-left {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+
+            .discount-pill {
+              font-size: 0.72rem;
+              font-weight: 700;
+              color: var(--color-success, #16a34a);
+              background: var(--color-success-bg, rgba(34, 197, 94, 0.12));
+              padding: 2px 6px;
+              border-radius: 4px;
+              border: 1px solid rgba(34, 197, 94, 0.25);
+            }
+
+            .split-pill {
+              font-size: 0.72rem;
+              font-weight: 600;
+              color: var(--color-text-muted);
+            }
+          }
+
+          .total-amount-box {
+            display: flex;
+            align-items: baseline;
+            gap: 6px;
+            margin-left: auto;
+
+            .total-label-compact {
+              font-size: 0.75rem;
+              font-weight: 600;
+              color: var(--color-text-muted);
+            }
+
+            .payable-val-highlight {
+              font-size: 1.0625rem;
+              font-weight: 800;
+              color: var(--color-crimson);
+              letter-spacing: -0.01em;
+              font-variant-numeric: tabular-nums;
+            }
+          }
         }
       }
 
@@ -2378,10 +3428,13 @@ import { AdminAuthService } from '../../../core/services/admin-auth.service';
         background: var(--color-surface);
         border: 1px solid var(--color-border);
         color: var(--color-crimson);
+        font-family: inherit;
         font-weight: 800;
         font-size: 0.8125rem;
+        line-height: 1.2;
         white-space: nowrap;
         flex-shrink: 0;
+        cursor: default;
 
         i {
           font-size: 0.95rem;
@@ -2392,6 +3445,41 @@ import { AdminAuthService } from '../../../core/services/admin-auth.service';
           border-color: rgba(212, 175, 55, 0.4);
           color: var(--color-warning);
         }
+
+        &.reallot-clickable {
+          cursor: pointer;
+          transition: all 0.15s ease;
+          &:hover {
+            border-color: var(--color-crimson);
+            background: #fff5f5;
+            box-shadow: 0 2px 6px rgba(220, 38, 38, 0.15);
+          }
+        }
+      }
+
+      .btn-change-table-pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        padding: 2px 8px;
+        font-size: 0.75rem;
+        font-weight: 600;
+        background: #f8fafc;
+        border: 1px solid #cbd5e1;
+        border-radius: 6px;
+        color: #334155;
+        cursor: pointer;
+        transition: all 0.15s ease;
+        &:hover {
+          background: #fee2e2;
+          border-color: #ef4444;
+          color: #dc2626;
+        }
+      }
+
+      .reallot-table-modal {
+        max-width: 480px;
+        width: 100%;
       }
 
       .guest-meta {
@@ -2425,38 +3513,100 @@ import { AdminAuthService } from '../../../core/services/admin-auth.service';
         display: flex;
         align-items: center;
         gap: 8px;
-        padding: 5px 10px;
-        background: var(--color-surface);
-        border: 1px dashed var(--color-border);
-        border-radius: var(--radius-xs);
+        padding: 5px 8px;
+        background: var(--color-bone, #f8fafc);
+        border: 1px solid var(--color-border, #e2e8f0);
+        border-radius: var(--radius-sm, 8px);
         font-size: 0.75rem;
+        transition: border-color var(--transition-fast, 0.15s ease), background var(--transition-fast, 0.15s ease);
+
+        &:hover {
+          border-color: var(--color-border-hover, #cbd5e1);
+        }
+
+        &.has-server {
+          background: var(--color-bone-light, #f8fafc);
+        }
       }
 
       .server-label {
-        color: var(--color-text-muted);
+        color: var(--color-text-secondary, #64748b);
+        font-size: 0.72rem;
         font-weight: 600;
+        letter-spacing: 0.02em;
         display: flex;
         align-items: center;
         gap: 4px;
         white-space: nowrap;
+        user-select: none;
+
+        i {
+          font-size: 0.82rem;
+          color: var(--color-text-muted, #94a3b8);
+        }
+      }
+
+      .server-select-wrapper {
+        position: relative;
+        flex: 1;
+        display: flex;
+        align-items: center;
+        min-width: 0;
       }
 
       .server-select {
-        flex: 1;
+        width: 100%;
+        appearance: none;
+        -webkit-appearance: none;
+        -moz-appearance: none;
         font-size: 0.75rem;
-        padding: 3px 6px;
-        border: 1px solid var(--color-border);
-        border-radius: var(--radius-xs);
-        background: var(--color-surface);
-        color: var(--color-text-primary);
+        font-weight: 500;
+        padding: 4px 22px 4px 8px;
+        border: 1px solid var(--color-border, #e2e8f0);
+        border-radius: var(--radius-xs, 6px);
+        background: var(--color-surface, #ffffff);
+        color: var(--color-text-primary, #1e293b);
         outline: none;
         cursor: pointer;
+        transition: all var(--transition-fast, 0.15s ease);
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        overflow: hidden;
+
+        &:hover {
+          border-color: var(--color-border-hover, #cbd5e1);
+        }
+
+        &:focus {
+          border-color: var(--color-primary, #6366f1);
+          box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.12);
+        }
+
+        &.is-unassigned {
+          color: var(--color-text-muted, #94a3b8);
+        }
+      }
+
+      .server-select-caret {
+        position: absolute;
+        right: 7px;
+        top: 50%;
+        transform: translateY(-50%);
+        pointer-events: none;
+        font-size: 0.7rem;
+        color: var(--color-text-muted, #64748b);
       }
 
       .server-bar-locked {
-        background: rgba(0, 0, 0, 0.02);
-        border-style: solid;
-        border-color: rgba(0, 0, 0, 0.08);
+        background: var(--color-surface-soft, rgba(0, 0, 0, 0.02));
+        border-color: var(--color-border-subtle, rgba(0, 0, 0, 0.08));
+
+        .server-label {
+          color: var(--color-text-muted, #94a3b8);
+          i {
+            color: var(--color-text-muted, #94a3b8);
+          }
+        }
       }
 
       .server-completed-box {
@@ -2465,12 +3615,13 @@ import { AdminAuthService } from '../../../core/services/admin-auth.service';
         justify-content: space-between;
         gap: 6px;
         flex: 1;
+        min-width: 0;
       }
 
       .server-name-badge {
         font-size: 0.75rem;
         font-weight: 600;
-        color: var(--color-onyx);
+        color: var(--color-text-primary, #1e293b);
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
@@ -2481,14 +3632,14 @@ import { AdminAuthService } from '../../../core/services/admin-auth.service';
         align-items: center;
         gap: 4px;
         padding: 2px 7px;
-        border-radius: var(--radius-xs);
-        border: 1px solid var(--color-border);
-        background: var(--color-surface);
-        color: var(--color-text-secondary);
+        border-radius: var(--radius-xs, 4px);
+        border: 1px solid var(--color-border, #cbd5e1);
+        background: var(--color-surface, #ffffff);
+        color: var(--color-text-secondary, #475569);
         font-size: 0.7rem;
         font-weight: 600;
         cursor: pointer;
-        transition: all var(--transition-fast);
+        transition: all var(--transition-fast, 0.15s ease);
 
         &:hover {
           background: #eff6ff;
@@ -2848,6 +3999,27 @@ import { AdminAuthService } from '../../../core/services/admin-auth.service';
         }
       }
 
+      .btn-whatsapp {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        background: #25d366;
+        color: #ffffff;
+        font-weight: 600;
+        border: none;
+        cursor: pointer;
+        transition: background 0.15s ease;
+
+        &:hover {
+          background: #20ba5a;
+          color: #ffffff;
+        }
+
+        i {
+          font-size: 1rem;
+        }
+      }
+
       .empty-orders-panel {
         grid-column: 1 / -1;
         background: var(--color-surface);
@@ -3050,7 +4222,7 @@ import { AdminAuthService } from '../../../core/services/admin-auth.service';
 
         &:hover:not(.is-out-of-stock) {
           border-color: var(--color-crimson);
-          background: #fffdf9;
+          background: var(--color-surface-hover);
           transform: translateX(2px);
           box-shadow: var(--shadow-xs);
         }
@@ -3375,7 +4547,243 @@ import { AdminAuthService } from '../../../core/services/admin-auth.service';
         display: flex;
         flex-direction: column;
         gap: 8px;
+        margin-bottom: 14px;
+      }
+
+      .settle-discount-card {
         margin-bottom: 18px;
+        padding: 12px 14px;
+        background: var(--color-bone-light, #f8fafc);
+        border: 1px solid var(--color-border, #e2e8f0);
+        border-radius: var(--radius-sm, 8px);
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+
+      .discount-header-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+      }
+
+      .discount-title {
+        font-size: 0.8rem;
+        font-weight: 700;
+        color: var(--color-onyx, #1e293b);
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+
+        i {
+          color: var(--color-primary, #6366f1);
+          font-size: 0.95rem;
+        }
+      }
+
+      .discount-segmented-control {
+        display: inline-flex;
+        background: var(--color-surface, #ffffff);
+        border: 1px solid var(--color-border, #e2e8f0);
+        border-radius: 6px;
+        padding: 2px;
+        gap: 2px;
+      }
+
+      .seg-btn {
+        background: transparent;
+        border: none;
+        padding: 3px 9px;
+        font-size: 0.72rem;
+        font-weight: 600;
+        color: var(--color-text-secondary, #64748b);
+        border-radius: 4px;
+        cursor: pointer;
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        transition: all var(--transition-fast, 0.15s ease);
+
+        &:hover {
+          color: var(--color-text-primary, #1e293b);
+        }
+
+        &.active {
+          background: var(--color-primary, #6366f1);
+          color: #ffffff;
+        }
+      }
+
+      .custom-disc-pane {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+
+      .inr-input-wrapper {
+        position: relative;
+        display: flex;
+        align-items: center;
+      }
+
+      .inr-prefix {
+        position: absolute;
+        left: 10px;
+        font-size: 0.85rem;
+        font-weight: 700;
+        color: var(--color-text-muted, #94a3b8);
+        pointer-events: none;
+      }
+
+      .inr-input {
+        width: 100%;
+        padding: 6px 12px 6px 26px;
+        font-size: 0.825rem;
+        font-weight: 600;
+        border: 1px solid var(--color-border, #e2e8f0);
+        border-radius: 6px;
+        background: var(--color-surface, #ffffff);
+        color: var(--color-text-primary, #1e293b);
+        outline: none;
+        transition: all var(--transition-fast, 0.15s ease);
+
+        &:focus {
+          border-color: var(--color-primary, #6366f1);
+          box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.12);
+        }
+      }
+
+      .btn-disc-clear {
+        position: absolute;
+        right: 8px;
+        background: transparent;
+        border: none;
+        color: var(--color-text-muted, #94a3b8);
+        font-size: 0.72rem;
+        cursor: pointer;
+        display: inline-flex;
+        align-items: center;
+        gap: 2px;
+        padding: 2px 4px;
+
+        &:hover {
+          color: var(--color-danger, #ef4444);
+        }
+      }
+
+      .quick-disc-chips {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+      }
+
+      .disc-chip {
+        background: var(--color-surface, #ffffff);
+        border: 1px solid var(--color-border, #e2e8f0);
+        border-radius: 5px;
+        padding: 3px 8px;
+        font-size: 0.72rem;
+        font-weight: 600;
+        color: var(--color-text-secondary, #475569);
+        cursor: pointer;
+        transition: all var(--transition-fast, 0.15s ease);
+
+        &:hover {
+          background: #f1f5f9;
+          border-color: #cbd5e1;
+          color: var(--color-text-primary, #1e293b);
+        }
+
+        &.chip-active {
+          background: #eff6ff;
+          border-color: #3b82f6;
+          color: #1d4ed8;
+          font-weight: 700;
+        }
+
+        &.chip-round {
+          color: #047857;
+          border-color: #a7f3d0;
+          background: #ecfdf5;
+
+          &:hover {
+            background: #d1fae5;
+          }
+        }
+      }
+
+      .coupon-disc-pane {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+
+      .coupon-select-wrapper {
+        position: relative;
+        display: flex;
+        align-items: center;
+      }
+
+      .coupon-select {
+        width: 100%;
+        appearance: none;
+        -webkit-appearance: none;
+        padding: 6px 26px 6px 10px;
+        font-size: 0.78rem;
+        font-weight: 500;
+        border: 1px solid var(--color-border, #e2e8f0);
+        border-radius: 6px;
+        background: var(--color-surface, #ffffff);
+        color: var(--color-text-primary, #1e293b);
+        outline: none;
+        cursor: pointer;
+        transition: all var(--transition-fast, 0.15s ease);
+
+        &:focus {
+          border-color: var(--color-primary, #6366f1);
+          box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.12);
+        }
+      }
+
+      .coupon-caret {
+        position: absolute;
+        right: 9px;
+        font-size: 0.72rem;
+        color: var(--color-text-muted, #94a3b8);
+        pointer-events: none;
+      }
+
+      .applied-coupon-badge {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 6px;
+        background: #ecfdf5;
+        border: 1px solid #a7f3d0;
+        border-radius: 6px;
+        padding: 5px 8px;
+        font-size: 0.72rem;
+        color: #065f46;
+
+        i {
+          font-size: 0.85rem;
+          color: #059669;
+        }
+      }
+
+      .btn-disc-clear-pill {
+        background: transparent;
+        border: none;
+        color: #065f46;
+        cursor: pointer;
+        padding: 2px 4px;
+        display: inline-flex;
+        align-items: center;
+
+        &:hover {
+          color: #ef4444;
+        }
       }
 
       .settle-row {
@@ -3791,6 +5199,12 @@ import { AdminAuthService } from '../../../core/services/admin-auth.service';
         }
       }
 
+      .pickup-ref-input {
+        background: var(--color-surface-hover);
+        font-weight: 700;
+        color: #7d6514;
+      }
+
       .catalog-items-grid {
         display: flex;
         flex-direction: column;
@@ -4047,6 +5461,71 @@ import { AdminAuthService } from '../../../core/services/admin-auth.service';
           color: var(--color-crimson);
           font-size: 0.8125rem;
           font-weight: 500;
+        }
+      }
+
+      .whatsapp-dialog-card {
+        max-width: 480px;
+      }
+
+      .auth-icon-badge.whatsapp-badge {
+        background: rgba(37, 211, 102, 0.12) !important;
+        color: #25d366 !important;
+      }
+
+      .whatsapp-preview-box {
+        margin: 0;
+        padding: 10px 12px;
+        background: #f8fafc;
+        border: 1px solid var(--color-border, #e2e8f0);
+        border-radius: 6px;
+        font-family: monospace;
+        font-size: 0.75rem;
+        line-height: 1.45;
+        color: #334155;
+        white-space: pre-wrap;
+        word-break: break-word;
+        max-height: 180px;
+        overflow-y: auto;
+      }
+
+      .btn-whatsapp-action {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        background: #25d366;
+        color: #ffffff;
+        font-weight: 600;
+        font-size: 0.875rem;
+        padding: 8px 16px;
+        border-radius: var(--radius-sm, 6px);
+        border: none;
+        cursor: pointer;
+        transition: background 0.15s ease;
+
+        &:hover:not(:disabled) {
+          background: #20ba5a;
+        }
+
+        &:disabled {
+          opacity: 0.5;
+          cursor: not-allowed;
+        }
+
+        i {
+          font-size: 1.15rem;
+        }
+      }
+
+      .whatsapp-modal-footer {
+        display: flex;
+        align-items: center;
+        justify-content: flex-end;
+        gap: 8px;
+        flex-wrap: wrap;
+
+        a.btn {
+          text-decoration: none;
         }
       }
 
@@ -4670,6 +6149,10 @@ export class OrderQueueComponent {
   private adminAuth = inject(AdminAuthService);
   private router = inject(Router);
 
+  readonly isLoading = computed(
+    () => this.dataService.isOrdersLoading() || !this.dataService.ordersLoaded()
+  );
+
   // Order side panel drawer state
   selectedSidePanelOrderId = signal<string | null>(null);
   selectedSidePanelOrder = computed(() => {
@@ -4705,11 +6188,16 @@ export class OrderQueueComponent {
 
   @HostListener('document:keydown.escape')
   onEscapeKey(): void {
+    if (this.showChangeTableModal()) {
+      this.closeChangeTableModal();
+    }
     if (this.selectedSidePanelOrderId()) {
       this.closeOrderSidePanel();
     }
   }
 
+  network = inject(NetworkStatusService);
+  soundService = inject(SoundService);
   orders = this.mock.orders;
   tables = this.mock.tables;
   menuItems = this.mock.menuItems;
@@ -4718,12 +6206,98 @@ export class OrderQueueComponent {
   selectedStatus = signal<string>('ACTIVE');
   searchQuery = signal<string>('');
   latestNewOrderId = signal<string | null>(null);
-  soundEnabled = signal<boolean>(true);
+  lastSyncTime = signal<Date>(new Date());
+
+  streamStatusText = computed(() => {
+    if (!this.network.isOnline()) {
+      return 'Stream Offline';
+    }
+    return 'Live Order Stream';
+  });
+
+  streamTooltip = computed(() => {
+    if (!this.network.isOnline()) {
+      return 'Internet: Offline | Real-time cross-station order stream is paused until network reconnects';
+    }
+    const channel = this.network.isBroadcastChannelSupported()
+      ? 'BroadcastChannel Active (Zero-latency)'
+      : 'LocalStorage Sync Active';
+    const timeStr = this.lastSyncTime().toLocaleTimeString();
+    return `Status: Connected | Transport: ${channel} | Active Queue: ${this.activeOrdersCount()} | Last Event: ${timeStr}`;
+  });
+
+  emptyStateTitle = computed(() => {
+    const q = this.searchQuery().trim();
+    if (q) return `No orders matching "${q}"`;
+    const st = this.selectedStatus();
+    if (st === 'ACTIVE') {
+      return this.orders().length > 0 ? 'No Active Orders' : 'Order Queue Clear';
+    }
+    if (st === 'COMPLETED') return 'No Completed Orders Yet';
+    return `No ${st.charAt(0) + st.slice(1).toLowerCase()} Orders`;
+  });
+
+  emptyStateMessage = computed(() => {
+    const q = this.searchQuery().trim();
+    if (q) return 'Check the order number, guest name, or clear the search query.';
+    const st = this.selectedStatus();
+    if (st === 'ACTIVE' && this.orders().length > 0) {
+      const compCount = this.countByStatus('COMPLETED');
+      return `All active tickets are fulfilled. You have ${compCount} completed order${compCount === 1 ? '' : 's'} in today's archive.`;
+    }
+    return 'Incoming dine-in QR orders, takeaway tickets, and walk-ins appear here automatically.';
+  });
+
+  emptyStateActionText = computed(() => {
+    if (this.searchQuery().trim()) return 'Clear Search';
+    return 'New Order';
+  });
+
+  emptyStateActionIcon = computed(() => {
+    if (this.searchQuery().trim()) return 'ph-x';
+    return 'ph-plus-circle';
+  });
+
+  emptyStateSecondaryText = computed(() => {
+    if (this.searchQuery().trim()) return '';
+    const st = this.selectedStatus();
+    if (st === 'ACTIVE' && this.countByStatus('COMPLETED') > 0) {
+      return `View Completed (${this.countByStatus('COMPLETED')})`;
+    }
+    if (st !== 'ACTIVE' && this.activeOrdersCount() > 0) {
+      return `View Active (${this.activeOrdersCount()})`;
+    }
+    return '';
+  });
+
+  onEmptyStateAction() {
+    if (this.searchQuery().trim()) {
+      this.searchQuery.set('');
+    } else {
+      this.openManualOrderModal();
+    }
+  }
+
+  onEmptyStateSecondary() {
+    const st = this.selectedStatus();
+    if (st === 'ACTIVE' && this.countByStatus('COMPLETED') > 0) {
+      this.selectedStatus.set('COMPLETED');
+    } else {
+      this.selectedStatus.set('ACTIVE');
+    }
+  }
 
   constructor() {
+    let lastHandledEventTimestamp = 0;
     effect(() => {
       const ev = this.dataService.liveOrderEvent();
-      if (ev && ev.type === 'ORDER_CREATED' && ev.order) {
+      if (!ev) return;
+      if (ev.timestamp && ev.timestamp === lastHandledEventTimestamp) return;
+      lastHandledEventTimestamp = ev.timestamp || Date.now();
+
+      this.lastSyncTime.set(new Date());
+
+      if (ev.type === 'ORDER_CREATED' && ev.order) {
         const order = ev.order;
         this.latestNewOrderId.set(order.id);
         const loc =
@@ -4734,9 +6308,7 @@ export class OrderQueueComponent {
           `New live QR order ${order.orderNumber} placed for ${loc} (${order.items.length} dishes)`,
           '🔔 Real-time Live Order',
         );
-        if (this.soundEnabled()) {
-          this.playOrderNotificationSound();
-        }
+        this.soundService.playOrderArrivalSound();
         setTimeout(() => {
           if (this.latestNewOrderId() === order.id) {
             this.latestNewOrderId.set(null);
@@ -4744,27 +6316,6 @@ export class OrderQueueComponent {
         }, 8000);
       }
     });
-  }
-
-  private playOrderNotificationSound(): void {
-    try {
-      const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
-      if (!AudioCtx) return;
-      const ctx = new AudioCtx();
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
-      osc.type = 'sine';
-      osc.frequency.setValueAtTime(587.33, ctx.currentTime);
-      osc.frequency.exponentialRampToValueAtTime(880, ctx.currentTime + 0.12);
-      gain.gain.setValueAtTime(0.15, ctx.currentTime);
-      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.35);
-      osc.connect(gain);
-      gain.connect(ctx.destination);
-      osc.start();
-      osc.stop(ctx.currentTime + 0.35);
-    } catch {
-      // Audio autoplay policy fallback
-    }
   }
 
   showManualModal = false;
@@ -4782,10 +6333,47 @@ export class OrderQueueComponent {
   splitCount = signal<number>(2);
   isSettling = signal<boolean>(false);
 
+  // WhatsApp Delivery State
+  showWhatsAppModal = signal<boolean>(false);
+  whatsAppOrder = signal<Order | null>(null);
+  whatsAppPhone = signal<string>('');
+
+  whatsAppMessagePreview = computed(() => {
+    const ord = this.whatsAppOrder();
+    if (!ord) return '';
+    const restName = this.dataService.restaurant()?.name || 'GuruKripa Dhaba';
+    return buildWhatsAppBillMessage(restName, ord, null);
+  });
+
+  whatsAppWebUrl = computed(() => {
+    const ord = this.whatsAppOrder();
+    if (!ord) return '';
+    const restName = this.dataService.restaurant()?.name || 'GuruKripa Dhaba';
+    return getWhatsAppWebUrl(this.whatsAppPhone(), restName, ord, null);
+  });
+
+  whatsAppAppUrl = computed(() => {
+    const ord = this.whatsAppOrder();
+    if (!ord) return '';
+    const restName = this.dataService.restaurant()?.name || 'GuruKripa Dhaba';
+    return getWhatsAppAppUrl(this.whatsAppPhone(), restName, ord, null);
+  });
+
+  // Settlement Discount & Offers state
+  settleDiscountMode = signal<'CUSTOM' | 'COUPON'>('CUSTOM');
+  customDiscountRupees = signal<number>(0);
+  selectedCouponCode = signal<string>('');
+  activeCoupons = computed(() => (this.mock.coupons ? this.mock.coupons().filter((c) => c.isActive) : []));
+
   // Cancel Order Modal state
   showCancelModal = signal<boolean>(false);
   orderToCancel = signal<Order | null>(null);
   cancellationReason = signal<string>('');
+
+  // Reallot / Change Table Modal state
+  showChangeTableModal = signal<boolean>(false);
+  orderForTableChange = signal<Order | null>(null);
+  selectedNewTableId = signal<string>('');
   cancelError = signal<string>('');
   isCancelling = signal<boolean>(false);
   readonly commonCancelReasons: string[] = [
@@ -4815,6 +6403,7 @@ export class OrderQueueComponent {
   editingOrder = signal<Order | null>(null);
   editCustomerName = signal<string>('');
   editCustomerPhone = signal<string>('');
+  editTableId = signal<string>('');
   editItems = signal<OrderItem[]>([]);
   editDishSearch = signal<string>('');
   isSavingEdit = signal<boolean>(false);
@@ -5094,13 +6683,16 @@ export class OrderQueueComponent {
     // Persist to backend database via API
     this.dataService.addOrder(newOrder);
 
-    // If dining at a table, mark table as OCCUPIED
+    // If dining at a table, mark table as OCCUPIED and link activeOrderId
     if (!isTakeaway && selectedTable) {
       const updatedTables = this.mock
         .tables()
-        .map((t) => (t.id === selectedTable!.id ? { ...t, status: 'OCCUPIED' as const } : t));
+        .map((t) =>
+          t.id === selectedTable.id ? { ...t, status: 'OCCUPIED' as const, activeOrderId: newOrder.id } : t,
+        );
       this.mock.tables.set(updatedTables);
       this.mock.saveLocal('tables', updatedTables);
+      this.mock.updateTableStatus(selectedTable.id, 'OCCUPIED');
     }
 
     this.toastService.success(
@@ -5109,6 +6701,101 @@ export class OrderQueueComponent {
         : `Manual order ${newOrder.orderNumber} placed for Table ${newOrder.tableNumber}`,
     );
     this.showManualModal = false;
+  }
+
+  handleTableBadgeClick(event: Event, order: Order): void {
+    event.stopPropagation();
+    if (!this.isOrderPaid(order)) {
+      this.openChangeTableModal(order);
+    }
+  }
+
+  openChangeTableModal(order: Order): void {
+    if (this.isOrderPaid(order)) {
+      this.toastService.warning('Cannot change table for settled or completed orders.');
+      return;
+    }
+    this.orderForTableChange.set(order);
+    this.selectedNewTableId.set(order.tableId || '');
+    this.showChangeTableModal.set(true);
+  }
+
+  closeChangeTableModal(): void {
+    this.showChangeTableModal.set(false);
+    this.orderForTableChange.set(null);
+    this.selectedNewTableId.set('');
+  }
+
+  confirmChangeTable(): void {
+    const ord = this.orderForTableChange();
+    const newTableId = this.selectedNewTableId();
+    if (!ord || !newTableId) return;
+
+    const newTable = this.tables().find((t) => t.id === newTableId || t.number === newTableId);
+    if (!newTable) {
+      this.toastService.error('Selected table not found');
+      return;
+    }
+
+    if (ord.tableId === newTable.id) {
+      this.toastService.info(`Order is already allotted to Table ${newTable.number}`);
+      this.closeChangeTableModal();
+      return;
+    }
+
+    const res = this.mock.transferTable({
+      orderId: ord.id,
+      destinationTableId: newTable.id,
+      staffName: 'Admin / POS',
+    });
+
+    if (!res.success) {
+      this.toastService.warning(res.error || 'Cannot reallot table');
+      return;
+    }
+
+    // Update backend table statuses via API & local state
+    this.mock.updateTableStatus(newTable.id, 'OCCUPIED');
+    if (ord.tableId && ord.tableId !== newTable.id) {
+      const remainingActive = this.mock
+        .orders()
+        .some(
+          (o) =>
+            o.id !== ord.id &&
+            o.tableId === ord.tableId &&
+            !['COMPLETED', 'CANCELLED'].includes(o.status),
+        );
+      if (!remainingActive) {
+        this.mock.updateTableStatus(ord.tableId, 'AVAILABLE');
+      }
+    }
+
+    // Update local orders state & persistence
+    const currentOrders = this.mock.orders().map((o) =>
+      o.id === ord.id
+        ? {
+            ...o,
+            tableId: newTable.id,
+            tableNumber: newTable.number,
+            orderType: 'DINE_IN' as const,
+            timeline: [
+              ...o.timeline,
+              {
+                status: o.status,
+                timestamp: new Date().toISOString(),
+                note: `Table changed from Table ${ord.tableNumber || 'Unassigned'} to Table ${newTable.number}`,
+              },
+            ],
+          }
+        : o,
+    );
+    this.mock.orders.set(currentOrders);
+    this.mock.saveLocal('orders', currentOrders);
+
+    this.toastService.success(
+      `Order ${ord.orderNumber} successfully allotted to Table ${newTable.number} (${newTable.section})`,
+    );
+    this.closeChangeTableModal();
   }
 
   getServerStaffName(staffId: string | undefined): string {
@@ -5202,6 +6889,12 @@ export class OrderQueueComponent {
   }
 
   advanceStatus(order: Order, nextStatus: OrderStatus): void {
+    const live = this.orders().find((o) => o.id === order.id) || order;
+    if (live.status === nextStatus) return;
+    const currentStage = this.getOrderStageIndex(live.status);
+    const targetStage = this.getOrderStageIndex(nextStatus);
+    if (targetStage >= 0 && targetStage < currentStage && nextStatus !== 'CANCELLED') return;
+
     const res = this.mock.updateOrderStatusAtomic(order.id, nextStatus, {
       note: `Updated to ${nextStatus} by Floor Dispatch`,
     });
@@ -5217,11 +6910,90 @@ export class OrderQueueComponent {
   // --- Settle Bill Modal Actions ---
   openSettleModal(order: Order): void {
     this.selectedOrderForSettlement.set(order);
-    this.selectedPaymentMethod.set(order.paymentMethod === 'CASH' ? 'CASH' : 'UPI');
+    const defaultMethod = order.paymentMethod === 'CARD' ? 'CARD' : order.paymentMethod === 'UPI' ? 'UPI' : 'CASH';
+    this.selectedPaymentMethod.set(defaultMethod);
     this.settleMode.set('FULL');
     this.splitCount.set(2);
     this.isSettling.set(false);
+    this.customDiscountRupees.set(order.discountAmount || 0);
+    this.selectedCouponCode.set(order.appliedCouponCode || '');
+    this.settleDiscountMode.set(order.appliedCouponCode ? 'COUPON' : 'CUSTOM');
     this.showSettleModal.set(true);
+  }
+
+  getEffectiveDiscount(ord: Order | null): number {
+    if (!ord) return 0;
+    const grossTotal = Math.round(((ord.subtotal || 0) + (ord.taxAmount || 0)) * 100) / 100;
+    if (this.settleDiscountMode() === 'CUSTOM') {
+      const disc = Math.max(0, this.customDiscountRupees() || 0);
+      return Math.min(grossTotal, Math.round(disc * 100) / 100);
+    } else {
+      const code = this.selectedCouponCode();
+      if (!code) return 0;
+      const coup = this.activeCoupons().find((c) => c.code.toUpperCase() === code.toUpperCase());
+      if (!coup) return 0;
+      if (coup.minOrderValue && ord.subtotal < coup.minOrderValue) return 0;
+
+      let disc = 0;
+      if (coup.discountType === 'PERCENTAGE') {
+        disc = (grossTotal * coup.discountValue) / 100;
+        if (coup.maxDiscountAmount && disc > coup.maxDiscountAmount) {
+          disc = coup.maxDiscountAmount;
+        }
+      } else {
+        disc = coup.discountValue;
+      }
+      return Math.min(grossTotal, Math.round(disc * 100) / 100);
+    }
+  }
+
+  getSettlementTax(ord: Order | null): number {
+    if (!ord) return 0;
+    return ord.taxAmount;
+  }
+
+  getSettlementTotal(ord: Order | null): number {
+    if (!ord) return 0;
+    const grossTotal = Math.round(((ord.subtotal || 0) + (ord.taxAmount || 0)) * 100) / 100;
+    const effectiveDisc = this.getEffectiveDiscount(ord);
+    return Math.max(0, Math.round((grossTotal - effectiveDisc) * 100) / 100);
+  }
+
+  onCustomDiscountChange(event: Event, maxLimit: number): void {
+    const val = parseFloat((event.target as HTMLInputElement).value);
+    if (isNaN(val) || val < 0) {
+      this.customDiscountRupees.set(0);
+    } else {
+      this.customDiscountRupees.set(Math.min(maxLimit, Math.round(val)));
+    }
+    this.selectedCouponCode.set('');
+  }
+
+  applyQuickRupees(amount: number, maxLimit: number): void {
+    this.settleDiscountMode.set('CUSTOM');
+    this.customDiscountRupees.set(Math.min(maxLimit, amount));
+    this.selectedCouponCode.set('');
+  }
+
+  applyRoundOffDiscount(ord: Order): void {
+    this.settleDiscountMode.set('CUSTOM');
+    const grossTotal = Math.round(((ord.subtotal || 0) + (ord.taxAmount || 0)) * 100) / 100;
+    const roundedDown = Math.floor(grossTotal / 10) * 10;
+    const neededOff = Math.max(0, Math.round((grossTotal - roundedDown) * 100) / 100);
+    this.customDiscountRupees.set(neededOff);
+    this.selectedCouponCode.set('');
+  }
+
+  onSelectCoupon(code: string, subtotal: number): void {
+    this.selectedCouponCode.set(code);
+    if (code) {
+      this.customDiscountRupees.set(0);
+    }
+  }
+
+  clearDiscount(): void {
+    this.customDiscountRupees.set(0);
+    this.selectedCouponCode.set('');
   }
 
   closeSettleModal(): void {
@@ -5236,12 +7008,16 @@ export class OrderQueueComponent {
 
     this.isSettling.set(true);
     const method = this.selectedPaymentMethod();
+    const finalDiscount = this.getEffectiveDiscount(ord);
+    const appliedCode = this.settleDiscountMode() === 'COUPON' ? this.selectedCouponCode() : '';
 
     // 1. If not yet marked PAID and not split, perform authoritative settlement
     if (ord.paymentStatus !== 'PAID' && !ord.isSplit) {
       const settleRes = this.mock.settleOrder({
         orderId: ord.id,
         paymentMethod: method,
+        discountAmount: finalDiscount,
+        appliedCouponCode: appliedCode,
       });
 
       if (!settleRes.success) {
@@ -5254,7 +7030,7 @@ export class OrderQueueComponent {
 
     // 2. Advance operational status to COMPLETED
     const completeRes = this.mock.updateOrderStatusAtomic(ord.id, 'COMPLETED', {
-      note: `Bill settled via ${method} & marked COMPLETED by Floor Dispatch`,
+      note: `Bill settled via ${method}${finalDiscount > 0 ? ` with ₹${finalDiscount} discount` : ''} & marked COMPLETED by Floor Dispatch`,
     });
 
     this.isSettling.set(false);
@@ -5263,6 +7039,7 @@ export class OrderQueueComponent {
         `Order ${ord.orderNumber} successfully settled & marked COMPLETED via ${method}`,
       );
       this.closeSettleModal();
+      this.printOrderReceipt(ord);
     } else {
       this.toastService.error(completeRes.error || `Could not complete order ${ord.orderNumber}`);
       this.closeSettleModal();
@@ -5362,6 +7139,8 @@ export class OrderQueueComponent {
     }
     this.isSettling.set(false);
     this.toastService.success(`All remaining split parts settled via ${tender}.`);
+    this.closeSettleModal();
+    this.printOrderReceipt(order);
   }
 
   // --- Order Cancellation Handlers ---
@@ -5470,6 +7249,7 @@ export class OrderQueueComponent {
     this.editingOrder.set(order);
     this.editCustomerName.set(order.customerName);
     this.editCustomerPhone.set(order.customerPhone || '');
+    this.editTableId.set(order.tableId || '');
     this.editItems.set(order.items.map((i) => ({ ...i })));
     this.editDishSearch.set('');
     this.isSavingEdit.set(false);
@@ -5565,6 +7345,33 @@ export class OrderQueueComponent {
       ? `Order modified with Admin Override after settlement (New Total: ₹${tot})`
       : `Order modified by Dispatch: Items updated (New Total: ₹${tot})`;
 
+    const newTblId = this.editTableId();
+    const oldTblId = ord.tableId;
+    let newTableNumber = ord.tableNumber;
+    let newOrderType = ord.orderType;
+
+    if (newTblId && newTblId !== oldTblId) {
+      const newTable = this.tables().find((t) => t.id === newTblId || t.number === newTblId);
+      if (newTable) {
+        newTableNumber = newTable.number;
+        newOrderType = 'DINE_IN';
+        this.mock.updateTableStatus(newTable.id, 'OCCUPIED');
+        if (oldTblId) {
+          const remainingActive = this.mock
+            .orders()
+            .some(
+              (o) =>
+                o.id !== ord.id &&
+                o.tableId === oldTblId &&
+                !['COMPLETED', 'CANCELLED'].includes(o.status),
+            );
+          if (!remainingActive) {
+            this.mock.updateTableStatus(oldTblId, 'AVAILABLE');
+          }
+        }
+      }
+    }
+
     const updatedTimeline = [
       ...ord.timeline,
       {
@@ -5580,6 +7387,9 @@ export class OrderQueueComponent {
           ...o,
           customerName: this.editCustomerName().trim() || o.customerName,
           customerPhone: this.editCustomerPhone().trim() || o.customerPhone,
+          tableId: newTblId || o.tableId,
+          tableNumber: newTableNumber,
+          orderType: newOrderType,
           items: [...this.editItems()],
           subtotal: sub,
           taxAmount: tax,
@@ -5602,6 +7412,57 @@ export class OrderQueueComponent {
     this.toastService.success(`Order ${ord.orderNumber} successfully updated.`);
   }
 
+  // --- WhatsApp Bill Delivery Actions ---
+  openWhatsAppModal(ord: Order): void {
+    this.whatsAppOrder.set(ord);
+    this.whatsAppPhone.set(ord.customerPhone || '');
+    this.showWhatsAppModal.set(true);
+  }
+
+  closeWhatsAppModal(): void {
+    this.showWhatsAppModal.set(false);
+    this.whatsAppOrder.set(null);
+    this.whatsAppPhone.set('');
+  }
+
+  copyBillToClipboard(): void {
+    const text = this.whatsAppMessagePreview();
+    if (navigator?.clipboard?.writeText) {
+      navigator.clipboard.writeText(text).then(
+        () => this.toastService.success('Bill receipt copied to clipboard!'),
+        () => this.toastService.info('Please select and copy text manually from preview box.'),
+      );
+    } else {
+      this.toastService.info('Please select and copy text manually from preview box.');
+    }
+  }
+
+  onWhatsAppLinkClicked(url?: string): void {
+    if (url) {
+      launchExternalUrl(url);
+    }
+    this.toastService.success('WhatsApp opened with customer bill message!');
+    setTimeout(() => this.closeWhatsAppModal(), 400);
+  }
+
+  sendWhatsAppBill(): void {
+    const ord = this.whatsAppOrder();
+    if (!ord) return;
+    const phone = this.whatsAppPhone().trim();
+    if (!phone) {
+      this.toastService.warning('Please enter customer WhatsApp phone number.');
+      return;
+    }
+    const restName = this.dataService.restaurant()?.name || 'GuruKripa Dhaba';
+    const ok = openWhatsAppBill(phone, restName, ord, null);
+    if (ok) {
+      this.toastService.success('WhatsApp opened with customer bill!');
+      this.closeWhatsAppModal();
+    } else {
+      this.toastService.error('Invalid phone number format. Please provide at least 10 digits.');
+    }
+  }
+
   onBackdropClick(event: MouseEvent, modalType?: string): void {
     if ((event.target as HTMLElement).classList.contains('modal-overlay')) {
       if (modalType === 'settle') {
@@ -5614,6 +7475,8 @@ export class OrderQueueComponent {
         this.cancelAdminPasswordModal();
       } else if (modalType === 'server-admin-password') {
         this.closeServerAdminModal();
+      } else if (modalType === 'whatsapp') {
+        this.closeWhatsAppModal();
       } else {
         this.showManualModal = false;
       }

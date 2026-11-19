@@ -138,8 +138,12 @@ impl SyncWorker {
                 let payment_status = p.get("payment_status").and_then(|v| v.as_str()).unwrap_or("pending");
                 let table_id = p.get("table_id").and_then(|v| v.as_str()).and_then(|s| Uuid::parse_str(s).ok());
                 let customer_id = p.get("customer_id").and_then(|v| v.as_str()).and_then(|s| Uuid::parse_str(s).ok());
+                let cust_name = p.get("customer_name").and_then(|v| v.as_str()).unwrap_or("Walk-in Guest");
+                let cust_phone = p.get("customer_phone_e164").or_else(|| p.get("customer_phone")).and_then(|v| v.as_str()).unwrap_or("+919999999999");
+                let pickup_ref = p.get("pickup_reference").and_then(|v| v.as_str());
                 let subtotal_paise = p.get("subtotal_paise").and_then(|v| v.as_i64()).unwrap_or(0);
                 let discount_paise = p.get("discount_paise").and_then(|v| v.as_i64()).unwrap_or(0);
+                let coupon_code = p.get("applied_coupon_code").and_then(|v| v.as_str());
                 let tax_paise = p.get("tax_paise").and_then(|v| v.as_i64()).unwrap_or(0);
                 let service_charge_paise = p.get("service_charge_paise").and_then(|v| v.as_i64()).unwrap_or(0);
                 let round_off_paise = p.get("round_off_paise").and_then(|v| v.as_i64()).unwrap_or(0);
@@ -149,12 +153,12 @@ impl SyncWorker {
                 sqlx::query(
                     r#"
                     INSERT INTO orders (
-                        id, restaurant_id, order_number, order_type, status, payment_status,
+                        id, restaurant_id, order_number, order_type, pickup_reference, status, payment_status,
                         table_id, customer_id, customer_name, customer_phone_e164,
-                        subtotal_paise, discount_paise, tax_paise, service_charge_paise,
+                        subtotal_paise, discount_paise, applied_coupon_code, tax_paise, service_charge_paise,
                         round_off_paise, total_amount_paise, notes, updated_at
                     )
-                    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'Guest', '+919999999999', $9, $10, $11, $12, $13, $14, $15, NOW())
+                    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, NOW())
                     ON CONFLICT (id) DO UPDATE SET
                         status = EXCLUDED.status,
                         payment_status = EXCLUDED.payment_status,
@@ -165,12 +169,16 @@ impl SyncWorker {
                 .bind(restaurant_id)
                 .bind(order_number)
                 .bind(order_type)
+                .bind(pickup_ref)
                 .bind(status)
                 .bind(payment_status)
                 .bind(table_id)
                 .bind(customer_id)
+                .bind(cust_name)
+                .bind(cust_phone)
                 .bind(subtotal_paise)
                 .bind(discount_paise)
+                .bind(coupon_code)
                 .bind(tax_paise)
                 .bind(service_charge_paise)
                 .bind(round_off_paise)
@@ -302,10 +310,10 @@ impl SyncWorker {
     /// Ingests customer QR digital orders submitted to Cloud Supabase into the local PostgreSQL database
     async fn pull_inbound_cloud_orders(&self) -> Result<(), sqlx::Error> {
         // Query cloud orders placed with type 'digital_qr'
-        let cloud_orders = sqlx::query_as::<_, (Uuid, Uuid, String, Option<Uuid>, i64, i64, i64, i64, Option<String>)>(
+        let cloud_orders = sqlx::query_as::<_, (Uuid, Uuid, String, Option<Uuid>, Option<String>, Option<String>, i64, i64, i64, i64, Option<String>)>(
             r#"
-            SELECT id, restaurant_id, order_number, table_id, subtotal_paise, discount_paise,
-                   tax_paise, total_amount_paise, notes
+            SELECT id, restaurant_id, order_number, table_id, customer_name, customer_phone_e164,
+                   subtotal_paise, discount_paise, tax_paise, total_amount_paise, notes
             FROM orders
             WHERE order_type = 'digital_qr'
               AND status = 'SUBMITTED'
@@ -320,7 +328,7 @@ impl SyncWorker {
             Err(_) => return Ok(()),
         };
 
-        for (id, restaurant_id, order_number, table_id, subtotal, discount, tax, total, notes) in orders {
+        for (id, restaurant_id, order_number, table_id, customer_name, customer_phone, subtotal, discount, tax, total, notes) in orders {
             // Check if already in local DB
             let existing: Option<(Uuid,)> = sqlx::query_as("SELECT id FROM orders WHERE id = $1")
                 .bind(id)
@@ -335,9 +343,10 @@ impl SyncWorker {
                     r#"
                     INSERT INTO orders (
                         id, restaurant_id, order_number, order_type, status, payment_status,
-                        table_id, subtotal_paise, discount_paise, tax_paise, total_amount_paise, notes
+                        table_id, customer_name, customer_phone_e164, customer_phone,
+                        subtotal_paise, discount_paise, tax_paise, total_amount_paise, notes
                     )
-                    VALUES ($1, $2, $3, 'digital_qr', 'confirmed', 'pending', $4, $5, $6, $7, $8, $9)
+                    VALUES ($1, $2, $3, 'digital_qr', 'confirmed', 'pending', $4, $5, $6, $6, $7, $8, $9, $10, $11)
                     ON CONFLICT (id) DO NOTHING
                     "#,
                 )
@@ -345,6 +354,8 @@ impl SyncWorker {
                 .bind(restaurant_id)
                 .bind(&order_number)
                 .bind(table_id)
+                .bind(&customer_name)
+                .bind(&customer_phone)
                 .bind(subtotal)
                 .bind(discount)
                 .bind(tax)

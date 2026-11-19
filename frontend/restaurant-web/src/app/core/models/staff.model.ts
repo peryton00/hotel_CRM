@@ -1,5 +1,6 @@
 export type StaffRole =
   | 'ADMIN'
+  | 'STAFF'
   | 'EXECUTIVE_CHEF'
   | 'SOUS_CHEF'
   | 'MANAGER'

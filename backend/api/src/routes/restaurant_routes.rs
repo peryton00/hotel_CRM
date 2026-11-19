@@ -14,7 +14,9 @@ use crate::{
     error::AppError,
     models::{
         common::ApiResponse,
-        restaurant::{StaffAttendance, StaffMember, StaffPerformanceSummary},
+        restaurant::{
+            StaffAttendance, StaffMember, StaffPerformanceSummary, UpdateRestaurantPayload,
+        },
     },
     repositories::RestaurantRepository,
 };
@@ -71,6 +73,26 @@ pub async fn get_current_restaurant(
 ) -> Result<impl IntoResponse, AppError> {
     let restaurant = RestaurantRepository::get_by_id(&pool, tenant.restaurant_id).await?;
     match restaurant {
+        Some(r) => Ok(Json(ApiResponse::success(r))),
+        None => Err(AppError::NotFound(
+            "Restaurant profile not found".to_string(),
+        )),
+    }
+}
+
+pub async fn update_current_restaurant(
+    State(pool): State<PgPool>,
+    tenant: TenantContext,
+    Json(payload): Json<UpdateRestaurantPayload>,
+) -> Result<impl IntoResponse, AppError> {
+    if tenant.staff_role.to_uppercase() != "ADMIN" {
+        return Err(AppError::Forbidden(
+            "Access Denied: Only Administrator can update restaurant settings".to_string(),
+        ));
+    }
+
+    let updated = RestaurantRepository::update(&pool, tenant.restaurant_id, &payload).await?;
+    match updated {
         Some(r) => Ok(Json(ApiResponse::success(r))),
         None => Err(AppError::NotFound(
             "Restaurant profile not found".to_string(),
@@ -293,6 +315,10 @@ pub async fn mark_staff_attendance(
 ) -> Result<impl IntoResponse, AppError> {
     let date = chrono::NaiveDate::parse_from_str(payload.attendance_date.trim(), "%Y-%m-%d")
         .map_err(|_| AppError::BadRequest("Invalid date format, expected YYYY-MM-DD".to_string()))?;
+    let today = chrono::Utc::now().date_naive();
+    if date > today {
+        return Err(AppError::BadRequest("Cannot mark attendance for future dates".to_string()));
+    }
     let status = payload.status.trim().to_uppercase();
 
     let record = sqlx::query_as::<_, StaffAttendance>(

@@ -6,12 +6,24 @@ import { RestaurantDataService } from '../../../data-access/services/restaurant-
 import { Customer, CustomerStatus, LoyaltyTier } from '../../../core/models/customer.model';
 import { CurrencyInrPipe } from '../../../shared/pipes/currency-inr.pipe';
 import { StatusBadgeComponent } from '../../../shared/components/status-badge/status-badge.component';
+import { SkeletonLoaderComponent } from '../../../shared/components/loading/skeleton-loader.component';
+import { LoadingButtonDirective } from '../../../shared/components/loading/loading-button.directive';
+import { EmptyStateComponent } from '../../../shared/components/empty-state/empty-state.component';
 import { ToastService } from '../../../core/services/toast.service';
 
 @Component({
   selector: 'app-customer-list',
   standalone: true,
-  imports: [CommonModule, RouterModule, FormsModule, CurrencyInrPipe, StatusBadgeComponent],
+  imports: [
+    CommonModule,
+    RouterModule,
+    FormsModule,
+    CurrencyInrPipe,
+    StatusBadgeComponent,
+    SkeletonLoaderComponent,
+    LoadingButtonDirective,
+    EmptyStateComponent,
+  ],
   template: `
     <div class="customers-page">
       <!-- Header -->
@@ -94,76 +106,88 @@ import { ToastService } from '../../../core/services/toast.service';
             </tr>
           </thead>
           <tbody>
-            @for (cust of filteredCustomers(); track cust.id) {
+            @if (isLoading()) {
               <tr>
-                <td>
-                  <div class="cust-name-cell">
-                    <div class="avatar-sm">{{ cust.name.charAt(0) }}</div>
-                    <div>
-                      <div class="name-text">{{ cust.name }}</div>
-                      <div class="pts-text">{{ cust.loyaltyPoints }} pts</div>
+                <td colspan="8" style="padding: 0;">
+                  <app-skeleton variant="customer-row" [count]="6" />
+                </td>
+              </tr>
+            } @else {
+              @for (cust of filteredCustomers(); track cust.id) {
+                <tr>
+                  <td>
+                    <div class="cust-name-cell">
+                      <div class="avatar-sm">{{ cust.name.charAt(0) }}</div>
+                      <div>
+                        <div class="name-text">{{ cust.name }}</div>
+                        <div class="pts-text">{{ cust.loyaltyPoints }} pts</div>
+                      </div>
                     </div>
-                  </div>
-                </td>
-                <td>
-                  <div class="phone-text">{{ cust.phone }}</div>
-                  <div class="email-text">{{ cust.email || '—' }}</div>
-                </td>
-                <td>
-                  <span
-                    class="badge"
-                    [class.badge-gold]="
-                      cust.loyaltyTier === 'PLATINUM' || cust.loyaltyTier === 'GOLD'
-                    "
-                    [class.badge-outline]="
-                      cust.loyaltyTier === 'SILVER' || cust.loyaltyTier === 'BRONZE'
-                    "
-                  >
-                    <i class="ph ph-crown" *ngIf="cust.loyaltyTier === 'PLATINUM'"></i>
-                    {{ cust.loyaltyTier }}
-                  </span>
-                </td>
-                <td>
-                  <app-status-badge [status]="cust.status"></app-status-badge>
-                </td>
-                <td>
-                  <strong>{{ cust.visitCount }}</strong>
-                </td>
-                <td>
-                  <span class="text-price">{{ cust.totalSpend | currencyInr }}</span>
-                </td>
-                <td>
-                  <span class="text-sm text-muted">{{ cust.lastVisit | date: 'mediumDate' }}</span>
-                </td>
-                <td>
-                  <div class="actions-cell">
-                    <a
-                      [routerLink]="['/admin/customers', cust.id]"
-                      class="btn btn-secondary btn-sm"
-                      title="View Profile"
+                  </td>
+                  <td>
+                    <div class="phone-text">{{ cust.phone }}</div>
+                    <div class="email-text">{{ cust.email || '—' }}</div>
+                  </td>
+                  <td>
+                    <span
+                      class="badge"
+                      [class.badge-gold]="
+                        cust.loyaltyTier === 'PLATINUM' || cust.loyaltyTier === 'GOLD'
+                      "
+                      [class.badge-outline]="
+                        cust.loyaltyTier === 'SILVER' || cust.loyaltyTier === 'BRONZE'
+                      "
                     >
-                      <i class="ph ph-eye"></i>
-                    </a>
-                    <button
-                      class="btn btn-secondary btn-sm"
-                      (click)="openAssignCouponModal(cust)"
-                      title="Assign Coupon"
-                    >
-                      <i class="ph ph-ticket"></i>
-                    </button>
-                  </div>
-                </td>
-              </tr>
-            } @empty {
-              <tr>
-                <td
-                  colspan="8"
-                  class="text-center"
-                  style="padding: 40px; color: var(--color-text-muted);"
-                >
-                  No customers found matching your criteria.
-                </td>
-              </tr>
+                      <i class="ph ph-crown" *ngIf="cust.loyaltyTier === 'PLATINUM'"></i>
+                      {{ cust.loyaltyTier }}
+                    </span>
+                  </td>
+                  <td>
+                    <app-status-badge [status]="cust.status"></app-status-badge>
+                  </td>
+                  <td>
+                    <strong>{{ cust.visitCount }}</strong>
+                  </td>
+                  <td>
+                    <span class="text-price">{{ cust.totalSpend | currencyInr }}</span>
+                  </td>
+                  <td>
+                    <span class="text-sm text-muted">{{ cust.lastVisit | date: 'mediumDate' }}</span>
+                  </td>
+                  <td>
+                    <div class="actions-cell">
+                      <a
+                        [routerLink]="['/admin/customers', cust.id]"
+                        class="btn btn-secondary btn-sm"
+                        title="View Profile"
+                      >
+                        <i class="ph ph-eye"></i>
+                      </a>
+                      <button
+                        class="btn btn-secondary btn-sm"
+                        (click)="openAssignCouponModal(cust)"
+                        title="Assign Coupon"
+                      >
+                        <i class="ph ph-ticket"></i>
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              } @empty {
+                <tr>
+                  <td colspan="8" style="padding: 0;">
+                    <app-empty-state
+                      icon="ph-users"
+                      title="No Customers Found"
+                      message="No guest profiles matched your search or tier filter."
+                      actionText="Add New Customer"
+                      actionIcon="ph-user-plus"
+                      (actionClick)="openAddModal()"
+                      [bordered]="false"
+                    />
+                  </td>
+                </tr>
+              }
             }
           </tbody>
         </table>
@@ -230,6 +254,8 @@ import { ToastService } from '../../../core/services/toast.service';
               <button class="btn btn-secondary" (click)="showAddModal = false">Cancel</button>
               <button
                 class="btn btn-primary"
+                [appLoadingButton]="isSaving()"
+                loadingText="Saving Customer..."
                 (click)="saveNewCustomer()"
                 [disabled]="!newCustName.trim() || !newCustPhone.trim()"
               >
@@ -464,6 +490,11 @@ export class CustomerListComponent {
   private mock = this.dataService;
   private toastService = inject(ToastService);
 
+  readonly isLoading = computed(
+    () => this.dataService.isCustomersLoading() || !this.dataService.customersLoaded()
+  );
+  readonly isSaving = signal<boolean>(false);
+
   customers = this.mock.customers;
   coupons = this.mock.coupons;
 
@@ -524,27 +555,17 @@ export class CustomerListComponent {
   saveNewCustomer(): void {
     if (!this.newCustName.trim() || !this.newCustPhone.trim()) return;
 
-    const newCustomer: Customer = {
-      id: `cust-${Date.now().toString().slice(-4)}`,
+    this.mock.createCustomer({
       name: this.newCustName.trim(),
       phone: this.newCustPhone.trim(),
       email: this.newCustEmail.trim() || undefined,
-      customerSince: new Date().toISOString(),
-      visitCount: 1,
-      lastVisit: new Date().toISOString(),
-      totalSpend: 0,
-      avgOrderValue: 0,
       status: this.newCustStatus,
       loyaltyTier: this.newCustTier,
       loyaltyPoints: 100,
       assignedCouponIds: ['coup-002'],
-    };
+    });
 
-    const updated = [newCustomer, ...this.mock.customers()];
-    this.mock.customers.set(updated);
-    this.mock.saveLocal('customers', updated);
-
-    this.toastService.success(`Added guest profile for ${newCustomer.name}`);
+    this.toastService.success(`Added guest profile for ${this.newCustName.trim()}`);
     this.showAddModal = false;
   }
 

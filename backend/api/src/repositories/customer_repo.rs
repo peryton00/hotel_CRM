@@ -20,7 +20,9 @@ impl CustomerRepository {
             sqlx::query_as::<_, Customer>(
                 r#"
                 SELECT id, restaurant_id, name, phone, email, address, notes,
-                       visit_count, total_spend_paise, created_at, updated_at
+                       total_orders AS visit_count, total_spent_paise AS total_spend_paise,
+                       loyalty_points, loyalty_tier::text AS loyalty_tier,
+                       created_at, updated_at
                 FROM customers
                 WHERE restaurant_id = $1 AND (name ILIKE $2 OR phone ILIKE $2)
                 ORDER BY name ASC
@@ -35,10 +37,12 @@ impl CustomerRepository {
             sqlx::query_as::<_, Customer>(
                 r#"
                 SELECT id, restaurant_id, name, phone, email, address, notes,
-                       visit_count, total_spend_paise, created_at, updated_at
+                       total_orders AS visit_count, total_spent_paise AS total_spend_paise,
+                       loyalty_points, loyalty_tier::text AS loyalty_tier,
+                       created_at, updated_at
                 FROM customers
                 WHERE restaurant_id = $1
-                ORDER BY visit_count DESC, name ASC
+                ORDER BY total_orders DESC, name ASC
                 LIMIT 50
                 "#,
             )
@@ -66,7 +70,9 @@ impl CustomerRepository {
                 notes = COALESCE(EXCLUDED.notes, customers.notes),
                 updated_at = NOW()
             RETURNING id, restaurant_id, name, phone, email, address, notes,
-                      visit_count, total_spend_paise, created_at, updated_at
+                      total_orders AS visit_count, total_spent_paise AS total_spend_paise,
+                      loyalty_points, loyalty_tier::text AS loyalty_tier,
+                      created_at, updated_at
             "#,
         )
         .bind(restaurant_id)
@@ -81,6 +87,33 @@ impl CustomerRepository {
         Ok(customer)
     }
 
+    pub async fn award_points(
+        pool: &PgPool,
+        restaurant_id: Uuid,
+        customer_id: Uuid,
+        points: i32,
+    ) -> Result<Customer, AppError> {
+        let customer = sqlx::query_as::<_, Customer>(
+            r#"
+            UPDATE customers
+            SET loyalty_points = GREATEST(0, loyalty_points + $3),
+                updated_at = NOW()
+            WHERE restaurant_id = $1 AND id = $2
+            RETURNING id, restaurant_id, name, phone, email, address, notes,
+                      total_orders AS visit_count, total_spent_paise AS total_spend_paise,
+                      loyalty_points, loyalty_tier::text AS loyalty_tier,
+                      created_at, updated_at
+            "#,
+        )
+        .bind(restaurant_id)
+        .bind(customer_id)
+        .bind(points)
+        .fetch_one(pool)
+        .await?;
+
+        Ok(customer)
+    }
+
     pub async fn list_reservations(
         pool: &PgPool,
         restaurant_id: Uuid,
@@ -89,8 +122,13 @@ impl CustomerRepository {
         let reservations = if let Some(t) = from_time {
             sqlx::query_as::<_, Reservation>(
                 r#"
-                SELECT id, restaurant_id, table_id, customer_id, customer_name, customer_phone,
-                       guest_count, reservation_time, status, special_requests, created_at, updated_at
+                SELECT id, restaurant_id,
+                       table_id,
+                       customer_id, customer_name,
+                       COALESCE(customer_phone, customer_phone_e164, '') AS customer_phone,
+                       COALESCE(guest_count, party_size, 2) AS guest_count,
+                       reservation_time, status::text AS status, special_requests,
+                       created_at, created_at AS updated_at
                 FROM reservations
                 WHERE restaurant_id = $1 AND reservation_time >= $2
                 ORDER BY reservation_time ASC
@@ -103,8 +141,13 @@ impl CustomerRepository {
         } else {
             sqlx::query_as::<_, Reservation>(
                 r#"
-                SELECT id, restaurant_id, table_id, customer_id, customer_name, customer_phone,
-                       guest_count, reservation_time, status, special_requests, created_at, updated_at
+                SELECT id, restaurant_id,
+                       table_id,
+                       customer_id, customer_name,
+                       COALESCE(customer_phone, customer_phone_e164, '') AS customer_phone,
+                       COALESCE(guest_count, party_size, 2) AS guest_count,
+                       reservation_time, status::text AS status, special_requests,
+                       created_at, created_at AS updated_at
                 FROM reservations
                 WHERE restaurant_id = $1
                 ORDER BY reservation_time ASC
@@ -131,8 +174,10 @@ impl CustomerRepository {
                 guest_count, reservation_time, status, special_requests
             )
             VALUES ($1, $2, $3, $4, $5, $6, $7, 'confirmed', $8)
-            RETURNING id, restaurant_id, table_id, customer_id, customer_name, customer_phone,
-                      guest_count, reservation_time, status, special_requests, created_at, updated_at
+            RETURNING id, restaurant_id, table_id, customer_id, customer_name,
+                      COALESCE(customer_phone, '') AS customer_phone,
+                      guest_count, reservation_time, status::text AS status, special_requests,
+                      created_at, created_at AS updated_at
             "#,
         )
         .bind(restaurant_id)
@@ -158,10 +203,15 @@ impl CustomerRepository {
         let res = sqlx::query_as::<_, Reservation>(
             r#"
             UPDATE reservations
-            SET status = $3, updated_at = NOW()
+            SET status = $3
             WHERE restaurant_id = $1 AND id = $2
-            RETURNING id, restaurant_id, table_id, customer_id, customer_name, customer_phone,
-                      guest_count, reservation_time, status, special_requests, created_at, updated_at
+            RETURNING id, restaurant_id,
+                      table_id,
+                      customer_id, customer_name,
+                      COALESCE(customer_phone, customer_phone_e164, '') AS customer_phone,
+                      COALESCE(guest_count, party_size, 2) AS guest_count,
+                      reservation_time, status::text AS status, special_requests,
+                      created_at, created_at AS updated_at
             "#,
         )
         .bind(restaurant_id)

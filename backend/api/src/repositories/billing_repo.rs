@@ -53,10 +53,10 @@ impl BillingRepository {
         // 2. Fetch order
         let order = sqlx::query_as::<_, Order>(
             r#"
-            SELECT id, restaurant_id, order_number, order_type, status, payment_status,
-                   table_id, customer_id, subtotal_paise, discount_paise, tax_paise,
+            SELECT id, restaurant_id, COALESCE(order_number, 'ORD-' || UPPER(SUBSTRING(id::text, 1, 8))) AS order_number, order_type, pickup_reference, status, payment_status, payment_method,
+                   table_id, customer_id, customer_name, customer_phone_e164, subtotal_paise, discount_paise, tax_paise,
                    service_charge_paise, round_off_paise, total_amount_paise, notes,
-                   server_staff_id, created_at, updated_at, settled_at, cancelled_at,
+                   server_staff_id, created_at, updated_at, NULL::timestamptz AS settled_at, cancelled_at,
                    legacy_unknown_timestamp
             FROM orders
             WHERE restaurant_id = $1 AND id = $2 FOR UPDATE
@@ -76,7 +76,34 @@ impl BillingRepository {
 
         let now = Utc::now();
 
-        // 3. Record payment
+        // 3. Deduct discount directly from total bill (not from product prices/subtotal)
+        let (final_discount_paise, final_tax_paise, final_total_paise, final_coupon_code) =
+            if let Some(disc) = req.discount_paise {
+                let gross_total_paise = order.subtotal_paise + order.tax_paise;
+                let discount = disc.min(gross_total_paise).max(0);
+                let final_total = (gross_total_paise - discount).max(0);
+                (
+                    discount,
+                    order.tax_paise,
+                    final_total,
+                    req.applied_coupon_code.or(order.applied_coupon_code),
+                )
+            } else {
+                (
+                    order.discount_paise,
+                    order.tax_paise,
+                    order.total_amount_paise,
+                    order.applied_coupon_code,
+                )
+            };
+
+        let payment_amount = if req.discount_paise.is_some() {
+            final_total_paise
+        } else {
+            req.amount_paise
+        };
+
+        // 4. Record payment
         let payment = sqlx::query_as::<_, Payment>(
             r#"
             INSERT INTO payments (
@@ -91,7 +118,7 @@ impl BillingRepository {
         )
         .bind(restaurant_id)
         .bind(order.id)
-        .bind(req.amount_paise)
+        .bind(payment_amount)
         .bind(&req.payment_method)
         .bind(req.idempotency_key)
         .bind(now)
@@ -99,23 +126,31 @@ impl BillingRepository {
         .fetch_one(&mut *tx)
         .await?;
 
-        // 4. Update order payment status and settlement timestamp
+        // 5. Update order payment status, payment method, discount, tax, totals and settlement timestamp
         sqlx::query(
             r#"
             UPDATE orders
             SET payment_status = 'paid',
-                settled_at = $1,
+                payment_method = $1,
+                discount_paise = $2,
+                applied_coupon_code = $3,
+                tax_paise = $4,
+                total_amount_paise = $5,
                 updated_at = NOW()
-            WHERE restaurant_id = $2 AND id = $3
+            WHERE restaurant_id = $6 AND id = $7
             "#,
         )
-        .bind(now)
+        .bind(&req.payment_method)
+        .bind(final_discount_paise)
+        .bind(&final_coupon_code)
+        .bind(final_tax_paise)
+        .bind(final_total_paise)
         .bind(restaurant_id)
         .bind(order.id)
         .execute(&mut *tx)
         .await?;
 
-        // 5. Generate and store invoice (non-blocking best-effort insert with DB-safe fallback)
+        // 6. Generate and store invoice (non-blocking best-effort insert with DB-safe fallback)
         let invoice_num = format!("INV-{}", order.order_number);
         let _ = sqlx::query(
             r#"
@@ -131,18 +166,20 @@ impl BillingRepository {
         .bind(order.id)
         .bind(&invoice_num)
         .bind(order.subtotal_paise)
-        .bind(order.discount_paise)
-        .bind(order.tax_paise)
-        .bind(order.total_amount_paise)
+        .bind(final_discount_paise)
+        .bind(final_tax_paise)
+        .bind(final_total_paise)
         .execute(&mut *tx)
         .await;
 
-        // 6. Emit outbox event for sync
+        // 7. Emit outbox event for sync
         let outbox_payload = serde_json::json!({
             "payment_id": payment.id,
             "order_id": order.id,
             "restaurant_id": restaurant_id,
             "amount_paise": payment.amount_paise,
+            "discount_paise": final_discount_paise,
+            "total_paise": final_total_paise,
             "payment_method": payment.payment_method,
             "settled_at": payment.settled_at,
             "order_number": order.order_number,
@@ -177,9 +214,9 @@ impl BillingRepository {
         let order = sqlx::query_as::<_, Order>(
             r#"
             SELECT id, restaurant_id, order_number, order_type, status, payment_status,
-                   table_id, customer_id, subtotal_paise, discount_paise, tax_paise,
+                   table_id, customer_id, customer_name, customer_phone_e164, subtotal_paise, discount_paise, tax_paise,
                    service_charge_paise, round_off_paise, total_amount_paise, notes,
-                   server_staff_id, created_at, updated_at, settled_at, cancelled_at,
+                   server_staff_id, created_at, updated_at, NULL::timestamptz AS settled_at, cancelled_at,
                    legacy_unknown_timestamp
             FROM orders
             WHERE restaurant_id = $1 AND id = $2 FOR UPDATE
@@ -250,10 +287,10 @@ impl BillingRepository {
         // Check order
         let order = sqlx::query_as::<_, Order>(
             r#"
-            SELECT id, restaurant_id, order_number, order_type, status, payment_status,
-                   table_id, customer_id, subtotal_paise, discount_paise, tax_paise,
+            SELECT id, restaurant_id, COALESCE(order_number, 'ORD-' || UPPER(SUBSTRING(id::text, 1, 8))) AS order_number, order_type, pickup_reference, status, payment_status, payment_method,
+                   table_id, customer_id, customer_name, customer_phone_e164, subtotal_paise, discount_paise, tax_paise,
                    service_charge_paise, round_off_paise, total_amount_paise, notes,
-                   server_staff_id, created_at, updated_at, settled_at, cancelled_at,
+                   server_staff_id, created_at, updated_at, NULL::timestamptz AS settled_at, cancelled_at,
                    legacy_unknown_timestamp
             FROM orders
             WHERE restaurant_id = $1 AND id = $2
@@ -271,6 +308,17 @@ impl BillingRepository {
                 "Refund amount cannot exceed the order total amount".to_string(),
             ));
         }
+
+        let valid_staff_id = match staff_id {
+            Some(id) => sqlx::query_scalar::<_, Uuid>(
+                "SELECT id FROM staff_members WHERE id = $1 OR auth_user_id = $1 LIMIT 1",
+            )
+            .bind(id)
+            .fetch_optional(&mut *tx)
+            .await
+            .unwrap_or(None),
+            None => None,
+        };
 
         let refund = sqlx::query_as::<_, Refund>(
             r#"
@@ -291,7 +339,7 @@ impl BillingRepository {
         .bind(req.refund_amount_paise)
         .bind(&req.reason)
         .bind(req.refund_method)
-        .bind(staff_id)
+        .bind(valid_staff_id)
         .bind(req.idempotency_key)
         .fetch_one(&mut *tx)
         .await?;
@@ -457,10 +505,10 @@ impl BillingRepository {
 
         let order = sqlx::query_as::<_, Order>(
             r#"
-            SELECT id, restaurant_id, order_number, order_type, status, payment_status,
-                   table_id, customer_id, subtotal_paise, discount_paise, tax_paise,
+            SELECT id, restaurant_id, COALESCE(order_number, 'ORD-' || UPPER(SUBSTRING(id::text, 1, 8))) AS order_number, order_type, pickup_reference, status, payment_status, payment_method,
+                   table_id, customer_id, customer_name, customer_phone_e164, subtotal_paise, discount_paise, tax_paise,
                    service_charge_paise, round_off_paise, total_amount_paise, notes,
-                   server_staff_id, created_at, updated_at, settled_at, cancelled_at,
+                   server_staff_id, created_at, updated_at, NULL::timestamptz AS settled_at, cancelled_at,
                    legacy_unknown_timestamp
             FROM orders
             WHERE restaurant_id = $1 AND id = $2
@@ -513,6 +561,8 @@ impl BillingRepository {
             order_number: order.order_number,
             order_type: order.order_type,
             table_number,
+            customer_name: order.customer_name,
+            customer_phone: order.customer_phone_e164,
             date: order.created_at,
             items: receipt_items,
             subtotal_paise: order.subtotal_paise,
@@ -521,7 +571,7 @@ impl BillingRepository {
             round_off_paise: order.round_off_paise,
             final_amount_paise: order.total_amount_paise,
             payment_status: order.payment_status,
-            payment_method: None,
+            payment_method: order.payment_method,
         })
     }
 }

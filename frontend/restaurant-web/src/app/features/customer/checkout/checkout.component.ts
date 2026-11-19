@@ -7,13 +7,14 @@ import { RestaurantDataService } from '../../../data-access/services/restaurant-
 import { ToastService } from '../../../core/services/toast.service';
 import { Order, OrderStatus } from '../../../core/models/order.model';
 import { CurrencyInrPipe } from '../../../shared/pipes/currency-inr.pipe';
+import { LoadingButtonDirective } from '../../../shared/components/loading/loading-button.directive';
 import { normalizeToE164 } from '../../../core/utils/phone.util';
 import { generateIdempotencyKey } from '../../../core/utils/idempotency.util';
 
 @Component({
   selector: 'app-checkout',
   standalone: true,
-  imports: [CommonModule, RouterModule, FormsModule, CurrencyInrPipe],
+  imports: [CommonModule, RouterModule, FormsModule, CurrencyInrPipe, LoadingButtonDirective],
   template: `
     <div class="checkout-page">
       <div class="checkout-header">
@@ -155,15 +156,13 @@ import { generateIdempotencyKey } from '../../../core/utils/idempotency.util';
 
             <button
               class="btn btn-primary place-order-btn"
+              [appLoadingButton]="isSubmitting"
+              loadingText="Sending to Kitchen..."
               [disabled]="!isFormValid() || isSubmitting"
               (click)="submitOrder()"
             >
-              @if (isSubmitting) {
-                <span>Sending to Kitchen...</span>
-              } @else {
-                <span>Place Dine-In Order</span>
-                <i class="ph ph-arrow-right"></i>
-              }
+              <span>Place Dine-In Order</span>
+              <i class="ph ph-arrow-right"></i>
             </button>
 
             <p class="sub-disclaimer">
@@ -559,15 +558,7 @@ export class CheckoutComponent {
     }
 
     // Update Table status to OCCUPIED
-    const updatedTables = this.mock
-      .tables()
-      .map((t) =>
-        t.id === tableCtx.tableId || t.number === tableCtx.tableNumber
-          ? { ...t, status: 'OCCUPIED' as const }
-          : t,
-      );
-    this.mock.tables.set(updatedTables);
-    this.mock.saveLocal('tables', updatedTables);
+    this.mock.updateTableStatus(tableCtx.tableId || tableCtx.tableNumber, 'OCCUPIED');
 
     // Clear cart tray
     this.cartService.clearCart();

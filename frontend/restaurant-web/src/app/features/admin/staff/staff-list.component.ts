@@ -9,11 +9,19 @@ import { AttendanceStatus, StaffPerformanceSummary } from '../../../core/models/
 import { AdminAuthService } from '../../../core/services/admin-auth.service';
 import { ToastService } from '../../../core/services/toast.service';
 import { CurrencyInrPipe } from '../../../shared/pipes/currency-inr.pipe';
+import { SkeletonLoaderComponent } from '../../../shared/components/loading/skeleton-loader.component';
+import { EmptyStateComponent } from '../../../shared/components/empty-state/empty-state.component';
 
 @Component({
   selector: 'app-staff-list',
   standalone: true,
-  imports: [CommonModule, FormsModule, CurrencyInrPipe],
+  imports: [
+    CommonModule,
+    FormsModule,
+    CurrencyInrPipe,
+    SkeletonLoaderComponent,
+    EmptyStateComponent,
+  ],
   template: `
     <div class="staff-page">
       <!-- Header -->
@@ -74,124 +82,137 @@ import { CurrencyInrPipe } from '../../../shared/pipes/currency-inr.pipe';
         }
 
         <div class="staff-grid">
-          @for (member of staff(); track member.id) {
-            <div
-              class="staff-card clickable-card"
-              [class.inactive]="member.status === 'INACTIVE'"
-              [class.card-selected]="selectedPanelStaff()?.id === member.id"
-              (click)="openSidePanel(member)"
-            >
-              <div class="staff-top">
-                <div class="avatar-lg" [class.avatar-admin]="member.role === 'ADMIN'">
-                  {{ member.name.charAt(0).toUpperCase() }}
-                </div>
-                <div class="staff-title-group">
-                  <div class="staff-name-row">
-                    <h3 class="staff-name">{{ member.name }}</h3>
-                    @if (member.status === 'INACTIVE') {
-                      <span class="status-pill inactive-pill">Inactive</span>
-                    }
+          @if (isLoading()) {
+            <app-skeleton variant="staff-card" [count]="6" />
+          } @else {
+            @for (member of staff(); track member.id) {
+              <div
+                class="staff-card clickable-card"
+                [class.inactive]="member.status === 'INACTIVE'"
+                [class.card-selected]="selectedPanelStaff()?.id === member.id"
+                (click)="openSidePanel(member)"
+              >
+                <div class="staff-top">
+                  <div class="avatar-lg" [class.avatar-admin]="member.role === 'ADMIN'">
+                    {{ member.name.charAt(0).toUpperCase() }}
                   </div>
-                  <span class="role-badge" [class.role-admin]="member.role === 'ADMIN'">
-                    {{ formatRole(member.role) }}
-                  </span>
-                </div>
-              </div>
-
-              <div class="staff-credentials-box">
-                <div class="credential-item">
-                  <span class="cred-label">Login ID / Username:</span>
-                  <div class="cred-value-wrap">
-                    <span class="cred-value">{{ member.loginId || member.email }}</span>
-                    <button
-                      class="copy-mini-btn"
-                      (click)="copyToClipboard(member.loginId || member.email, 'Login ID'); $event.stopPropagation()"
-                      title="Copy Login ID"
-                    >
-                      <i class="ph ph-copy"></i>
-                    </button>
+                  <div class="staff-title-group">
+                    <div class="staff-name-row">
+                      <h3 class="staff-name">{{ member.name }}</h3>
+                      @if (member.status === 'INACTIVE') {
+                        <span class="status-pill inactive-pill">Inactive</span>
+                      }
+                    </div>
+                    <span class="role-badge" [class.role-admin]="member.role === 'ADMIN'">
+                      {{ formatRole(member.role) }}
+                    </span>
                   </div>
                 </div>
-              </div>
 
-              <div class="staff-details">
-                <div class="detail-line">
-                  <i class="ph ph-phone"></i>
-                  <span>{{ member.phone || 'No phone set' }}</span>
+                <div class="staff-credentials-box">
+                  <div class="credential-item">
+                    <span class="cred-label">Login ID / Username:</span>
+                    <div class="cred-value-wrap">
+                      <span class="cred-value">{{ member.loginId || member.email }}</span>
+                      <button
+                        class="copy-mini-btn"
+                        (click)="copyToClipboard(member.loginId || member.email, 'Login ID'); $event.stopPropagation()"
+                        title="Copy Login ID"
+                      >
+                        <i class="ph ph-copy"></i>
+                      </button>
+                    </div>
+                  </div>
                 </div>
-                @if (member.email) {
+
+                <div class="staff-details">
                   <div class="detail-line">
-                    <i class="ph ph-envelope"></i>
-                    <span>{{ member.email }}</span>
+                    <i class="ph ph-phone"></i>
+                    <span>{{ member.phone || 'No phone set' }}</span>
                   </div>
-                }
-                <div class="detail-line">
-                  <i class="ph ph-clock"></i>
-                  <span>Shift: {{ member.shift || 'General Shift' }}</span>
-                </div>
-                @if (member.assignedSection) {
+                  @if (member.email) {
+                    <div class="detail-line">
+                      <i class="ph ph-envelope"></i>
+                      <span>{{ member.email }}</span>
+                    </div>
+                  }
                   <div class="detail-line">
-                    <i class="ph ph-map-pin"></i>
-                    <span>Station: {{ member.assignedSection }}</span>
+                    <i class="ph ph-clock"></i>
+                    <span>Shift: {{ member.shift || 'General Shift' }}</span>
                   </div>
-                }
-                <div class="detail-line">
-                  <i class="ph ph-calendar"></i>
-                  <span>Cycle: Starts on Day {{ member.payrollCycleStartDay || 1 }}</span>
-                </div>
-                <div class="detail-line">
-                  <i class="ph ph-currency-inr"></i>
-                  <span>Base Salary: {{ (member.monthlySalary || 15000) | currencyInr }}/mo</span>
-                </div>
-              </div>
-
-              <div class="card-sidepanel-hint">
-                <span><i class="ph ph-sidebar-simple"></i> Click to open calendar & info panel</span>
-                <i class="ph ph-arrow-right"></i>
-              </div>
-
-              @if (auth.isAdmin()) {
-                <div class="staff-actions" (click)="$event.stopPropagation()">
-                  <button
-                    class="btn btn-secondary btn-sm"
-                    (click)="openEditModal(member)"
-                    title="Edit staff details, role, and salary"
-                  >
-                    <i class="ph ph-pencil-simple"></i>
-                    <span>Edit</span>
-                  </button>
-
-                  <button
-                    class="btn btn-secondary btn-sm"
-                    (click)="openSidePanel(member)"
-                    title="Open side panel with calendar and serving stats"
-                  >
+                  @if (member.assignedSection) {
+                    <div class="detail-line">
+                      <i class="ph ph-map-pin"></i>
+                      <span>Station: {{ member.assignedSection }}</span>
+                    </div>
+                  }
+                  <div class="detail-line">
                     <i class="ph ph-calendar"></i>
-                    <span>Panel</span>
-                  </button>
+                    <span>Cycle: Starts on Day {{ member.payrollCycleStartDay || 1 }}</span>
+                  </div>
+                  <div class="detail-line">
+                    <i class="ph ph-currency-inr"></i>
+                    <span>Base Salary: {{ (member.monthlySalary || 15000) | currencyInr }}/mo</span>
+                  </div>
+                </div>
 
-                  @if (member.role !== 'ADMIN') {
+                <div class="card-sidepanel-hint">
+                  <span><i class="ph ph-sidebar-simple"></i> Click to open calendar & info panel</span>
+                  <i class="ph ph-arrow-right"></i>
+                </div>
+
+                @if (auth.isAdmin()) {
+                  <div class="staff-actions" (click)="$event.stopPropagation()">
                     <button
                       class="btn btn-secondary btn-sm"
-                      (click)="openResetPasswordModal(member)"
-                      title="Secretly update or reset password in Supabase"
+                      (click)="openEditModal(member)"
+                      title="Edit staff details, role, and salary"
                     >
-                      <i class="ph ph-key"></i>
-                      <span>Password</span>
+                      <i class="ph ph-pencil-simple"></i>
+                      <span>Edit</span>
                     </button>
 
                     <button
-                      class="btn btn-outline btn-sm status-toggle-btn"
-                      (click)="toggleStaffStatus(member)"
-                      [title]="member.status === 'ACTIVE' ? 'Deactivate staff account' : 'Reactivate staff account'"
+                      class="btn btn-secondary btn-sm"
+                      (click)="openSidePanel(member)"
+                      title="Open side panel with calendar and serving stats"
                     >
-                      <i class="ph" [class.ph-user-minus]="member.status === 'ACTIVE'" [class.ph-user-check]="member.status !== 'ACTIVE'"></i>
-                      <span>{{ member.status === 'ACTIVE' ? 'Deactivate' : 'Activate' }}</span>
+                      <i class="ph ph-calendar"></i>
+                      <span>Panel</span>
                     </button>
-                  }
-                </div>
-              }
-            </div>
+
+                    @if (member.role !== 'ADMIN') {
+                      <button
+                        class="btn btn-secondary btn-sm"
+                        (click)="openResetPasswordModal(member)"
+                        title="Secretly update or reset password in Supabase"
+                      >
+                        <i class="ph ph-key"></i>
+                        <span>Password</span>
+                      </button>
+
+                      <button
+                        class="btn btn-outline btn-sm status-toggle-btn"
+                        (click)="toggleStaffStatus(member)"
+                        [title]="member.status === 'ACTIVE' ? 'Deactivate staff account' : 'Reactivate staff account'"
+                      >
+                        <i class="ph" [class.ph-user-minus]="member.status === 'ACTIVE'" [class.ph-user-check]="member.status !== 'ACTIVE'"></i>
+                        <span>{{ member.status === 'ACTIVE' ? 'Deactivate' : 'Activate' }}</span>
+                      </button>
+                    }
+                  </div>
+                }
+              </div>
+            } @empty {
+              <app-empty-state
+                icon="ph-identification-card"
+                title="No Staff Members Found"
+                message="No staff profiles configured yet. Click 'Add Staff Member' to create one."
+                [actionText]="auth.isAdmin() ? 'Add Staff Member' : ''"
+                actionIcon="ph-user-plus"
+                (actionClick)="openAddModal()"
+              />
+            }
           }
         </div>
       } @else {
@@ -206,6 +227,7 @@ import { CurrencyInrPipe } from '../../../shared/pipes/currency-inr.pipe';
                   type="date"
                   class="form-input date-input"
                   [ngModel]="selectedDate()"
+                  [max]="todayDateString"
                   (ngModelChange)="onDateChange($event)"
                 />
               </div>
@@ -673,8 +695,10 @@ import { CurrencyInrPipe } from '../../../shared/pipes/currency-inr.pipe';
                     [class.is-today]="day.isToday"
                     [class.is-selected]="day.dateStr === selectedPanelDate()"
                     [class.in-cycle]="day.isInCycle"
+                    [class.is-future]="day.isFuture"
+                    [disabled]="day.isFuture"
                     (click)="selectedPanelDate.set(day.dateStr)"
-                    [title]="day.dateStr + (day.status ? ' (' + day.status + ')' : '')"
+                    [title]="day.isFuture ? day.dateStr + ' (Future date)' : day.dateStr + (day.status ? ' (' + day.status + ')' : '')"
                   >
                     <span class="day-num">{{ day.dayNum }}</span>
                     @if (day.status) {
@@ -688,47 +712,54 @@ import { CurrencyInrPipe } from '../../../shared/pipes/currency-inr.pipe';
 
               <!-- Quick Mark Attendance for Selected Date in Calendar -->
               <div class="cal-marker-bar">
-                <div class="marker-header">
-                  <span>Mark for <strong>{{ selectedPanelDate() | date: 'mediumDate' }}</strong>:</span>
-                  @let selStatus = getMemberAttendanceStatusForDate(pStaff.id, selectedPanelDate());
-                  <span class="status-indicator-badge" [ngClass]="selStatus.toLowerCase()">
-                    {{ formatAttendanceStatus(selStatus) }}
-                  </span>
-                </div>
-                <div class="marker-buttons">
-                  <button
-                    type="button"
-                    class="btn-status present btn-sm"
-                    [class.active]="selStatus === 'PRESENT'"
-                    (click)="markPanelAttendance('PRESENT')"
-                  >
-                    <i class="ph ph-check-bold"></i> Present
-                  </button>
-                  <button
-                    type="button"
-                    class="btn-status half-day btn-sm"
-                    [class.active]="selStatus === 'HALF_DAY'"
-                    (click)="markPanelAttendance('HALF_DAY')"
-                  >
-                    <i class="ph ph-clock"></i> Half Day
-                  </button>
-                  <button
-                    type="button"
-                    class="btn-status absent btn-sm"
-                    [class.active]="selStatus === 'ABSENT'"
-                    (click)="markPanelAttendance('ABSENT')"
-                  >
-                    <i class="ph ph-x-bold"></i> Absent
-                  </button>
-                  <button
-                    type="button"
-                    class="btn-status leave btn-sm"
-                    [class.active]="selStatus === 'PAID_LEAVE'"
-                    (click)="markPanelAttendance('PAID_LEAVE')"
-                  >
-                    <i class="ph ph-airplane-tilt"></i> Leave
-                  </button>
-                </div>
+                @if (isDateFuture(selectedPanelDate())) {
+                  <div class="future-date-notice">
+                    <i class="ph ph-prohibit"></i>
+                    <span>Attendance cannot be marked for future dates (<strong>{{ selectedPanelDate() | date: 'mediumDate' }}</strong>).</span>
+                  </div>
+                } @else {
+                  <div class="marker-header">
+                    <span>Mark for <strong>{{ selectedPanelDate() | date: 'mediumDate' }}</strong>:</span>
+                    @let selStatus = getMemberAttendanceStatusForDate(pStaff.id, selectedPanelDate());
+                    <span class="status-indicator-badge" [ngClass]="selStatus.toLowerCase()">
+                      {{ formatAttendanceStatus(selStatus) }}
+                    </span>
+                  </div>
+                  <div class="marker-buttons">
+                    <button
+                      type="button"
+                      class="btn-status present btn-sm"
+                      [class.active]="selStatus === 'PRESENT'"
+                      (click)="markPanelAttendance('PRESENT')"
+                    >
+                      <i class="ph ph-check-bold"></i> Present
+                    </button>
+                    <button
+                      type="button"
+                      class="btn-status half-day btn-sm"
+                      [class.active]="selStatus === 'HALF_DAY'"
+                      (click)="markPanelAttendance('HALF_DAY')"
+                    >
+                      <i class="ph ph-clock"></i> Half Day
+                    </button>
+                    <button
+                      type="button"
+                      class="btn-status absent btn-sm"
+                      [class.active]="selStatus === 'ABSENT'"
+                      (click)="markPanelAttendance('ABSENT')"
+                    >
+                      <i class="ph ph-x-bold"></i> Absent
+                    </button>
+                    <button
+                      type="button"
+                      class="btn-status leave btn-sm"
+                      [class.active]="selStatus === 'PAID_LEAVE'"
+                      (click)="markPanelAttendance('PAID_LEAVE')"
+                    >
+                      <i class="ph ph-airplane-tilt"></i> Leave
+                    </button>
+                  </div>
+                }
               </div>
             </div>
           </div>
@@ -1400,6 +1431,10 @@ import { CurrencyInrPipe } from '../../../shared/pipes/currency-inr.pipe';
         display: grid;
         grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
         gap: 20px;
+
+        app-empty-state {
+          grid-column: 1 / -1;
+        }
       }
 
       .staff-card {
@@ -1966,7 +2001,8 @@ import { CurrencyInrPipe } from '../../../shared/pipes/currency-inr.pipe';
 
       .performance-table {
         width: 100%;
-        border-collapse: collapse;
+        border-collapse: separate;
+        border-spacing: 0;
         font-size: 0.8125rem;
 
         th {
@@ -2652,6 +2688,17 @@ import { CurrencyInrPipe } from '../../../shared/pipes/currency-inr.pipe';
           background: rgba(212, 175, 55, 0.05);
         }
 
+        &.is-future {
+          opacity: 0.28;
+          cursor: not-allowed;
+          background: var(--color-surface-hover);
+
+          &:hover {
+            border-color: var(--color-border-subtle);
+            background: var(--color-surface-hover);
+          }
+        }
+
         &.is-selected {
           border-color: var(--color-onyx);
           background: var(--color-onyx);
@@ -2714,6 +2761,23 @@ import { CurrencyInrPipe } from '../../../shared/pipes/currency-inr.pipe';
         justify-content: space-between;
         align-items: center;
         font-size: 0.75rem;
+      }
+
+      .future-date-notice {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 10px 12px;
+        background: var(--color-surface-hover);
+        border: 1px dashed var(--color-border-subtle);
+        border-radius: var(--radius-sm);
+        font-size: 0.75rem;
+        color: var(--color-text-muted);
+
+        i {
+          font-size: 1rem;
+          color: var(--color-crimson);
+        }
       }
 
       .marker-buttons {
@@ -3059,14 +3123,23 @@ export class StaffListComponent {
   private toastService = inject(ToastService);
 
   staff = this.dataService.staffMembers;
+  readonly isLoading = computed(
+    () => this.dataService.isStaffLoading() || !this.dataService.staffLoaded(),
+  );
+  readonly todayDateString = new Date().toLocaleDateString('en-CA');
   activeTab = signal<'DIRECTORY' | 'ATTENDANCE'>('DIRECTORY');
-  selectedDate = signal<string>(new Date().toISOString().slice(0, 10));
-  selectedMonth = signal<string>(new Date().toISOString().slice(0, 7));
+  selectedDate = signal<string>(new Date().toLocaleDateString('en-CA'));
+  selectedMonth = signal<string>(new Date().toLocaleDateString('en-CA').slice(0, 7));
 
   // Side Panel State
   selectedPanelStaff = signal<StaffMember | null>(null);
-  panelMonth = signal<string>(new Date().toISOString().slice(0, 7));
-  selectedPanelDate = signal<string>(new Date().toISOString().slice(0, 10));
+  panelMonth = signal<string>(new Date().toLocaleDateString('en-CA').slice(0, 7));
+  selectedPanelDate = signal<string>(new Date().toLocaleDateString('en-CA'));
+
+  isDateFuture(dateStr?: string | null): boolean {
+    if (!dateStr) return false;
+    return dateStr > this.todayDateString;
+  }
 
   activeStaff = computed(() => this.staff().filter((s) => s.status !== 'INACTIVE'));
 
@@ -3129,7 +3202,7 @@ export class StaffListComponent {
     const firstDayIndex = (new Date(year, month - 1, 1).getDay() + 6) % 7; // Mon=0, Sun=6
     const prevMonthDays = new Date(year, month - 1, 0).getDate();
 
-    const todayStr = new Date().toISOString().slice(0, 10);
+    const todayStr = this.todayDateString;
     const cycleStartDay = staff?.payrollCycleStartDay || 1;
 
     let cycleStart = `${year}-${String(month).padStart(2, '0')}-${String(cycleStartDay).padStart(2, '0')}`;
@@ -3146,6 +3219,7 @@ export class StaffListComponent {
       isCurrentMonth: boolean;
       isToday: boolean;
       isInCycle: boolean;
+      isFuture: boolean;
       status?: AttendanceStatus;
     }> = [];
 
@@ -3161,6 +3235,7 @@ export class StaffListComponent {
         isCurrentMonth: false,
         isToday: dStr === todayStr,
         isInCycle: dStr >= cycleStart && dStr <= cycleEnd,
+        isFuture: dStr > todayStr,
       });
     }
 
@@ -3177,6 +3252,7 @@ export class StaffListComponent {
         isCurrentMonth: true,
         isToday: dStr === todayStr,
         isInCycle: dStr >= cycleStart && dStr <= cycleEnd,
+        isFuture: dStr > todayStr,
         status: att?.status,
       });
     }
@@ -3191,6 +3267,7 @@ export class StaffListComponent {
         isCurrentMonth: false,
         isToday: dStr === todayStr,
         isInCycle: dStr >= cycleStart && dStr <= cycleEnd,
+        isFuture: dStr > todayStr,
       });
     }
 
@@ -3530,6 +3607,11 @@ export class StaffListComponent {
     if (!st) return;
     const date = this.selectedPanelDate();
 
+    if (this.isDateFuture(date)) {
+      this.toastService.warning('Cannot mark attendance for future dates');
+      return;
+    }
+
     this.dataService.markStaffAttendance(st.id, date, status).subscribe({
       next: () => {
         this.toastService.success(
@@ -3811,6 +3893,13 @@ export class StaffListComponent {
     this.staffRepo.updateStaff(memberId, { password: newPwd } as any).subscribe({
       next: () => {
         this.isSubmitting = false;
+        if (
+          this.selectedMember?.role === 'ADMIN' ||
+          this.selectedMember?.id === this.auth.currentUser()?.id
+        ) {
+          localStorage.setItem('supabase_admin_pwd_secret', newPwd);
+          this.auth.refreshAdminSecret();
+        }
         this.toastService.success(
           `Updated secret password for ${this.selectedMember?.name} in Supabase!`,
         );
@@ -3818,6 +3907,13 @@ export class StaffListComponent {
       },
       error: () => {
         this.isSubmitting = false;
+        if (
+          this.selectedMember?.role === 'ADMIN' ||
+          this.selectedMember?.id === this.auth.currentUser()?.id
+        ) {
+          localStorage.setItem('supabase_admin_pwd_secret', newPwd);
+          this.auth.refreshAdminSecret();
+        }
         this.toastService.success(
           `Updated secret password for ${this.selectedMember?.name} in Supabase!`,
         );
@@ -3857,6 +3953,10 @@ export class StaffListComponent {
 
   markAttendance(staffId: string, status: AttendanceStatus): void {
     const date = this.selectedDate();
+    if (this.isDateFuture(date)) {
+      this.toastService.warning('Cannot mark attendance for future dates');
+      return;
+    }
     this.dataService.markStaffAttendance(staffId, date, status).subscribe({
       next: () => {
         this.toastService.success(`Attendance marked as ${this.formatAttendanceStatus(status)}`);
@@ -3898,7 +3998,7 @@ export class StaffListComponent {
   }
 
   setToday(): void {
-    const today = new Date().toISOString().slice(0, 10);
+    const today = this.todayDateString;
     this.selectedDate.set(today);
     this.selectedMonth.set(today.slice(0, 7));
     this.dataService.loadStaffAttendance(today.slice(0, 7));
@@ -3906,6 +4006,11 @@ export class StaffListComponent {
   }
 
   onDateChange(date: string): void {
+    if (this.isDateFuture(date)) {
+      this.toastService.warning('Cannot mark attendance for future dates');
+      this.selectedDate.set(this.todayDateString);
+      return;
+    }
     this.selectedDate.set(date);
     if (date) {
       const month = date.slice(0, 7);

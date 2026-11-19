@@ -3,6 +3,7 @@ pub mod config;
 pub mod error;
 pub mod gateway;
 pub mod models;
+pub mod printer;
 pub mod repositories;
 pub mod routes;
 pub mod server;

@@ -346,10 +346,7 @@ export class ApiOrderRepository implements IOrderRepository {
           ? (it.unit_price_paise || 0) / 100
           : (it.unitPrice || (it.unit_price_paise || 0) / 100);
         const quantity = it.quantity || 1;
-        const totalPaise = it.total_paise || it.item_total_paise;
-        const itemTotal = totalPaise
-          ? totalPaise / 100
-          : it.itemTotal || unitPrice * quantity;
+        const itemTotal = it.subtotal_paise ? it.subtotal_paise / 100 : unitPrice * quantity;
 
         return {
           id: it.id || `item-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,

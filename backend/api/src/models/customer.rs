@@ -13,6 +13,8 @@ pub struct Customer {
     pub notes: Option<String>,
     pub visit_count: i32,
     pub total_spend_paise: i64,
+    pub loyalty_points: Option<i32>,
+    pub loyalty_tier: Option<String>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }
@@ -56,4 +58,10 @@ pub struct CreateReservationRequest {
 #[derive(Debug, Clone, Deserialize)]
 pub struct UpdateReservationStatusRequest {
     pub status: String,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct AwardPointsRequest {
+    pub points: i32,
+    pub reason: Option<String>,
 }

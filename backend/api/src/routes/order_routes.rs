@@ -21,6 +21,7 @@ use crate::{
 #[derive(Debug, Deserialize)]
 pub struct ListOrdersQuery {
     pub status: Option<String>,
+    pub days: Option<i64>,
     #[serde(flatten)]
     pub pagination: PaginationQuery,
 }
@@ -31,7 +32,7 @@ pub async fn list_orders(
     Query(query): Query<ListOrdersQuery>,
 ) -> Result<impl IntoResponse, AppError> {
     let orders =
-        OrderRepository::list_orders(&pool, tenant.restaurant_id, query.status, query.pagination)
+        OrderRepository::list_orders(&pool, tenant.restaurant_id, query.status, query.days, query.pagination)
             .await?;
 
     Ok(Json(ApiResponse::success(orders)))

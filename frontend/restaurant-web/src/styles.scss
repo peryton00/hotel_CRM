@@ -7,3 +7,66 @@
 @use './styles/typography';
 @use './styles/mixins';
 @use './styles/utilities';
+@use './styles/admin-dark';
+
+// =============================================================================
+// Global Print Optimization
+// =============================================================================
+@media print {
+  html, body {
+    background: #ffffff !important;
+    color: #0f172a !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    font-size: 11pt !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  // Force all invoice paper text to high-contrast dark ink on printed pages
+  .invoice-paper,
+  .invoice-paper * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  .invoice-paper strong,
+  .invoice-paper b,
+  .invoice-paper h1,
+  .invoice-paper h2,
+  .invoice-paper h3,
+  .invoice-paper h4,
+  .invoice-paper p,
+  .invoice-paper td,
+  .invoice-paper th {
+    color: #0f172a !important;
+  }
+
+  .admin-sidebar,
+  .admin-header,
+  header.admin-header,
+  aside.admin-sidebar,
+  .drawer-backdrop,
+  .offline-global-banner,
+  .syncing-global-banner,
+  .action-bar,
+  .no-print,
+  .modal-overlay,
+  nav {
+    display: none !important;
+  }
+
+  .admin-shell,
+  .admin-main,
+  .admin-content {
+    display: block !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+    overflow: visible !important;
+  }
+}

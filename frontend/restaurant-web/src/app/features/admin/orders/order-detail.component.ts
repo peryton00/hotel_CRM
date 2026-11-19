@@ -1,6 +1,6 @@
 import { Component, inject, computed, signal, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { RouterModule, ActivatedRoute } from '@angular/router';
+import { RouterModule, ActivatedRoute, Router } from '@angular/router';
 import { FormsModule } from '@angular/forms';
 import { RestaurantDataService } from '../../../data-access/services/restaurant-data.service';
 import {
@@ -16,11 +16,24 @@ import { StatusBadgeComponent } from '../../../shared/components/status-badge/st
 import { ToastService } from '../../../core/services/toast.service';
 import { generateIdempotencyKey } from '../../../core/utils/idempotency.util';
 import { AdminAuthService } from '../../../core/services/admin-auth.service';
+import { ThermalPrinterService } from '../../../core/services/thermal-printer.service';
+import { SkeletonLoaderComponent } from '../../../shared/components/loading/skeleton-loader.component';
+import { EmptyStateComponent } from '../../../shared/components/empty-state/empty-state.component';
+import { ThermalReceiptModalComponent } from '../../../shared/components/thermal-receipt-modal/thermal-receipt-modal.component';
 
 @Component({
   selector: 'app-order-detail',
   standalone: true,
-  imports: [CommonModule, RouterModule, FormsModule, CurrencyInrPipe, StatusBadgeComponent],
+  imports: [
+    CommonModule,
+    RouterModule,
+    FormsModule,
+    CurrencyInrPipe,
+    StatusBadgeComponent,
+    SkeletonLoaderComponent,
+    EmptyStateComponent,
+    ThermalReceiptModalComponent,
+  ],
   template: `
     @if (order(); as ord) {
       <div class="order-detail-page">
@@ -301,7 +314,7 @@ import { AdminAuthService } from '../../../core/services/admin-auth.service';
                       </span>
                       <span class="status-chip chip-paid-pill">
                         <i class="ph ph-money"></i>
-                        <span>Paid ({{ ord.paymentMethod || 'UPI' }})</span>
+                        <span>Paid ({{ ord.paymentMethod || 'PAID' }})</span>
                       </span>
                       <span class="status-chip chip-printed-pill">
                         <i class="ph ph-printer"></i>
@@ -370,7 +383,7 @@ import { AdminAuthService } from '../../../core/services/admin-auth.service';
                         <button
                           type="button"
                           class="tender-choice-btn"
-                          [class.active]="(ord.paymentMethod || 'UPI') === pm.value"
+                          [class.active]="(ord.paymentMethod || 'CASH') === pm.value"
                           (click)="updatePaymentMethod(pm.value)"
                         >
                           <i [class]="pm.icon"></i>
@@ -1287,13 +1300,51 @@ import { AdminAuthService } from '../../../core/services/admin-auth.service';
             </div>
           </div>
         }
+
+        <!-- Thermal Receipt Print & Preview Modal (Hardware ESC/POS) -->
+        <app-thermal-receipt-modal
+          [isOpen]="showThermalModal()"
+          [order]="ord"
+          [restaurant]="restaurant()"
+          [effectivePrintCount]="ord.printCount || 0"
+          (close)="showThermalModal.set(false)"
+          (printed)="onThermalOrderPrinted($event)"
+        />
+      </div>
+    } @else if (isLoading()) {
+      <div class="order-detail-page skeleton-detail-loading" style="padding: 24px; gap: 24px;">
+        <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+          <div style="display: flex; flex-direction: column; gap: 10px; width: 45%;">
+            <div class="skeleton-base" style="width: 140px; height: 16px; border-radius: 4px;"></div>
+            <div class="skeleton-base" style="width: 220px; height: 32px; border-radius: 6px;"></div>
+            <div class="skeleton-base" style="width: 180px; height: 14px; border-radius: 4px;"></div>
+          </div>
+          <div style="display: flex; gap: 10px;">
+            <div class="skeleton-base" style="width: 110px; height: 38px; border-radius: 6px;"></div>
+            <div class="skeleton-base" style="width: 120px; height: 38px; border-radius: 6px;"></div>
+          </div>
+        </div>
+        <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 24px;">
+          <div style="background: var(--color-surface, #fff); border: 1px solid var(--color-border, #e5ded4); border-radius: var(--radius-md, 12px); padding: 24px; display: flex; flex-direction: column; gap: 16px;">
+            <div class="skeleton-base" style="width: 30%; height: 22px; border-radius: 4px;"></div>
+            <app-skeleton variant="table-row" [count]="4" />
+          </div>
+          <div style="background: var(--color-surface, #fff); border: 1px solid var(--color-border, #e5ded4); border-radius: var(--radius-md, 12px); padding: 24px; display: flex; flex-direction: column; gap: 16px;">
+            <div class="skeleton-base" style="width: 50%; height: 22px; border-radius: 4px;"></div>
+            <div class="skeleton-base" style="width: 100%; height: 60px; border-radius: 6px;"></div>
+            <div class="skeleton-base" style="width: 100%; height: 100px; border-radius: 6px;"></div>
+          </div>
+        </div>
       </div>
     } @else {
-      <div class="empty-state-panel">
-        <h2 class="heading-card">Order Not Found</h2>
-        <p class="text-muted">The requested order does not exist or has been archived.</p>
-        <a routerLink="/admin/orders" class="btn btn-secondary">Return to Orders Queue</a>
-      </div>
+      <app-empty-state
+        icon="ph-receipt"
+        title="Order Not Found"
+        message="The requested order does not exist or has been archived."
+        actionText="Return to Orders Queue"
+        actionIcon="ph-arrow-left"
+        (actionClick)="router.navigate(['/admin/orders'])"
+      />
     }
   `,
   styles: [
@@ -2441,12 +2492,19 @@ import { AdminAuthService } from '../../../core/services/admin-auth.service';
   ],
 })
 export class OrderDetailComponent implements OnInit {
+  router = inject(Router);
   private route = inject(ActivatedRoute);
   private dataService = inject(RestaurantDataService);
   private mock = this.dataService;
   private toastService = inject(ToastService);
   private adminAuth = inject(AdminAuthService);
+  private thermalPrinter = inject(ThermalPrinterService);
 
+  readonly isLoading = computed(
+    () => this.dataService.isOrdersLoading() || !this.dataService.ordersLoaded(),
+  );
+
+  restaurant = this.mock.restaurant;
   orderId = signal<string>('');
 
   order = computed(() => {
@@ -2495,6 +2553,7 @@ export class OrderDetailComponent implements OnInit {
   isSubmittingRefund = signal<boolean>(false);
 
   // Admin Password Override for Paid Orders
+  showThermalModal = signal<boolean>(false);
   showAdminPasswordModal = signal<boolean>(false);
   adminPasswordInput = signal<string>('');
   adminPasswordError = signal<string>('');
@@ -2629,8 +2688,33 @@ export class OrderDetailComponent implements OnInit {
       return;
     }
 
+    if (status === 'PAID') {
+      const method: 'UPI' | 'CASH' | 'CARD' =
+        ord.paymentMethod === 'CARD' ? 'CARD' : ord.paymentMethod === 'UPI' ? 'UPI' : 'CASH';
+      const settleRes = this.mock.settleOrder({
+        orderId: ord.id,
+        paymentMethod: method,
+      });
+      if (!settleRes.success) {
+        this.toastService.warning(settleRes.error || 'Failed to settle order');
+        return;
+      }
+      const isPrinted = (ord.printCount || 0) > 0;
+      if (isPrinted) {
+        this.toastService.success(`Payment marked as PAID & order COMPLETED`);
+      } else {
+        this.toastService.success(`Payment status marked as PAID`);
+      }
+      return;
+    }
+
+    if (status === 'REFUNDED') {
+      this.openRefundModal();
+      return;
+    }
+
     const isPrinted = (ord.printCount || 0) > 0;
-    const nextStatus = status === 'PAID' && isPrinted ? 'COMPLETED' : ord.status;
+    const nextStatus = ord.status;
 
     const updated = this.mock
       .orders()
@@ -2639,15 +2723,7 @@ export class OrderDetailComponent implements OnInit {
       );
     this.mock.orders.set(updated);
     this.mock.saveLocal('orders', updated);
-
-    if (status === 'PAID' && isPrinted && ord.status !== 'COMPLETED') {
-      this.mock.updateOrderStatusAtomic(ord.id, 'COMPLETED', {
-        note: 'Order paid and invoice already printed; marked COMPLETED',
-      });
-      this.toastService.success(`Payment marked as PAID & order COMPLETED`);
-    } else {
-      this.toastService.success(`Payment status marked as ${status}`);
-    }
+    this.toastService.success(`Payment status marked as ${status}`);
   }
 
   updatePaymentMethod(method: PaymentMethod): void {
@@ -2738,30 +2814,56 @@ export class OrderDetailComponent implements OnInit {
     }
   }
 
+  private dispatchThermalOrBrowserPrint(ord: Order, infoMsg: string): void {
+    const cfg = this.thermalPrinter.config();
+    if (cfg.target === 'BROWSER') {
+      this.toastService.success(infoMsg);
+      window.print();
+      return;
+    }
+
+    const rest = this.mock.restaurant() || {};
+    this.thermalPrinter.printOrderReceipt(rest, ord, null).subscribe({
+      next: (res) => {
+        if (res.success) {
+          const targetName =
+            cfg.target === 'NETWORK'
+              ? cfg.networkAddress
+              : cfg.printerName || 'Default Windows Printer';
+          this.toastService.success(`Thermal receipt sent to ${targetName}.`);
+        } else {
+          this.toastService.warning(`Thermal printer error: ${res.message}. Opening standard print.`);
+          window.print();
+        }
+      },
+      error: () => {
+        this.toastService.warning('Thermal printer offline. Opening standard print.');
+        window.print();
+      },
+    });
+  }
+
   printOrderReceipt(): void {
     const ord = this.order();
     if (!ord) return;
-    if (ord.printCount && ord.printCount > 0) {
-      this.openReprintReceiptModal();
-      return;
-    }
-    const res = this.mock.recordOrderPrint(ord.id, false, 'Floor Staff');
-    if (res.success) {
+    this.showThermalModal.set(true);
+  }
+
+  openReprintReceiptModal(): void {
+    this.showThermalModal.set(true);
+  }
+
+  onThermalOrderPrinted(event: { method: 'THERMAL' | 'BROWSER'; printCount: number }): void {
+    const ord = this.order();
+    if (!ord) return;
+    if ((ord.printCount || 0) === 0) {
+      this.mock.recordOrderPrint(ord.id, false, 'Floor Staff');
       if (ord.paymentStatus === 'PAID' && ord.status !== 'COMPLETED') {
         this.mock.updateOrderStatusAtomic(ord.id, 'COMPLETED', {
           note: 'Tax Invoice printed and payment already settled; marked COMPLETED',
         });
       }
-      this.toastService.success(`Bill receipt printed (Original - Copy #1).`);
-      window.print();
     }
-  }
-
-  openReprintReceiptModal(): void {
-    this.isReprintFlow.set(true);
-    this.adminPasswordInput.set('');
-    this.adminPasswordError.set('');
-    this.showAdminPasswordModal.set(true);
   }
 
   // --- Edit Order Modal Actions ---
@@ -2814,10 +2916,10 @@ export class OrderDetailComponent implements OnInit {
               note: 'Invoice reprinted and payment already settled; marked COMPLETED',
             });
           }
-          this.toastService.info(
+          this.showThermalModal.set(true);
+          this.toastService.success(
             `Admin authorization verified. Printing reprint (Copy #${res.printCount}).`,
           );
-          window.print();
         }
       }
     } else {

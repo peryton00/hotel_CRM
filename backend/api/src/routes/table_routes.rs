@@ -11,7 +11,10 @@ use crate::{
     error::AppError,
     models::{
         common::ApiResponse,
-        table::{AssignTableStaffRequest, TransferTableRequest, UpdateTableStatusRequest},
+        table::{
+            AssignTableStaffRequest, CreateTableRequest, TransferTableRequest,
+            UpdateTableStatusRequest,
+        },
     },
     repositories::TableRepository,
 };
@@ -22,6 +25,27 @@ pub async fn list_tables(
 ) -> Result<impl IntoResponse, AppError> {
     let tables = TableRepository::list_by_restaurant(&pool, tenant.restaurant_id).await?;
     Ok(Json(ApiResponse::success(tables)))
+}
+
+pub async fn create_table(
+    State(pool): State<PgPool>,
+    tenant: TenantContext,
+    Json(req): Json<CreateTableRequest>,
+) -> Result<impl IntoResponse, AppError> {
+    let table = TableRepository::create_table(&pool, tenant.restaurant_id, req).await?;
+    Ok(Json(ApiResponse::success(table)))
+}
+
+pub async fn delete_table(
+    State(pool): State<PgPool>,
+    tenant: TenantContext,
+    Path(table_id): Path<Uuid>,
+) -> Result<impl IntoResponse, AppError> {
+    TableRepository::delete_table(&pool, tenant.restaurant_id, table_id).await?;
+    Ok(Json(ApiResponse::with_message(
+        serde_json::json!({ "deleted": true }),
+        "Table deleted successfully",
+    )))
 }
 
 pub async fn update_table_status(
@@ -37,6 +61,7 @@ pub async fn update_table_status(
         req.status.as_deref(),
         req.active_order_id,
         req.assigned_staff_id.map(Some),
+        req.ordering_enabled,
     )
     .await?;
 

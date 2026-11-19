@@ -5,7 +5,7 @@ use crate::{
     error::AppError,
     models::inventory::{
         CreateInventoryItemRequest, InventoryItem, RecordWastageRequest, StockMovement,
-        WastageRecord,
+        UpdateInventoryItemRequest, WastageRecord,
     },
     services::{inventory_service::InventoryService, outbox_service::OutboxService},
 };
@@ -19,8 +19,13 @@ impl InventoryRepository {
     ) -> Result<Vec<InventoryItem>, AppError> {
         let items = sqlx::query_as::<_, InventoryItem>(
             r#"
-            SELECT id, restaurant_id, name, sku, category, unit_of_measure,
-                   current_stock, reserved_stock, reorder_level, cost_per_unit_paise,
+            SELECT id, restaurant_id, name, sku,
+                   'general'::text AS category,
+                   unit_of_measure,
+                   current_stock::float8 AS current_stock,
+                   0.0::float8 AS reserved_stock,
+                   reorder_level::float8 AS reorder_level,
+                   cost_per_unit_paise,
                    created_at, updated_at
             FROM inventory_items
             WHERE restaurant_id = $1
@@ -45,12 +50,17 @@ impl InventoryRepository {
         let item = sqlx::query_as::<_, InventoryItem>(
             r#"
             INSERT INTO inventory_items (
-                restaurant_id, name, sku, category, unit_of_measure,
-                current_stock, reserved_stock, reorder_level, cost_per_unit_paise
+                restaurant_id, name, sku, category, unit, unit_of_measure,
+                current_stock, reorder_level, cost_per_unit_paise
             )
-            VALUES ($1, $2, $3, $4, $5, $6, 0.0, $7, $8)
-            RETURNING id, restaurant_id, name, sku, category, unit_of_measure,
-                      current_stock, reserved_stock, reorder_level, cost_per_unit_paise,
+            VALUES ($1, $2, $3, $4, $5, $5, $6, $7, $8)
+            RETURNING id, restaurant_id, name, sku,
+                      category,
+                      unit_of_measure,
+                      current_stock::float8 AS current_stock,
+                      0.0::float8 AS reserved_stock,
+                      reorder_level::float8 AS reorder_level,
+                      cost_per_unit_paise,
                       created_at, updated_at
             "#,
         )
@@ -61,6 +71,47 @@ impl InventoryRepository {
         .bind(&req.unit_of_measure)
         .bind(initial_stock)
         .bind(reorder_level)
+        .bind(req.cost_per_unit_paise)
+        .fetch_one(pool)
+        .await?;
+
+        Ok(item)
+    }
+
+    pub async fn update_item(
+        pool: &PgPool,
+        restaurant_id: Uuid,
+        item_id: Uuid,
+        req: UpdateInventoryItemRequest,
+    ) -> Result<InventoryItem, AppError> {
+        let item = sqlx::query_as::<_, InventoryItem>(
+            r#"
+            UPDATE inventory_items
+            SET name = COALESCE($3, name),
+                sku = COALESCE($4, sku),
+                unit_of_measure = COALESCE($5, unit_of_measure),
+                current_stock = COALESCE($6, current_stock),
+                reorder_level = COALESCE($7, reorder_level),
+                cost_per_unit_paise = COALESCE($8, cost_per_unit_paise),
+                updated_at = NOW()
+            WHERE restaurant_id = $1 AND id = $2
+            RETURNING id, restaurant_id, name, sku,
+                      'general'::text AS category,
+                      unit_of_measure,
+                      current_stock::float8 AS current_stock,
+                      0.0::float8 AS reserved_stock,
+                      reorder_level::float8 AS reorder_level,
+                      cost_per_unit_paise,
+                      created_at, updated_at
+            "#,
+        )
+        .bind(restaurant_id)
+        .bind(item_id)
+        .bind(req.name)
+        .bind(req.sku)
+        .bind(req.unit_of_measure)
+        .bind(req.current_stock)
+        .bind(req.reorder_level)
         .bind(req.cost_per_unit_paise)
         .fetch_one(pool)
         .await?;
@@ -80,7 +131,8 @@ impl InventoryRepository {
         if let Some(ref idem) = req.idempotency_key {
             let existing = sqlx::query_as::<_, WastageRecord>(
                 r#"
-                SELECT id, restaurant_id, inventory_item_id, quantity, unit_of_measure,
+                SELECT id, restaurant_id, inventory_item_id,
+                       quantity::float8 AS quantity, unit_of_measure,
                        cost_impact_paise, reason, reported_by_staff_id, idempotency_key, created_at
                 FROM wastage_records
                 WHERE restaurant_id = $1 AND idempotency_key = $2
@@ -100,8 +152,13 @@ impl InventoryRepository {
         // 2. Fetch inventory item with lock
         let item = sqlx::query_as::<_, InventoryItem>(
             r#"
-            SELECT id, restaurant_id, name, sku, category, unit_of_measure,
-                   current_stock, reserved_stock, reorder_level, cost_per_unit_paise,
+            SELECT id, restaurant_id, name, sku,
+                   'general'::text AS category,
+                   unit_of_measure,
+                   current_stock::float8 AS current_stock,
+                   0.0::float8 AS reserved_stock,
+                   reorder_level::float8 AS reorder_level,
+                   cost_per_unit_paise,
                    created_at, updated_at
             FROM inventory_items
             WHERE restaurant_id = $1 AND id = $2 FOR UPDATE
@@ -145,6 +202,17 @@ impl InventoryRepository {
         .execute(&mut *tx)
         .await?;
 
+        let valid_staff_id = match staff_id {
+            Some(id) => sqlx::query_scalar::<_, Uuid>(
+                "SELECT id FROM staff_members WHERE id = $1 OR auth_user_id = $1 LIMIT 1",
+            )
+            .bind(id)
+            .fetch_optional(&mut *tx)
+            .await
+            .unwrap_or(None),
+            None => None,
+        };
+
         // 4. Insert wastage record
         let wastage = sqlx::query_as::<_, WastageRecord>(
             r#"
@@ -153,7 +221,8 @@ impl InventoryRepository {
                 cost_impact_paise, reason, reported_by_staff_id, idempotency_key
             )
             VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-            RETURNING id, restaurant_id, inventory_item_id, quantity, unit_of_measure,
+            RETURNING id, restaurant_id, inventory_item_id,
+                      quantity::float8 AS quantity, unit_of_measure,
                       cost_impact_paise, reason, reported_by_staff_id, idempotency_key, created_at
             "#,
         )
@@ -163,7 +232,7 @@ impl InventoryRepository {
         .bind(&item.unit_of_measure)
         .bind(cost_impact)
         .bind(&req.reason)
-        .bind(staff_id)
+        .bind(valid_staff_id)
         .bind(req.idempotency_key)
         .fetch_one(&mut *tx)
         .await?;
@@ -172,17 +241,16 @@ impl InventoryRepository {
         sqlx::query(
             r#"
             INSERT INTO stock_movements (
-                restaurant_id, inventory_item_id, movement_type, quantity_change,
-                balance_after, unit_cost_paise, reference_wastage_id, notes
+                restaurant_id, inventory_item_id, movement_type, quantity,
+                balance_after, reference_wastage_id, notes
             )
-            VALUES ($1, $2, 'wastage', $3, $4, $5, $6, $7)
+            VALUES ($1, $2, 'WASTAGE', $3, $4, $5, $6)
             "#,
         )
         .bind(restaurant_id)
         .bind(item.id)
         .bind(-converted_qty)
         .bind(new_stock)
-        .bind(item.cost_per_unit_paise)
         .bind(wastage.id)
         .bind(format!("Wastage reported: {}", req.reason))
         .execute(&mut *tx)
@@ -226,8 +294,11 @@ impl InventoryRepository {
         let movements = if let Some(id) = item_id {
             sqlx::query_as::<_, StockMovement>(
                 r#"
-                SELECT id, restaurant_id, inventory_item_id, movement_type, quantity_change,
-                       balance_after, unit_cost_paise, reference_order_id, reference_wastage_id,
+                SELECT id, restaurant_id, inventory_item_id, movement_type,
+                       quantity::float8 AS quantity_change,
+                       balance_after::float8 AS balance_after,
+                       0::bigint AS unit_cost_paise,
+                       reference_order_id, reference_wastage_id,
                        idempotency_key, notes, created_at
                 FROM stock_movements
                 WHERE restaurant_id = $1 AND inventory_item_id = $2
@@ -242,8 +313,11 @@ impl InventoryRepository {
         } else {
             sqlx::query_as::<_, StockMovement>(
                 r#"
-                SELECT id, restaurant_id, inventory_item_id, movement_type, quantity_change,
-                       balance_after, unit_cost_paise, reference_order_id, reference_wastage_id,
+                SELECT id, restaurant_id, inventory_item_id, movement_type,
+                       quantity::float8 AS quantity_change,
+                       balance_after::float8 AS balance_after,
+                       0::bigint AS unit_cost_paise,
+                       reference_order_id, reference_wastage_id,
                        idempotency_key, notes, created_at
                 FROM stock_movements
                 WHERE restaurant_id = $1

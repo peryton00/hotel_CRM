@@ -14,7 +14,8 @@ use crate::{
     models::{
         common::ApiResponse,
         customer::{
-            CreateCustomerRequest, CreateReservationRequest, UpdateReservationStatusRequest,
+            AwardPointsRequest, CreateCustomerRequest, CreateReservationRequest,
+            UpdateReservationStatusRequest,
         },
     },
     repositories::CustomerRepository,
@@ -46,6 +47,18 @@ pub async fn create_customer(
     Json(req): Json<CreateCustomerRequest>,
 ) -> Result<impl IntoResponse, AppError> {
     let customer = CustomerRepository::create_customer(&pool, tenant.restaurant_id, req).await?;
+    Ok(Json(ApiResponse::success(customer)))
+}
+
+pub async fn award_points(
+    State(pool): State<PgPool>,
+    tenant: TenantContext,
+    Path(customer_id): Path<Uuid>,
+    Json(req): Json<AwardPointsRequest>,
+) -> Result<impl IntoResponse, AppError> {
+    let customer =
+        CustomerRepository::award_points(&pool, tenant.restaurant_id, customer_id, req.points)
+            .await?;
     Ok(Json(ApiResponse::success(customer)))
 }
 

@@ -88,6 +88,17 @@ pub struct CreateInventoryItemRequest {
 }
 
 #[derive(Debug, Clone, Deserialize)]
+pub struct UpdateInventoryItemRequest {
+    pub name: Option<String>,
+    pub sku: Option<String>,
+    pub category: Option<String>,
+    pub unit_of_measure: Option<String>,
+    pub current_stock: Option<f64>,
+    pub reorder_level: Option<f64>,
+    pub cost_per_unit_paise: Option<i64>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
 pub struct RecordWastageRequest {
     pub inventory_item_id: Uuid,
     pub quantity: f64,

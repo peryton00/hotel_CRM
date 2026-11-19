@@ -1,19 +1,38 @@
 import { Component, inject, computed, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { RouterModule } from '@angular/router';
+import { RouterModule, Router } from '@angular/router';
 import { FormsModule } from '@angular/forms';
 import { RestaurantDataService } from '../../../data-access/services/restaurant-data.service';
 import { CurrencyInrPipe } from '../../../shared/pipes/currency-inr.pipe';
 import { StatusBadgeComponent } from '../../../shared/components/status-badge/status-badge.component';
+import { SkeletonLoaderComponent } from '../../../shared/components/loading/skeleton-loader.component';
+import { LoadingButtonDirective } from '../../../shared/components/loading/loading-button.directive';
+import { EmptyStateComponent } from '../../../shared/components/empty-state/empty-state.component';
 import { ToastService } from '../../../core/services/toast.service';
 import { Order } from '../../../core/models/order.model';
 import { Invoice, SplitBill } from '../../../core/models/billing.model';
 import { generateIdempotencyKey } from '../../../core/utils/idempotency.util';
+import {
+  openWhatsAppBill,
+  buildWhatsAppBillMessage,
+  getWhatsAppWebUrl,
+  getWhatsAppAppUrl,
+  launchExternalUrl,
+} from '../../../core/utils/whatsapp-bill.util';
 
 @Component({
   selector: 'app-billing-queue',
   standalone: true,
-  imports: [CommonModule, RouterModule, FormsModule, CurrencyInrPipe, StatusBadgeComponent],
+  imports: [
+    CommonModule,
+    RouterModule,
+    FormsModule,
+    CurrencyInrPipe,
+    StatusBadgeComponent,
+    SkeletonLoaderComponent,
+    LoadingButtonDirective,
+    EmptyStateComponent,
+  ],
   template: `
     <div class="billing-page">
       <!-- Header -->
@@ -91,18 +110,23 @@ import { generateIdempotencyKey } from '../../../core/utils/idempotency.util';
             </tr>
           </thead>
           <tbody>
-            @for (ord of filteredOrders(); track ord.id) {
+            @if (isLoading()) {
+              <tr>
+                <td colspan="8" style="padding: 0;">
+                  <app-skeleton variant="billing-row" [count]="5" />
+                </td>
+              </tr>
+            } @else {
+              @for (ord of filteredOrders(); track ord.id) {
               <tr>
                 <td>
                   <div class="ord-tbl-cell">
                     @if (ord.orderType === 'TAKEAWAY') {
-                      <span
-                        class="table-tag takeaway-tag"
-                        style="background: rgba(212, 175, 55, 0.15); border-color: rgba(212, 175, 55, 0.4); color: #8b6508;"
-                        ><i class="ph ph-bag"></i> Takeaway ({{
+                      <span class="table-tag takeaway-tag">
+                        <i class="ph ph-bag"></i> Takeaway ({{
                           ord.pickupReference || ord.orderNumber
-                        }})</span
-                      >
+                        }})
+                      </span>
                     } @else {
                       <span class="table-tag">Table {{ ord.tableNumber }}</span>
                     }
@@ -158,14 +182,20 @@ import { generateIdempotencyKey } from '../../../core/utils/idempotency.util';
                       <i class="ph ph-receipt"></i>
                       <span>Bill Preview</span>
                       @if (ord.printCount && ord.printCount > 0) {
-                        <span
-                          class="badge badge-subtle"
-                          style="font-size: 0.65rem; padding: 2px 5px; margin-left: 4px; background: rgba(184, 134, 11, 0.15); color: #8b6508; border-radius: 4px;"
-                        >
+                        <span class="badge badge-subtle print-count-badge">
                           {{ ord.printCount }}x
                         </span>
                       }
                     </a>
+                    <button
+                      type="button"
+                      class="btn btn-whatsapp btn-sm"
+                      (click)="openWhatsAppForOrder(ord)"
+                      title="Send Bill via WhatsApp"
+                    >
+                      <i class="ph ph-whatsapp-logo"></i>
+                      <span>WhatsApp</span>
+                    </button>
 
                     @if (!ord.isSplit && ord.paymentStatus === 'UNPAID') {
                       <button
@@ -273,6 +303,15 @@ import { generateIdempotencyKey } from '../../../core/utils/idempotency.util';
                                       <i class="ph ph-receipt"></i>
                                       <span>Slip</span>
                                     </a>
+                                    <button
+                                      type="button"
+                                      class="btn btn-whatsapp btn-xs"
+                                      (click)="openWhatsAppForSplit(ord, split)"
+                                      title="Send Split Bill via WhatsApp"
+                                    >
+                                      <i class="ph ph-whatsapp-logo"></i>
+                                      <span>WhatsApp</span>
+                                    </button>
                                     @if (split.paymentStatus === 'UNPAID') {
                                       <button
                                         class="btn btn-primary btn-xs"
@@ -303,15 +342,17 @@ import { generateIdempotencyKey } from '../../../core/utils/idempotency.util';
               }
             } @empty {
               <tr>
-                <td
-                  colspan="8"
-                  class="text-center"
-                  style="padding: 32px; color: var(--color-text-muted);"
-                >
-                  No orders found in current billing filter.
+                <td colspan="8" style="padding: 0;">
+                  <app-empty-state
+                    icon="ph-receipt"
+                    title="No Orders in Billing Queue"
+                    message="No dining orders currently match the selected payment or order filter."
+                    [bordered]="false"
+                  />
                 </td>
               </tr>
             }
+          }
           </tbody>
         </table>
       </div>
@@ -342,21 +383,138 @@ import { generateIdempotencyKey } from '../../../core/utils/idempotency.util';
                   <span>Item Subtotal</span>
                   <span>{{ ord.subtotal | currencyInr }}</span>
                 </div>
-                @if (ord.discountAmount > 0) {
+                @if (getEffectiveDiscount(ord) > 0) {
                   <div class="settle-row discount">
-                    <span>Discount Applied</span>
-                    <span>-{{ ord.discountAmount | currencyInr }}</span>
+                    <span>Discount ({{ settleDiscountMode() === 'COUPON' && selectedCouponCode() ? selectedCouponCode() : 'Counter Off' }})</span>
+                    <span class="text-success font-semibold">-{{ getEffectiveDiscount(ord) | currencyInr }}</span>
                   </div>
                 }
                 <div class="settle-row">
                   <span>Taxes (CGST + SGST)</span>
-                  <span>{{ ord.taxAmount | currencyInr }}</span>
+                  <span>{{ getSettlementTax(ord) | currencyInr }}</span>
                 </div>
                 <div class="settle-divider"></div>
                 <div class="settle-row total-highlight">
                   <span>Net Payable Total</span>
-                  <span class="amount-large">{{ ord.totalAmount | currencyInr }}</span>
+                  <span class="amount-large">{{ getSettlementTotal(ord) | currencyInr }}</span>
                 </div>
+              </div>
+
+              <!-- Counter Discount & Coupons Block -->
+              <div class="settle-discount-card">
+                <div class="discount-header-row">
+                  <span class="discount-title">
+                    <i class="ph ph-tag"></i> Discount & Offers
+                  </span>
+                  <div class="discount-segmented-control">
+                    <button
+                      type="button"
+                      class="seg-btn"
+                      [class.active]="settleDiscountMode() === 'CUSTOM'"
+                      (click)="settleDiscountMode.set('CUSTOM')"
+                    >
+                      <i class="ph ph-currency-inr"></i> Flat ₹ Off
+                    </button>
+                    <button
+                      type="button"
+                      class="seg-btn"
+                      [class.active]="settleDiscountMode() === 'COUPON'"
+                      (click)="settleDiscountMode.set('COUPON')"
+                    >
+                      <i class="ph ph-ticket"></i> Coupon
+                    </button>
+                  </div>
+                </div>
+
+                @if (settleDiscountMode() === 'CUSTOM') {
+                  <div class="custom-disc-pane">
+                    <div class="inr-input-wrapper">
+                      <span class="inr-prefix">₹</span>
+                      <input
+                        type="number"
+                        min="0"
+                        [max]="ord.subtotal + ord.taxAmount"
+                        class="inr-input"
+                        placeholder="Enter rupees off..."
+                        [value]="customDiscountRupees() || ''"
+                        (input)="onCustomDiscountChange($event, ord.subtotal + ord.taxAmount)"
+                      />
+                      @if (customDiscountRupees() > 0) {
+                        <button
+                          type="button"
+                          class="btn-disc-clear"
+                          (click)="clearDiscount()"
+                          title="Clear discount"
+                        >
+                          <i class="ph ph-x"></i> Clear
+                        </button>
+                      }
+                    </div>
+                    <div class="quick-disc-chips">
+                      <button
+                        type="button"
+                        class="disc-chip"
+                        [class.chip-active]="customDiscountRupees() === 20"
+                        (click)="applyQuickRupees(20, ord.subtotal + ord.taxAmount)"
+                      >
+                        -₹20
+                      </button>
+                      <button
+                        type="button"
+                        class="disc-chip"
+                        [class.chip-active]="customDiscountRupees() === 50"
+                        (click)="applyQuickRupees(50, ord.subtotal + ord.taxAmount)"
+                      >
+                        -₹50
+                      </button>
+                      <button
+                        type="button"
+                        class="disc-chip"
+                        [class.chip-active]="customDiscountRupees() === 100"
+                        (click)="applyQuickRupees(100, ord.subtotal + ord.taxAmount)"
+                      >
+                        -₹100
+                      </button>
+                      <button
+                        type="button"
+                        class="disc-chip chip-round"
+                        (click)="applyRoundOffDiscount(ord)"
+                        title="Round total down to nearest ₹10"
+                      >
+                        Round Off
+                      </button>
+                    </div>
+                  </div>
+                }
+
+                @if (settleDiscountMode() === 'COUPON') {
+                  <div class="coupon-disc-pane">
+                    <div class="coupon-select-wrapper">
+                      <select
+                        class="coupon-select"
+                        [ngModel]="selectedCouponCode()"
+                        (ngModelChange)="onSelectCoupon($event, ord.subtotal)"
+                      >
+                        <option value="">-- Select Active Coupon --</option>
+                        @for (c of activeCoupons(); track c.id) {
+                          <option [value]="c.code">
+                            {{ c.code }} ({{ c.discountType === 'PERCENTAGE' ? c.discountValue + '% OFF' : '₹' + c.discountValue + ' OFF' }}{{ c.minOrderValue ? ', min ₹' + c.minOrderValue : '' }})
+                          </option>
+                        }
+                      </select>
+                      <i class="ph ph-caret-down coupon-caret"></i>
+                    </div>
+                    @if (selectedCouponCode()) {
+                      <div class="applied-coupon-badge">
+                        <i class="ph ph-seal-check"></i>
+                        <span>Coupon <strong>{{ selectedCouponCode() }}</strong> applied: -{{ getEffectiveDiscount(ord) | currencyInr }}</span>
+                        <button type="button" class="btn-disc-clear-pill" (click)="clearDiscount()">
+                          <i class="ph ph-x"></i>
+                        </button>
+                      </div>
+                    }
+                  </div>
+                }
               </div>
 
               <div class="payment-selector-group">
@@ -393,6 +551,22 @@ import { generateIdempotencyKey } from '../../../core/utils/idempotency.util';
                       <i class="ph ph-check-circle tile-check"></i>
                     }
                   </button>
+
+                  <button
+                    type="button"
+                    class="method-tile"
+                    [class.selected]="selectedPaymentMethod() === 'CARD'"
+                    (click)="selectedPaymentMethod.set('CARD')"
+                  >
+                    <i class="ph ph-credit-card tile-icon"></i>
+                    <div class="tile-info">
+                      <span class="tile-title">Card / POS</span>
+                      <span class="tile-sub">Swipe / Tap Terminal</span>
+                    </div>
+                    @if (selectedPaymentMethod() === 'CARD') {
+                      <i class="ph ph-check-circle tile-check"></i>
+                    }
+                  </button>
                 </div>
               </div>
             </div>
@@ -407,15 +581,13 @@ import { generateIdempotencyKey } from '../../../core/utils/idempotency.util';
               </button>
               <button
                 class="btn btn-primary"
+                [appLoadingButton]="isSettling()"
+                loadingText="Recording..."
                 (click)="confirmSettlement()"
                 [disabled]="isSettling()"
               >
-                @if (isSettling()) {
-                  <span>Recording...</span>
-                } @else {
-                  <i class="ph ph-check"></i>
-                  <span>Confirm {{ selectedPaymentMethod() }} Settlement</span>
-                }
+                <i class="ph ph-check"></i>
+                <span>Confirm {{ selectedPaymentMethod() }} Settlement</span>
               </button>
             </div>
           </div>
@@ -840,6 +1012,108 @@ import { generateIdempotencyKey } from '../../../core/utils/idempotency.util';
           </div>
         </div>
       }
+
+      <!-- WhatsApp Delivery Modal -->
+      @if (showWhatsAppModal() && whatsAppOrder(); as ord) {
+        <div class="modal-overlay" (click)="onModalBackdropClick($event, 'whatsapp')">
+          <div class="modal-card settle-modal whatsapp-dialog-card" role="dialog" aria-modal="true">
+            <div class="modal-header">
+              <div class="whatsapp-header-wrap">
+                <div class="whatsapp-icon-badge">
+                  <i class="ph ph-whatsapp-logo"></i>
+                </div>
+                <div>
+                  <h3 class="heading-card">Send Bill via WhatsApp</h3>
+                  <span class="text-xs text-muted">
+                    {{ ord.orderNumber }} • Table {{ ord.tableNumber || 'Dine-In' }}
+                    @if (whatsAppSplit(); as split) {
+                      (Split Bill #{{ split.splitIndex }}/{{ split.splitTotalCount }})
+                    }
+                  </span>
+                </div>
+              </div>
+              <button
+                class="close-btn"
+                (click)="closeWhatsAppModal()"
+                aria-label="Close dialog"
+              >
+                <i class="ph ph-x"></i>
+              </button>
+            </div>
+
+            <div class="modal-body">
+              <div class="form-group">
+                <label class="form-label" for="bq-wa-phone">Customer WhatsApp Phone Number *</label>
+                <div class="input-with-icon">
+                  <i class="ph ph-phone"></i>
+                  <input
+                    id="bq-wa-phone"
+                    type="tel"
+                    class="form-input"
+                    placeholder="e.g. 9876543210 or +91 98765 43210"
+                    [value]="whatsAppPhone()"
+                    (input)="whatsAppPhone.set($any($event.target).value)"
+                    (keyup.enter)="sendWhatsAppBill()"
+                    autofocus
+                  />
+                </div>
+                <span class="hint-text">Enter 10-digit mobile number. Country code defaults to +91 (India) if omitted.</span>
+              </div>
+
+              <div class="form-group">
+                <label class="form-label">Message Preview</label>
+                <pre class="whatsapp-preview-box">{{ whatsAppMessagePreview() }}</pre>
+              </div>
+            </div>
+
+            <div class="modal-footer whatsapp-modal-footer">
+              <button class="btn btn-secondary" (click)="closeWhatsAppModal()">
+                Cancel
+              </button>
+              <button
+                type="button"
+                class="btn btn-secondary"
+                (click)="copyBillToClipboard()"
+                title="Copy formatted bill text to clipboard"
+              >
+                <i class="ph ph-copy"></i>
+                <span>Copy Text</span>
+              </button>
+              @if (whatsAppAppUrl()) {
+                <a
+                  [href]="whatsAppAppUrl()"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  class="btn btn-secondary"
+                  (click)="onWhatsAppLinkClicked(whatsAppAppUrl())"
+                  title="Open in WhatsApp Desktop App or Mobile"
+                >
+                  <i class="ph ph-device-mobile"></i>
+                  <span>WhatsApp App</span>
+                </a>
+              }
+              @if (whatsAppWebUrl()) {
+                <a
+                  [href]="whatsAppWebUrl()"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  class="btn btn-whatsapp-action"
+                  (click)="onWhatsAppLinkClicked(whatsAppWebUrl())"
+                  title="Directly launch WhatsApp Web in a new tab"
+                >
+                  <i class="ph ph-whatsapp-logo"></i>
+                  <span>Open WhatsApp Web</span>
+                </a>
+              } @else {
+                <button type="button" class="btn btn-whatsapp-action" disabled>
+                  <i class="ph ph-whatsapp-logo"></i>
+                  <span>Enter Valid 10-Digit Mobile</span>
+                </button>
+              }
+            </div>
+          </div>
+        </div>
+      }
     </div>
   `,
   styles: [
@@ -949,6 +1223,27 @@ import { generateIdempotencyKey } from '../../../core/utils/idempotency.util';
         font-size: 0.75rem;
         font-weight: 800;
         color: var(--color-crimson);
+
+        &.takeaway-tag {
+          display: inline-flex;
+          align-items: center;
+          gap: 4px;
+          background: rgba(212, 175, 55, 0.15);
+          border: 1px solid rgba(212, 175, 55, 0.4);
+          color: #7d6514;
+          padding: 2px 7px;
+          border-radius: var(--radius-xs);
+          font-weight: 700;
+        }
+      }
+
+      .print-count-badge {
+        font-size: 0.65rem;
+        padding: 2px 5px;
+        margin-left: 4px;
+        background: rgba(184, 134, 11, 0.15);
+        color: #7d6514;
+        border-radius: 4px;
       }
 
       .order-id-text {
@@ -1001,7 +1296,243 @@ import { generateIdempotencyKey } from '../../../core/utils/idempotency.util';
         display: flex;
         flex-direction: column;
         gap: 8px;
-        margin-bottom: 20px;
+        margin-bottom: 14px;
+      }
+
+      .settle-discount-card {
+        margin-bottom: 18px;
+        padding: 12px 14px;
+        background: var(--color-bone-light, #f8fafc);
+        border: 1px solid var(--color-border, #e2e8f0);
+        border-radius: var(--radius-sm, 8px);
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+
+      .discount-header-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+      }
+
+      .discount-title {
+        font-size: 0.8rem;
+        font-weight: 700;
+        color: var(--color-onyx, #1e293b);
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+
+        i {
+          color: var(--color-primary, #6366f1);
+          font-size: 0.95rem;
+        }
+      }
+
+      .discount-segmented-control {
+        display: inline-flex;
+        background: var(--color-surface, #ffffff);
+        border: 1px solid var(--color-border, #e2e8f0);
+        border-radius: 6px;
+        padding: 2px;
+        gap: 2px;
+      }
+
+      .seg-btn {
+        background: transparent;
+        border: none;
+        padding: 3px 9px;
+        font-size: 0.72rem;
+        font-weight: 600;
+        color: var(--color-text-secondary, #64748b);
+        border-radius: 4px;
+        cursor: pointer;
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        transition: all var(--transition-fast, 0.15s ease);
+
+        &:hover {
+          color: var(--color-text-primary, #1e293b);
+        }
+
+        &.active {
+          background: var(--color-primary, #6366f1);
+          color: #ffffff;
+        }
+      }
+
+      .custom-disc-pane {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+
+      .inr-input-wrapper {
+        position: relative;
+        display: flex;
+        align-items: center;
+      }
+
+      .inr-prefix {
+        position: absolute;
+        left: 10px;
+        font-size: 0.85rem;
+        font-weight: 700;
+        color: var(--color-text-muted, #94a3b8);
+        pointer-events: none;
+      }
+
+      .inr-input {
+        width: 100%;
+        padding: 6px 12px 6px 26px;
+        font-size: 0.825rem;
+        font-weight: 600;
+        border: 1px solid var(--color-border, #e2e8f0);
+        border-radius: 6px;
+        background: var(--color-surface, #ffffff);
+        color: var(--color-text-primary, #1e293b);
+        outline: none;
+        transition: all var(--transition-fast, 0.15s ease);
+
+        &:focus {
+          border-color: var(--color-primary, #6366f1);
+          box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.12);
+        }
+      }
+
+      .btn-disc-clear {
+        position: absolute;
+        right: 8px;
+        background: transparent;
+        border: none;
+        color: var(--color-text-muted, #94a3b8);
+        font-size: 0.72rem;
+        cursor: pointer;
+        display: inline-flex;
+        align-items: center;
+        gap: 2px;
+        padding: 2px 4px;
+
+        &:hover {
+          color: var(--color-danger, #ef4444);
+        }
+      }
+
+      .quick-disc-chips {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+      }
+
+      .disc-chip {
+        background: var(--color-surface, #ffffff);
+        border: 1px solid var(--color-border, #e2e8f0);
+        border-radius: 5px;
+        padding: 3px 8px;
+        font-size: 0.72rem;
+        font-weight: 600;
+        color: var(--color-text-secondary, #475569);
+        cursor: pointer;
+        transition: all var(--transition-fast, 0.15s ease);
+
+        &:hover {
+          background: #f1f5f9;
+          border-color: #cbd5e1;
+          color: var(--color-text-primary, #1e293b);
+        }
+
+        &.chip-active {
+          background: #eff6ff;
+          border-color: #3b82f6;
+          color: #1d4ed8;
+          font-weight: 700;
+        }
+
+        &.chip-round {
+          color: #047857;
+          border-color: #a7f3d0;
+          background: #ecfdf5;
+
+          &:hover {
+            background: #d1fae5;
+          }
+        }
+      }
+
+      .coupon-disc-pane {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+
+      .coupon-select-wrapper {
+        position: relative;
+        display: flex;
+        align-items: center;
+      }
+
+      .coupon-select {
+        width: 100%;
+        appearance: none;
+        -webkit-appearance: none;
+        padding: 6px 26px 6px 10px;
+        font-size: 0.78rem;
+        font-weight: 500;
+        border: 1px solid var(--color-border, #e2e8f0);
+        border-radius: 6px;
+        background: var(--color-surface, #ffffff);
+        color: var(--color-text-primary, #1e293b);
+        outline: none;
+        cursor: pointer;
+        transition: all var(--transition-fast, 0.15s ease);
+
+        &:focus {
+          border-color: var(--color-primary, #6366f1);
+          box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.12);
+        }
+      }
+
+      .coupon-caret {
+        position: absolute;
+        right: 9px;
+        font-size: 0.72rem;
+        color: var(--color-text-muted, #94a3b8);
+        pointer-events: none;
+      }
+
+      .applied-coupon-badge {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 6px;
+        background: #ecfdf5;
+        border: 1px solid #a7f3d0;
+        border-radius: 6px;
+        padding: 5px 8px;
+        font-size: 0.72rem;
+        color: #065f46;
+
+        i {
+          font-size: 0.85rem;
+          color: #059669;
+        }
+      }
+
+      .btn-disc-clear-pill {
+        background: transparent;
+        border: none;
+        color: #065f46;
+        cursor: pointer;
+        padding: 2px 4px;
+        display: inline-flex;
+        align-items: center;
+
+        &:hover {
+          color: #ef4444;
+        }
       }
 
       .settle-row {
@@ -1039,8 +1570,12 @@ import { generateIdempotencyKey } from '../../../core/utils/idempotency.util';
 
       .method-options-grid {
         display: grid;
-        grid-template-columns: 1fr 1fr;
-        gap: 12px;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 10px;
+
+        @media (max-width: 600px) {
+          grid-template-columns: 1fr;
+        }
       }
 
       .method-tile {
@@ -1319,6 +1854,117 @@ import { generateIdempotencyKey } from '../../../core/utils/idempotency.util';
           box-shadow: 0 1px 4px rgba(194, 24, 7, 0.12);
         }
       }
+
+      .btn-whatsapp {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        background: #25d366;
+        color: #ffffff;
+        font-weight: 500;
+        border: none;
+        cursor: pointer;
+        transition: background 0.15s ease;
+
+        &:hover {
+          background: #20ba5a;
+          color: #ffffff;
+        }
+
+        i {
+          font-size: 1rem;
+        }
+
+        &.btn-xs {
+          padding: 3px 8px;
+          font-size: 0.6875rem;
+          border-radius: var(--radius-xs, 4px);
+        }
+
+        &.btn-sm {
+          padding: 6px 10px;
+          font-size: 0.75rem;
+          border-radius: var(--radius-sm, 6px);
+        }
+      }
+
+      .whatsapp-dialog-card {
+        max-width: 480px;
+      }
+
+      .whatsapp-header-wrap {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+      }
+
+      .whatsapp-icon-badge {
+        width: 36px;
+        height: 36px;
+        border-radius: 50%;
+        background: rgba(37, 211, 102, 0.12);
+        color: #25d366;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.25rem;
+      }
+
+      .whatsapp-preview-box {
+        margin: 0;
+        padding: 10px 12px;
+        background: #f8fafc;
+        border: 1px solid var(--color-border, #e2e8f0);
+        border-radius: 6px;
+        font-family: monospace;
+        font-size: 0.75rem;
+        line-height: 1.45;
+        color: #334155;
+        white-space: pre-wrap;
+        word-break: break-word;
+        max-height: 180px;
+        overflow-y: auto;
+      }
+
+      .btn-whatsapp-action {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        background: #25d366;
+        color: #ffffff;
+        font-weight: 600;
+        font-size: 0.875rem;
+        padding: 8px 16px;
+        border-radius: var(--radius-sm, 6px);
+        border: none;
+        cursor: pointer;
+        transition: background 0.15s ease;
+
+        &:hover:not(:disabled) {
+          background: #20ba5a;
+        }
+
+        &:disabled {
+          opacity: 0.5;
+          cursor: not-allowed;
+        }
+
+        i {
+          font-size: 1.15rem;
+        }
+      }
+
+      .whatsapp-modal-footer {
+        display: flex;
+        align-items: center;
+        justify-content: flex-end;
+        gap: 8px;
+        flex-wrap: wrap;
+
+        a.btn {
+          text-decoration: none;
+        }
+      }
     `,
   ],
 })
@@ -1326,6 +1972,15 @@ export class BillingQueueComponent {
   private dataService = inject(RestaurantDataService);
   private mock = this.dataService;
   private toastService = inject(ToastService);
+  private router = inject(Router);
+
+  readonly isLoading = computed(
+    () =>
+      this.dataService.isOrdersLoading() ||
+      !this.dataService.ordersLoaded() ||
+      this.dataService.isTablesLoading() ||
+      !this.dataService.tablesLoaded()
+  );
 
   orders = this.mock.orders;
   selectedTab = signal<string>('ALL');
@@ -1334,8 +1989,14 @@ export class BillingQueueComponent {
   // Settle Full Order State
   showSettleModal = signal<boolean>(false);
   selectedOrderForSettlement = signal<Order | null>(null);
-  selectedPaymentMethod = signal<'CASH' | 'UPI'>('UPI');
+  selectedPaymentMethod = signal<'CASH' | 'UPI' | 'CARD'>('UPI');
   isSettling = signal<boolean>(false);
+
+  // Settlement Discount & Offers state
+  settleDiscountMode = signal<'CUSTOM' | 'COUPON'>('CUSTOM');
+  customDiscountRupees = signal<number>(0);
+  selectedCouponCode = signal<string>('');
+  activeCoupons = computed(() => (this.mock.coupons ? this.mock.coupons().filter((c) => c.isActive) : []));
 
   // Settle Split Bill State
   showSettleSplitModal = signal<boolean>(false);
@@ -1361,6 +2022,74 @@ export class BillingQueueComponent {
   refundReason = signal<string>('');
   refundError = signal<string>('');
   isSubmittingRefund = signal<boolean>(false);
+
+  // WhatsApp Delivery State
+  showWhatsAppModal = signal<boolean>(false);
+  whatsAppOrder = signal<Order | null>(null);
+  whatsAppSplit = signal<SplitBill | null>(null);
+  whatsAppPhone = signal<string>('');
+
+  whatsAppMessagePreview = computed(() => {
+    const ord = this.whatsAppOrder();
+    if (!ord) return '';
+    const split = this.whatsAppSplit();
+    const restName = this.dataService.restaurant()?.name || 'GuruKripa Dhaba';
+    return buildWhatsAppBillMessage(
+      restName,
+      ord,
+      split
+        ? {
+            splitIndex: split.splitIndex,
+            splitTotalCount: split.splitTotalCount,
+            totalAmount: split.totalAmount,
+            paymentStatus: split.paymentStatus,
+            paymentMethod: split.paymentMethod,
+          }
+        : null,
+    );
+  });
+
+  whatsAppWebUrl = computed(() => {
+    const ord = this.whatsAppOrder();
+    if (!ord) return '';
+    const split = this.whatsAppSplit();
+    const restName = this.dataService.restaurant()?.name || 'GuruKripa Dhaba';
+    return getWhatsAppWebUrl(
+      this.whatsAppPhone(),
+      restName,
+      ord,
+      split
+        ? {
+            splitIndex: split.splitIndex,
+            splitTotalCount: split.splitTotalCount,
+            totalAmount: split.totalAmount,
+            paymentStatus: split.paymentStatus,
+            paymentMethod: split.paymentMethod,
+          }
+        : null,
+    );
+  });
+
+  whatsAppAppUrl = computed(() => {
+    const ord = this.whatsAppOrder();
+    if (!ord) return '';
+    const split = this.whatsAppSplit();
+    const restName = this.dataService.restaurant()?.name || 'GuruKripa Dhaba';
+    return getWhatsAppAppUrl(
+      this.whatsAppPhone(),
+      restName,
+      ord,
+      split
+        ? {
+            splitIndex: split.splitIndex,
+            splitTotalCount: split.splitTotalCount,
+            totalAmount: split.totalAmount,
+            paymentStatus: split.paymentStatus,
+            paymentMethod: split.paymentMethod,
+          }
+        : null,
+    );
+  });
 
   totalSettled = computed(() => {
     let sum = 0;
@@ -1466,8 +2195,87 @@ export class BillingQueueComponent {
       return;
     }
     this.selectedOrderForSettlement.set(order);
-    this.selectedPaymentMethod.set('UPI');
+    this.selectedPaymentMethod.set(order.paymentMethod === 'CARD' ? 'CARD' : order.paymentMethod === 'UPI' ? 'UPI' : 'CASH');
+    this.customDiscountRupees.set(order.discountAmount || 0);
+    this.selectedCouponCode.set(order.appliedCouponCode || '');
+    this.settleDiscountMode.set(order.appliedCouponCode ? 'COUPON' : 'CUSTOM');
+    this.isSettling.set(false);
     this.showSettleModal.set(true);
+  }
+
+  getEffectiveDiscount(ord: Order | null): number {
+    if (!ord) return 0;
+    const grossTotal = Math.round(((ord.subtotal || 0) + (ord.taxAmount || 0)) * 100) / 100;
+    if (this.settleDiscountMode() === 'CUSTOM') {
+      const disc = Math.max(0, this.customDiscountRupees() || 0);
+      return Math.min(grossTotal, Math.round(disc * 100) / 100);
+    } else {
+      const code = this.selectedCouponCode();
+      if (!code) return 0;
+      const coup = this.activeCoupons().find((c) => c.code.toUpperCase() === code.toUpperCase());
+      if (!coup) return 0;
+      if (coup.minOrderValue && ord.subtotal < coup.minOrderValue) return 0;
+
+      let disc = 0;
+      if (coup.discountType === 'PERCENTAGE') {
+        disc = (grossTotal * coup.discountValue) / 100;
+        if (coup.maxDiscountAmount && disc > coup.maxDiscountAmount) {
+          disc = coup.maxDiscountAmount;
+        }
+      } else {
+        disc = coup.discountValue;
+      }
+      return Math.min(grossTotal, Math.round(disc * 100) / 100);
+    }
+  }
+
+  getSettlementTax(ord: Order | null): number {
+    if (!ord) return 0;
+    return ord.taxAmount;
+  }
+
+  getSettlementTotal(ord: Order | null): number {
+    if (!ord) return 0;
+    const grossTotal = Math.round(((ord.subtotal || 0) + (ord.taxAmount || 0)) * 100) / 100;
+    const effectiveDisc = this.getEffectiveDiscount(ord);
+    return Math.max(0, Math.round((grossTotal - effectiveDisc) * 100) / 100);
+  }
+
+  onCustomDiscountChange(event: Event, maxLimit: number): void {
+    const val = parseFloat((event.target as HTMLInputElement).value);
+    if (isNaN(val) || val < 0) {
+      this.customDiscountRupees.set(0);
+    } else {
+      this.customDiscountRupees.set(Math.min(maxLimit, Math.round(val)));
+    }
+    this.selectedCouponCode.set('');
+  }
+
+  applyQuickRupees(amount: number, maxLimit: number): void {
+    this.settleDiscountMode.set('CUSTOM');
+    this.customDiscountRupees.set(Math.min(maxLimit, amount));
+    this.selectedCouponCode.set('');
+  }
+
+  applyRoundOffDiscount(ord: Order): void {
+    this.settleDiscountMode.set('CUSTOM');
+    const grossTotal = Math.round(((ord.subtotal || 0) + (ord.taxAmount || 0)) * 100) / 100;
+    const roundedDown = Math.floor(grossTotal / 10) * 10;
+    const neededOff = Math.max(0, Math.round((grossTotal - roundedDown) * 100) / 100);
+    this.customDiscountRupees.set(neededOff);
+    this.selectedCouponCode.set('');
+  }
+
+  onSelectCoupon(code: string, subtotal: number): void {
+    this.selectedCouponCode.set(code);
+    if (code) {
+      this.customDiscountRupees.set(0);
+    }
+  }
+
+  clearDiscount(): void {
+    this.customDiscountRupees.set(0);
+    this.selectedCouponCode.set('');
   }
 
   closeSettleModal(): void {
@@ -1482,16 +2290,21 @@ export class BillingQueueComponent {
 
     this.isSettling.set(true);
     const method = this.selectedPaymentMethod();
+    const finalDiscount = this.getEffectiveDiscount(ord);
+    const appliedCode = this.settleDiscountMode() === 'COUPON' ? this.selectedCouponCode() : '';
 
     const res = this.mock.settleOrder({
       orderId: ord.id,
       paymentMethod: method,
+      discountAmount: finalDiscount,
+      appliedCouponCode: appliedCode,
     });
 
     this.isSettling.set(false);
     if (res.success) {
       this.toastService.success(`Order ${ord.orderNumber} successfully settled via ${method}`);
       this.closeSettleModal();
+      this.router.navigate(['/admin/billing', ord.id]);
     } else {
       this.toastService.warning(res.error || 'Failed to settle order');
       this.closeSettleModal();
@@ -1536,6 +2349,7 @@ export class BillingQueueComponent {
         `Split Bill #${split.splitIndex} (₹${split.totalAmount}) settled via ${method}.`,
       );
       this.closeSettleSplitModal();
+      this.router.navigate(['/admin/billing', ord.id], { queryParams: { splitId: split.id } });
     } else {
       this.toastService.error(res.error || 'Failed to settle split bill');
     }
@@ -1747,12 +2561,85 @@ export class BillingQueueComponent {
     }
   }
 
+  // --- WhatsApp Bill Delivery Actions ---
+  openWhatsAppForOrder(order: Order): void {
+    this.whatsAppOrder.set(order);
+    this.whatsAppSplit.set(null);
+    this.whatsAppPhone.set(order.customerPhone || '');
+    this.showWhatsAppModal.set(true);
+  }
+
+  openWhatsAppForSplit(order: Order, split: SplitBill): void {
+    this.whatsAppOrder.set(order);
+    this.whatsAppSplit.set(split);
+    this.whatsAppPhone.set(order.customerPhone || '');
+    this.showWhatsAppModal.set(true);
+  }
+
+  closeWhatsAppModal(): void {
+    this.showWhatsAppModal.set(false);
+    this.whatsAppOrder.set(null);
+    this.whatsAppSplit.set(null);
+    this.whatsAppPhone.set('');
+  }
+
+  copyBillToClipboard(): void {
+    const text = this.whatsAppMessagePreview();
+    if (navigator?.clipboard?.writeText) {
+      navigator.clipboard.writeText(text).then(
+        () => this.toastService.success('Bill receipt copied to clipboard!'),
+        () => this.toastService.info('Please select and copy text manually from preview box.'),
+      );
+    } else {
+      this.toastService.info('Please select and copy text manually from preview box.');
+    }
+  }
+
+  onWhatsAppLinkClicked(url?: string): void {
+    if (url) {
+      launchExternalUrl(url);
+    }
+    this.toastService.success('WhatsApp opened with customer bill message!');
+    setTimeout(() => this.closeWhatsAppModal(), 400);
+  }
+
+  sendWhatsAppBill(): void {
+    const ord = this.whatsAppOrder();
+    if (!ord) return;
+    const phone = this.whatsAppPhone().trim();
+    if (!phone) {
+      this.toastService.warning('Please enter customer WhatsApp phone number.');
+      return;
+    }
+
+    const split = this.whatsAppSplit();
+    const splitArg = split
+      ? {
+          splitIndex: split.splitIndex,
+          splitTotalCount: split.splitTotalCount,
+          totalAmount: split.totalAmount,
+          paymentStatus: split.paymentStatus,
+          paymentMethod: split.paymentMethod,
+        }
+      : null;
+
+    const restName = this.dataService.restaurant()?.name || 'GuruKripa Dhaba';
+    const ok = openWhatsAppBill(phone, restName, ord, splitArg);
+    if (ok) {
+      this.toastService.success('WhatsApp opened with customer bill!');
+      this.closeWhatsAppModal();
+    } else {
+      this.toastService.error('Invalid phone number format. Please provide at least 10 digits.');
+    }
+  }
+
   onModalBackdropClick(event: MouseEvent, type: string): void {
     if ((event.target as HTMLElement).classList.contains('modal-overlay')) {
       if (type === 'settle') this.closeSettleModal();
       if (type === 'settle-split') this.closeSettleSplitModal();
       if (type === 'split') this.closeSplitModal();
       if (type === 'refund') this.closeRefundModal();
+      if (type === 'whatsapp') this.closeWhatsAppModal();
     }
   }
 }

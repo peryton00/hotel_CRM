@@ -1,4 +1,4 @@
-import { Routes } from '@angular/router';
+import { Routes, CanDeactivateFn } from '@angular/router';
 import { AdminLayoutComponent } from './layouts/admin-layout/admin-layout.component';
 import { CustomerLayoutComponent } from './layouts/customer-layout/customer-layout.component';
 import { adminGuard } from './core/guards/admin.guard';
@@ -26,6 +26,10 @@ export function resolveFallbackEntry(): string {
   }
   return 'menu/gurukripa-dhaba';
 }
+
+export const canDeactivateSettings: CanDeactivateFn<any> = (component) => {
+  return typeof component?.canDeactivate === 'function' ? component.canDeactivate() : true;
+};
 
 export const routes: Routes = [
   // Default Entry
@@ -164,6 +168,7 @@ export const routes: Routes = [
         path: 'settings',
         loadComponent: () =>
           import('./features/admin/settings/settings.component').then((m) => m.SettingsComponent),
+        canDeactivate: [canDeactivateSettings],
       },
     ],
   },
