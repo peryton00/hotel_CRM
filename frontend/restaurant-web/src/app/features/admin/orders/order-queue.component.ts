@@ -54,9 +54,17 @@ import {
             class="sound-toggle-btn"
             [class.muted]="soundService.isMuted()"
             (click)="soundService.toggleMute()"
-            [title]="!soundService.isMuted() ? 'Audio alerts active (click to mute)' : 'Audio alerts muted (click to enable)'"
+            [title]="
+              !soundService.isMuted()
+                ? 'Audio alerts active (click to mute)'
+                : 'Audio alerts muted (click to enable)'
+            "
           >
-            <i class="ph" [class.ph-speaker-high]="!soundService.isMuted()" [class.ph-speaker-simple-slash]="soundService.isMuted()"></i>
+            <i
+              class="ph"
+              [class.ph-speaker-high]="!soundService.isMuted()"
+              [class.ph-speaker-simple-slash]="soundService.isMuted()"
+            ></i>
           </button>
           <button class="btn btn-primary" (click)="openManualOrderModal()">
             <i class="ph ph-plus-circle"></i>
@@ -190,9 +198,7 @@ import {
                       {{ ord.customerName }}
                     </span>
                     @if (ord.customerPhone) {
-                      <span class="cust-phone-inline">
-                        · {{ ord.customerPhone }}
-                      </span>
+                      <span class="cust-phone-inline"> · {{ ord.customerPhone }} </span>
                     }
                   </div>
                   <div class="card-status-badges">
@@ -210,10 +216,15 @@ import {
                   <div class="table-info">
                     @if (ord.orderType === 'TAKEAWAY') {
                       <span class="tbl-badge takeaway-badge">
-                        <i class="ph ph-bag"></i> Takeaway ({{ ord.pickupReference || ord.orderNumber }})
+                        <i class="ph ph-bag"></i> Takeaway ({{
+                          ord.pickupReference || ord.orderNumber
+                        }})
                       </span>
                     } @else {
-                      <span class="tbl-badge completed-tbl-badge" [title]="'Table ' + (ord.tableNumber || 'Unassigned')">
+                      <span
+                        class="tbl-badge completed-tbl-badge"
+                        [title]="'Table ' + (ord.tableNumber || 'Unassigned')"
+                      >
                         <i class="ph ph-table"></i> Table {{ ord.tableNumber || 'Unassigned' }}
                       </span>
                     }
@@ -230,7 +241,12 @@ import {
                   </span>
                   <div class="completed-server-cell">
                     <span class="server-caption">Served by:</span>
-                    <span class="server-name-text" [title]="'Serving Staff: ' + (getServerStaffName(ord.serverStaffId) || 'Unassigned')">
+                    <span
+                      class="server-name-text"
+                      [title]="
+                        'Serving Staff: ' + (getServerStaffName(ord.serverStaffId) || 'Unassigned')
+                      "
+                    >
                       {{ getServerStaffName(ord.serverStaffId) || 'Unassigned' }}
                     </span>
                     <button
@@ -254,12 +270,16 @@ import {
                   </span>
                   <a
                     [routerLink]="['/admin/billing', ord.id]"
-                    [queryParams]="ord.printCount && ord.printCount > 0 ? { reprint: 'true' } : null"
+                    [queryParams]="
+                      ord.printCount && ord.printCount > 0 ? { reprint: 'true' } : null
+                    "
                     (click)="$event.stopPropagation()"
                     class="btn-invoice-action"
                     [title]="
                       ord.printCount && ord.printCount > 0
-                        ? 'Tax Invoice printed ' + ord.printCount + ' time(s) — Reprint requires Admin authorization'
+                        ? 'Tax Invoice printed ' +
+                          ord.printCount +
+                          ' time(s) — Reprint requires Admin authorization'
                         : 'Print Tax Invoice'
                     "
                   >
@@ -355,12 +375,21 @@ import {
                       class="tbl-badge reallot-clickable"
                       [disabled]="isOrderPaid(ord)"
                       (click)="handleTableBadgeClick($event, ord)"
-                      [title]="isOrderPaid(ord) ? 'Table ' + (ord.tableNumber || 'Unassigned') : 'Click to change/reallot table'"
+                      [title]="
+                        isOrderPaid(ord)
+                          ? 'Table ' + (ord.tableNumber || 'Unassigned')
+                          : 'Click to change/reallot table'
+                      "
                     >
                       <i class="ph ph-table"></i>
-                      <span>{{ ord.tableNumber ? 'Table ' + ord.tableNumber : 'Allot Table' }}</span>
+                      <span>{{
+                        ord.tableNumber ? 'Table ' + ord.tableNumber : 'Allot Table'
+                      }}</span>
                       @if (!isOrderPaid(ord)) {
-                        <i class="ph ph-pencil-simple" style="font-size: 0.75rem; margin-left: 2px; opacity: 0.85;"></i>
+                        <i
+                          class="ph ph-pencil-simple"
+                          style="font-size: 0.75rem; margin-left: 2px; opacity: 0.85;"
+                        ></i>
                       }
                     </button>
                   }
@@ -375,14 +404,28 @@ import {
                 </div>
 
                 <!-- Server / Staff Handling Order -->
-                <div class="server-bar" [class.server-bar-locked]="isOrderPaid(ord)" [class.has-server]="!!ord.serverStaffId">
+                <div
+                  class="server-bar"
+                  [class.server-bar-locked]="isOrderPaid(ord)"
+                  [class.has-server]="!!ord.serverStaffId"
+                >
                   <span class="server-label">
-                    <i class="ph" [class.ph-user-check]="!isOrderPaid(ord)" [class.ph-lock-key]="isOrderPaid(ord)"></i>
+                    <i
+                      class="ph"
+                      [class.ph-user-check]="!isOrderPaid(ord)"
+                      [class.ph-lock-key]="isOrderPaid(ord)"
+                    ></i>
                     <span>Server:</span>
                   </span>
                   @if (isOrderPaid(ord)) {
                     <div class="server-completed-box">
-                      <span class="server-name-badge" [title]="'Serving Staff: ' + (getServerStaffName(ord.serverStaffId) || 'Unassigned')">
+                      <span
+                        class="server-name-badge"
+                        [title]="
+                          'Serving Staff: ' +
+                          (getServerStaffName(ord.serverStaffId) || 'Unassigned')
+                        "
+                      >
                         {{ getServerStaffName(ord.serverStaffId) || 'Unassigned' }}
                       </span>
                       <button
@@ -481,7 +524,10 @@ import {
                         <span class="step-num"><i class="ph ph-check"></i></span>
                         <span class="step-txt">Accept</span>
                       </div>
-                      <div class="step-connector" [class.filled]="getOrderStageIndex(ord.status) >= 2"></div>
+                      <div
+                        class="step-connector"
+                        [class.filled]="getOrderStageIndex(ord.status) >= 2"
+                      ></div>
 
                       <div
                         class="step-bubble"
@@ -493,7 +539,10 @@ import {
                         <span class="step-num"><i class="ph ph-cooking-pot"></i></span>
                         <span class="step-txt">Prepare</span>
                       </div>
-                      <div class="step-connector" [class.filled]="getOrderStageIndex(ord.status) >= 3"></div>
+                      <div
+                        class="step-connector"
+                        [class.filled]="getOrderStageIndex(ord.status) >= 3"
+                      ></div>
 
                       <div
                         class="step-bubble"
@@ -505,7 +554,10 @@ import {
                         <span class="step-num"><i class="ph ph-bell-ringing"></i></span>
                         <span class="step-txt">Ready</span>
                       </div>
-                      <div class="step-connector" [class.filled]="getOrderStageIndex(ord.status) >= 4"></div>
+                      <div
+                        class="step-connector"
+                        [class.filled]="getOrderStageIndex(ord.status) >= 4"
+                      ></div>
 
                       <div
                         class="step-bubble"
@@ -517,7 +569,10 @@ import {
                         <span class="step-num"><i class="ph ph-moped"></i></span>
                         <span class="step-txt">Dispatch</span>
                       </div>
-                      <div class="step-connector" [class.filled]="getOrderStageIndex(ord.status) >= 5"></div>
+                      <div
+                        class="step-connector"
+                        [class.filled]="getOrderStageIndex(ord.status) >= 5"
+                      ></div>
 
                       <div
                         class="step-bubble"
@@ -561,7 +616,11 @@ import {
                         (click)="$event.stopPropagation(); advanceStatus(ord, 'DISPATCHED')"
                       >
                         <i class="ph ph-moped"></i>
-                        <span>{{ ord.orderType === 'TAKEAWAY' ? 'Dispatch for Delivery/Handover' : 'Dispatch to Table' }}</span>
+                        <span>{{
+                          ord.orderType === 'TAKEAWAY'
+                            ? 'Dispatch for Delivery/Handover'
+                            : 'Dispatch to Table'
+                        }}</span>
                       </button>
                     } @else if (ord.status === 'DISPATCHED') {
                       <button
@@ -569,7 +628,11 @@ import {
                         (click)="$event.stopPropagation(); advanceStatus(ord, 'SERVED')"
                       >
                         <i class="ph ph-check-circle"></i>
-                        <span>{{ ord.orderType === 'TAKEAWAY' ? 'Delivered / Handed Over' : 'Mark Delivered & Served' }}</span>
+                        <span>{{
+                          ord.orderType === 'TAKEAWAY'
+                            ? 'Delivered / Handed Over'
+                            : 'Mark Delivered & Served'
+                        }}</span>
                       </button>
                     } @else if (ord.status === 'SERVED') {
                       <button
@@ -618,7 +681,9 @@ import {
                     @if (ord.status !== 'CANCELLED') {
                       <a
                         [routerLink]="['/admin/billing', ord.id]"
-                        [queryParams]="ord.printCount && ord.printCount > 0 ? { reprint: 'true' } : null"
+                        [queryParams]="
+                          ord.printCount && ord.printCount > 0 ? { reprint: 'true' } : null
+                        "
                         (click)="$event.stopPropagation()"
                         class="card-util-btn"
                         [title]="
@@ -654,21 +719,21 @@ import {
               </div>
             }
           } @empty {
-          <div style="grid-column: 1 / -1; width: 100%;">
-            <app-empty-state
-              icon="ph-tray"
-              [title]="emptyStateTitle()"
-              [message]="emptyStateMessage()"
-              [actionText]="emptyStateActionText()"
-              [actionIcon]="emptyStateActionIcon()"
-              (actionClick)="onEmptyStateAction()"
-              [secondaryActionText]="emptyStateSecondaryText()"
-              (secondaryActionClick)="onEmptyStateSecondary()"
-              [bordered]="false"
-            />
-          </div>
+            <div style="grid-column: 1 / -1; width: 100%;">
+              <app-empty-state
+                icon="ph-tray"
+                [title]="emptyStateTitle()"
+                [message]="emptyStateMessage()"
+                [actionText]="emptyStateActionText()"
+                [actionIcon]="emptyStateActionIcon()"
+                (actionClick)="onEmptyStateAction()"
+                [secondaryActionText]="emptyStateSecondaryText()"
+                (secondaryActionClick)="onEmptyStateSecondary()"
+                [bordered]="false"
+              />
+            </div>
+          }
         }
-      }
       </div>
 
       <!-- Order Quick Details Side Drawer -->
@@ -684,13 +749,26 @@ import {
           <div class="drawer-header">
             <div class="drawer-title-group">
               <div class="drawer-title-row">
-                <h3 id="side-drawer-order-title" class="drawer-order-num">{{ sideOrd.orderNumber }}</h3>
+                <h3 id="side-drawer-order-title" class="drawer-order-num">
+                  {{ sideOrd.orderNumber }}
+                </h3>
                 <app-status-badge [status]="sideOrd.status"></app-status-badge>
               </div>
               <div class="drawer-sub-meta">
-                <span class="drawer-type-pill" [class.takeaway-pill]="sideOrd.orderType === 'TAKEAWAY'">
-                  <i class="ph" [class.ph-bag]="sideOrd.orderType === 'TAKEAWAY'" [class.ph-table]="sideOrd.orderType !== 'TAKEAWAY'"></i>
-                  {{ sideOrd.orderType === 'TAKEAWAY' ? 'Takeaway • ' + (sideOrd.pickupReference || sideOrd.orderNumber) : 'Dine-In • Table ' + sideOrd.tableNumber }}
+                <span
+                  class="drawer-type-pill"
+                  [class.takeaway-pill]="sideOrd.orderType === 'TAKEAWAY'"
+                >
+                  <i
+                    class="ph"
+                    [class.ph-bag]="sideOrd.orderType === 'TAKEAWAY'"
+                    [class.ph-table]="sideOrd.orderType !== 'TAKEAWAY'"
+                  ></i>
+                  {{
+                    sideOrd.orderType === 'TAKEAWAY'
+                      ? 'Takeaway • ' + (sideOrd.pickupReference || sideOrd.orderNumber)
+                      : 'Dine-In • Table ' + sideOrd.tableNumber
+                  }}
                 </span>
                 <span class="drawer-time-stamp">
                   <i class="ph ph-clock"></i> {{ sideOrd.createdAt | date: 'shortTime' }}
@@ -712,7 +790,9 @@ import {
             <!-- 1. Customer & Contact Details Card -->
             <div class="drawer-section-card">
               <div class="section-card-header">
-                <span class="section-card-title"><i class="ph ph-user"></i> Guest & Location Details</span>
+                <span class="section-card-title"
+                  ><i class="ph ph-user"></i> Guest & Location Details</span
+                >
                 @if (!isOrderPaid(sideOrd)) {
                   <button
                     type="button"
@@ -728,14 +808,22 @@ import {
               <div class="drawer-info-grid">
                 <div class="drawer-info-row">
                   <span class="drawer-info-label">Customer Name</span>
-                  <span class="drawer-info-value font-semibold">{{ sideOrd.customerName || 'Walk-in Guest' }}</span>
+                  <span class="drawer-info-value font-semibold">{{
+                    sideOrd.customerName || 'Walk-in Guest'
+                  }}</span>
                 </div>
                 <div class="drawer-info-row">
                   <span class="drawer-info-label">Phone Contact</span>
                   <div class="drawer-phone-wrap">
-                    <span class="drawer-info-value">{{ sideOrd.customerPhone || 'Not provided' }}</span>
+                    <span class="drawer-info-value">{{
+                      sideOrd.customerPhone || 'Not provided'
+                    }}</span>
                     @if (sideOrd.customerPhone) {
-                      <a [href]="'tel:' + sideOrd.customerPhone" class="btn-tel-call" title="Call Customer">
+                      <a
+                        [href]="'tel:' + sideOrd.customerPhone"
+                        class="btn-tel-call"
+                        title="Call Customer"
+                      >
                         <i class="ph ph-phone-call"></i>
                         <span>Call</span>
                       </a>
@@ -744,9 +832,20 @@ import {
                 </div>
                 <div class="drawer-info-row">
                   <span class="drawer-info-label">Dining Location</span>
-                  <div class="drawer-location-cell" style="display: flex; align-items: center; justify-content: space-between; gap: 8px; width: 100%;">
+                  <div
+                    class="drawer-location-cell"
+                    style="display: flex; align-items: center; justify-content: space-between; gap: 8px; width: 100%;"
+                  >
                     <span class="drawer-info-value font-bold text-crimson">
-                      {{ sideOrd.orderType === 'TAKEAWAY' ? 'Takeaway Counter (' + (sideOrd.pickupReference || sideOrd.orderNumber) + ')' : (sideOrd.tableNumber ? 'Table ' + sideOrd.tableNumber : 'Unassigned Table') }}
+                      {{
+                        sideOrd.orderType === 'TAKEAWAY'
+                          ? 'Takeaway Counter (' +
+                            (sideOrd.pickupReference || sideOrd.orderNumber) +
+                            ')'
+                          : sideOrd.tableNumber
+                            ? 'Table ' + sideOrd.tableNumber
+                            : 'Unassigned Table'
+                      }}
                     </span>
                     @if (!isOrderPaid(sideOrd)) {
                       <button
@@ -802,38 +901,79 @@ import {
             @if (sideOrd.status !== 'COMPLETED' && sideOrd.status !== 'CANCELLED') {
               <div class="drawer-section-card workflow-card">
                 <div class="section-card-header">
-                  <span class="section-card-title"><i class="ph ph-arrows-clockwise"></i> Live Dispatch Progression</span>
+                  <span class="section-card-title"
+                    ><i class="ph ph-arrows-clockwise"></i> Live Dispatch Progression</span
+                  >
                   <span class="current-stage-tag">{{ sideOrd.status }}</span>
                 </div>
 
                 <!-- Stepper Progress Bar -->
                 <div class="stepper-horizontal-bar">
-                  <div class="step-point" [class.done]="getOrderStageIndex(sideOrd.status) >= 1" [class.current]="sideOrd.status === 'PENDING'">
+                  <div
+                    class="step-point"
+                    [class.done]="getOrderStageIndex(sideOrd.status) >= 1"
+                    [class.current]="sideOrd.status === 'PENDING'"
+                  >
                     <span class="point-dot"><i class="ph ph-bell"></i></span>
                     <span class="point-lbl">Pending</span>
                   </div>
-                  <div class="step-connector" [class.filled]="getOrderStageIndex(sideOrd.status) >= 1"></div>
-                  <div class="step-point" [class.done]="getOrderStageIndex(sideOrd.status) >= 2" [class.current]="sideOrd.status === 'ACCEPTED'">
+                  <div
+                    class="step-connector"
+                    [class.filled]="getOrderStageIndex(sideOrd.status) >= 1"
+                  ></div>
+                  <div
+                    class="step-point"
+                    [class.done]="getOrderStageIndex(sideOrd.status) >= 2"
+                    [class.current]="sideOrd.status === 'ACCEPTED'"
+                  >
                     <span class="point-dot"><i class="ph ph-check"></i></span>
                     <span class="point-lbl">Accepted</span>
                   </div>
-                  <div class="step-connector" [class.filled]="getOrderStageIndex(sideOrd.status) >= 2"></div>
-                  <div class="step-point" [class.done]="getOrderStageIndex(sideOrd.status) >= 3" [class.current]="sideOrd.status === 'PREPARING'">
+                  <div
+                    class="step-connector"
+                    [class.filled]="getOrderStageIndex(sideOrd.status) >= 2"
+                  ></div>
+                  <div
+                    class="step-point"
+                    [class.done]="getOrderStageIndex(sideOrd.status) >= 3"
+                    [class.current]="sideOrd.status === 'PREPARING'"
+                  >
                     <span class="point-dot"><i class="ph ph-cooking-pot"></i></span>
                     <span class="point-lbl">Kitchen</span>
                   </div>
-                  <div class="step-connector" [class.filled]="getOrderStageIndex(sideOrd.status) >= 3"></div>
-                  <div class="step-point" [class.done]="getOrderStageIndex(sideOrd.status) >= 4" [class.current]="sideOrd.status === 'READY'">
+                  <div
+                    class="step-connector"
+                    [class.filled]="getOrderStageIndex(sideOrd.status) >= 3"
+                  ></div>
+                  <div
+                    class="step-point"
+                    [class.done]="getOrderStageIndex(sideOrd.status) >= 4"
+                    [class.current]="sideOrd.status === 'READY'"
+                  >
                     <span class="point-dot"><i class="ph ph-bell-ringing"></i></span>
                     <span class="point-lbl">Ready</span>
                   </div>
-                  <div class="step-connector" [class.filled]="getOrderStageIndex(sideOrd.status) >= 4"></div>
-                  <div class="step-point" [class.done]="getOrderStageIndex(sideOrd.status) >= 5" [class.current]="sideOrd.status === 'DISPATCHED'">
+                  <div
+                    class="step-connector"
+                    [class.filled]="getOrderStageIndex(sideOrd.status) >= 4"
+                  ></div>
+                  <div
+                    class="step-point"
+                    [class.done]="getOrderStageIndex(sideOrd.status) >= 5"
+                    [class.current]="sideOrd.status === 'DISPATCHED'"
+                  >
                     <span class="point-dot"><i class="ph ph-moped"></i></span>
                     <span class="point-lbl">Dispatch</span>
                   </div>
-                  <div class="step-connector" [class.filled]="getOrderStageIndex(sideOrd.status) >= 5"></div>
-                  <div class="step-point" [class.done]="sideOrd.status === 'SERVED'" [class.current]="sideOrd.status === 'SERVED'">
+                  <div
+                    class="step-connector"
+                    [class.filled]="getOrderStageIndex(sideOrd.status) >= 5"
+                  ></div>
+                  <div
+                    class="step-point"
+                    [class.done]="sideOrd.status === 'SERVED'"
+                    [class.current]="sideOrd.status === 'SERVED'"
+                  >
                     <span class="point-dot"><i class="ph ph-hand-waving"></i></span>
                     <span class="point-lbl">Served</span>
                   </div>
@@ -842,11 +982,17 @@ import {
                 <!-- Next Dispatch Action Button -->
                 <div class="drawer-dispatch-action-row">
                   @if (sideOrd.status === 'PENDING') {
-                    <button class="btn btn-primary w-full" (click)="advanceStatus(sideOrd, 'ACCEPTED')">
+                    <button
+                      class="btn btn-primary w-full"
+                      (click)="advanceStatus(sideOrd, 'ACCEPTED')"
+                    >
                       <i class="ph ph-check-bold"></i> Accept Order
                     </button>
                   } @else if (sideOrd.status === 'ACCEPTED') {
-                    <button class="btn btn-dark w-full" (click)="advanceStatus(sideOrd, 'PREPARING')">
+                    <button
+                      class="btn btn-dark w-full"
+                      (click)="advanceStatus(sideOrd, 'PREPARING')"
+                    >
                       <i class="ph ph-cooking-pot"></i> Send to Kitchen / Preparing
                     </button>
                   } @else if (sideOrd.status === 'PREPARING') {
@@ -854,15 +1000,34 @@ import {
                       <i class="ph ph-bell-ringing"></i> Mark Food Ready
                     </button>
                   } @else if (sideOrd.status === 'READY') {
-                    <button class="btn btn-info w-full" (click)="advanceStatus(sideOrd, 'DISPATCHED')">
-                      <i class="ph ph-moped"></i> {{ sideOrd.orderType === 'TAKEAWAY' ? 'Handover for Delivery / Counter' : 'Dispatch to Table' }}
+                    <button
+                      class="btn btn-info w-full"
+                      (click)="advanceStatus(sideOrd, 'DISPATCHED')"
+                    >
+                      <i class="ph ph-moped"></i>
+                      {{
+                        sideOrd.orderType === 'TAKEAWAY'
+                          ? 'Handover for Delivery / Counter'
+                          : 'Dispatch to Table'
+                      }}
                     </button>
                   } @else if (sideOrd.status === 'DISPATCHED') {
-                    <button class="btn btn-success w-full" (click)="advanceStatus(sideOrd, 'SERVED')">
-                      <i class="ph ph-check-circle"></i> {{ sideOrd.orderType === 'TAKEAWAY' ? 'Mark Picked Up / Delivered' : 'Mark Delivered & Served' }}
+                    <button
+                      class="btn btn-success w-full"
+                      (click)="advanceStatus(sideOrd, 'SERVED')"
+                    >
+                      <i class="ph ph-check-circle"></i>
+                      {{
+                        sideOrd.orderType === 'TAKEAWAY'
+                          ? 'Mark Picked Up / Delivered'
+                          : 'Mark Delivered & Served'
+                      }}
                     </button>
                   } @else if (sideOrd.status === 'SERVED') {
-                    <button class="btn btn-primary w-full checkout-glow" (click)="openSettleModal(sideOrd)">
+                    <button
+                      class="btn btn-primary w-full checkout-glow"
+                      (click)="openSettleModal(sideOrd)"
+                    >
                       <i class="ph ph-credit-card"></i> Proceed to Bill Settlement & Invoice
                     </button>
                   }
@@ -873,14 +1038,24 @@ import {
             <!-- 3. Billing & Payment Status Card (Unpaid vs Paid vs Completed) -->
             <div class="drawer-section-card billing-card">
               <div class="section-card-header">
-                <span class="section-card-title"><i class="ph ph-receipt"></i> Billing & Payment Status</span>
+                <span class="section-card-title"
+                  ><i class="ph ph-receipt"></i> Billing & Payment Status</span
+                >
                 <span
                   class="payment-status-pill"
                   [class.status-paid]="isOrderPaid(sideOrd)"
                   [class.status-unpaid]="!isOrderPaid(sideOrd)"
                 >
-                  <i class="ph" [class.ph-check-circle]="isOrderPaid(sideOrd)" [class.ph-warning-circle]="!isOrderPaid(sideOrd)"></i>
-                  {{ isOrderPaid(sideOrd) ? 'PAID (' + (sideOrd.paymentMethod || 'PAID') + ')' : 'UNPAID / PENDING' }}
+                  <i
+                    class="ph"
+                    [class.ph-check-circle]="isOrderPaid(sideOrd)"
+                    [class.ph-warning-circle]="!isOrderPaid(sideOrd)"
+                  ></i>
+                  {{
+                    isOrderPaid(sideOrd)
+                      ? 'PAID (' + (sideOrd.paymentMethod || 'PAID') + ')'
+                      : 'UNPAID / PENDING'
+                  }}
                 </span>
               </div>
 
@@ -890,18 +1065,32 @@ import {
                     <i class="ph ph-info"></i>
                     <div>
                       <strong>Order is Unsettled</strong>
-                      <p>Total amount of {{ sideOrd.totalAmount | currencyInr }} is pending collection from guest.</p>
+                      <p>
+                        Total amount of {{ sideOrd.totalAmount | currencyInr }} is pending
+                        collection from guest.
+                      </p>
                     </div>
                   </div>
 
                   <div class="billing-buttons-cluster">
-                    <button class="btn btn-primary btn-sm flex-1" (click)="openSettleModal(sideOrd)">
+                    <button
+                      class="btn btn-primary btn-sm flex-1"
+                      (click)="openSettleModal(sideOrd)"
+                    >
                       <i class="ph ph-credit-card"></i> Settle Bill
                     </button>
-                    <button class="btn btn-secondary btn-sm" (click)="printOrderReceipt(sideOrd)" title="Print Bill Receipt">
+                    <button
+                      class="btn btn-secondary btn-sm"
+                      (click)="printOrderReceipt(sideOrd)"
+                      title="Print Bill Receipt"
+                    >
                       <i class="ph ph-printer"></i> Print Bill
                     </button>
-                    <button class="btn btn-whatsapp btn-sm" (click)="openWhatsAppModal(sideOrd)" title="Send Bill via WhatsApp">
+                    <button
+                      class="btn btn-whatsapp btn-sm"
+                      (click)="openWhatsAppModal(sideOrd)"
+                      title="Send Bill via WhatsApp"
+                    >
                       <i class="ph ph-whatsapp-logo"></i> WhatsApp
                     </button>
                   </div>
@@ -925,12 +1114,18 @@ import {
                       <button class="btn btn-secondary btn-sm" (click)="printOrderReceipt(sideOrd)">
                         <i class="ph ph-printer"></i> Reprint Receipt
                       </button>
-                      <button class="btn btn-whatsapp btn-sm" (click)="openWhatsAppModal(sideOrd)" title="Send Digital Bill via WhatsApp">
+                      <button
+                        class="btn btn-whatsapp btn-sm"
+                        (click)="openWhatsAppModal(sideOrd)"
+                        title="Send Digital Bill via WhatsApp"
+                      >
                         <i class="ph ph-whatsapp-logo"></i> WhatsApp
                       </button>
                       <a
                         [routerLink]="['/admin/billing', sideOrd.id]"
-                        [queryParams]="sideOrd.printCount && sideOrd.printCount > 0 ? { reprint: 'true' } : null"
+                        [queryParams]="
+                          sideOrd.printCount && sideOrd.printCount > 0 ? { reprint: 'true' } : null
+                        "
                         class="btn btn-secondary btn-sm"
                         (click)="closeOrderSidePanel()"
                       >
@@ -943,20 +1138,30 @@ import {
                     <i class="ph ph-x-circle text-crimson"></i>
                     <div>
                       <strong class="text-crimson">Order Cancelled</strong>
-                      <p class="text-xs text-muted">This order was cancelled. Invoicing and settlements are disabled.</p>
+                      <p class="text-xs text-muted">
+                        This order was cancelled. Invoicing and settlements are disabled.
+                      </p>
                     </div>
                   </div>
                 } @else {
                   <!-- Paid but not yet marked completed (Needs invoice print) -->
                   <div class="paid-pending-print-box">
                     <p class="text-xs text-muted">
-                      Payment of {{ sideOrd.totalAmount | currencyInr }} is collected via {{ sideOrd.paymentMethod || 'PAID' }}. Print invoice to complete order.
+                      Payment of {{ sideOrd.totalAmount | currencyInr }} is collected via
+                      {{ sideOrd.paymentMethod || 'PAID' }}. Print invoice to complete order.
                     </p>
                     <div style="display: flex; gap: 8px;">
-                      <button class="btn btn-primary btn-sm flex-1" (click)="printOrderReceipt(sideOrd)">
+                      <button
+                        class="btn btn-primary btn-sm flex-1"
+                        (click)="printOrderReceipt(sideOrd)"
+                      >
                         <i class="ph ph-printer"></i> Print Invoice to Complete
                       </button>
-                      <button class="btn btn-whatsapp btn-sm" (click)="openWhatsAppModal(sideOrd)" title="Send Bill via WhatsApp">
+                      <button
+                        class="btn btn-whatsapp btn-sm"
+                        (click)="openWhatsAppModal(sideOrd)"
+                        title="Send Bill via WhatsApp"
+                      >
                         <i class="ph ph-whatsapp-logo"></i> WhatsApp
                       </button>
                     </div>
@@ -969,7 +1174,8 @@ import {
             <div class="drawer-section-card dishes-card">
               <div class="section-card-header">
                 <span class="section-card-title">
-                  <i class="ph ph-bowl-food"></i> Itemized Order Bill ({{ sideOrd.items.length }} dishes)
+                  <i class="ph ph-bowl-food"></i> Itemized Order Bill ({{ sideOrd.items.length }}
+                  dishes)
                 </span>
                 @if (sideOrd.status !== 'CANCELLED' && sideOrd.status !== 'COMPLETED') {
                   <button class="btn btn-secondary btn-xs" (click)="openEditOrderModal(sideOrd)">
@@ -993,10 +1199,17 @@ import {
                           <span class="variant-tag">{{ v.groupName }}: {{ v.optionName }}</span>
                         }
                         @for (a of item.selectedAddons; track a.name || a.addonName || a) {
-                          <span class="addon-tag">+{{ a.name || a.addonName }} (₹{{ a.priceDelta || a.price || 0 }})</span>
+                          <span class="addon-tag"
+                            >+{{ a.name || a.addonName }} (₹{{
+                              a.priceDelta || a.price || 0
+                            }})</span
+                          >
                         }
                         @if (item.specialInstructions || item.customInstructions) {
-                          <span class="notes-tag"><i class="ph ph-chat-text"></i> {{ item.specialInstructions || item.customInstructions }}</span>
+                          <span class="notes-tag"
+                            ><i class="ph ph-chat-text"></i>
+                            {{ item.specialInstructions || item.customInstructions }}</span
+                          >
                         }
                       </div>
                     </div>
@@ -1016,7 +1229,12 @@ import {
                 </div>
                 @if (sideOrd.discountAmount > 0) {
                   <div class="fin-row discount-row">
-                    <span>Discount {{ sideOrd.appliedCouponCode ? '(' + sideOrd.appliedCouponCode + ')' : '' }}</span>
+                    <span
+                      >Discount
+                      {{
+                        sideOrd.appliedCouponCode ? '(' + sideOrd.appliedCouponCode + ')' : ''
+                      }}</span
+                    >
                     <span class="text-success">-{{ sideOrd.discountAmount | currencyInr }}</span>
                   </div>
                 }
@@ -1344,7 +1562,10 @@ import {
                         <strong>{{ manualSubtotal() | currencyInr }}</strong>
                       </div>
                       <div class="math-line">
-                        <span>Taxes (CGST {{ restaurant()?.taxSettings?.cgstRate ?? 2.5 }}% + SGST {{ restaurant()?.taxSettings?.sgstRate ?? 2.5 }}%)</span>
+                        <span
+                          >Taxes (CGST {{ restaurant()?.taxSettings?.cgstRate ?? 2.5 }}% + SGST
+                          {{ restaurant()?.taxSettings?.sgstRate ?? 2.5 }}%)</span
+                        >
                         <span>{{ manualTax() | currencyInr }}</span>
                       </div>
                       <div class="math-line total">
@@ -1375,13 +1596,24 @@ import {
       <!-- Reallot / Change Table Modal -->
       @if (showChangeTableModal() && orderForTableChange(); as changeOrd) {
         <div class="modal-overlay" (click)="closeChangeTableModal()">
-          <div class="modal-card reallot-table-modal" (click)="$event.stopPropagation()" role="dialog" aria-modal="true">
+          <div
+            class="modal-card reallot-table-modal"
+            (click)="$event.stopPropagation()"
+            role="dialog"
+            aria-modal="true"
+          >
             <div class="modal-header">
               <div>
                 <h3 class="heading-card">Change / Allot Dining Table</h3>
                 <p class="text-xs text-muted" style="margin-top: 2px;">
-                  Order <strong>{{ changeOrd.orderNumber }}</strong> ({{ changeOrd.customerName || 'Guest' }})
-                  • Currently: <strong>{{ changeOrd.tableNumber ? 'Table ' + changeOrd.tableNumber : 'Unassigned / Counter' }}</strong>
+                  Order <strong>{{ changeOrd.orderNumber }}</strong> ({{
+                    changeOrd.customerName || 'Guest'
+                  }}) • Currently:
+                  <strong>{{
+                    changeOrd.tableNumber
+                      ? 'Table ' + changeOrd.tableNumber
+                      : 'Unassigned / Counter'
+                  }}</strong>
                 </p>
               </div>
               <button class="close-btn" (click)="closeChangeTableModal()">
@@ -1391,7 +1623,11 @@ import {
 
             <div class="modal-body" style="padding: 20px;">
               <div class="form-group">
-                <label class="form-label" style="font-weight: 600; margin-bottom: 8px; display: block;">Select Destination Table *</label>
+                <label
+                  class="form-label"
+                  style="font-weight: 600; margin-bottom: 8px; display: block;"
+                  >Select Destination Table *</label
+                >
                 <select
                   class="form-select"
                   [ngModel]="selectedNewTableId()"
@@ -1400,22 +1636,24 @@ import {
                 >
                   <option value="" disabled>-- Choose Table --</option>
                   @for (tbl of tables(); track tbl.id) {
-                    <option
-                      [value]="tbl.id"
-                      [disabled]="tbl.id === changeOrd.tableId"
-                    >
-                      Table {{ tbl.number }} ({{ tbl.section }}) — {{ tbl.status }} • {{ tbl.capacity }} Seats
+                    <option [value]="tbl.id" [disabled]="tbl.id === changeOrd.tableId">
+                      Table {{ tbl.number }} ({{ tbl.section }}) — {{ tbl.status }} •
+                      {{ tbl.capacity }} Seats
                       {{ tbl.id === changeOrd.tableId ? ' [Current Table]' : '' }}
                     </option>
                   }
                 </select>
                 <p class="text-xs text-muted" style="margin-top: 8px;">
-                  Select a table to assign. The guest order and dining bill will immediately transfer to the selected table.
+                  Select a table to assign. The guest order and dining bill will immediately
+                  transfer to the selected table.
                 </p>
               </div>
             </div>
 
-            <div class="modal-footer" style="padding: 16px 20px; display: flex; justify-content: flex-end; gap: 10px;">
+            <div
+              class="modal-footer"
+              style="padding: 16px 20px; display: flex; justify-content: flex-end; gap: 10px;"
+            >
               <button class="btn btn-secondary" (click)="closeChangeTableModal()">Cancel</button>
               <button
                 class="btn btn-primary"
@@ -1504,8 +1742,16 @@ import {
                   </div>
                   @if (getEffectiveDiscount(ord) > 0) {
                     <div class="settle-row discount">
-                      <span>Discount ({{ settleDiscountMode() === 'COUPON' && selectedCouponCode() ? selectedCouponCode() : 'Counter Off' }})</span>
-                      <span class="text-success font-semibold">-{{ getEffectiveDiscount(ord) | currencyInr }}</span>
+                      <span
+                        >Discount ({{
+                          settleDiscountMode() === 'COUPON' && selectedCouponCode()
+                            ? selectedCouponCode()
+                            : 'Counter Off'
+                        }})</span
+                      >
+                      <span class="text-success font-semibold"
+                        >-{{ getEffectiveDiscount(ord) | currencyInr }}</span
+                      >
                     </div>
                   }
                   <div class="settle-row">
@@ -1617,7 +1863,11 @@ import {
                           <option value="">-- Select Active Coupon --</option>
                           @for (c of activeCoupons(); track c.id) {
                             <option [value]="c.code">
-                              {{ c.code }} ({{ c.discountType === 'PERCENTAGE' ? c.discountValue + '% OFF' : '₹' + c.discountValue + ' OFF' }}{{ c.minOrderValue ? ', min ₹' + c.minOrderValue : '' }})
+                              {{ c.code }} ({{
+                                c.discountType === 'PERCENTAGE'
+                                  ? c.discountValue + '% OFF'
+                                  : '₹' + c.discountValue + ' OFF'
+                              }}{{ c.minOrderValue ? ', min ₹' + c.minOrderValue : '' }})
                             </option>
                           }
                         </select>
@@ -1626,8 +1876,16 @@ import {
                       @if (selectedCouponCode()) {
                         <div class="applied-coupon-badge">
                           <i class="ph ph-seal-check"></i>
-                          <span>Coupon <strong>{{ selectedCouponCode() }}</strong> applied: -{{ getEffectiveDiscount(ord) | currencyInr }}</span>
-                          <button type="button" class="btn-disc-clear-pill" (click)="clearDiscount()">
+                          <span
+                            >Coupon <strong>{{ selectedCouponCode() }}</strong> applied: -{{
+                              getEffectiveDiscount(ord) | currencyInr
+                            }}</span
+                          >
+                          <button
+                            type="button"
+                            class="btn-disc-clear-pill"
+                            (click)="clearDiscount()"
+                          >
                             <i class="ph ph-x"></i>
                           </button>
                         </div>
@@ -2121,17 +2379,16 @@ import {
                   <i class="ph ph-shield-lock"></i>
                 </div>
                 <div>
-                  <h3 id="server-admin-dialog-title" class="heading-card">Admin Password Required</h3>
+                  <h3 id="server-admin-dialog-title" class="heading-card">
+                    Admin Password Required
+                  </h3>
                   <span class="text-xs text-muted"
-                    >Authorization required to change serving staff for completed order {{ serverOrd.orderNumber }}</span
+                    >Authorization required to change serving staff for completed order
+                    {{ serverOrd.orderNumber }}</span
                   >
                 </div>
               </div>
-              <button
-                class="close-btn"
-                (click)="closeServerAdminModal()"
-                aria-label="Close dialog"
-              >
+              <button class="close-btn" (click)="closeServerAdminModal()" aria-label="Close dialog">
                 <i class="ph ph-x"></i>
               </button>
             </div>
@@ -2141,7 +2398,8 @@ import {
                 <i class="ph ph-warning-circle"></i>
                 <p>
                   Order <strong>{{ serverOrd.orderNumber }}</strong> is finalized and completed.
-                  Changing the assigned serving staff impacts service records, audit logs, and tip distribution.
+                  Changing the assigned serving staff impacts service records, audit logs, and tip
+                  distribution.
                 </p>
               </div>
 
@@ -2161,7 +2419,9 @@ import {
               </div>
 
               <div class="form-group">
-                <label class="form-label" for="serverAdminPassword">Enter Admin Password / Staff PIN</label>
+                <label class="form-label" for="serverAdminPassword"
+                  >Enter Admin Password / Staff PIN</label
+                >
                 <div class="input-with-icon">
                   <i class="ph ph-lock-key"></i>
                   <input
@@ -2381,7 +2641,7 @@ import {
                     <span>{{ editSubtotal() | currencyInr }}</span>
                   </div>
                   <div class="dt-row">
-                    <span>GST ({{ (getOrderCgstRate(ord) + getOrderSgstRate(ord)) }}%)</span>
+                    <span>GST ({{ getOrderCgstRate(ord) + getOrderSgstRate(ord) }}%)</span>
                     <span>{{ editTax() | currencyInr }}</span>
                   </div>
                   @if (ord.discountAmount > 0) {
@@ -2466,7 +2726,8 @@ import {
                   />
                 </div>
                 <span class="hint-text"
-                  >Enter 10-digit mobile number. Defaults to +91 (India) if country code is omitted.</span
+                  >Enter 10-digit mobile number. Defaults to +91 (India) if country code is
+                  omitted.</span
                 >
               </div>
 
@@ -2690,11 +2951,15 @@ import {
 
       @keyframes cardNewOrderFlash {
         0% {
-          box-shadow: 0 0 0 2px #d4af37, 0 8px 24px rgba(212, 175, 55, 0.25);
+          box-shadow:
+            0 0 0 2px #d4af37,
+            0 8px 24px rgba(212, 175, 55, 0.25);
           transform: translateY(-2px);
         }
         100% {
-          box-shadow: 0 0 0 1px rgba(212, 175, 55, 0.3), 0 2px 8px rgba(0, 0, 0, 0.05);
+          box-shadow:
+            0 0 0 1px rgba(212, 175, 55, 0.3),
+            0 2px 8px rgba(0, 0, 0, 0.05);
           transform: translateY(0);
         }
       }
@@ -2762,12 +3027,24 @@ import {
           line-height: 1;
           flex-shrink: 0;
 
-          &.status-pending { color: #f59e0b; }
-          &.status-preparing { color: #f97316; }
-          &.status-ready { color: #10b981; }
-          &.status-dispatched { color: #3b82f6; }
-          &.status-served { color: #8b5cf6; }
-          &.status-completed { color: #6366f1; }
+          &.status-pending {
+            color: #f59e0b;
+          }
+          &.status-preparing {
+            color: #f97316;
+          }
+          &.status-ready {
+            color: #10b981;
+          }
+          &.status-dispatched {
+            color: #3b82f6;
+          }
+          &.status-served {
+            color: #8b5cf6;
+          }
+          &.status-completed {
+            color: #6366f1;
+          }
         }
 
         .tab-count-badge {
@@ -2992,7 +3269,9 @@ import {
 
         &.card-selected {
           border-color: var(--color-crimson);
-          box-shadow: 0 0 0 2px rgba(139, 0, 0, 0.15), 0 8px 24px rgba(0, 0, 0, 0.1);
+          box-shadow:
+            0 0 0 2px rgba(139, 0, 0, 0.15),
+            0 8px 24px rgba(0, 0, 0, 0.1);
         }
       }
 
@@ -3518,7 +3797,9 @@ import {
         border: 1px solid var(--color-border, #e2e8f0);
         border-radius: var(--radius-sm, 8px);
         font-size: 0.75rem;
-        transition: border-color var(--transition-fast, 0.15s ease), background var(--transition-fast, 0.15s ease);
+        transition:
+          border-color var(--transition-fast, 0.15s ease),
+          background var(--transition-fast, 0.15s ease);
 
         &:hover {
           border-color: var(--color-border-hover, #cbd5e1);
@@ -6184,7 +6465,7 @@ export class OrderQueueComponent {
   }
 
   readonly isLoading = computed(
-    () => this.dataService.isOrdersLoading() || !this.dataService.ordersLoaded()
+    () => this.dataService.isOrdersLoading() || !this.dataService.ordersLoaded(),
   );
 
   // Order side panel drawer state
@@ -6335,9 +6616,7 @@ export class OrderQueueComponent {
         const order = ev.order;
         this.latestNewOrderId.set(order.id);
         const loc =
-          order.orderType === 'TAKEAWAY'
-            ? 'Takeaway'
-            : `Table ${order.tableNumber || '?'}`;
+          order.orderType === 'TAKEAWAY' ? 'Takeaway' : `Table ${order.tableNumber || '?'}`;
         this.toastService.info(
           `New live QR order ${order.orderNumber} placed for ${loc} (${order.items.length} dishes)`,
           '🔔 Real-time Live Order',
@@ -6397,7 +6676,9 @@ export class OrderQueueComponent {
   settleDiscountMode = signal<'CUSTOM' | 'COUPON'>('CUSTOM');
   customDiscountRupees = signal<number>(0);
   selectedCouponCode = signal<string>('');
-  activeCoupons = computed(() => (this.mock.coupons ? this.mock.coupons().filter((c) => c.isActive) : []));
+  activeCoupons = computed(() =>
+    this.mock.coupons ? this.mock.coupons().filter((c) => c.isActive) : [],
+  );
 
   // Cancel Order Modal state
   showCancelModal = signal<boolean>(false);
@@ -6460,7 +6741,7 @@ export class OrderQueueComponent {
 
   editTax = computed(() => {
     const ord = this.editingOrder();
-    const rate = ord ? (this.getOrderCgstRate(ord) + this.getOrderSgstRate(ord)) : this.gstRate;
+    const rate = ord ? this.getOrderCgstRate(ord) + this.getOrderSgstRate(ord) : this.gstRate;
     return Math.round(this.editSubtotal() * (rate / 100) * 100) / 100;
   });
 
@@ -6727,7 +7008,9 @@ export class OrderQueueComponent {
       const updatedTables = this.mock
         .tables()
         .map((t) =>
-          t.id === selectedTable.id ? { ...t, status: 'OCCUPIED' as const, activeOrderId: newOrder.id } : t,
+          t.id === selectedTable.id
+            ? { ...t, status: 'OCCUPIED' as const, activeOrderId: newOrder.id }
+            : t,
         );
       this.mock.tables.set(updatedTables);
       this.mock.saveLocal('tables', updatedTables);
@@ -6864,11 +7147,7 @@ export class OrderQueueComponent {
     }
 
     const newStaffId = this.selectedNewStaffId();
-    const res = this.dataService.assignOrderServer(
-      ord.id,
-      newStaffId ? newStaffId : null,
-      pwd,
-    );
+    const res = this.dataService.assignOrderServer(ord.id, newStaffId ? newStaffId : null, pwd);
 
     if (res.success) {
       const staffName = this.getServerStaffName(newStaffId) || 'Unassigned';
@@ -6949,7 +7228,8 @@ export class OrderQueueComponent {
   // --- Settle Bill Modal Actions ---
   openSettleModal(order: Order): void {
     this.selectedOrderForSettlement.set(order);
-    const defaultMethod = order.paymentMethod === 'CARD' ? 'CARD' : order.paymentMethod === 'UPI' ? 'UPI' : 'CASH';
+    const defaultMethod =
+      order.paymentMethod === 'CARD' ? 'CARD' : order.paymentMethod === 'UPI' ? 'UPI' : 'CASH';
     this.selectedPaymentMethod.set(defaultMethod);
     this.settleMode.set('FULL');
     this.splitCount.set(2);

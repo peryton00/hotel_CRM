@@ -88,7 +88,8 @@ pub async fn get_public_table(
         ));
     }
 
-    let is_online = crate::gateway::GatewayHeartbeatClient::is_restaurant_online(&pool, q.rid).await
+    let is_online = crate::gateway::GatewayHeartbeatClient::is_restaurant_online(&pool, q.rid)
+        .await
         || crate::ws::has_active_crm_clients();
 
     table.is_pos_online = is_online;
@@ -114,7 +115,8 @@ pub async fn get_public_restaurant_status(
     State(pool): State<PgPool>,
     Query(q): Query<RestaurantIdQuery>,
 ) -> Result<Json<ApiResponse<RestaurantStatusResponse>>, AppError> {
-    let is_online = crate::gateway::GatewayHeartbeatClient::is_restaurant_online(&pool, q.rid).await
+    let is_online = crate::gateway::GatewayHeartbeatClient::is_restaurant_online(&pool, q.rid)
+        .await
         || crate::ws::has_active_crm_clients();
 
     let phone: Option<String> = sqlx::query_scalar("SELECT phone FROM restaurants WHERE id = $1")
@@ -175,7 +177,14 @@ pub async fn get_public_menu(
     let (gst_rate, cgst_rate, sgst_rate, service_charge_rate) = rest_res
         .ok()
         .flatten()
-        .map(|(g, c, s, sc)| (g.unwrap_or(5.0), c.unwrap_or(2.5), s.unwrap_or(2.5), sc.unwrap_or(0.0)))
+        .map(|(g, c, s, sc)| {
+            (
+                g.unwrap_or(5.0),
+                c.unwrap_or(2.5),
+                s.unwrap_or(2.5),
+                sc.unwrap_or(0.0),
+            )
+        })
         .unwrap_or((5.0, 2.5, 2.5, 0.0));
 
     Ok(Json(ApiResponse::success(json!({
@@ -215,7 +224,9 @@ pub async fn create_public_order(
     Json(req): Json<PublicCreateOrderRequest>,
 ) -> Result<Json<ApiResponse<crate::models::order::OrderWithItems>>, AppError> {
     if req.customer_name.trim().is_empty() {
-        return Err(AppError::BadRequest("Customer name is required".to_string()));
+        return Err(AppError::BadRequest(
+            "Customer name is required".to_string(),
+        ));
     }
     if req.customer_phone.trim().len() < 10 {
         return Err(AppError::BadRequest(
@@ -223,8 +234,10 @@ pub async fn create_public_order(
         ));
     }
 
-    let is_pos_online = crate::gateway::GatewayHeartbeatClient::is_restaurant_online(&pool, req.restaurant_id).await
-        || crate::ws::has_active_crm_clients();
+    let is_pos_online =
+        crate::gateway::GatewayHeartbeatClient::is_restaurant_online(&pool, req.restaurant_id)
+            .await
+            || crate::ws::has_active_crm_clients();
 
     if !is_pos_online {
         return Err(AppError::Conflict(
@@ -276,18 +289,18 @@ pub async fn get_customer_orders(
     State(pool): State<PgPool>,
     Query(q): Query<CustomerOrdersQuery>,
 ) -> Result<Json<ApiResponse<Vec<crate::models::order::OrderWithItems>>>, AppError> {
-    let clean_phone = q.phone.chars().filter(|c| c.is_ascii_digit()).collect::<String>();
+    let clean_phone = q
+        .phone
+        .chars()
+        .filter(|c| c.is_ascii_digit())
+        .collect::<String>();
     if clean_phone.len() < 10 {
         return Ok(Json(ApiResponse::success(Vec::new())));
     }
 
-    let orders = OrderRepository::list_orders_by_customer_phone(
-        &pool,
-        q.rid,
-        &clean_phone,
-        q.table_id,
-    )
-    .await?;
+    let orders =
+        OrderRepository::list_orders_by_customer_phone(&pool, q.rid, &clean_phone, q.table_id)
+            .await?;
 
     Ok(Json(ApiResponse::success(orders)))
 }

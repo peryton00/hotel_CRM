@@ -310,123 +310,127 @@ type InventoryTab = 'INGREDIENTS' | 'RECIPES' | 'LEDGER';
                   </tr>
                 } @else {
                   @for (ing of filteredIngredients(); track ing.id) {
-                  <tr
-                    [class.row-alert]="ing.currentStock > 0 && ing.currentStock <= ing.minThreshold"
-                    [class.row-danger]="ing.currentStock <= 0"
-                  >
-                    <td>
-                      <div class="ing-meta-cell">
-                        <strong>{{ ing.name }}</strong>
-                        @if (ing.description) {
-                          <span class="text-xs text-muted">{{ ing.description }}</span>
-                        }
-                        @if (ing.supplierName) {
-                          <span class="text-xs text-secondary"
-                            ><i class="ph ph-storefront"></i> {{ ing.supplierName }}</span
-                          >
-                        }
-                      </div>
-                    </td>
-                    <td>
-                      <span class="category-pill">{{ ing.category }}</span>
-                    </td>
-                    <td>
-                      <div class="stock-qty-cell">
-                        <span
-                          class="stock-num"
-                          [class.text-crimson]="ing.currentStock <= 0"
-                          [class.text-amber]="
-                            ing.currentStock > 0 && ing.currentStock <= ing.minThreshold
-                          "
-                        >
-                          {{ ing.currentStock }} {{ ing.unit }}
-                        </span>
-                        @if (getReservedQuantity(ing.id); as resQty) {
-                          @if (resQty > 0) {
-                            <span class="text-xs text-muted" title="Active order reservations">
-                              (Avail: {{ getAvailableStock(ing.id) }} {{ ing.unit }} • Res:
-                              {{ resQty }} {{ ing.unit }})
-                            </span>
+                    <tr
+                      [class.row-alert]="
+                        ing.currentStock > 0 && ing.currentStock <= ing.minThreshold
+                      "
+                      [class.row-danger]="ing.currentStock <= 0"
+                    >
+                      <td>
+                        <div class="ing-meta-cell">
+                          <strong>{{ ing.name }}</strong>
+                          @if (ing.description) {
+                            <span class="text-xs text-muted">{{ ing.description }}</span>
                           }
-                        }
-                        @if (ing.targetStock) {
-                          <div
-                            class="stock-bar-track"
-                            title="Current: {{ ing.currentStock }} / Target: {{ ing.targetStock }}"
+                          @if (ing.supplierName) {
+                            <span class="text-xs text-secondary"
+                              ><i class="ph ph-storefront"></i> {{ ing.supplierName }}</span
+                            >
+                          }
+                        </div>
+                      </td>
+                      <td>
+                        <span class="category-pill">{{ ing.category }}</span>
+                      </td>
+                      <td>
+                        <div class="stock-qty-cell">
+                          <span
+                            class="stock-num"
+                            [class.text-crimson]="ing.currentStock <= 0"
+                            [class.text-amber]="
+                              ing.currentStock > 0 && ing.currentStock <= ing.minThreshold
+                            "
                           >
+                            {{ ing.currentStock }} {{ ing.unit }}
+                          </span>
+                          @if (getReservedQuantity(ing.id); as resQty) {
+                            @if (resQty > 0) {
+                              <span class="text-xs text-muted" title="Active order reservations">
+                                (Avail: {{ getAvailableStock(ing.id) }} {{ ing.unit }} • Res:
+                                {{ resQty }} {{ ing.unit }})
+                              </span>
+                            }
+                          }
+                          @if (ing.targetStock) {
                             <div
-                              class="stock-bar-fill"
-                              [style.width.%]="
-                                calcStockPercentage(ing.currentStock, ing.targetStock)
-                              "
-                              [class.fill-danger]="ing.currentStock <= 0"
-                              [class.fill-warning]="
-                                ing.currentStock > 0 && ing.currentStock <= ing.minThreshold
-                              "
-                            ></div>
-                          </div>
+                              class="stock-bar-track"
+                              title="Current: {{ ing.currentStock }} / Target: {{
+                                ing.targetStock
+                              }}"
+                            >
+                              <div
+                                class="stock-bar-fill"
+                                [style.width.%]="
+                                  calcStockPercentage(ing.currentStock, ing.targetStock)
+                                "
+                                [class.fill-danger]="ing.currentStock <= 0"
+                                [class.fill-warning]="
+                                  ing.currentStock > 0 && ing.currentStock <= ing.minThreshold
+                                "
+                              ></div>
+                            </div>
+                          }
+                        </div>
+                      </td>
+                      <td>{{ ing.minThreshold }} {{ ing.unit }}</td>
+                      <td>{{ ing.costPerUnit | currencyInr }}/{{ ing.costUnit }}</td>
+                      <td>
+                        <strong>{{ calcIngredientValue(ing) | currencyInr }}</strong>
+                      </td>
+                      <td>
+                        @if (ing.currentStock <= 0) {
+                          <span class="badge badge-danger">Out of Stock</span>
+                        } @else if (ing.currentStock <= ing.minThreshold) {
+                          <span class="badge badge-warning">Low Stock</span>
+                        } @else {
+                          <span class="badge badge-success">In Stock</span>
                         }
-                      </div>
-                    </td>
-                    <td>{{ ing.minThreshold }} {{ ing.unit }}</td>
-                    <td>{{ ing.costPerUnit | currencyInr }}/{{ ing.costUnit }}</td>
-                    <td>
-                      <strong>{{ calcIngredientValue(ing) | currencyInr }}</strong>
-                    </td>
-                    <td>
-                      @if (ing.currentStock <= 0) {
-                        <span class="badge badge-danger">Out of Stock</span>
-                      } @else if (ing.currentStock <= ing.minThreshold) {
-                        <span class="badge badge-warning">Low Stock</span>
-                      } @else {
-                        <span class="badge badge-success">In Stock</span>
-                      }
-                    </td>
-                    <td>
-                      <div class="row-actions">
-                        <button
-                          class="btn-icon"
-                          (click)="quickRestock(ing)"
-                          title="Quick Restock"
-                          aria-label="Quick Restock"
-                        >
-                          <i class="ph ph-plus-circle"></i>
-                        </button>
-                        <button
-                          class="btn-icon"
-                          (click)="quickAdjust(ing)"
-                          title="Adjust or Record Wastage"
-                          aria-label="Adjust or Record Wastage"
-                        >
-                          <i class="ph ph-arrows-clockwise"></i>
-                        </button>
-                        <button
-                          class="btn-icon"
-                          (click)="openIngredientModal(ing)"
-                          title="Edit Ingredient Settings"
-                          aria-label="Edit Ingredient Settings"
-                        >
-                          <i class="ph ph-pencil-simple"></i>
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                } @empty {
-                  <tr>
-                    <td colspan="8" style="padding: 0;">
-                      <app-empty-state
-                        icon="ph-package"
-                        title="No Ingredients Found"
-                        message="No raw kitchen materials match your search and category filter."
-                        actionText="New Ingredient"
-                        actionIcon="ph-plus"
-                        (actionClick)="openIngredientModal()"
-                        [bordered]="false"
-                      />
-                    </td>
-                  </tr>
+                      </td>
+                      <td>
+                        <div class="row-actions">
+                          <button
+                            class="btn-icon"
+                            (click)="quickRestock(ing)"
+                            title="Quick Restock"
+                            aria-label="Quick Restock"
+                          >
+                            <i class="ph ph-plus-circle"></i>
+                          </button>
+                          <button
+                            class="btn-icon"
+                            (click)="quickAdjust(ing)"
+                            title="Adjust or Record Wastage"
+                            aria-label="Adjust or Record Wastage"
+                          >
+                            <i class="ph ph-arrows-clockwise"></i>
+                          </button>
+                          <button
+                            class="btn-icon"
+                            (click)="openIngredientModal(ing)"
+                            title="Edit Ingredient Settings"
+                            aria-label="Edit Ingredient Settings"
+                          >
+                            <i class="ph ph-pencil-simple"></i>
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  } @empty {
+                    <tr>
+                      <td colspan="8" style="padding: 0;">
+                        <app-empty-state
+                          icon="ph-package"
+                          title="No Ingredients Found"
+                          message="No raw kitchen materials match your search and category filter."
+                          actionText="New Ingredient"
+                          actionIcon="ph-plus"
+                          (actionClick)="openIngredientModal()"
+                          [bordered]="false"
+                        />
+                      </td>
+                    </tr>
+                  }
                 }
-              }
               </tbody>
             </table>
           </div>
@@ -2730,7 +2734,7 @@ export class InventoryComponent {
   private toastService = inject(ToastService);
 
   readonly isLoading = computed(
-    () => this.dataService.isInventoryLoading() || !this.dataService.inventoryLoaded()
+    () => this.dataService.isInventoryLoading() || !this.dataService.inventoryLoaded(),
   );
 
   readonly ingredients = this.mock.ingredients;

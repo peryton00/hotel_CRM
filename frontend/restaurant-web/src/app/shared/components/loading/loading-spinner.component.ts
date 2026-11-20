@@ -9,12 +9,7 @@ export type SpinnerColor = 'primary' | 'secondary' | 'white' | 'muted' | 'gold' 
   standalone: true,
   imports: [CommonModule],
   template: `
-    <div
-      class="spinner-wrapper"
-      [class]="'size-' + size"
-      role="status"
-      [attr.aria-label]="label"
-    >
+    <div class="spinner-wrapper" [class]="'size-' + size" role="status" [attr.aria-label]="label">
       <svg
         class="spinner-svg"
         [class]="'color-' + color"
@@ -23,14 +18,7 @@ export type SpinnerColor = 'primary' | 'secondary' | 'white' | 'muted' | 'gold' 
         xmlns="http://www.w3.org/2000/svg"
         [style.stroke-width]="strokeWidth"
       >
-        <circle
-          class="track"
-          cx="12"
-          cy="12"
-          r="9.5"
-          stroke="currentColor"
-          stroke-opacity="0.2"
-        />
+        <circle class="track" cx="12" cy="12" r="9.5" stroke="currentColor" stroke-opacity="0.2" />
         <path
           class="arc"
           d="M12 2.5 A 9.5 9.5 0 0 1 21.5 12"

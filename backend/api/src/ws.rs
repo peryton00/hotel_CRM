@@ -1,7 +1,7 @@
-use std::sync::{Arc, Mutex, OnceLock};
-use tokio::sync::mpsc;
 use axum::extract::ws::{Message, WebSocket, WebSocketUpgrade};
 use axum::response::IntoResponse;
+use std::sync::{Arc, Mutex, OnceLock};
+use tokio::sync::mpsc;
 
 static WS_CLIENTS: OnceLock<Arc<Mutex<Vec<mpsc::UnboundedSender<String>>>>> = OnceLock::new();
 
@@ -43,7 +43,7 @@ async fn handle_socket(mut socket: WebSocket) {
             msg = rx.recv() => {
                 match msg {
                     Some(text) => {
-                        if socket.send(Message::Text(text.into())).await.is_err() {
+                        if socket.send(Message::Text(text)).await.is_err() {
                             break;
                         }
                     }

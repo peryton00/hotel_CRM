@@ -136,7 +136,9 @@ import {
 
                 <div class="brand-text-block">
                   <h1 class="brand-name">{{ restaurant()?.name || 'GuruKripa Dhaba' }}</h1>
-                  <p class="brand-tagline">{{ restaurant()?.tagline || 'Artisanal Awadhi & Mughlai Bistro' }}</p>
+                  <p class="brand-tagline">
+                    {{ restaurant()?.tagline || 'Artisanal Awadhi & Mughlai Bistro' }}
+                  </p>
                   <p class="brand-address">{{ restaurantAddress }}</p>
                   <div class="brand-contacts-row">
                     <span><i class="ph ph-phone"></i> {{ restaurantPhone }}</span>
@@ -174,7 +176,11 @@ import {
                 <div class="meta-card-title">SPLIT RECEIPT PARTICULARS</div>
                 <div class="meta-field-row">
                   <span class="m-label">Receipt Slip ID:</span>
-                  <strong class="m-val mono">SPLIT-{{ split.orderNumber.replace(/[^0-9]/g, '') }}-{{ split.splitIndex }}</strong>
+                  <strong class="m-val mono"
+                    >SPLIT-{{ split.orderNumber.replace(/[^0-9]/g, '') }}-{{
+                      split.splitIndex
+                    }}</strong
+                  >
                 </div>
                 <div class="meta-field-row">
                   <span class="m-label">Parent Order No:</span>
@@ -182,11 +188,18 @@ import {
                 </div>
                 <div class="meta-field-row">
                   <span class="m-label">Settlement Date:</span>
-                  <span class="m-val">{{ (split.settledAt || ord.createdAt) | date: 'mediumDate' }}, {{ (split.settledAt || ord.createdAt) | date: 'shortTime' }}</span>
+                  <span class="m-val"
+                    >{{ split.settledAt || ord.createdAt | date: 'mediumDate' }},
+                    {{ split.settledAt || ord.createdAt | date: 'shortTime' }}</span
+                  >
                 </div>
                 <div class="meta-field-row">
                   <span class="m-label">Split Mode:</span>
-                  <span class="m-val">{{ split.splitType === 'ITEM_BASED' ? 'Itemized Dish Allocation' : 'Equal Proportional Share' }}</span>
+                  <span class="m-val">{{
+                    split.splitType === 'ITEM_BASED'
+                      ? 'Itemized Dish Allocation'
+                      : 'Equal Proportional Share'
+                  }}</span>
                 </div>
               </div>
 
@@ -196,28 +209,42 @@ import {
                   <span class="m-label">Service Type:</span>
                   @if (ord.orderType === 'TAKEAWAY' || split.orderType === 'TAKEAWAY') {
                     <span class="service-pill takeaway">
-                      <i class="ph ph-shopping-bag"></i> TAKEAWAY • {{ split.pickupReference || ord.pickupReference || ord.orderNumber }}
+                      <i class="ph ph-shopping-bag"></i> TAKEAWAY •
+                      {{ split.pickupReference || ord.pickupReference || ord.orderNumber }}
                     </span>
                   } @else {
                     <span class="service-pill dinein">
-                      <i class="ph ph-fork-knife"></i> TABLE {{ split.tableNumber || ord.tableNumber || 'DINE-IN' }}
+                      <i class="ph ph-fork-knife"></i> TABLE
+                      {{ split.tableNumber || ord.tableNumber || 'DINE-IN' }}
                     </span>
                   }
                 </div>
                 <div class="meta-field-row">
                   <span class="m-label">Guest Name:</span>
-                  <strong class="m-val">{{ split.customerName || ord.customerName || 'Walk-in Guest' }}</strong>
+                  <strong class="m-val">{{
+                    split.customerName || ord.customerName || 'Walk-in Guest'
+                  }}</strong>
                 </div>
                 <div class="meta-field-row">
                   <span class="m-label">Payment Status:</span>
-                  <span class="m-val payment-status-pill" [class.paid]="split.paymentStatus === 'PAID'">
-                    {{ split.paymentStatus === 'PAID' ? 'PAID (' + (split.paymentMethod || 'SETTLED') + ')' : 'UNPAID' }}
+                  <span
+                    class="m-val payment-status-pill"
+                    [class.paid]="split.paymentStatus === 'PAID'"
+                  >
+                    {{
+                      split.paymentStatus === 'PAID'
+                        ? 'PAID (' + (split.paymentMethod || 'SETTLED') + ')'
+                        : 'UNPAID'
+                    }}
                   </span>
                 </div>
                 @if (split.printCount && split.printCount > 0) {
                   <div class="meta-field-row">
                     <span class="m-label">Print Copy:</span>
-                    <span class="m-val">#{{ split.printCount }} {{ split.printCount > 1 ? '(Duplicate Reprint)' : '(Original)' }}</span>
+                    <span class="m-val"
+                      >#{{ split.printCount }}
+                      {{ split.printCount > 1 ? '(Duplicate Reprint)' : '(Original)' }}</span
+                    >
                   </div>
                 }
               </div>
@@ -237,7 +264,11 @@ import {
                   </tr>
                 </thead>
                 <tbody>
-                  @if (split.splitType === 'ITEM_BASED' && split.allocatedItems && split.allocatedItems.length > 0) {
+                  @if (
+                    split.splitType === 'ITEM_BASED' &&
+                    split.allocatedItems &&
+                    split.allocatedItems.length > 0
+                  ) {
                     @for (it of split.allocatedItems; track it.orderItemId; let i = $index) {
                       <tr>
                         <td class="col-num">{{ i + 1 }}</td>
@@ -247,7 +278,9 @@ import {
                         <td class="col-hsn">996331</td>
                         <td class="col-qty font-bold">{{ it.quantity }}</td>
                         <td class="col-rate">{{ it.unitPrice | number: '1.2-2' }}</td>
-                        <td class="col-amt font-bold">{{ (it.quantity * it.unitPrice) | number: '1.2-2' }}</td>
+                        <td class="col-amt font-bold">
+                          {{ it.quantity * it.unitPrice | number: '1.2-2' }}
+                        </td>
                       </tr>
                     }
                   } @else {
@@ -255,10 +288,13 @@ import {
                       <td class="col-num">1</td>
                       <td class="col-desc">
                         <div class="item-primary-name">
-                          Equal Split Share (Part {{ split.splitIndex }} of {{ split.splitTotalCount }})
+                          Equal Split Share (Part {{ split.splitIndex }} of
+                          {{ split.splitTotalCount }})
                         </div>
                         <span class="item-micro-spec variant">
-                          Proportionate 1/{{ split.splitTotalCount }} share of parent order #{{ ord.orderNumber }}
+                          Proportionate 1/{{ split.splitTotalCount }} share of parent order #{{
+                            ord.orderNumber
+                          }}
                         </span>
                       </td>
                       <td class="col-hsn">996331</td>
@@ -285,7 +321,9 @@ import {
                   </div>
                   <div class="settlement-badge" [class.paid]="split.paymentStatus === 'PAID'">
                     <i class="ph ph-seal-check"></i>
-                    <span>{{ split.paymentStatus === 'PAID' ? 'SPLIT SHARE SETTLED' : 'AWAITING PAYMENT' }}</span>
+                    <span>{{
+                      split.paymentStatus === 'PAID' ? 'SPLIT SHARE SETTLED' : 'AWAITING PAYMENT'
+                    }}</span>
                   </div>
                 </div>
               </div>
@@ -311,7 +349,9 @@ import {
                     }
                   } @else {
                     <div class="total-line tax-line">
-                      <span class="t-label">GST ({{ ((getOrderCgstRate(ord)) + (getOrderSgstRate(ord))) }}%):</span>
+                      <span class="t-label"
+                        >GST ({{ getOrderCgstRate(ord) + getOrderSgstRate(ord) }}%):</span
+                      >
                       <span class="t-val">{{ split.taxAmount | currencyInr }}</span>
                     </div>
                   }
@@ -327,13 +367,20 @@ import {
             <footer class="invoice-footer-section">
               <div class="footer-terms-block">
                 <strong class="terms-title">Terms & Notes:</strong>
-                <p class="terms-text">Itemized split bill for individual dining party share. Parent order: {{ ord.orderNumber }}.</p>
-                <p class="computer-gen-notice">This is a computer-generated tax receipt. No physical signature required.</p>
+                <p class="terms-text">
+                  Itemized split bill for individual dining party share. Parent order:
+                  {{ ord.orderNumber }}.
+                </p>
+                <p class="computer-gen-notice">
+                  This is a computer-generated tax receipt. No physical signature required.
+                </p>
               </div>
               <div class="footer-signatory-block">
                 <div class="signatory-space"></div>
                 <div class="signatory-rule"></div>
-                <span class="signatory-name">For {{ restaurant()?.name || 'GuruKripa Dhaba' }}</span>
+                <span class="signatory-name"
+                  >For {{ restaurant()?.name || 'GuruKripa Dhaba' }}</span
+                >
                 <span class="signatory-title">Authorized Signatory</span>
               </div>
             </footer>
@@ -368,7 +415,9 @@ import {
 
                 <div class="brand-text-block">
                   <h1 class="brand-name">{{ restaurant()?.name || 'GuruKripa Dhaba' }}</h1>
-                  <p class="brand-tagline">{{ restaurant()?.tagline || 'Artisanal Awadhi & Mughlai Bistro' }}</p>
+                  <p class="brand-tagline">
+                    {{ restaurant()?.tagline || 'Artisanal Awadhi & Mughlai Bistro' }}
+                  </p>
                   <p class="brand-address">{{ restaurantAddress }}</p>
                   <div class="brand-contacts-row">
                     <span><i class="ph ph-phone"></i> {{ restaurantPhone }}</span>
@@ -408,7 +457,10 @@ import {
                 </div>
                 <div class="meta-field-row">
                   <span class="m-label">Invoice Date:</span>
-                  <span class="m-val">{{ ord.createdAt | date: 'mediumDate' }}, {{ ord.createdAt | date: 'shortTime' }}</span>
+                  <span class="m-val"
+                    >{{ ord.createdAt | date: 'mediumDate' }},
+                    {{ ord.createdAt | date: 'shortTime' }}</span
+                  >
                 </div>
                 <div class="meta-field-row">
                   <span class="m-label">Billed By (Cashier):</span>
@@ -422,7 +474,8 @@ import {
                   <span class="m-label">Service Type:</span>
                   @if (ord.orderType === 'TAKEAWAY') {
                     <span class="service-pill takeaway">
-                      <i class="ph ph-shopping-bag"></i> TAKEAWAY • {{ ord.pickupReference || ord.orderNumber }}
+                      <i class="ph ph-shopping-bag"></i> TAKEAWAY •
+                      {{ ord.pickupReference || ord.orderNumber }}
                     </span>
                   } @else {
                     <span class="service-pill dinein">
@@ -440,14 +493,24 @@ import {
                 </div>
                 <div class="meta-field-row">
                   <span class="m-label">Payment Status:</span>
-                  <span class="m-val payment-status-pill" [class.paid]="ord.paymentStatus === 'PAID'">
-                    {{ ord.paymentStatus === 'PAID' ? 'PAID (' + (ord.paymentMethod || 'SETTLED') + ')' : 'UNPAID' }}
+                  <span
+                    class="m-val payment-status-pill"
+                    [class.paid]="ord.paymentStatus === 'PAID'"
+                  >
+                    {{
+                      ord.paymentStatus === 'PAID'
+                        ? 'PAID (' + (ord.paymentMethod || 'SETTLED') + ')'
+                        : 'UNPAID'
+                    }}
                   </span>
                 </div>
                 @if (ord.printCount && ord.printCount > 0) {
                   <div class="meta-field-row">
                     <span class="m-label">Print Copy:</span>
-                    <span class="m-val">#{{ ord.printCount }} {{ ord.printCount > 1 ? '(Duplicate Reprint)' : '(Original)' }}</span>
+                    <span class="m-val"
+                      >#{{ ord.printCount }}
+                      {{ ord.printCount > 1 ? '(Duplicate Reprint)' : '(Original)' }}</span
+                    >
                   </div>
                 }
               </div>
@@ -473,7 +536,9 @@ import {
                       <td class="col-desc">
                         <div class="item-primary-name">{{ item.name }}</div>
                         @if (item.selectedPortion) {
-                          <span class="item-micro-spec portion">Portion: {{ item.selectedPortion.label }}</span>
+                          <span class="item-micro-spec portion"
+                            >Portion: {{ item.selectedPortion.label }}</span
+                          >
                         }
                         @if (item.selectedVariants && item.selectedVariants.length > 0) {
                           <div class="item-variants-list">
@@ -483,13 +548,17 @@ import {
                           </div>
                         }
                         @if (item.specialInstructions) {
-                          <span class="item-micro-spec notes">Note: {{ item.specialInstructions }}</span>
+                          <span class="item-micro-spec notes"
+                            >Note: {{ item.specialInstructions }}</span
+                          >
                         }
                       </td>
                       <td class="col-hsn">996331</td>
                       <td class="col-qty font-bold">{{ item.quantity }}</td>
                       <td class="col-rate">{{ item.unitPrice | number: '1.2-2' }}</td>
-                      <td class="col-amt font-bold">{{ (item.quantity * item.unitPrice) | number: '1.2-2' }}</td>
+                      <td class="col-amt font-bold">
+                        {{ item.quantity * item.unitPrice | number: '1.2-2' }}
+                      </td>
                     </tr>
                   }
                 </tbody>
@@ -511,11 +580,18 @@ import {
                   </div>
                   <div class="settlement-row">
                     <span>Settlement Time:</span>
-                    <span>{{ (ord.settledAt || ord.createdAt) | date: 'mediumDate' }}, {{ (ord.settledAt || ord.createdAt) | date: 'shortTime' }}</span>
+                    <span
+                      >{{ ord.settledAt || ord.createdAt | date: 'mediumDate' }},
+                      {{ ord.settledAt || ord.createdAt | date: 'shortTime' }}</span
+                    >
                   </div>
                   <div class="settlement-badge" [class.paid]="ord.paymentStatus === 'PAID'">
                     <i class="ph ph-seal-check"></i>
-                    <span>{{ ord.paymentStatus === 'PAID' ? 'TRANSACTION SETTLED & VERIFIED' : 'PAYMENT PENDING SETTLEMENT' }}</span>
+                    <span>{{
+                      ord.paymentStatus === 'PAID'
+                        ? 'TRANSACTION SETTLED & VERIFIED'
+                        : 'PAYMENT PENDING SETTLEMENT'
+                    }}</span>
                   </div>
                 </div>
               </div>
@@ -534,7 +610,9 @@ import {
                   }
                   <div class="total-line">
                     <span class="t-label">Taxable Value:</span>
-                    <span class="t-val">{{ (ord.subtotal - (ord.discountAmount || 0)) | currencyInr }}</span>
+                    <span class="t-val">{{
+                      ord.subtotal - (ord.discountAmount || 0) | currencyInr
+                    }}</span>
                   </div>
                   <div class="total-line tax-line">
                     <span class="t-label">CGST ({{ getOrderCgstRate(ord) }}%):</span>
@@ -559,16 +637,23 @@ import {
                 <strong class="terms-title">Terms & Conditions:</strong>
                 <ol class="terms-list">
                   <li>All disputes are subject to local state jurisdiction only.</li>
-                  <li>GST is levied as applicable on Restaurant Services under GST Act (SAC 996331).</li>
+                  <li>
+                    GST is levied as applicable on Restaurant Services under GST Act (SAC 996331).
+                  </li>
                   <li>Food items once delivered cannot be returned or exchanged.</li>
                 </ol>
-                <p class="computer-gen-notice">This is a computer-generated commercial tax invoice. No physical signature is required.</p>
+                <p class="computer-gen-notice">
+                  This is a computer-generated commercial tax invoice. No physical signature is
+                  required.
+                </p>
               </div>
 
               <div class="footer-signatory-block">
                 <div class="signatory-space"></div>
                 <div class="signatory-rule"></div>
-                <span class="signatory-name">For {{ restaurant()?.name || 'GuruKripa Dhaba' }}</span>
+                <span class="signatory-name"
+                  >For {{ restaurant()?.name || 'GuruKripa Dhaba' }}</span
+                >
                 <span class="signatory-title">Authorized Signatory</span>
               </div>
             </footer>
@@ -693,9 +778,7 @@ import {
                     <i class="ph ph-whatsapp-logo"></i>
                   </div>
                   <div>
-                    <h3 id="whatsapp-dialog-title" class="heading-card">
-                      Send Bill via WhatsApp
-                    </h3>
+                    <h3 id="whatsapp-dialog-title" class="heading-card">Send Bill via WhatsApp</h3>
                     <span class="text-xs text-muted"
                       >Instant digital bill delivery to guest's phone</span
                     >
@@ -708,7 +791,9 @@ import {
 
               <div class="modal-body auth-dialog-body">
                 <div class="form-group">
-                  <label class="form-label" for="whatsappPhoneInput">Customer WhatsApp Number</label>
+                  <label class="form-label" for="whatsappPhoneInput"
+                    >Customer WhatsApp Number</label
+                  >
                   <div class="input-with-icon">
                     <i class="ph ph-phone"></i>
                     <input
@@ -723,7 +808,8 @@ import {
                     />
                   </div>
                   <span class="hint-text"
-                    >Enter 10-digit mobile number. Country code defaults to +91 (India) if omitted.</span
+                    >Enter 10-digit mobile number. Country code defaults to +91 (India) if
+                    omitted.</span
                   >
                 </div>
 
@@ -794,12 +880,19 @@ import {
         />
       </div>
     } @else if (isLoading()) {
-      <div class="invoice-page" style="display: flex; flex-direction: column; align-items: center; gap: 20px; padding: 24px;">
-        <div style="width: 100%; max-width: 580px; display: flex; justify-content: space-between; align-items: center;">
+      <div
+        class="invoice-page"
+        style="display: flex; flex-direction: column; align-items: center; gap: 20px; padding: 24px;"
+      >
+        <div
+          style="width: 100%; max-width: 580px; display: flex; justify-content: space-between; align-items: center;"
+        >
           <div class="skeleton-base" style="width: 120px; height: 16px; border-radius: 4px;"></div>
           <div class="skeleton-base" style="width: 100px; height: 36px; border-radius: 6px;"></div>
         </div>
-        <div style="width: 100%; max-width: 580px; background: var(--color-surface, #fff); border: 1px solid var(--color-border, #e5ded4); border-radius: var(--radius-md, 12px); padding: 32px; display: flex; flex-direction: column; gap: 18px;">
+        <div
+          style="width: 100%; max-width: 580px; background: var(--color-surface, #fff); border: 1px solid var(--color-border, #e5ded4); border-radius: var(--radius-md, 12px); padding: 32px; display: flex; flex-direction: column; gap: 18px;"
+        >
           <div style="display: flex; flex-direction: column; align-items: center; gap: 8px;">
             <div class="skeleton-base" style="width: 50%; height: 24px; border-radius: 4px;"></div>
             <div class="skeleton-base" style="width: 70%; height: 14px; border-radius: 4px;"></div>
@@ -808,7 +901,10 @@ import {
           <app-skeleton variant="table-row" [count]="4" />
           <div class="skeleton-base" style="width: 100%; height: 1px; margin: 8px 0;"></div>
           <div style="display: flex; justify-content: flex-end;">
-            <div class="skeleton-base" style="width: 160px; height: 32px; border-radius: 4px;"></div>
+            <div
+              class="skeleton-base"
+              style="width: 160px; height: 32px; border-radius: 4px;"
+            ></div>
           </div>
         </div>
       </div>
@@ -843,7 +939,9 @@ import {
         border: 1px solid var(--color-border, #e2e8f0);
         border-radius: 12px;
         padding: 8px 14px;
-        box-shadow: 0 2px 8px -2px rgba(15, 23, 42, 0.05), 0 1px 3px rgba(15, 23, 42, 0.03);
+        box-shadow:
+          0 2px 8px -2px rgba(15, 23, 42, 0.05),
+          0 1px 3px rgba(15, 23, 42, 0.03);
         box-sizing: border-box;
 
         @media (max-width: 680px) {
@@ -1054,12 +1152,18 @@ import {
         border-radius: 12px;
         padding: 32px 36px;
         box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.08);
-        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+        font-family:
+          -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
         position: relative;
         overflow: hidden;
 
         // Prevent theme inversion: invoice sheet always maintains sharp print contrast
-        h1, h2, h3, h4, strong, b {
+        h1,
+        h2,
+        h3,
+        h4,
+        strong,
+        b {
           color: #0f172a;
         }
       }
@@ -1951,7 +2055,9 @@ import {
         border-radius: var(--radius-sm, 6px);
         border: none;
         cursor: pointer;
-        transition: background 0.15s ease, transform 0.1s ease;
+        transition:
+          background 0.15s ease,
+          transform 0.1s ease;
 
         &:hover {
           background: #20ba5a;
@@ -2126,7 +2232,9 @@ export class InvoicePreviewComponent implements OnInit {
     const r = this.restaurant();
     if (!r?.address) return '14 Heritage Promenade, Civil Lines, MG Road, Bengaluru - 560001';
     const parts = [r.address.street, r.address.area, r.address.city, r.address.zip].filter(Boolean);
-    return parts.length > 0 ? parts.join(', ') : '14 Heritage Promenade, Civil Lines, MG Road, Bengaluru - 560001';
+    return parts.length > 0
+      ? parts.join(', ')
+      : '14 Heritage Promenade, Civil Lines, MG Road, Bengaluru - 560001';
   }
 
   get restaurantContactInfo(): string {
@@ -2160,7 +2268,11 @@ export class InvoicePreviewComponent implements OnInit {
   }
 
   getBilledByStaff(ord: Order): string {
-    return (ord as any)?.serverStaffName || (ord as any)?.server_staff_name || 'Billing Desk / Supervisor';
+    return (
+      (ord as any)?.serverStaffName ||
+      (ord as any)?.server_staff_name ||
+      'Billing Desk / Supervisor'
+    );
   }
 
   getInvoiceNumber(ord: Order): string {
@@ -2181,11 +2293,7 @@ export class InvoicePreviewComponent implements OnInit {
     });
   }
 
-  private dispatchThermalOrBrowserPrint(
-    ord: Order,
-    split: any | null,
-    infoMsg: string,
-  ): void {
+  private dispatchThermalOrBrowserPrint(ord: Order, split: any | null, infoMsg: string): void {
     const cfg = this.thermalPrinter.config();
     if (cfg.target === 'BROWSER') {
       this.toastService.success(infoMsg);
@@ -2203,7 +2311,9 @@ export class InvoicePreviewComponent implements OnInit {
               : cfg.printerName || 'Default Windows Printer';
           this.toastService.success(`Thermal receipt sent to ${targetName}.`);
         } else {
-          this.toastService.warning(`Thermal printer error: ${res.message}. Opening standard print.`);
+          this.toastService.warning(
+            `Thermal printer error: ${res.message}. Opening standard print.`,
+          );
           window.print();
         }
       },
@@ -2271,7 +2381,9 @@ export class InvoicePreviewComponent implements OnInit {
       const res = this.mock.recordSplitBillPrint(split.id, true, 'Admin Override');
       if (res.success) {
         this.showThermalPreviewModal.set(true);
-        this.toastService.success(`Admin authorization verified. Printing duplicate reprint (Copy #${res.printCount}).`);
+        this.toastService.success(
+          `Admin authorization verified. Printing duplicate reprint (Copy #${res.printCount}).`,
+        );
       }
       return;
     }
@@ -2289,7 +2401,9 @@ export class InvoicePreviewComponent implements OnInit {
         this.mock.updateOrderStatusAtomic(ord.id, 'COMPLETED');
       }
       this.showThermalPreviewModal.set(true);
-      this.toastService.success(`Admin authorization verified. Printing duplicate reprint (Copy #${res.printCount}).`);
+      this.toastService.success(
+        `Admin authorization verified. Printing duplicate reprint (Copy #${res.printCount}).`,
+      );
     }
   }
 

@@ -74,13 +74,9 @@ pub async fn assign_table_staff(
     Path(table_id): Path<Uuid>,
     Json(req): Json<AssignTableStaffRequest>,
 ) -> Result<impl IntoResponse, AppError> {
-    let table = TableRepository::assign_staff(
-        &pool,
-        tenant.restaurant_id,
-        table_id,
-        req.assigned_staff_id,
-    )
-    .await?;
+    let table =
+        TableRepository::assign_staff(&pool, tenant.restaurant_id, table_id, req.assigned_staff_id)
+            .await?;
 
     Ok(Json(ApiResponse::success(table)))
 }

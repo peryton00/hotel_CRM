@@ -152,7 +152,9 @@ import { ToastService } from '../../../core/services/toast.service';
                     <span class="text-price">{{ cust.totalSpend | currencyInr }}</span>
                   </td>
                   <td>
-                    <span class="text-sm text-muted">{{ cust.lastVisit | date: 'mediumDate' }}</span>
+                    <span class="text-sm text-muted">{{
+                      cust.lastVisit | date: 'mediumDate'
+                    }}</span>
                   </td>
                   <td>
                     <div class="actions-cell">
@@ -491,7 +493,7 @@ export class CustomerListComponent {
   private toastService = inject(ToastService);
 
   readonly isLoading = computed(
-    () => this.dataService.isCustomersLoading() || !this.dataService.customersLoaded()
+    () => this.dataService.isCustomersLoading() || !this.dataService.customersLoaded(),
   );
   readonly isSaving = signal<boolean>(false);
 

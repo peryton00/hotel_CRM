@@ -13,7 +13,10 @@ pub async fn start_server(
     config: AppConfig,
     mut shutdown_rx: Option<tokio::sync::oneshot::Receiver<()>>,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-    tracing::info!("Starting HOTEL_CRM API engine in {} mode...", config.environment);
+    tracing::info!(
+        "Starting HOTEL_CRM API engine in {} mode...",
+        config.environment
+    );
 
     // 1. Configure Primary (Local/Operational) PostgreSQL connection pool
     let max_conns = if config.is_offline_first { 20 } else { 5 };
@@ -47,7 +50,10 @@ pub async fn start_server(
                 }
             }
             Err(e) => {
-                tracing::warn!("Database background connection notice: {}. API engine remains operational.", e);
+                tracing::warn!(
+                    "Database background connection notice: {}. API engine remains operational.",
+                    e
+                );
             }
         }
     });
@@ -600,7 +606,9 @@ pub async fn ensure_schema_and_seed(pool: &sqlx::PgPool) {
     "#;
 
     match sqlx::raw_sql(batch_sql).execute(pool).await {
-        Ok(_) => tracing::info!("Schema synchronization and canonical seed verification completed."),
+        Ok(_) => {
+            tracing::info!("Schema synchronization and canonical seed verification completed.")
+        }
         Err(e) => tracing::warn!("Schema harmonization / seed notice: {}", e),
     }
 }

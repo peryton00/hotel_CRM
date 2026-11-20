@@ -15,9 +15,7 @@ import { EmptyStateComponent } from '../../../shared/components/empty-state/empt
       <div class="page-header">
         <div>
           <h1 class="heading-display">Guest Reviews & Feedback</h1>
-          <p class="text-muted">
-            View customer ratings, review comments, and send replies.
-          </p>
+          <p class="text-muted">View customer ratings, review comments, and send replies.</p>
         </div>
 
         <div class="rating-kpi-badge">
@@ -34,7 +32,10 @@ import { EmptyStateComponent } from '../../../shared/components/empty-state/empt
             [class.active]="ratingFilter() === 0"
             (click)="ratingFilter.set(0)"
           >
-            All Reviews @if (!isLoading()) { ({{ feedbacks().length }}) }
+            All Reviews
+            @if (!isLoading()) {
+              ({{ feedbacks().length }})
+            }
           </button>
           <button
             class="tab-btn"
@@ -59,16 +60,34 @@ import { EmptyStateComponent } from '../../../shared/components/empty-state/empt
             <div class="review-card" style="display: flex; flex-direction: column; gap: 14px;">
               <div style="display: flex; justify-content: space-between; align-items: center;">
                 <div style="display: flex; align-items: center; gap: 12px;">
-                  <div class="skeleton-base skeleton-circle" style="width: 36px; height: 36px; border-radius: 50%;"></div>
+                  <div
+                    class="skeleton-base skeleton-circle"
+                    style="width: 36px; height: 36px; border-radius: 50%;"
+                  ></div>
                   <div style="display: flex; flex-direction: column; gap: 6px;">
-                    <div class="skeleton-base" style="width: 120px; height: 16px; border-radius: 4px;"></div>
-                    <div class="skeleton-base" style="width: 180px; height: 12px; border-radius: 4px;"></div>
+                    <div
+                      class="skeleton-base"
+                      style="width: 120px; height: 16px; border-radius: 4px;"
+                    ></div>
+                    <div
+                      class="skeleton-base"
+                      style="width: 180px; height: 12px; border-radius: 4px;"
+                    ></div>
                   </div>
                 </div>
-                <div class="skeleton-base" style="width: 100px; height: 18px; border-radius: 4px;"></div>
+                <div
+                  class="skeleton-base"
+                  style="width: 100px; height: 18px; border-radius: 4px;"
+                ></div>
               </div>
-              <div class="skeleton-base" style="width: 85%; height: 14px; border-radius: 4px;"></div>
-              <div class="skeleton-base" style="width: 60%; height: 14px; border-radius: 4px;"></div>
+              <div
+                class="skeleton-base"
+                style="width: 85%; height: 14px; border-radius: 4px;"
+              ></div>
+              <div
+                class="skeleton-base"
+                style="width: 60%; height: 14px; border-radius: 4px;"
+              ></div>
             </div>
           }
         } @else {

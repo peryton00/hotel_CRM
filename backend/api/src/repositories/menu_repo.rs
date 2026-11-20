@@ -122,7 +122,11 @@ impl MenuRepository {
         restaurant_id: Uuid,
         req: CreateMenuItemRequest,
     ) -> Result<MenuItem, AppError> {
-        let dietary = if req.is_veg.unwrap_or(true) { "VEG" } else { "NON_VEG" };
+        let dietary = if req.is_veg.unwrap_or(true) {
+            "VEG"
+        } else {
+            "NON_VEG"
+        };
         let item = sqlx::query_as::<_, MenuItem>(
             r#"
             INSERT INTO menu_items (
@@ -222,13 +226,11 @@ impl MenuRepository {
             .execute(pool)
             .await;
 
-        sqlx::query(
-            "DELETE FROM menu_items WHERE restaurant_id = $1 AND id = $2"
-        )
-        .bind(restaurant_id)
-        .bind(item_id)
-        .execute(pool)
-        .await?;
+        sqlx::query("DELETE FROM menu_items WHERE restaurant_id = $1 AND id = $2")
+            .bind(restaurant_id)
+            .bind(item_id)
+            .execute(pool)
+            .await?;
 
         Ok(())
     }
@@ -269,13 +271,11 @@ impl MenuRepository {
         restaurant_id: Uuid,
         category_id: Uuid,
     ) -> Result<(), AppError> {
-        sqlx::query(
-            "DELETE FROM menu_categories WHERE restaurant_id = $1 AND id = $2",
-        )
-        .bind(restaurant_id)
-        .bind(category_id)
-        .execute(pool)
-        .await?;
+        sqlx::query("DELETE FROM menu_categories WHERE restaurant_id = $1 AND id = $2")
+            .bind(restaurant_id)
+            .bind(category_id)
+            .execute(pool)
+            .await?;
 
         Ok(())
     }

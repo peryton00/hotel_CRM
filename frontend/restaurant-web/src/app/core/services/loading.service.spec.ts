@@ -17,10 +17,7 @@ describe('LoadingService', () => {
     };
 
     TestBed.configureTestingModule({
-      providers: [
-        LoadingService,
-        { provide: Router, useValue: mockRouter },
-      ],
+      providers: [LoadingService, { provide: Router, useValue: mockRouter }],
     });
 
     service = TestBed.inject(LoadingService);

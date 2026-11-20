@@ -125,14 +125,8 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<string, string[]> = {
     'kitchen:kot:fire',
     'menu:availability:toggle',
   ],
-  CAPTAIN: [
-    'pos:orders:create',
-    'kitchen:kot:fire',
-  ],
-  SERVICE_CREW: [
-    'pos:orders:create',
-    'kitchen:kot:fire',
-  ],
+  CAPTAIN: ['pos:orders:create', 'kitchen:kot:fire'],
+  SERVICE_CREW: ['pos:orders:create', 'kitchen:kot:fire'],
   EXECUTIVE_CHEF: [
     'kitchen:kot:fire',
     'kitchen:kds:view',
@@ -140,15 +134,6 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<string, string[]> = {
     'inventory:view',
     'inventory:adjust',
   ],
-  SOUS_CHEF: [
-    'kitchen:kot:fire',
-    'kitchen:kds:view',
-    'menu:availability:toggle',
-    'inventory:view',
-  ],
-  BEVERAGE_SPECIALIST: [
-    'kitchen:kot:fire',
-    'kitchen:kds:view',
-    'menu:availability:toggle',
-  ],
+  SOUS_CHEF: ['kitchen:kot:fire', 'kitchen:kds:view', 'menu:availability:toggle', 'inventory:view'],
+  BEVERAGE_SPECIALIST: ['kitchen:kot:fire', 'kitchen:kds:view', 'menu:availability:toggle'],
 };

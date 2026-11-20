@@ -1,6 +1,9 @@
 import { TestBed } from '@angular/core/testing';
 import { HttpClientTestingModule, HttpTestingController } from '@angular/common/http/testing';
-import { RestaurantDataService, OfflineSyncAction } from '../data-access/services/restaurant-data.service';
+import {
+  RestaurantDataService,
+  OfflineSyncAction,
+} from '../data-access/services/restaurant-data.service';
 import { NetworkStatusService } from './services/network-status.service';
 import { Order } from './models/order.model';
 

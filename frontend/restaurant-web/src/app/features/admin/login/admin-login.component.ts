@@ -68,10 +68,16 @@ import { ToastService } from '../../../core/services/toast.service';
                 (click)="togglePasswordVisibility()"
                 [attr.aria-label]="showPassword() ? 'Hide password' : 'Show password'"
               >
-                <i class="ph" [class.ph-eye]="!showPassword()" [class.ph-eye-slash]="showPassword()"></i>
+                <i
+                  class="ph"
+                  [class.ph-eye]="!showPassword()"
+                  [class.ph-eye-slash]="showPassword()"
+                ></i>
               </button>
             </div>
-            <span class="hint-text">Admin password set in Supabase; assigned staff use their secret password</span>
+            <span class="hint-text"
+              >Admin password set in Supabase; assigned staff use their secret password</span
+            >
           </div>
 
           @if (errorMessage()) {
@@ -81,7 +87,11 @@ import { ToastService } from '../../../core/services/toast.service';
             </div>
           }
 
-          <button type="submit" class="btn btn-primary submit-btn" [disabled]="isLoading() || !loginId.trim() || !password.trim()">
+          <button
+            type="submit"
+            class="btn btn-primary submit-btn"
+            [disabled]="isLoading() || !loginId.trim() || !password.trim()"
+          >
             @if (isLoading()) {
               <i class="ph ph-spinner ph-spin"></i>
               <span>Verifying with Supabase...</span>

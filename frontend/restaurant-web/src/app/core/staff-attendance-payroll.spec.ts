@@ -244,14 +244,13 @@ describe('Staff Table Handling, Daily Attendance & Payroll Calculation Logic', (
       serverStaffId: 'staff-rahul',
     };
 
-    const reassignServer = (
-      ord: typeof order,
-      newStaffId: string,
-      adminPassword?: string,
-    ) => {
+    const reassignServer = (ord: typeof order, newStaffId: string, adminPassword?: string) => {
       const isPaid = ord.paymentStatus === 'PAID' || ord.status === 'COMPLETED';
       if (isPaid && adminPassword !== 'admin123') {
-        return { success: false, error: 'Admin password required to change server on paid orders.' };
+        return {
+          success: false,
+          error: 'Admin password required to change server on paid orders.',
+        };
       }
       return { success: true, updatedServer: newStaffId };
     };

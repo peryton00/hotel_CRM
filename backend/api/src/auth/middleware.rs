@@ -55,7 +55,9 @@ where
                 }
 
                 let primary_key = DecodingKey::from_base64_secret(&config.supabase_jwt_secret)
-                    .unwrap_or_else(|_| DecodingKey::from_secret(config.supabase_jwt_secret.as_bytes()));
+                    .unwrap_or_else(|_| {
+                        DecodingKey::from_secret(config.supabase_jwt_secret.as_bytes())
+                    });
                 let fallback_key = DecodingKey::from_secret(config.supabase_jwt_secret.as_bytes());
 
                 let decoded = decode::<SupabaseClaims>(token, &primary_key, &validation)
@@ -97,7 +99,9 @@ where
                 .get("x-dev-user-id")
                 .and_then(|h| h.to_str().ok())
                 .and_then(|h| Uuid::parse_str(h).ok())
-                .unwrap_or_else(|| Uuid::parse_str("00000000-0000-0000-0000-000000000002").unwrap());
+                .unwrap_or_else(|| {
+                    Uuid::parse_str("00000000-0000-0000-0000-000000000002").unwrap()
+                });
 
             let dev_role = parts
                 .headers

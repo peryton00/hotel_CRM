@@ -361,15 +361,15 @@ export class RestaurantDataService {
               cgstRate:
                 res.cgst_rate !== undefined && res.cgst_rate !== null
                   ? Number(res.cgst_rate)
-                  : (res.gst_rate !== undefined && res.gst_rate !== null
-                      ? Number(res.gst_rate) / 2
-                      : (cached?.taxSettings?.cgstRate ?? 2.5)),
+                  : res.gst_rate !== undefined && res.gst_rate !== null
+                    ? Number(res.gst_rate) / 2
+                    : (cached?.taxSettings?.cgstRate ?? 2.5),
               sgstRate:
                 res.sgst_rate !== undefined && res.sgst_rate !== null
                   ? Number(res.sgst_rate)
-                  : (res.gst_rate !== undefined && res.gst_rate !== null
-                      ? Number(res.gst_rate) / 2
-                      : (cached?.taxSettings?.sgstRate ?? 2.5)),
+                  : res.gst_rate !== undefined && res.gst_rate !== null
+                    ? Number(res.gst_rate) / 2
+                    : (cached?.taxSettings?.sgstRate ?? 2.5),
               serviceChargeRate:
                 res.service_charge_rate !== undefined && res.service_charge_rate !== null
                   ? Number(res.service_charge_rate)
@@ -408,7 +408,7 @@ export class RestaurantDataService {
           id: t.id,
           number: (t.table_number || '').startsWith('tbl-')
             ? 'T-' + t.table_number.slice(4).padStart(2, '0')
-            : (t.table_number || t.number || 'T-01'),
+            : t.table_number || t.number || 'T-01',
           capacity: t.capacity,
           section: t.section,
           status: (t.status || 'available').toUpperCase() as TableStatus,
@@ -632,7 +632,9 @@ export class RestaurantDataService {
           customerPhone: r.customer_phone,
           partySize: r.guest_count,
           reservationTime: r.reservation_time,
-          reservationDate: r.reservation_time ? r.reservation_time.split('T')[0] : new Date().toISOString().split('T')[0],
+          reservationDate: r.reservation_time
+            ? r.reservation_time.split('T')[0]
+            : new Date().toISOString().split('T')[0],
           status: (r.status || 'CONFIRMED').toUpperCase() as ReservationStatus,
           tableId: r.table_id,
           specialRequests: r.special_requests,
@@ -725,12 +727,12 @@ export class RestaurantDataService {
           return {
             id: m.id,
             ingredientId: m.inventory_item_id,
-            ingredientName: ing ? ing.name : (m.ingredient_name || 'Ingredient'),
+            ingredientName: ing ? ing.name : m.ingredient_name || 'Ingredient',
             type: (m.movement_type || 'WASTAGE').toUpperCase() as any,
             quantityDelta: qty,
             quantityBefore: 0,
             quantityAfter: qty,
-            unit: (ing ? ing.unit : (m.unit_of_measure || m.unit || 'kg')) as any,
+            unit: (ing ? ing.unit : m.unit_of_measure || m.unit || 'kg') as any,
             reason: m.notes || m.reason || '',
             referenceId: m.order_id || m.reference_wastage_id,
             staffName: m.staff_name || 'System',
@@ -781,22 +783,26 @@ export class RestaurantDataService {
         const mapped = rawOrders.map((o: any) => this.mapApiOrder(o));
         const current = this.orders();
         const pendingOutbox = this.offlineOutbox();
-        const pendingLocalOrders = current.filter((localOrd) =>
-          pendingOutbox.some((act) => act.orderId === localOrd.id) || !this.isValidUuid(localOrd.id),
+        const pendingLocalOrders = current.filter(
+          (localOrd) =>
+            pendingOutbox.some((act) => act.orderId === localOrd.id) ||
+            !this.isValidUuid(localOrd.id),
         );
         const merged = [
           ...pendingLocalOrders,
-          ...mapped.filter((m: any) => !pendingLocalOrders.some((p) => p.id === m.id)).map((m: Order) => {
-            const loc = current.find((c) => c.id === m.id);
-            if (loc) {
-              const locStage = this.getOrderStageIndex(loc.status);
-              const mStage = this.getOrderStageIndex(m.status);
-              if (locStage > mStage) {
-                return { ...m, status: loc.status };
+          ...mapped
+            .filter((m: any) => !pendingLocalOrders.some((p) => p.id === m.id))
+            .map((m: Order) => {
+              const loc = current.find((c) => c.id === m.id);
+              if (loc) {
+                const locStage = this.getOrderStageIndex(loc.status);
+                const mStage = this.getOrderStageIndex(m.status);
+                if (locStage > mStage) {
+                  return { ...m, status: loc.status };
+                }
               }
-            }
-            return m;
-          }),
+              return m;
+            }),
         ];
         this.orders.set(merged);
         this.isOrdersLoading.set(false);
@@ -816,7 +822,7 @@ export class RestaurantDataService {
           id: t.id,
           number: (t.table_number || '').startsWith('tbl-')
             ? 'T-' + t.table_number.slice(4).padStart(2, '0')
-            : (t.table_number || t.number || 'T-01'),
+            : t.table_number || t.number || 'T-01',
           capacity: t.capacity,
           section: t.section,
           status: (t.status || 'available').toUpperCase() as TableStatus,
@@ -838,7 +844,9 @@ export class RestaurantDataService {
 
   private handleApiError(context: string, err: any): void {
     if (this.isConnectionOffline(err)) {
-      console.warn(`[RestaurantDataService] Database connection offline during "${context}". Operating in offline mode.`);
+      console.warn(
+        `[RestaurantDataService] Database connection offline during "${context}". Operating in offline mode.`,
+      );
       return;
     }
     const rawMsg =
@@ -907,15 +915,22 @@ export class RestaurantDataService {
     const tbl = this.tables().find((t) => t.id === o.table_id);
     const tableNumber = o.table_number || (tbl ? tbl.number : '');
 
-    const orderCgstRate = o.cgst_rate !== undefined && o.cgst_rate !== null
-      ? Number(o.cgst_rate)
-      : (o.subtotal_paise && o.tax_paise ? Math.round(((o.tax_paise / o.subtotal_paise) * 50.0) * 10) / 10 : 2.5);
-    const orderSgstRate = o.sgst_rate !== undefined && o.sgst_rate !== null
-      ? Number(o.sgst_rate)
-      : (o.subtotal_paise && o.tax_paise ? Math.round(((o.tax_paise / o.subtotal_paise) * 50.0) * 10) / 10 : 2.5);
+    const orderCgstRate =
+      o.cgst_rate !== undefined && o.cgst_rate !== null
+        ? Number(o.cgst_rate)
+        : o.subtotal_paise && o.tax_paise
+          ? Math.round((o.tax_paise / o.subtotal_paise) * 50.0 * 10) / 10
+          : 2.5;
+    const orderSgstRate =
+      o.sgst_rate !== undefined && o.sgst_rate !== null
+        ? Number(o.sgst_rate)
+        : o.subtotal_paise && o.tax_paise
+          ? Math.round((o.tax_paise / o.subtotal_paise) * 50.0 * 10) / 10
+          : 2.5;
     const totalTax = (o.tax_paise || 0) / 100;
     const rateSum = orderCgstRate + orderSgstRate;
-    const calculatedCgst = rateSum > 0 ? Math.round((totalTax * (orderCgstRate / rateSum)) * 100) / 100 : totalTax / 2;
+    const calculatedCgst =
+      rateSum > 0 ? Math.round(totalTax * (orderCgstRate / rateSum) * 100) / 100 : totalTax / 2;
     const calculatedSgst = Math.round((totalTax - calculatedCgst) * 100) / 100;
 
     return {
@@ -930,23 +945,20 @@ export class RestaurantDataService {
       customerPhone: o.customer_phone || o.customer_phone_e164 || o.customerPhone || '',
       customerPhoneE164: o.customer_phone_e164 || o.customer_phone || o.customerPhone || '',
       status: this.mapApiStatus(o.status),
-      paymentStatus: (
-        (o.payment_status || '').toUpperCase() === 'PAID' ||
-        (o.payment_status || '').toUpperCase() === 'COMPLETED' ||
-        (o.status || '').toUpperCase() === 'COMPLETED' ||
-        !!o.settled_at
-          ? 'PAID'
-          : 'UNPAID'
-      ) as PaymentStatus,
-      paymentMethod: (
-        o.payment_method?.toUpperCase() ||
+      paymentStatus: ((o.payment_status || '').toUpperCase() === 'PAID' ||
+      (o.payment_status || '').toUpperCase() === 'COMPLETED' ||
+      (o.status || '').toUpperCase() === 'COMPLETED' ||
+      !!o.settled_at
+        ? 'PAID'
+        : 'UNPAID') as PaymentStatus,
+      paymentMethod: (o.payment_method?.toUpperCase() ||
         this.orders().find((ord) => ord.id === o.id)?.paymentMethod ||
-        undefined
-      ) as any,
+        undefined) as any,
       items: (o.items || []).map((it: any) => {
-        const unitPrice = (it.unit_price_paise || it.unitPrice || 0) > 1000
-          ? (it.unit_price_paise || 0) / 100
-          : (it.unitPrice || (it.unit_price_paise || 0) / 100);
+        const unitPrice =
+          (it.unit_price_paise || it.unitPrice || 0) > 1000
+            ? (it.unit_price_paise || 0) / 100
+            : it.unitPrice || (it.unit_price_paise || 0) / 100;
         const quantity = it.quantity || 1;
         const itemTotal = it.subtotal_paise ? it.subtotal_paise / 100 : unitPrice * quantity;
 
@@ -996,9 +1008,7 @@ export class RestaurantDataService {
     }
 
     // Optimistically update in memory and localStorage
-    const updated = this.tables().map((t) =>
-      t.id === table.id ? { ...t, status: newStatus } : t,
-    );
+    const updated = this.tables().map((t) => (t.id === table.id ? { ...t, status: newStatus } : t));
     this.tables.set(updated);
     this.saveLocal('tables', updated);
 
@@ -1017,7 +1027,9 @@ export class RestaurantDataService {
         },
         error: (err) => {
           if (this.isConnectionOffline(err)) {
-            console.warn('[RestaurantDataService] Database offline during table status update; preserved locally.');
+            console.warn(
+              '[RestaurantDataService] Database offline during table status update; preserved locally.',
+            );
           } else {
             this.handleApiError('Failed to update table status', err);
           }
@@ -1076,7 +1088,9 @@ export class RestaurantDataService {
         },
         error: (err) => {
           if (this.isConnectionOffline(err)) {
-            console.warn('[RestaurantDataService] Database offline during createTable; preserved locally.');
+            console.warn(
+              '[RestaurantDataService] Database offline during createTable; preserved locally.',
+            );
           } else {
             this.handleApiError('Failed to create table', err);
           }
@@ -1102,7 +1116,9 @@ export class RestaurantDataService {
       next: () => {},
       error: (err) => {
         if (this.isConnectionOffline(err)) {
-          console.warn('[RestaurantDataService] Database offline during deleteTable; preserved locally.');
+          console.warn(
+            '[RestaurantDataService] Database offline during deleteTable; preserved locally.',
+          );
         } else {
           this.handleApiError('Failed to delete table', err);
         }
@@ -1130,7 +1146,9 @@ export class RestaurantDataService {
       next: () => {},
       error: (err) => {
         if (this.isConnectionOffline(err)) {
-          console.warn('[RestaurantDataService] Database offline during toggleTableOrdering; preserved locally.');
+          console.warn(
+            '[RestaurantDataService] Database offline during toggleTableOrdering; preserved locally.',
+          );
         } else {
           this.handleApiError('Failed to update table ordering', err);
         }
@@ -1192,7 +1210,9 @@ export class RestaurantDataService {
         },
         error: (err) => {
           if (this.isConnectionOffline(err)) {
-            console.warn('[RestaurantDataService] Database offline during createMenuItem; preserved locally.');
+            console.warn(
+              '[RestaurantDataService] Database offline during createMenuItem; preserved locally.',
+            );
           } else {
             this.handleApiError('Failed to create menu item', err);
           }
@@ -1213,7 +1233,9 @@ export class RestaurantDataService {
       return { success: true, item };
     }
 
-    const updated = this.menuItems().map((m) => (m.id === id ? ({ ...m, ...updates } as MenuItem) : m));
+    const updated = this.menuItems().map((m) =>
+      m.id === id ? ({ ...m, ...updates } as MenuItem) : m,
+    );
     this.menuItems.set(updated);
     this.saveLocal('menuItems', updated);
 
@@ -1221,7 +1243,8 @@ export class RestaurantDataService {
     if (updates.name !== undefined) payload.name = updates.name;
     if (updates.description !== undefined) payload.description = updates.description;
     if (updates.categoryId !== undefined) payload.category_id = updates.categoryId;
-    if (updates.price !== undefined) payload.base_price_paise = Math.round(Number(updates.price) * 100);
+    if (updates.price !== undefined)
+      payload.base_price_paise = Math.round(Number(updates.price) * 100);
     if (updates.dietary !== undefined) payload.is_veg = updates.dietary === 'VEG';
     if (updates.isAvailable !== undefined) payload.is_available = updates.isAvailable;
     if (updates.imageUrl !== undefined) payload.image_url = updates.imageUrl;
@@ -1232,7 +1255,9 @@ export class RestaurantDataService {
       next: () => {},
       error: (err) => {
         if (this.isConnectionOffline(err)) {
-          console.warn('[RestaurantDataService] Database offline during updateMenuItem; preserved locally.');
+          console.warn(
+            '[RestaurantDataService] Database offline during updateMenuItem; preserved locally.',
+          );
         } else {
           this.handleApiError('Failed to update menu item', err);
         }
@@ -1259,7 +1284,9 @@ export class RestaurantDataService {
       next: () => {},
       error: (err) => {
         if (this.isConnectionOffline(err)) {
-          console.warn('[RestaurantDataService] Database offline during deleteMenuItem; preserved locally.');
+          console.warn(
+            '[RestaurantDataService] Database offline during deleteMenuItem; preserved locally.',
+          );
         } else {
           this.handleApiError('Failed to delete menu item', err);
         }
@@ -1287,7 +1314,9 @@ export class RestaurantDataService {
       next: () => {},
       error: (err) => {
         if (this.isConnectionOffline(err)) {
-          console.warn('[RestaurantDataService] Database offline during toggleMenuItemAvailability; preserved locally.');
+          console.warn(
+            '[RestaurantDataService] Database offline during toggleMenuItemAvailability; preserved locally.',
+          );
         } else {
           this.handleApiError('Failed to toggle menu item availability', err);
         }
@@ -1337,7 +1366,9 @@ export class RestaurantDataService {
         },
         error: (err) => {
           if (this.isConnectionOffline(err)) {
-            console.warn('[RestaurantDataService] Database offline during createMenuCategory; preserved locally.');
+            console.warn(
+              '[RestaurantDataService] Database offline during createMenuCategory; preserved locally.',
+            );
           } else {
             this.handleApiError('Failed to create menu category', err);
           }
@@ -1363,7 +1394,9 @@ export class RestaurantDataService {
       next: () => {},
       error: (err) => {
         if (this.isConnectionOffline(err)) {
-          console.warn('[RestaurantDataService] Database offline during deleteMenuCategory; preserved locally.');
+          console.warn(
+            '[RestaurantDataService] Database offline during deleteMenuCategory; preserved locally.',
+          );
         } else {
           this.handleApiError('Failed to delete menu category', err);
         }
@@ -1429,7 +1462,9 @@ export class RestaurantDataService {
         },
         error: (err) => {
           if (this.isConnectionOffline(err)) {
-            console.warn('[RestaurantDataService] Database offline during createCoupon; preserved locally.');
+            console.warn(
+              '[RestaurantDataService] Database offline during createCoupon; preserved locally.',
+            );
           } else {
             this.handleApiError('Failed to create coupon', err);
           }
@@ -1455,7 +1490,9 @@ export class RestaurantDataService {
       next: () => {},
       error: (err) => {
         if (this.isConnectionOffline(err)) {
-          console.warn('[RestaurantDataService] Database offline during toggleCouponStatus; preserved locally.');
+          console.warn(
+            '[RestaurantDataService] Database offline during toggleCouponStatus; preserved locally.',
+          );
         } else {
           this.handleApiError('Failed to update coupon status', err);
         }
@@ -1481,7 +1518,9 @@ export class RestaurantDataService {
       next: () => {},
       error: (err) => {
         if (this.isConnectionOffline(err)) {
-          console.warn('[RestaurantDataService] Database offline during deleteCoupon; preserved locally.');
+          console.warn(
+            '[RestaurantDataService] Database offline during deleteCoupon; preserved locally.',
+          );
         } else {
           this.handleApiError('Failed to delete coupon', err);
         }
@@ -1492,11 +1531,7 @@ export class RestaurantDataService {
   }
 
   // --- Loyalty & Points Mutations ---
-  awardLoyaltyPoints(
-    customerId: string,
-    points: number,
-    reason: string,
-  ): { success: boolean } {
+  awardLoyaltyPoints(customerId: string, points: number, reason: string): { success: boolean } {
     const cust = (this.testMock ? this.testMock.customers() : this.customers()).find(
       (c) => c.id === customerId,
     );
@@ -1543,7 +1578,9 @@ export class RestaurantDataService {
         next: () => {},
         error: (err) => {
           if (this.isConnectionOffline(err)) {
-            console.warn('[RestaurantDataService] Database offline during awardLoyaltyPoints; preserved locally.');
+            console.warn(
+              '[RestaurantDataService] Database offline during awardLoyaltyPoints; preserved locally.',
+            );
           } else {
             this.handleApiError('Failed to award loyalty points', err);
           }
@@ -1584,7 +1621,8 @@ export class RestaurantDataService {
 
     if (this.isOnline()) {
       const payload = {
-        order_id: newFeedback.orderId && this.isValidUuid(newFeedback.orderId) ? newFeedback.orderId : null,
+        order_id:
+          newFeedback.orderId && this.isValidUuid(newFeedback.orderId) ? newFeedback.orderId : null,
         customer_name: newFeedback.customerName || null,
         customer_phone: null,
         rating: Math.round(newFeedback.rating),
@@ -1602,7 +1640,9 @@ export class RestaurantDataService {
         },
         error: (err) => {
           if (this.isConnectionOffline(err)) {
-            console.warn('[RestaurantDataService] Database offline during createFeedback; preserved locally.');
+            console.warn(
+              '[RestaurantDataService] Database offline during createFeedback; preserved locally.',
+            );
           } else {
             this.handleApiError('Failed to submit feedback to server', err);
           }
@@ -1638,7 +1678,9 @@ export class RestaurantDataService {
         next: () => {},
         error: (err) => {
           if (this.isConnectionOffline(err)) {
-            console.warn('[RestaurantDataService] Database offline during replyFeedback; preserved locally.');
+            console.warn(
+              '[RestaurantDataService] Database offline during replyFeedback; preserved locally.',
+            );
           } else {
             this.handleApiError('Failed to reply to feedback', err);
           }
@@ -1692,8 +1734,16 @@ export class RestaurantDataService {
 
     const currentStage = this.getOrderStageIndex(order.status);
     const targetStage = this.getOrderStageIndex(nextStatus);
-    if (targetStage >= 0 && targetStage < currentStage && !options?.force && nextStatus !== 'CANCELLED') {
-      return { success: false, error: `Cannot regress order status from ${order.status} to ${nextStatus}` };
+    if (
+      targetStage >= 0 &&
+      targetStage < currentStage &&
+      !options?.force &&
+      nextStatus !== 'CANCELLED'
+    ) {
+      return {
+        success: false,
+        error: `Cannot regress order status from ${order.status} to ${nextStatus}`,
+      };
     }
 
     const nextSeq = (this.orderStatusSeq.get(orderId) || 0) + 1;
@@ -1737,11 +1787,14 @@ export class RestaurantDataService {
             const synced = this.orders().map((o) => {
               if (o.id === orderId) {
                 const preservedItems =
-                  mapped.items && mapped.items.length > 0 ? mapped.items : (o.items || order.items || []);
+                  mapped.items && mapped.items.length > 0
+                    ? mapped.items
+                    : o.items || order.items || [];
                 const oStage = this.getOrderStageIndex(o.status);
                 const mappedStage = this.getOrderStageIndex(mapped.status || nextStatus);
                 // Keep local status if newer status was requested or if mappedStage is behind
-                const finalStatus = (!isLatest || mappedStage < oStage) ? o.status : (mapped.status || nextStatus);
+                const finalStatus =
+                  !isLatest || mappedStage < oStage ? o.status : mapped.status || nextStatus;
                 return { ...o, ...mapped, items: preservedItems, status: finalStatus };
               }
               return o;
@@ -1757,7 +1810,9 @@ export class RestaurantDataService {
               orderId,
               payload: { status: apiStatus, notes: options?.reason || options?.note },
             });
-            console.warn('[RestaurantDataService] Database offline during status update; queued offline.');
+            console.warn(
+              '[RestaurantDataService] Database offline during status update; queued offline.',
+            );
           } else {
             this.handleApiError('Failed to update order status', err);
             // Rollback on server error only if no newer update has superseded this request
@@ -1780,7 +1835,10 @@ export class RestaurantDataService {
           this.orderChannel = new BroadcastChannel('hotel_crm_order_stream');
         }
         this.orderChannel?.postMessage(event);
-        localStorage.setItem('royal_spice_order_stream_event', JSON.stringify({ ...event, _ts: Date.now() }));
+        localStorage.setItem(
+          'royal_spice_order_stream_event',
+          JSON.stringify({ ...event, _ts: Date.now() }),
+        );
       } catch {
         // Ignore cross-origin / private mode restriction
       }
@@ -1820,7 +1878,10 @@ export class RestaurantDataService {
   private connectOrderWebSocket(): void {
     if (typeof window === 'undefined' || typeof WebSocket === 'undefined') return;
     // Skip real WebSocket in Node.js/Vitest test runner to prevent cross-realm Event conflicts
-    if (typeof process !== 'undefined' && ((process as any).env?.['VITEST'] || (process as any).env?.['NODE_ENV'] === 'test')) {
+    if (
+      typeof process !== 'undefined' &&
+      ((process as any).env?.['VITEST'] || (process as any).env?.['NODE_ENV'] === 'test')
+    ) {
       return;
     }
     const wsUrl = environment.wsOrdersUrl || 'ws://localhost:3000/ws/orders';
@@ -1903,24 +1964,30 @@ export class RestaurantDataService {
             );
             const merged = [
               ...pendingLocalOrders,
-              ...mappedOrders.filter((m: any) => !pendingLocalOrders.some((p) => p.id === m.id)).map((m: any) => {
-                const loc = currentOrders.find((c) => c.id === m.id);
-                if (loc) {
-                  const locStage = this.getOrderStageIndex(loc.status);
-                  const mStage = this.getOrderStageIndex(m.status);
-                  if (locStage > mStage) {
-                    return { ...m, status: loc.status };
+              ...mappedOrders
+                .filter((m: any) => !pendingLocalOrders.some((p) => p.id === m.id))
+                .map((m: any) => {
+                  const loc = currentOrders.find((c) => c.id === m.id);
+                  if (loc) {
+                    const locStage = this.getOrderStageIndex(loc.status);
+                    const mStage = this.getOrderStageIndex(m.status);
+                    if (locStage > mStage) {
+                      return { ...m, status: loc.status };
+                    }
                   }
-                }
-                return m;
-              }),
+                  return m;
+                }),
             ];
             this.orders.set(merged);
             this.saveLocal('orders', merged);
 
             // Trigger notification sound and liveOrderEvent for the latest new order
             const newest = newOrders[0];
-            this.liveOrderEvent.set({ type: 'ORDER_CREATED', order: newest, timestamp: Date.now() });
+            this.liveOrderEvent.set({
+              type: 'ORDER_CREATED',
+              order: newest,
+              timestamp: Date.now(),
+            });
             this.soundService?.playOrderArrivalSound();
           }
         },
@@ -1958,7 +2025,11 @@ export class RestaurantDataService {
     }
 
     // Trigger sound and broadcast live order event locally
-    this.liveOrderEvent.set({ type: 'ORDER_CREATED', order: fullLocalOrder, timestamp: Date.now() });
+    this.liveOrderEvent.set({
+      type: 'ORDER_CREATED',
+      order: fullLocalOrder,
+      timestamp: Date.now(),
+    });
     this.broadcastRealtimeOrderEvent({ type: 'ORDER_CREATED', order: fullLocalOrder });
     this.soundService?.playOrderArrivalSound();
 
@@ -1986,83 +2057,89 @@ export class RestaurantDataService {
         orderId: order.id,
         payload,
       });
-      this.toastService.info('Order recorded in offline mode. Will automatically sync with cloud database when reconnected.', 'Offline Mode');
+      this.toastService.info(
+        'Order recorded in offline mode. Will automatically sync with cloud database when reconnected.',
+        'Offline Mode',
+      );
       return;
     }
 
-    this.api
-      .post<any>('/orders', payload)
-      .subscribe({
-        next: (res) => {
-          const mapped = this.mapApiOrder(res.order || res);
-          const currentList = this.orders();
-          const existing = currentList.find((o) => o.id === order.id);
-          const preservedItems =
-            mapped.items && mapped.items.length > 0 ? mapped.items : (existing?.items || order.items || []);
-          const existingIdx = currentList.findIndex((o) => o.id === order.id);
-          const preservedCustomerName =
-            order.customerName && order.customerName.trim() && order.customerName !== 'Walk-in Guest'
-              ? order.customerName.trim()
-              : (mapped.customerName || customerName);
-          const preservedCustomerPhone =
-            order.customerPhone && order.customerPhone.trim()
-              ? order.customerPhone.trim()
-              : (mapped.customerPhone || customerPhone);
-          const preservedPickupRef = order.pickupReference || mapped.pickupReference;
-          const preservedTimeline =
-            mapped.timeline && mapped.timeline.length > 0
-              ? mapped.timeline
-              : (existing?.timeline || order.timeline || []);
-          const preservedNotes = order.notes || mapped.notes || '';
-          const preservedCoupon = order.appliedCouponCode || mapped.appliedCouponCode;
+    this.api.post<any>('/orders', payload).subscribe({
+      next: (res) => {
+        const mapped = this.mapApiOrder(res.order || res);
+        const currentList = this.orders();
+        const existing = currentList.find((o) => o.id === order.id);
+        const preservedItems =
+          mapped.items && mapped.items.length > 0
+            ? mapped.items
+            : existing?.items || order.items || [];
+        const existingIdx = currentList.findIndex((o) => o.id === order.id);
+        const preservedCustomerName =
+          order.customerName && order.customerName.trim() && order.customerName !== 'Walk-in Guest'
+            ? order.customerName.trim()
+            : mapped.customerName || customerName;
+        const preservedCustomerPhone =
+          order.customerPhone && order.customerPhone.trim()
+            ? order.customerPhone.trim()
+            : mapped.customerPhone || customerPhone;
+        const preservedPickupRef = order.pickupReference || mapped.pickupReference;
+        const preservedTimeline =
+          mapped.timeline && mapped.timeline.length > 0
+            ? mapped.timeline
+            : existing?.timeline || order.timeline || [];
+        const preservedNotes = order.notes || mapped.notes || '';
+        const preservedCoupon = order.appliedCouponCode || mapped.appliedCouponCode;
 
-          const updated =
-            existingIdx > -1
-              ? currentList.map((o) =>
-                  o.id === order.id
-                    ? {
-                        ...o,
-                        ...mapped,
-                        customerName: preservedCustomerName,
-                        customerPhone: preservedCustomerPhone,
-                        pickupReference: preservedPickupRef,
-                        appliedCouponCode: preservedCoupon,
-                        notes: preservedNotes,
-                        timeline: preservedTimeline,
-                        items: preservedItems,
-                        id: mapped.id,
-                      }
-                    : o
-                )
-              : [
-                  {
-                    ...mapped,
-                    customerName: preservedCustomerName,
-                    customerPhone: preservedCustomerPhone,
-                    pickupReference: preservedPickupRef,
-                    appliedCouponCode: preservedCoupon,
-                    notes: preservedNotes,
-                    timeline: preservedTimeline,
-                    items: preservedItems,
-                  },
-                  ...currentList,
-                ];
-          this.orders.set(updated);
-          this.saveLocal('orders', updated);
-        },
-        error: (err) => {
-          if (this.isConnectionOffline(err)) {
-            this.queueOfflineAction({
-              type: 'CREATE_ORDER',
-              orderId: order.id,
-              payload,
-            });
-            this.toastService.info('Database offline. Order saved locally and queued for auto-sync.', 'Offline Mode');
-          } else {
-            this.handleApiError('Failed to create order', err);
-          }
-        },
-      });
+        const updated =
+          existingIdx > -1
+            ? currentList.map((o) =>
+                o.id === order.id
+                  ? {
+                      ...o,
+                      ...mapped,
+                      customerName: preservedCustomerName,
+                      customerPhone: preservedCustomerPhone,
+                      pickupReference: preservedPickupRef,
+                      appliedCouponCode: preservedCoupon,
+                      notes: preservedNotes,
+                      timeline: preservedTimeline,
+                      items: preservedItems,
+                      id: mapped.id,
+                    }
+                  : o,
+              )
+            : [
+                {
+                  ...mapped,
+                  customerName: preservedCustomerName,
+                  customerPhone: preservedCustomerPhone,
+                  pickupReference: preservedPickupRef,
+                  appliedCouponCode: preservedCoupon,
+                  notes: preservedNotes,
+                  timeline: preservedTimeline,
+                  items: preservedItems,
+                },
+                ...currentList,
+              ];
+        this.orders.set(updated);
+        this.saveLocal('orders', updated);
+      },
+      error: (err) => {
+        if (this.isConnectionOffline(err)) {
+          this.queueOfflineAction({
+            type: 'CREATE_ORDER',
+            orderId: order.id,
+            payload,
+          });
+          this.toastService.info(
+            'Database offline. Order saved locally and queued for auto-sync.',
+            'Offline Mode',
+          );
+        } else {
+          this.handleApiError('Failed to create order', err);
+        }
+      },
+    });
   }
 
   simulateIdempotentOrderSubmission(req: {
@@ -2106,7 +2183,10 @@ export class RestaurantDataService {
     const grossTotal = Math.round(((order.subtotal || 0) + (order.taxAmount || 0)) * 100) / 100;
     const finalDiscount = Math.min(
       grossTotal,
-      Math.max(0, req.discountAmount !== undefined ? req.discountAmount : (order.discountAmount || 0)),
+      Math.max(
+        0,
+        req.discountAmount !== undefined ? req.discountAmount : order.discountAmount || 0,
+      ),
     );
     const totalAmount = Math.max(0, Math.round((grossTotal - finalDiscount) * 100) / 100);
 
@@ -2149,30 +2229,36 @@ export class RestaurantDataService {
         orderId: req.orderId,
         payload,
       });
-      this.toastService.info(`Payment recorded offline (${req.paymentMethod}). Will sync with database when reconnected.`, 'Offline Payment');
+      this.toastService.info(
+        `Payment recorded offline (${req.paymentMethod}). Will sync with database when reconnected.`,
+        'Offline Payment',
+      );
       return { success: true };
     }
 
     // 2. Persist settlement to Backend API
-    this.api
-      .post<any>(`/orders/${req.orderId}/settle`, payload)
-      .subscribe({
-        next: () => {
-          // Confirmed by backend
-        },
-        error: (err) => {
-          if (this.isConnectionOffline(err)) {
-            this.queueOfflineAction({
-              type: 'SETTLE_ORDER',
-              orderId: req.orderId,
-              payload,
-            });
-            console.warn('[RestaurantDataService] Payment queued offline due to network disconnection.');
-          } else {
-            console.warn('[RestaurantDataService] Settle order backend sync warning:', err?.message || err);
-          }
-        },
-      });
+    this.api.post<any>(`/orders/${req.orderId}/settle`, payload).subscribe({
+      next: () => {
+        // Confirmed by backend
+      },
+      error: (err) => {
+        if (this.isConnectionOffline(err)) {
+          this.queueOfflineAction({
+            type: 'SETTLE_ORDER',
+            orderId: req.orderId,
+            payload,
+          });
+          console.warn(
+            '[RestaurantDataService] Payment queued offline due to network disconnection.',
+          );
+        } else {
+          console.warn(
+            '[RestaurantDataService] Settle order backend sync warning:',
+            err?.message || err,
+          );
+        }
+      },
+    });
 
     return { success: true };
   }
@@ -2230,11 +2316,9 @@ export class RestaurantDataService {
 
     if (this.testMock) return;
 
-    this.api
-      .put<any>(`/tables/${tableId}/assign`, { assigned_staff_id })
-      .subscribe({
-        error: (err) => this.handleApiError('Failed to assign table staff', err),
-      });
+    this.api.put<any>(`/tables/${tableId}/assign`, { assigned_staff_id }).subscribe({
+      error: (err) => this.handleApiError('Failed to assign table staff', err),
+    });
   }
 
   assignOrderServer(
@@ -2315,7 +2399,10 @@ export class RestaurantDataService {
     const processNext = (index: number) => {
       if (index >= queue.length) {
         this.isSyncingOffline.set(false);
-        this.toastService.success('All offline orders and payments synced with cloud database.', 'Cloud Connected');
+        this.toastService.success(
+          'All offline orders and payments synced with cloud database.',
+          'Cloud Connected',
+        );
         this.refreshOrders();
         return;
       }
@@ -2344,7 +2431,7 @@ export class RestaurantDataService {
                     pickupReference: o.pickupReference || mapped.pickupReference,
                     items: mapped.items && mapped.items.length > 0 ? mapped.items : o.items,
                   }
-                : o
+                : o,
             );
             this.orders.set(updated);
             this.saveLocal('orders', updated);
@@ -2361,11 +2448,16 @@ export class RestaurantDataService {
           },
           error: (err) => {
             if (this.isConnectionOffline(err)) {
-              console.warn('[RestaurantDataService] Database offline during order sync; keeping action in outbox.');
+              console.warn(
+                '[RestaurantDataService] Database offline during order sync; keeping action in outbox.',
+              );
               this.isSyncingOffline.set(false);
               return;
             }
-            console.warn('[RestaurantDataService] Offline create order dropped due to server error:', err);
+            console.warn(
+              '[RestaurantDataService] Offline create order dropped due to server error:',
+              err,
+            );
             this.clearOfflineAction(item.id);
             processNext(index + 1);
           },
@@ -2383,7 +2475,9 @@ export class RestaurantDataService {
           },
           error: (err) => {
             if (this.isConnectionOffline(err)) {
-              console.warn('[RestaurantDataService] Database offline during status sync; keeping action in outbox.');
+              console.warn(
+                '[RestaurantDataService] Database offline during status sync; keeping action in outbox.',
+              );
               this.isSyncingOffline.set(false);
               return;
             }
@@ -2404,7 +2498,9 @@ export class RestaurantDataService {
           },
           error: (err) => {
             if (this.isConnectionOffline(err)) {
-              console.warn('[RestaurantDataService] Database offline during settle sync; keeping action in outbox.');
+              console.warn(
+                '[RestaurantDataService] Database offline during settle sync; keeping action in outbox.',
+              );
               this.isSyncingOffline.set(false);
               return;
             }
@@ -2425,7 +2521,9 @@ export class RestaurantDataService {
           },
           error: (err) => {
             if (this.isConnectionOffline(err)) {
-              console.warn('[RestaurantDataService] Database offline during server assignment sync; keeping action in outbox.');
+              console.warn(
+                '[RestaurantDataService] Database offline during server assignment sync; keeping action in outbox.',
+              );
               this.isSyncingOffline.set(false);
               return;
             }
@@ -2442,7 +2540,12 @@ export class RestaurantDataService {
     processNext(0);
   }
 
-  markStaffAttendance(staffId: string, date: string, status: string, notes?: string): Observable<any> {
+  markStaffAttendance(
+    staffId: string,
+    date: string,
+    status: string,
+    notes?: string,
+  ): Observable<any> {
     return this.api
       .post<any>('/restaurants/staff/attendance', {
         staff_id: staffId,
@@ -2509,12 +2612,12 @@ export class RestaurantDataService {
                   return {
                     id: m.id,
                     ingredientId: m.inventory_item_id,
-                    ingredientName: ing ? ing.name : (m.ingredient_name || 'Ingredient'),
+                    ingredientName: ing ? ing.name : m.ingredient_name || 'Ingredient',
                     type: (m.movement_type || 'WASTAGE').toUpperCase() as any,
                     quantityDelta: qty,
                     quantityBefore: 0,
                     quantityAfter: qty,
-                    unit: (ing ? ing.unit : (m.unit_of_measure || m.unit || req.unit || 'kg')) as any,
+                    unit: (ing ? ing.unit : m.unit_of_measure || m.unit || req.unit || 'kg') as any,
                     reason: m.notes || m.reason || req.reason || '',
                     referenceId: m.id,
                     staffName: m.staff_name || req.staffName || 'Staff',
@@ -2608,31 +2711,27 @@ export class RestaurantDataService {
     }
 
     // 1. Optimistically update local signal and cache
-    const updated = this.reservations().map((r) =>
-      r.id === reservationId ? { ...r, status } : r,
-    );
+    const updated = this.reservations().map((r) => (r.id === reservationId ? { ...r, status } : r));
     this.reservations.set(updated);
     this.saveLocal('reservations', updated);
 
     // 2. Persist status change to backend API
-    this.api
-      .put<any>(`/reservations/${reservationId}/status`, { status })
-      .subscribe({
-        next: (res) => {
-          console.log(
-            `[RestaurantDataService] Reservation ${reservationId} status confirmed on backend: ${status}`,
+    this.api.put<any>(`/reservations/${reservationId}/status`, { status }).subscribe({
+      next: (res) => {
+        console.log(
+          `[RestaurantDataService] Reservation ${reservationId} status confirmed on backend: ${status}`,
+        );
+      },
+      error: (err) => {
+        if (this.isConnectionOffline(err)) {
+          console.warn(
+            `[RestaurantDataService] Database offline: reservation ${reservationId} status preserved locally.`,
           );
-        },
-        error: (err) => {
-          if (this.isConnectionOffline(err)) {
-            console.warn(
-              `[RestaurantDataService] Database offline: reservation ${reservationId} status preserved locally.`,
-            );
-          } else {
-            this.handleApiError('Failed to update reservation status', err);
-          }
-        },
-      });
+        } else {
+          this.handleApiError('Failed to update reservation status', err);
+        }
+      },
+    });
 
     return { success: true };
   }
@@ -2736,9 +2835,7 @@ export class RestaurantDataService {
         printCount: count,
         lastPrintedAt: new Date().toISOString(),
       };
-      this.orders.set(
-        this.orders().map((o) => (o.id === order.id ? updatedOrder : o)),
-      );
+      this.orders.set(this.orders().map((o) => (o.id === order.id ? updatedOrder : o)));
       this.broadcastRealtimeOrderEvent({ type: 'ORDER_UPDATED', order: updatedOrder });
       if (isPaid && order.status !== 'COMPLETED') {
         this.updateOrderStatusAtomic(order.id, 'COMPLETED');
@@ -2807,7 +2904,8 @@ export class RestaurantDataService {
             reason: req.staffName || 'Table transfer',
           })
           .subscribe({
-            error: (err) => console.warn('[RestaurantDataService] transferTable backend warning:', err),
+            error: (err) =>
+              console.warn('[RestaurantDataService] transferTable backend warning:', err),
           });
       }
     }
@@ -2849,7 +2947,8 @@ export class RestaurantDataService {
           refund_method: 'original_source',
         })
         .subscribe({
-          error: (err) => console.warn('[RestaurantDataService] recordRefund backend warning:', err),
+          error: (err) =>
+            console.warn('[RestaurantDataService] recordRefund backend warning:', err),
         });
     }
 
@@ -3021,7 +3120,9 @@ export class RestaurantDataService {
         },
         error: (err) => {
           if (this.isConnectionOffline(err)) {
-            console.warn('[RestaurantDataService] Database offline during updateIngredient; preserved locally.');
+            console.warn(
+              '[RestaurantDataService] Database offline during updateIngredient; preserved locally.',
+            );
           } else {
             this.handleApiError('Failed to update ingredient on database', err);
           }
@@ -3069,7 +3170,9 @@ export class RestaurantDataService {
         },
         error: (err) => {
           if (this.isConnectionOffline(err)) {
-            console.warn('[RestaurantDataService] Database offline during createIngredient; preserved locally.');
+            console.warn(
+              '[RestaurantDataService] Database offline during createIngredient; preserved locally.',
+            );
           } else {
             this.handleApiError('Failed to create ingredient on database', err);
           }
@@ -3333,11 +3436,15 @@ export class RestaurantDataService {
                 cgstRate:
                   res.cgst_rate !== undefined && res.cgst_rate !== null
                     ? Number(res.cgst_rate)
-                    : (res.gst_rate !== undefined ? Number(res.gst_rate) / 2 : current.taxSettings.cgstRate),
+                    : res.gst_rate !== undefined
+                      ? Number(res.gst_rate) / 2
+                      : current.taxSettings.cgstRate,
                 sgstRate:
                   res.sgst_rate !== undefined && res.sgst_rate !== null
                     ? Number(res.sgst_rate)
-                    : (res.gst_rate !== undefined ? Number(res.gst_rate) / 2 : current.taxSettings.sgstRate),
+                    : res.gst_rate !== undefined
+                      ? Number(res.gst_rate) / 2
+                      : current.taxSettings.sgstRate,
               },
             };
             this.restaurant.set(merged);

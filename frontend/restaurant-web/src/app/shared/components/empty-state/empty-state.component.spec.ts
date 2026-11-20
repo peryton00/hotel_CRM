@@ -23,7 +23,7 @@ describe('EmptyStateComponent', () => {
     const compiled = fixture.nativeElement as HTMLElement;
     expect(compiled.querySelector('.empty-title')?.textContent).toContain('No Records Found');
     expect(compiled.querySelector('.empty-description')?.textContent).toContain(
-      'Try adjusting your filters or date range.'
+      'Try adjusting your filters or date range.',
     );
     expect(compiled.querySelector('.empty-action-btn')).toBeNull();
   });

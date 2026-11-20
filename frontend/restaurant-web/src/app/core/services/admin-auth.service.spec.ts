@@ -97,7 +97,9 @@ describe('AdminAuthService & Controlled Access RBAC System', () => {
       req.flush(
         {
           success: false,
-          error: { message: 'Invalid credentials. Access restricted to passwords set in Supabase.' },
+          error: {
+            message: 'Invalid credentials. Access restricted to passwords set in Supabase.',
+          },
         },
         { status: 401, statusText: 'Unauthorized' },
       );
@@ -165,7 +167,9 @@ describe('AdminAuthService & Controlled Access RBAC System', () => {
         response = res;
       });
 
-      const putReq = httpMock.expectOne('http://localhost:3000/api/v1/restaurants/staff/admin-uuid-001');
+      const putReq = httpMock.expectOne(
+        'http://localhost:3000/api/v1/restaurants/staff/admin-uuid-001',
+      );
       expect(putReq.request.method).toBe('PUT');
       expect(putReq.request.body).toEqual({ password: 'NewAdminPass@2026' });
       putReq.flush({ success: true, data: { id: 'admin-uuid-001' } });
@@ -198,11 +202,14 @@ describe('AdminAuthService & Controlled Access RBAC System', () => {
         response = res;
       });
 
-      const putReq = httpMock.expectOne('http://localhost:3000/api/v1/restaurants/staff/admin-uuid-001');
+      const putReq = httpMock.expectOne(
+        'http://localhost:3000/api/v1/restaurants/staff/admin-uuid-001',
+      );
       putReq.flush('Server error', { status: 500, statusText: 'Internal Server Error' });
 
       const patchReq = httpMock.expectOne(
-        (r) => r.url.includes('/rest/v1/staff_members?id=eq.admin-uuid-001') && r.method === 'PATCH',
+        (r) =>
+          r.url.includes('/rest/v1/staff_members?id=eq.admin-uuid-001') && r.method === 'PATCH',
       );
       expect(patchReq.request.body).toEqual({ pin_hash: 'FallbackPass@2026' });
       patchReq.flush([{ id: 'admin-uuid-001', pin_hash: 'FallbackPass@2026' }]);

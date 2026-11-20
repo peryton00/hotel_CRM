@@ -31,9 +31,14 @@ pub async fn list_orders(
     tenant: TenantContext,
     Query(query): Query<ListOrdersQuery>,
 ) -> Result<impl IntoResponse, AppError> {
-    let orders =
-        OrderRepository::list_orders(&pool, tenant.restaurant_id, query.status, query.days, query.pagination)
-            .await?;
+    let orders = OrderRepository::list_orders(
+        &pool,
+        tenant.restaurant_id,
+        query.status,
+        query.days,
+        query.pagination,
+    )
+    .await?;
 
     Ok(Json(ApiResponse::success(orders)))
 }
@@ -135,13 +140,9 @@ pub async fn assign_order_server(
         }
     }
 
-    let order = OrderRepository::assign_server(
-        &pool,
-        tenant.restaurant_id,
-        order_id,
-        req.server_staff_id,
-    )
-    .await?;
+    let order =
+        OrderRepository::assign_server(&pool, tenant.restaurant_id, order_id, req.server_staff_id)
+            .await?;
 
     Ok(Json(ApiResponse::success(order)))
 }

@@ -31,7 +31,8 @@ impl OrderRepository {
         }
 
         // Fetch tax settings configured by admin from database
-        let rest_rates: Option<(Option<f64>, Option<f64>, Option<f64>, Option<f64>)> = sqlx::query_as(
+        type TaxRatesRow = (Option<f64>, Option<f64>, Option<f64>, Option<f64>);
+        let rest_rates: Option<TaxRatesRow> = sqlx::query_as(
             "SELECT COALESCE(gst_rate, 5.0)::float8, COALESCE(cgst_rate, gst_rate / 2.0, 2.5)::float8, COALESCE(sgst_rate, gst_rate / 2.0, 2.5)::float8, COALESCE(service_charge_rate, 0.0)::float8 FROM restaurants WHERE id = $1"
         )
         .bind(restaurant_id)
@@ -39,12 +40,24 @@ impl OrderRepository {
         .await?;
 
         let (gst_rate, cgst_rate, sgst_rate, service_charge_rate) = rest_rates
-            .map(|(g, c, s, sc)| (g.unwrap_or(5.0), c.unwrap_or(2.5), s.unwrap_or(2.5), sc.unwrap_or(0.0)))
+            .map(|(g, c, s, sc)| {
+                (
+                    g.unwrap_or(5.0),
+                    c.unwrap_or(2.5),
+                    s.unwrap_or(2.5),
+                    sc.unwrap_or(0.0),
+                )
+            })
             .unwrap_or((5.0, 2.5, 2.5, 0.0));
 
         let discount_paise = req.discount_paise.unwrap_or(0).min(subtotal_paise);
-        let breakdown =
-            OrderService::calculate_bill(subtotal_paise, discount_paise, gst_rate, service_charge_rate, true);
+        let breakdown = OrderService::calculate_bill(
+            subtotal_paise,
+            discount_paise,
+            gst_rate,
+            service_charge_rate,
+            true,
+        );
 
         // 2. Generate sequential order number count
         let _count_row: (i64,) =
@@ -412,7 +425,12 @@ impl OrderRepository {
             })
             .collect();
 
-        Ok(PaginatedResponse::new(orders_with_items, total, page, limit))
+        Ok(PaginatedResponse::new(
+            orders_with_items,
+            total,
+            page,
+            limit,
+        ))
     }
 
     pub async fn update_status(
@@ -531,7 +549,11 @@ impl OrderRepository {
             "notes": notes,
             "staff_id": valid_staff_id,
         });
-        let idem_key = format!("order-status-{}-{}", order_id, Utc::now().timestamp_millis());
+        let idem_key = format!(
+            "order-status-{}-{}",
+            order_id,
+            Utc::now().timestamp_millis()
+        );
         OutboxService::emit_event(
             &mut tx,
             "order",

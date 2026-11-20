@@ -28,7 +28,8 @@ type ViewTab = 'campaigns' | 'entitlements' | 'redemptions';
         <div>
           <h1 class="heading-display">Promotions & Coupons</h1>
           <p class="text-muted">
-            Create discount coupons, assign offers to customer accounts, and review redemption history.
+            Create discount coupons, assign offers to customer accounts, and review redemption
+            history.
           </p>
         </div>
 
@@ -52,7 +53,12 @@ type ViewTab = 'campaigns' | 'entitlements' | 'redemptions';
           (click)="activeTab = 'campaigns'"
         >
           <i class="ph ph-tag"></i>
-          <span>Coupons @if (!isLoading()) { ({{ coupons().length }}) }</span>
+          <span
+            >Coupons
+            @if (!isLoading()) {
+              ({{ coupons().length }})
+            }
+          </span>
         </button>
 
         <button
@@ -61,7 +67,12 @@ type ViewTab = 'campaigns' | 'entitlements' | 'redemptions';
           (click)="activeTab = 'entitlements'"
         >
           <i class="ph ph-identification-badge"></i>
-          <span>Customer Assignments @if (!isLoading()) { ({{ assignments().length }}) }</span>
+          <span
+            >Customer Assignments
+            @if (!isLoading()) {
+              ({{ assignments().length }})
+            }
+          </span>
         </button>
 
         <button
@@ -70,7 +81,12 @@ type ViewTab = 'campaigns' | 'entitlements' | 'redemptions';
           (click)="activeTab = 'redemptions'"
         >
           <i class="ph ph-clock-counter-clockwise"></i>
-          <span>Redemption History @if (!isLoading()) { ({{ redemptions().length }}) }</span>
+          <span
+            >Redemption History
+            @if (!isLoading()) {
+              ({{ redemptions().length }})
+            }
+          </span>
         </button>
       </div>
 
@@ -86,7 +102,9 @@ type ViewTab = 'campaigns' | 'entitlements' | 'redemptions';
                   <div class="code-tag-group">
                     <span class="coupon-code-pill">{{ coup.code }}</span>
                     @if (coup.isTargeted) {
-                      <span class="badge-targeted"><i class="ph ph-lock-key"></i> VIP Targeted</span>
+                      <span class="badge-targeted"
+                        ><i class="ph ph-lock-key"></i> VIP Targeted</span
+                      >
                     }
                   </div>
                   <button
@@ -174,9 +192,7 @@ type ViewTab = 'campaigns' | 'entitlements' | 'redemptions';
           <div class="table-card">
             <div class="table-header-info">
               <h3 class="heading-card">Customer Coupon Assignments</h3>
-              <p class="text-xs text-muted">
-                Coupons linked to customer phone numbers.
-              </p>
+              <p class="text-xs text-muted">Coupons linked to customer phone numbers.</p>
             </div>
 
             <table class="data-table">
@@ -271,9 +287,7 @@ type ViewTab = 'campaigns' | 'entitlements' | 'redemptions';
           <div class="table-card">
             <div class="table-header-info">
               <h3 class="heading-card">Redemption History Log</h3>
-              <p class="text-xs text-muted">
-                Log of redeemed coupons tied to orders.
-              </p>
+              <p class="text-xs text-muted">Log of redeemed coupons tied to orders.</p>
             </div>
 
             <table class="data-table">
@@ -414,8 +428,8 @@ type ViewTab = 'campaigns' | 'entitlements' | 'redemptions';
                 <label class="checkbox-label">
                   <input type="checkbox" [(ngModel)]="couponForm.isTargeted" />
                   <span
-                    ><strong>Targeted Customer Coupon:</strong> Requires customer
-                    assignment before it can be redeemed.</span
+                    ><strong>Targeted Customer Coupon:</strong> Requires customer assignment before
+                    it can be redeemed.</span
                   >
                 </label>
               </div>
@@ -916,9 +930,7 @@ export class CouponManagementComponent {
   toggleActive(coupon: Coupon): void {
     const nextActive = !coupon.isActive;
     this.mock.toggleCouponStatus(coupon.id, nextActive);
-    this.toastService.info(
-      `Coupon ${coupon.code} is now ${nextActive ? 'Active' : 'Inactive'}`,
-    );
+    this.toastService.info(`Coupon ${coupon.code} is now ${nextActive ? 'Active' : 'Inactive'}`);
   }
 
   openCreateModal(): void {
@@ -942,7 +954,9 @@ export class CouponManagementComponent {
     if (!this.couponForm.code?.trim() || !this.couponForm.discountValue) return;
 
     this.mock.createCoupon(this.couponForm);
-    this.toastService.success(`Created coupon campaign ${this.couponForm.code.trim().toUpperCase()}`);
+    this.toastService.success(
+      `Created coupon campaign ${this.couponForm.code.trim().toUpperCase()}`,
+    );
     this.showCreateModal = false;
   }
 

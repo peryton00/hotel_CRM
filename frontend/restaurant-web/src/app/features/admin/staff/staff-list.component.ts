@@ -4,7 +4,11 @@ import { FormsModule } from '@angular/forms';
 import { RestaurantDataService } from '../../../data-access/services/restaurant-data.service';
 import { STAFF_REPO } from '../../../data-access/repositories';
 import { StaffMember, StaffRole } from '../../../core/models/staff.model';
-import { ALL_PERMISSIONS, DEFAULT_ROLE_PERMISSIONS, PermissionDefinition } from '../../../core/models/permissions.model';
+import {
+  ALL_PERMISSIONS,
+  DEFAULT_ROLE_PERMISSIONS,
+  PermissionDefinition,
+} from '../../../core/models/permissions.model';
 import { AttendanceStatus, StaffPerformanceSummary } from '../../../core/models/attendance.model';
 import { AdminAuthService } from '../../../core/services/admin-auth.service';
 import { ToastService } from '../../../core/services/toast.service';
@@ -36,7 +40,8 @@ import { EmptyStateComponent } from '../../../shared/components/empty-state/empt
             }
           </div>
           <p class="text-muted">
-            Configure assigned staff member accounts, edit details, track attendance & performance, and set secret credentials in Supabase.
+            Configure assigned staff member accounts, edit details, track attendance & performance,
+            and set secret credentials in Supabase.
           </p>
         </div>
 
@@ -76,7 +81,10 @@ import { EmptyStateComponent } from '../../../shared/components/empty-state/empt
             <i class="ph ph-shield-warning"></i>
             <div>
               <strong>Restricted Access Area</strong>
-              <p>Only the Administrator has permission to create, edit staff profiles, or view/reset secret passwords.</p>
+              <p>
+                Only the Administrator has permission to create, edit staff profiles, or view/reset
+                secret passwords.
+              </p>
             </div>
           </div>
         }
@@ -116,7 +124,10 @@ import { EmptyStateComponent } from '../../../shared/components/empty-state/empt
                       <span class="cred-value">{{ member.loginId || member.email }}</span>
                       <button
                         class="copy-mini-btn"
-                        (click)="copyToClipboard(member.loginId || member.email, 'Login ID'); $event.stopPropagation()"
+                        (click)="
+                          copyToClipboard(member.loginId || member.email, 'Login ID');
+                          $event.stopPropagation()
+                        "
                         title="Copy Login ID"
                       >
                         <i class="ph ph-copy"></i>
@@ -152,12 +163,14 @@ import { EmptyStateComponent } from '../../../shared/components/empty-state/empt
                   </div>
                   <div class="detail-line">
                     <i class="ph ph-currency-inr"></i>
-                    <span>Base Salary: {{ (member.monthlySalary || 15000) | currencyInr }}/mo</span>
+                    <span>Base Salary: {{ member.monthlySalary || 15000 | currencyInr }}/mo</span>
                   </div>
                 </div>
 
                 <div class="card-sidepanel-hint">
-                  <span><i class="ph ph-sidebar-simple"></i> Click to open calendar & info panel</span>
+                  <span
+                    ><i class="ph ph-sidebar-simple"></i> Click to open calendar & info panel</span
+                  >
                   <i class="ph ph-arrow-right"></i>
                 </div>
 
@@ -194,9 +207,17 @@ import { EmptyStateComponent } from '../../../shared/components/empty-state/empt
                       <button
                         class="btn btn-outline btn-sm status-toggle-btn"
                         (click)="toggleStaffStatus(member)"
-                        [title]="member.status === 'ACTIVE' ? 'Deactivate staff account' : 'Reactivate staff account'"
+                        [title]="
+                          member.status === 'ACTIVE'
+                            ? 'Deactivate staff account'
+                            : 'Reactivate staff account'
+                        "
                       >
-                        <i class="ph" [class.ph-user-minus]="member.status === 'ACTIVE'" [class.ph-user-check]="member.status !== 'ACTIVE'"></i>
+                        <i
+                          class="ph"
+                          [class.ph-user-minus]="member.status === 'ACTIVE'"
+                          [class.ph-user-check]="member.status !== 'ACTIVE'"
+                        ></i>
                         <span>{{ member.status === 'ACTIVE' ? 'Deactivate' : 'Activate' }}</span>
                       </button>
                     }
@@ -244,7 +265,11 @@ import { EmptyStateComponent } from '../../../shared/components/empty-state/empt
                 [ngModel]="selectedMonth()"
                 (ngModelChange)="onMonthChange($event)"
               />
-              <button class="btn btn-secondary btn-sm" (click)="refreshAttendanceData()" title="Sync live calculations">
+              <button
+                class="btn btn-secondary btn-sm"
+                (click)="refreshAttendanceData()"
+                title="Sync live calculations"
+              >
                 <i class="ph ph-arrows-clockwise"></i> Refresh
               </button>
             </div>
@@ -258,7 +283,8 @@ import { EmptyStateComponent } from '../../../shared/components/empty-state/empt
                   <i class="ph ph-check-square-offset"></i> Daily Attendance Register
                 </h2>
                 <p class="section-desc">
-                  Mark daily attendance for {{ selectedDate() | date: 'mediumDate' }}. Present days, half days, and paid leaves count towards calculated salary.
+                  Mark daily attendance for {{ selectedDate() | date: 'mediumDate' }}. Present days,
+                  half days, and paid leaves count towards calculated salary.
                 </p>
               </div>
               <div class="attendance-count-summary">
@@ -279,7 +305,8 @@ import { EmptyStateComponent } from '../../../shared/components/empty-state/empt
                     <div class="member-meta">
                       <span class="member-name">{{ member.name }}</span>
                       <span class="member-role">
-                        {{ formatRole(member.role) }} &bull; Cycle Starts: Day {{ member.payrollCycleStartDay || 1 }}
+                        {{ formatRole(member.role) }} &bull; Cycle Starts: Day
+                        {{ member.payrollCycleStartDay || 1 }}
                       </span>
                     </div>
                   </div>
@@ -351,7 +378,8 @@ import { EmptyStateComponent } from '../../../shared/components/empty-state/empt
                   <i class="ph ph-currency-inr"></i> Performance & Salary Calculation Ledger
                 </h2>
                 <p class="section-desc">
-                  Working days, orders served, handled sales, and net payable salary calculated for month {{ selectedMonth() }}.
+                  Working days, orders served, handled sales, and net payable salary calculated for
+                  month {{ selectedMonth() }}.
                 </p>
               </div>
               <div class="salary-formula-chip">
@@ -402,23 +430,33 @@ import { EmptyStateComponent } from '../../../shared/components/empty-state/empt
                   @for (summary of performanceList(); track summary.staff_id) {
                     <tr>
                       <td>
-                        <div class="table-member-cell clickable-cell" (click)="openSidePanelById(summary.staff_id)">
+                        <div
+                          class="table-member-cell clickable-cell"
+                          (click)="openSidePanelById(summary.staff_id)"
+                        >
                           <span class="member-name">{{ summary.staff_name }}</span>
                           <span class="member-sub">{{ summary.role }}</span>
                         </div>
                       </td>
                       <td>
                         <div class="cycle-period-cell">
-                          <span class="cycle-day-badge">Day {{ summary.payroll_cycle_start_day || 1 }}</span>
+                          <span class="cycle-day-badge"
+                            >Day {{ summary.payroll_cycle_start_day || 1 }}</span
+                          >
                           @if (summary.cycle_start_date && summary.cycle_end_date) {
-                            <span class="cycle-dates-sub">{{ summary.cycle_start_date | date: 'dd MMM' }} - {{ summary.cycle_end_date | date: 'dd MMM' }}</span>
+                            <span class="cycle-dates-sub"
+                              >{{ summary.cycle_start_date | date: 'dd MMM' }} -
+                              {{ summary.cycle_end_date | date: 'dd MMM' }}</span
+                            >
                           }
                         </div>
                       </td>
                       <td>
                         <div class="salary-cell">
                           <strong>{{ summary.monthly_salary_paise / 100 | currencyInr }}</strong>
-                          <span class="per-day-rate">({{ (summary.monthly_salary_paise / 100) / 30 | currencyInr }}/day)</span>
+                          <span class="per-day-rate"
+                            >({{ summary.monthly_salary_paise / 100 / 30 | currencyInr }}/day)</span
+                          >
                         </div>
                       </td>
                       <td>
@@ -434,7 +472,10 @@ import { EmptyStateComponent } from '../../../shared/components/empty-state/empt
                         <span class="tag-count leave">{{ summary.leave_days }}</span>
                       </td>
                       <td>
-                        <strong class="working-days-text">{{ summary.effective_working_days }} / {{ summary.total_days_in_month }}</strong>
+                        <strong class="working-days-text"
+                          >{{ summary.effective_working_days }} /
+                          {{ summary.total_days_in_month }}</strong
+                        >
                       </td>
                       <td>
                         <span class="orders-count-badge">
@@ -442,7 +483,9 @@ import { EmptyStateComponent } from '../../../shared/components/empty-state/empt
                         </span>
                       </td>
                       <td>
-                        <span class="sales-served-text">{{ summary.orders_served_total_paise / 100 | currencyInr }}</span>
+                        <span class="sales-served-text">{{
+                          summary.orders_served_total_paise / 100 | currencyInr
+                        }}</span>
                       </td>
                       <td>
                         <span class="calculated-salary-text">
@@ -489,7 +532,12 @@ import { EmptyStateComponent } from '../../../shared/components/empty-state/empt
       <!-- Staff Information & Calendar Side Panel (Flyout Drawer) -->
       @if (selectedPanelStaff(); as pStaff) {
         <div class="panel-backdrop" (click)="closeSidePanel()"></div>
-        <aside class="staff-side-panel" role="dialog" aria-modal="true" aria-label="Staff Details and Attendance">
+        <aside
+          class="staff-side-panel"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Staff Details and Attendance"
+        >
           <!-- Panel Header -->
           <div class="panel-header">
             <div class="panel-header-profile">
@@ -511,7 +559,12 @@ import { EmptyStateComponent } from '../../../shared/components/empty-state/empt
                 </div>
               </div>
             </div>
-            <button type="button" class="panel-close-btn" (click)="closeSidePanel()" aria-label="Close side panel">
+            <button
+              type="button"
+              class="panel-close-btn"
+              (click)="closeSidePanel()"
+              aria-label="Close side panel"
+            >
               <i class="ph ph-x"></i>
             </button>
           </div>
@@ -520,7 +573,9 @@ import { EmptyStateComponent } from '../../../shared/components/empty-state/empt
           <div class="panel-body">
             <!-- 1. Profile & Assigned Tables Card -->
             <div class="panel-card">
-              <h3 class="panel-card-title"><i class="ph ph-user-circle"></i> Profile & Assignment</h3>
+              <h3 class="panel-card-title">
+                <i class="ph ph-user-circle"></i> Profile & Assignment
+              </h3>
               <div class="panel-meta-grid">
                 <div class="meta-item">
                   <span class="meta-label">Phone</span>
@@ -564,7 +619,11 @@ import { EmptyStateComponent } from '../../../shared/components/empty-state/empt
                           </div>
                           <span class="served-table-badge">
                             <i class="ph ph-table"></i>
-                            {{ ord.orderType === 'TAKEAWAY' ? 'Takeaway' : ('Table ' + (ord.tableNumber || 'N/A')) }}
+                            {{
+                              ord.orderType === 'TAKEAWAY'
+                                ? 'Takeaway'
+                                : 'Table ' + (ord.tableNumber || 'N/A')
+                            }}
                           </span>
                         </div>
                         <div class="served-order-bottom">
@@ -573,7 +632,9 @@ import { EmptyStateComponent } from '../../../shared/components/empty-state/empt
                             {{ ord.createdAt | date: 'dd MMM, hh:mm a' }}
                           </span>
                           <div class="served-order-right">
-                            <strong class="served-amount">{{ ord.totalAmount | currencyInr }}</strong>
+                            <strong class="served-amount">{{
+                              ord.totalAmount | currencyInr
+                            }}</strong>
                             <span class="served-status-chip" [class]="ord.status.toLowerCase()">
                               {{ ord.status }}
                             </span>
@@ -584,7 +645,10 @@ import { EmptyStateComponent } from '../../../shared/components/empty-state/empt
                   </div>
                 } @else {
                   <div class="empty-served-note">
-                    <span class="text-xs text-muted">No customer orders served yet. Staff is allotted dynamically per customer order.</span>
+                    <span class="text-xs text-muted"
+                      >No customer orders served yet. Staff is allotted dynamically per customer
+                      order.</span
+                    >
                   </div>
                 }
               </div>
@@ -592,11 +656,15 @@ import { EmptyStateComponent } from '../../../shared/components/empty-state/empt
 
             <!-- 2. Monthly Cycle & Base Salary Configuration Card -->
             <div class="panel-card highlight-card">
-              <h3 class="panel-card-title"><i class="ph ph-clock-countdown"></i> Monthly Payroll Cycle & Salary</h3>
-              
+              <h3 class="panel-card-title">
+                <i class="ph ph-clock-countdown"></i> Monthly Payroll Cycle & Salary
+              </h3>
+
               <div class="cycle-config-box">
                 <div class="form-group">
-                  <label class="form-label text-xs">Custom Monthly Cycle Start Day for {{ pStaff.name }}:</label>
+                  <label class="form-label text-xs"
+                    >Custom Monthly Cycle Start Day for {{ pStaff.name }}:</label
+                  >
                   <select
                     class="form-select cycle-select"
                     [ngModel]="pStaff.payrollCycleStartDay || 1"
@@ -624,11 +692,15 @@ import { EmptyStateComponent } from '../../../shared/components/empty-state/empt
                 <div class="salary-stat-row">
                   <div>
                     <span class="meta-label">Base Monthly Salary:</span>
-                    <strong class="salary-highlight">{{ (pStaff.monthlySalary || 15000) | currencyInr }}/mo</strong>
+                    <strong class="salary-highlight"
+                      >{{ pStaff.monthlySalary || 15000 | currencyInr }}/mo</strong
+                    >
                   </div>
                   <div class="text-right">
                     <span class="meta-label">Daily Payout Rate:</span>
-                    <strong class="daily-rate-highlight">{{ ((pStaff.monthlySalary || 15000) / 30) | currencyInr }}/day</strong>
+                    <strong class="daily-rate-highlight"
+                      >{{ (pStaff.monthlySalary || 15000) / 30 | currencyInr }}/day</strong
+                    >
                   </div>
                 </div>
               </div>
@@ -636,12 +708,16 @@ import { EmptyStateComponent } from '../../../shared/components/empty-state/empt
 
             <!-- 3. Performance & Serving Summary in Cycle -->
             <div class="panel-card">
-              <h3 class="panel-card-title"><i class="ph ph-chart-line-up"></i> Serving & Cycle Performance</h3>
+              <h3 class="panel-card-title">
+                <i class="ph ph-chart-line-up"></i> Serving & Cycle Performance
+              </h3>
               @let metrics = panelStaffMetrics();
               <div class="panel-kpi-grid">
                 <div class="panel-kpi-item">
                   <span class="kpi-sub-label">Orders Served</span>
-                  <strong class="kpi-val"><i class="ph ph-receipt"></i> {{ metrics.orders }}</strong>
+                  <strong class="kpi-val"
+                    ><i class="ph ph-receipt"></i> {{ metrics.orders }}</strong
+                  >
                 </div>
                 <div class="panel-kpi-item">
                   <span class="kpi-sub-label">Handled Sales</span>
@@ -668,13 +744,25 @@ import { EmptyStateComponent } from '../../../shared/components/empty-state/empt
             <!-- 4. Month-wise Attendance Calendar & Direct Marking -->
             <div class="panel-card">
               <div class="calendar-header-bar">
-                <h3 class="panel-card-title"><i class="ph ph-calendar"></i> Month Attendance Calendar</h3>
+                <h3 class="panel-card-title">
+                  <i class="ph ph-calendar"></i> Month Attendance Calendar
+                </h3>
                 <div class="month-nav-controls">
-                  <button type="button" class="btn-cal-nav" (click)="prevPanelMonth()" title="Previous Month">
+                  <button
+                    type="button"
+                    class="btn-cal-nav"
+                    (click)="prevPanelMonth()"
+                    title="Previous Month"
+                  >
                     <i class="ph ph-caret-left"></i>
                   </button>
                   <span class="cal-current-month">{{ panelMonth() }}</span>
-                  <button type="button" class="btn-cal-nav" (click)="nextPanelMonth()" title="Next Month">
+                  <button
+                    type="button"
+                    class="btn-cal-nav"
+                    (click)="nextPanelMonth()"
+                    title="Next Month"
+                  >
                     <i class="ph ph-caret-right"></i>
                   </button>
                 </div>
@@ -682,7 +770,8 @@ import { EmptyStateComponent } from '../../../shared/components/empty-state/empt
 
               <!-- Calendar Weekday Headers -->
               <div class="cal-weekdays">
-                <span>Mo</span><span>Tu</span><span>We</span><span>Th</span><span>Fr</span><span>Sa</span><span>Su</span>
+                <span>Mo</span><span>Tu</span><span>We</span><span>Th</span><span>Fr</span
+                ><span>Sa</span><span>Su</span>
               </div>
 
               <!-- Calendar Days Grid -->
@@ -698,12 +787,24 @@ import { EmptyStateComponent } from '../../../shared/components/empty-state/empt
                     [class.is-future]="day.isFuture"
                     [disabled]="day.isFuture"
                     (click)="selectedPanelDate.set(day.dateStr)"
-                    [title]="day.isFuture ? day.dateStr + ' (Future date)' : day.dateStr + (day.status ? ' (' + day.status + ')' : '')"
+                    [title]="
+                      day.isFuture
+                        ? day.dateStr + ' (Future date)'
+                        : day.dateStr + (day.status ? ' (' + day.status + ')' : '')
+                    "
                   >
                     <span class="day-num">{{ day.dayNum }}</span>
                     @if (day.status) {
                       <span class="day-status-dot" [ngClass]="day.status.toLowerCase()">
-                        {{ day.status === 'PRESENT' ? 'P' : day.status === 'HALF_DAY' ? 'H' : day.status === 'PAID_LEAVE' ? 'L' : 'A' }}
+                        {{
+                          day.status === 'PRESENT'
+                            ? 'P'
+                            : day.status === 'HALF_DAY'
+                              ? 'H'
+                              : day.status === 'PAID_LEAVE'
+                                ? 'L'
+                                : 'A'
+                        }}
                       </span>
                     }
                   </button>
@@ -715,12 +816,21 @@ import { EmptyStateComponent } from '../../../shared/components/empty-state/empt
                 @if (isDateFuture(selectedPanelDate())) {
                   <div class="future-date-notice">
                     <i class="ph ph-prohibit"></i>
-                    <span>Attendance cannot be marked for future dates (<strong>{{ selectedPanelDate() | date: 'mediumDate' }}</strong>).</span>
+                    <span
+                      >Attendance cannot be marked for future dates (<strong>{{
+                        selectedPanelDate() | date: 'mediumDate'
+                      }}</strong
+                      >).</span
+                    >
                   </div>
                 } @else {
                   <div class="marker-header">
-                    <span>Mark for <strong>{{ selectedPanelDate() | date: 'mediumDate' }}</strong>:</span>
-                    @let selStatus = getMemberAttendanceStatusForDate(pStaff.id, selectedPanelDate());
+                    <span
+                      >Mark for <strong>{{ selectedPanelDate() | date: 'mediumDate' }}</strong
+                      >:</span
+                    >
+                    @let selStatus =
+                      getMemberAttendanceStatusForDate(pStaff.id, selectedPanelDate());
                     <span class="status-indicator-badge" [ngClass]="selStatus.toLowerCase()">
                       {{ formatAttendanceStatus(selStatus) }}
                     </span>
@@ -787,7 +897,9 @@ import { EmptyStateComponent } from '../../../shared/components/empty-state/empt
             <div class="modal-header">
               <div>
                 <h3 class="heading-card">Add Staff Member</h3>
-                <p class="modal-subtitle">Create login credentials secretly in Supabase for the assigned staff member.</p>
+                <p class="modal-subtitle">
+                  Create login credentials secretly in Supabase for the assigned staff member.
+                </p>
               </div>
               <button class="close-btn" (click)="showAddModal = false">
                 <i class="ph ph-x"></i>
@@ -832,7 +944,9 @@ import { EmptyStateComponent } from '../../../shared/components/empty-state/empt
                     placeholder="e.g. vikas.cashier"
                     [(ngModel)]="staffForm.loginId"
                   />
-                  <span class="field-hint">Used by the staff member to log into the CRM console.</span>
+                  <span class="field-hint"
+                    >Used by the staff member to log into the CRM console.</span
+                  >
                 </div>
 
                 <div class="form-group">
@@ -855,7 +969,11 @@ import { EmptyStateComponent } from '../../../shared/components/empty-state/empt
                       (click)="showSecretPassword = !showSecretPassword"
                       [attr.aria-label]="showSecretPassword ? 'Hide password' : 'Show password'"
                     >
-                      <i class="ph" [class.ph-eye]="!showSecretPassword" [class.ph-eye-slash]="showSecretPassword"></i>
+                      <i
+                        class="ph"
+                        [class.ph-eye]="!showSecretPassword"
+                        [class.ph-eye-slash]="showSecretPassword"
+                      ></i>
                     </button>
                   </div>
                   <span class="field-hint">Created secretly by Admin and stored in Supabase.</span>
@@ -914,7 +1032,9 @@ import { EmptyStateComponent } from '../../../shared/components/empty-state/empt
                     min="1000"
                     [(ngModel)]="staffForm.monthlySalary"
                   />
-                  <span class="field-hint">Base for calculating per-day attendance payout (÷ 30 days).</span>
+                  <span class="field-hint"
+                    >Base for calculating per-day attendance payout (÷ 30 days).</span
+                  >
                 </div>
 
                 <div class="form-group">
@@ -929,7 +1049,9 @@ import { EmptyStateComponent } from '../../../shared/components/empty-state/empt
                     <option [value]="25">Day 25 (25th of month)</option>
                     <option [value]="28">Day 28 (28th of month)</option>
                   </select>
-                  <span class="field-hint">Day of month when this employee's payroll cycle starts.</span>
+                  <span class="field-hint"
+                    >Day of month when this employee's payroll cycle starts.</span
+                  >
                 </div>
               </div>
 
@@ -946,8 +1068,20 @@ import { EmptyStateComponent } from '../../../shared/components/empty-state/empt
                   </div>
                   @if (staffForm.role !== 'ADMIN') {
                     <div class="perm-bulk-actions">
-                      <button type="button" class="btn-text-action" (click)="selectAllPermissions()">Select All</button>
-                      <button type="button" class="btn-text-action" (click)="deselectAllPermissions()">Clear All</button>
+                      <button
+                        type="button"
+                        class="btn-text-action"
+                        (click)="selectAllPermissions()"
+                      >
+                        Select All
+                      </button>
+                      <button
+                        type="button"
+                        class="btn-text-action"
+                        (click)="deselectAllPermissions()"
+                      >
+                        Clear All
+                      </button>
                     </div>
                   }
                 </div>
@@ -1006,7 +1140,12 @@ import { EmptyStateComponent } from '../../../shared/components/empty-state/empt
               <button
                 class="btn btn-primary"
                 (click)="saveStaff()"
-                [disabled]="!staffForm.name.trim() || !staffForm.loginId.trim() || !staffForm.password.trim() || isSubmitting"
+                [disabled]="
+                  !staffForm.name.trim() ||
+                  !staffForm.loginId.trim() ||
+                  !staffForm.password.trim() ||
+                  isSubmitting
+                "
               >
                 @if (isSubmitting) {
                   <i class="ph ph-spinner ph-spin"></i>
@@ -1029,7 +1168,8 @@ import { EmptyStateComponent } from '../../../shared/components/empty-state/empt
               <div>
                 <h3 class="heading-card">Edit Staff Details</h3>
                 <p class="modal-subtitle">
-                  Update employee profile, contact information, role, cycle start day, and salary settings for {{ editingMember.name }}.
+                  Update employee profile, contact information, role, cycle start day, and salary
+                  settings for {{ editingMember.name }}.
                 </p>
               </div>
               <button class="close-btn" (click)="showEditModal = false">
@@ -1076,7 +1216,9 @@ import { EmptyStateComponent } from '../../../shared/components/empty-state/empt
                     placeholder="e.g. rahul123"
                     [(ngModel)]="editForm.loginId"
                   />
-                  <span class="field-hint">Used by the staff member to log into the CRM console.</span>
+                  <span class="field-hint"
+                    >Used by the staff member to log into the CRM console.</span
+                  >
                 </div>
 
                 <div class="form-group">
@@ -1089,7 +1231,9 @@ import { EmptyStateComponent } from '../../../shared/components/empty-state/empt
                     [(ngModel)]="editForm.monthlySalary"
                   />
                   <span class="field-hint">
-                    Daily rate = Monthly Salary ÷ 30 days ({{ ((editForm.monthlySalary || 0) / 30) | currencyInr }}/day)
+                    Daily rate = Monthly Salary ÷ 30 days ({{
+                      (editForm.monthlySalary || 0) / 30 | currencyInr
+                    }}/day)
                   </span>
                 </div>
               </div>
@@ -1107,7 +1251,9 @@ import { EmptyStateComponent } from '../../../shared/components/empty-state/empt
                     <option [value]="25">Day 25 (25th of month)</option>
                     <option [value]="28">Day 28 (28th of month)</option>
                   </select>
-                  <span class="field-hint">Day of month when this employee's salary cycle begins.</span>
+                  <span class="field-hint"
+                    >Day of month when this employee's salary cycle begins.</span
+                  >
                 </div>
 
                 <div class="form-group">
@@ -1168,8 +1314,20 @@ import { EmptyStateComponent } from '../../../shared/components/empty-state/empt
                   </div>
                   @if (editForm.role !== 'ADMIN') {
                     <div class="perm-bulk-actions">
-                      <button type="button" class="btn-text-action" (click)="selectAllPermissions(true)">Select All</button>
-                      <button type="button" class="btn-text-action" (click)="deselectAllPermissions(true)">Clear All</button>
+                      <button
+                        type="button"
+                        class="btn-text-action"
+                        (click)="selectAllPermissions(true)"
+                      >
+                        Select All
+                      </button>
+                      <button
+                        type="button"
+                        class="btn-text-action"
+                        (click)="deselectAllPermissions(true)"
+                      >
+                        Clear All
+                      </button>
                     </div>
                   }
                 </div>
@@ -1230,7 +1388,11 @@ import { EmptyStateComponent } from '../../../shared/components/empty-state/empt
             <div class="modal-header">
               <div>
                 <h3 class="heading-card">Reset Secret Password</h3>
-                <p class="modal-subtitle">Update password in Supabase for {{ selectedMember.name }} ({{ selectedMember.loginId || selectedMember.email }})</p>
+                <p class="modal-subtitle">
+                  Update password in Supabase for {{ selectedMember.name }} ({{
+                    selectedMember.loginId || selectedMember.email
+                  }})
+                </p>
               </div>
               <button class="close-btn" (click)="showResetModal = false">
                 <i class="ph ph-x"></i>
@@ -1257,10 +1419,16 @@ import { EmptyStateComponent } from '../../../shared/components/empty-state/empt
                     class="toggle-visibility-btn"
                     (click)="showResetSecretPassword = !showResetSecretPassword"
                   >
-                    <i class="ph" [class.ph-eye]="!showResetSecretPassword" [class.ph-eye-slash]="showResetSecretPassword"></i>
+                    <i
+                      class="ph"
+                      [class.ph-eye]="!showResetSecretPassword"
+                      [class.ph-eye-slash]="showResetSecretPassword"
+                    ></i>
                   </button>
                 </div>
-                <span class="field-hint">This new secret password will be saved directly into Supabase.</span>
+                <span class="field-hint"
+                  >This new secret password will be saved directly into Supabase.</span
+                >
               </div>
 
               @if (resetPasswordValue) {
@@ -1270,11 +1438,19 @@ import { EmptyStateComponent } from '../../../shared/components/empty-state/empt
                     <strong>Updated Credentials:</strong>
                   </div>
                   <div class="share-content">
-                    <code>ID: {{ selectedMember.loginId || selectedMember.email }} | Password: {{ resetPasswordValue }}</code>
+                    <code
+                      >ID: {{ selectedMember.loginId || selectedMember.email }} | Password:
+                      {{ resetPasswordValue }}</code
+                    >
                     <button
                       type="button"
                       class="btn btn-secondary btn-sm"
-                      (click)="copyCredentials(selectedMember.loginId || selectedMember.email, resetPasswordValue)"
+                      (click)="
+                        copyCredentials(
+                          selectedMember.loginId || selectedMember.email,
+                          resetPasswordValue
+                        )
+                      "
                     >
                       <i class="ph ph-copy"></i>
                       <span>Copy</span>
@@ -1446,7 +1622,10 @@ import { EmptyStateComponent } from '../../../shared/components/empty-state/empt
         flex-direction: column;
         gap: 16px;
         box-shadow: var(--shadow-xs);
-        transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+        transition:
+          transform 0.2s ease,
+          box-shadow 0.2s ease,
+          border-color 0.2s ease;
         position: relative;
 
         &:hover {
@@ -1971,7 +2150,11 @@ import { EmptyStateComponent } from '../../../shared/components/empty-state/empt
         gap: 4px;
 
         &.highlight {
-          background: linear-gradient(135deg, rgba(212, 175, 55, 0.1) 0%, rgba(194, 24, 7, 0.05) 100%);
+          background: linear-gradient(
+            135deg,
+            rgba(212, 175, 55, 0.1) 0%,
+            rgba(194, 24, 7, 0.05) 100%
+          );
           border-color: rgba(212, 175, 55, 0.4);
         }
       }
@@ -2210,8 +2393,12 @@ import { EmptyStateComponent } from '../../../shared/components/empty-state/empt
       }
 
       @keyframes fadeIn {
-        from { opacity: 0; }
-        to { opacity: 1; }
+        from {
+          opacity: 0;
+        }
+        to {
+          opacity: 1;
+        }
       }
 
       .panel-header {
@@ -2306,7 +2493,11 @@ import { EmptyStateComponent } from '../../../shared/components/empty-state/empt
         gap: 14px;
 
         &.highlight-card {
-          background: linear-gradient(135deg, rgba(212, 175, 55, 0.06) 0%, rgba(194, 24, 7, 0.03) 100%);
+          background: linear-gradient(
+            135deg,
+            rgba(212, 175, 55, 0.06) 0%,
+            rgba(194, 24, 7, 0.03) 100%
+          );
           border-color: rgba(212, 175, 55, 0.35);
         }
       }
@@ -2472,11 +2663,15 @@ import { EmptyStateComponent } from '../../../shared/components/empty-state/empt
         border-radius: 4px;
         text-transform: uppercase;
 
-        &.completed, &.served, &.delivered {
+        &.completed,
+        &.served,
+        &.delivered {
           background: rgba(22, 101, 52, 0.12);
           color: #166534;
         }
-        &.preparing, &.accepted, &.ready {
+        &.preparing,
+        &.accepted,
+        &.ready {
           background: rgba(180, 83, 9, 0.12);
           color: #b45309;
         }
@@ -3090,7 +3285,7 @@ import { EmptyStateComponent } from '../../../shared/components/empty-state/empt
             background: rgba(0, 0, 0, 0.03);
           }
 
-          input[type="checkbox"] {
+          input[type='checkbox'] {
             margin-top: 2px;
             accent-color: var(--color-primary);
             cursor: pointer;
@@ -3326,9 +3521,7 @@ export class StaffListComponent {
       .staffAttendance()
       .filter(
         (a) =>
-          a.staff_id === st.id &&
-          a.attendance_date >= cycleStart &&
-          a.attendance_date <= cycleEnd,
+          a.staff_id === st.id && a.attendance_date >= cycleStart && a.attendance_date <= cycleEnd,
       );
 
     const present = atts.filter((a) => a.status === 'PRESENT').length;
@@ -3511,7 +3704,20 @@ export class StaffListComponent {
   }
 
   getMonthName(monthNum: number): string {
-    const names = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    const names = [
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
+    ];
     return names[(monthNum - 1) % 12] || '';
   }
 
@@ -3565,41 +3771,39 @@ export class StaffListComponent {
 
   onUpdateStaffCycle(member: StaffMember, startDayVal: any): void {
     const day = parseInt(startDayVal, 10) || 1;
-    this.staffRepo
-      .updateStaff(member.id, { payrollCycleStartDay: day } as any)
-      .subscribe({
-        next: () => {
-          const updated = this.staff().map((s) =>
-            s.id === member.id ? { ...s, payrollCycleStartDay: day } : s,
-          );
-          this.staff.set(updated);
-          this.dataService.staffMembers.set(updated);
-          if (this.selectedPanelStaff()?.id === member.id) {
-            this.selectedPanelStaff.set({
-              ...this.selectedPanelStaff()!,
-              payrollCycleStartDay: day,
-            });
-          }
-          this.dataService.loadStaffPerformance(this.selectedMonth());
-          this.toastService.success(
-            `Updated monthly payroll cycle for ${member.name} (Starts Day ${day})`,
-          );
-        },
-        error: () => {
-          const updated = this.staff().map((s) =>
-            s.id === member.id ? { ...s, payrollCycleStartDay: day } : s,
-          );
-          this.staff.set(updated);
-          this.dataService.staffMembers.set(updated);
-          if (this.selectedPanelStaff()?.id === member.id) {
-            this.selectedPanelStaff.set({
-              ...this.selectedPanelStaff()!,
-              payrollCycleStartDay: day,
-            });
-          }
-          this.toastService.success(`Updated payroll cycle for ${member.name}`);
-        },
-      });
+    this.staffRepo.updateStaff(member.id, { payrollCycleStartDay: day } as any).subscribe({
+      next: () => {
+        const updated = this.staff().map((s) =>
+          s.id === member.id ? { ...s, payrollCycleStartDay: day } : s,
+        );
+        this.staff.set(updated);
+        this.dataService.staffMembers.set(updated);
+        if (this.selectedPanelStaff()?.id === member.id) {
+          this.selectedPanelStaff.set({
+            ...this.selectedPanelStaff()!,
+            payrollCycleStartDay: day,
+          });
+        }
+        this.dataService.loadStaffPerformance(this.selectedMonth());
+        this.toastService.success(
+          `Updated monthly payroll cycle for ${member.name} (Starts Day ${day})`,
+        );
+      },
+      error: () => {
+        const updated = this.staff().map((s) =>
+          s.id === member.id ? { ...s, payrollCycleStartDay: day } : s,
+        );
+        this.staff.set(updated);
+        this.dataService.staffMembers.set(updated);
+        if (this.selectedPanelStaff()?.id === member.id) {
+          this.selectedPanelStaff.set({
+            ...this.selectedPanelStaff()!,
+            payrollCycleStartDay: day,
+          });
+        }
+        this.toastService.success(`Updated payroll cycle for ${member.name}`);
+      },
+    });
   }
 
   markPanelAttendance(status: AttendanceStatus): void {
@@ -3624,10 +3828,7 @@ export class StaffListComponent {
     });
   }
 
-  getMemberAttendanceStatusForDate(
-    staffId: string,
-    date: string,
-  ): AttendanceStatus | 'NOT_MARKED' {
+  getMemberAttendanceStatusForDate(staffId: string, date: string): AttendanceStatus | 'NOT_MARKED' {
     const att = this.dataService
       .staffAttendance()
       .find((a) => a.staff_id === staffId && a.attendance_date === date);
@@ -3693,7 +3894,9 @@ export class StaffListComponent {
       assignedSection: member.assignedSection || 'Main Dining Floor',
       monthlySalary: member.monthlySalary || 15000,
       payrollCycleStartDay: member.payrollCycleStartDay || 1,
-      permissions: member.permissions ? [...member.permissions] : [...(DEFAULT_ROLE_PERMISSIONS[member.role] || [])],
+      permissions: member.permissions
+        ? [...member.permissions]
+        : [...(DEFAULT_ROLE_PERMISSIONS[member.role] || [])],
     };
     this.showEditModal = true;
   }

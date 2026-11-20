@@ -114,9 +114,10 @@ impl TableRepository {
         restaurant_id: Uuid,
         req: CreateTableRequest,
     ) -> Result<RestaurantTable, AppError> {
-        let qr_token = req.qr_code_identifier.clone().unwrap_or_else(|| {
-            format!("QR-{}", &Uuid::new_v4().to_string()[..8].to_uppercase())
-        });
+        let qr_token = req
+            .qr_code_identifier
+            .clone()
+            .unwrap_or_else(|| format!("QR-{}", Uuid::new_v4().to_string()[..8].to_uppercase()));
         let capacity = req.capacity.unwrap_or(4);
         let section = req.section.unwrap_or_else(|| "Main Dining".to_string());
         let table = sqlx::query_as::<_, RestaurantTable>(
@@ -150,13 +151,11 @@ impl TableRepository {
         restaurant_id: Uuid,
         table_id: Uuid,
     ) -> Result<(), AppError> {
-        sqlx::query(
-            "DELETE FROM tables WHERE restaurant_id = $1 AND id = $2"
-        )
-        .bind(restaurant_id)
-        .bind(table_id)
-        .execute(pool)
-        .await?;
+        sqlx::query("DELETE FROM tables WHERE restaurant_id = $1 AND id = $2")
+            .bind(restaurant_id)
+            .bind(table_id)
+            .execute(pool)
+            .await?;
 
         Ok(())
     }

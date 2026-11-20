@@ -115,7 +115,9 @@ import { EmptyStateComponent } from '../../../shared/components/empty-state/empt
                   <div class="dish-badges">
                     <app-dietary-badge [type]="item.dietary"></app-dietary-badge>
                     @if (item.isChefSpecial) {
-                      <span class="badge badge-gold"><i class="ph ph-star-four"></i> Chef Special</span>
+                      <span class="badge badge-gold"
+                        ><i class="ph ph-star-four"></i> Chef Special</span
+                      >
                     }
                   </div>
                   <div class="dish-stock-status">
@@ -388,9 +390,7 @@ import { EmptyStateComponent } from '../../../shared/components/empty-state/empt
         [isOpen]="!!categoryToDelete"
         title="Delete Category"
         [message]="
-          'Are you sure you want to permanently delete category ' +
-          categoryToDelete?.name +
-          '?'
+          'Are you sure you want to permanently delete category ' + categoryToDelete?.name + '?'
         "
         confirmText="Delete Category"
         (confirm)="executeDeleteCategory()"
@@ -590,7 +590,10 @@ import { EmptyStateComponent } from '../../../shared/components/empty-state/empt
         display: flex;
         flex-direction: column;
         box-shadow: var(--shadow-xs, 0 1px 2px rgba(0, 0, 0, 0.05));
-        transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
+        transition:
+          transform 0.15s ease,
+          box-shadow 0.15s ease,
+          border-color 0.15s ease;
 
         &:hover {
           border-color: rgba(220, 38, 38, 0.3);

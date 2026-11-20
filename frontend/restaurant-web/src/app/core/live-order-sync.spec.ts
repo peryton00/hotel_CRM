@@ -137,7 +137,9 @@ describe('Live Order Stream & Active Queue Synchronization', () => {
     // Active status filter: in service pipeline or unpaid (and not cancelled)
     const isOrderActive = (o: Order) => {
       if (o.status === 'CANCELLED') return false;
-      if (['PENDING', 'ACCEPTED', 'PREPARING', 'READY', 'DISPATCHED', 'SERVED'].includes(o.status)) {
+      if (
+        ['PENDING', 'ACCEPTED', 'PREPARING', 'READY', 'DISPATCHED', 'SERVED'].includes(o.status)
+      ) {
         return true;
       }
       return o.paymentStatus !== 'PAID';
@@ -146,7 +148,14 @@ describe('Live Order Stream & Active Queue Synchronization', () => {
     const activeOrders = mockService.orders().filter(isOrderActive);
 
     expect(activeOrders.length).toBe(6);
-    expect(activeOrders.map((o) => o.id)).toEqual(['ord-1', 'ord-2', 'ord-3', 'ord-4', 'ord-5', 'ord-6']);
+    expect(activeOrders.map((o) => o.id)).toEqual([
+      'ord-1',
+      'ord-2',
+      'ord-3',
+      'ord-4',
+      'ord-5',
+      'ord-6',
+    ]);
 
     // Completed paid and Cancelled must not be in active queue
     expect(activeOrders.some((o) => o.id === 'ord-7')).toBe(false);

@@ -1,5 +1,11 @@
 import { Injectable, signal, computed, inject, DestroyRef } from '@angular/core';
-import { Router, NavigationStart, NavigationEnd, NavigationCancel, NavigationError } from '@angular/router';
+import {
+  Router,
+  NavigationStart,
+  NavigationEnd,
+  NavigationCancel,
+  NavigationError,
+} from '@angular/router';
 import { filter } from 'rxjs';
 
 @Injectable({
@@ -38,8 +44,8 @@ export class LoadingService {
             event instanceof NavigationStart ||
             event instanceof NavigationEnd ||
             event instanceof NavigationCancel ||
-            event instanceof NavigationError
-        )
+            event instanceof NavigationError,
+        ),
       )
       .subscribe((event) => {
         if (event instanceof NavigationStart) {
@@ -132,7 +138,7 @@ export class LoadingService {
    */
   isLoading(key?: string) {
     if (key) {
-      return computed(() => ((this.activeOperations()[key] || 0) > 0));
+      return computed(() => (this.activeOperations()[key] || 0) > 0);
     }
     return computed(() => {
       const ops = this.activeOperations();
@@ -164,7 +170,7 @@ export class LoadingService {
         delete current[key];
         this.activeOperations.set(current);
         this.operationTimeouts.delete(key);
-      }, 20000)
+      }, 20000),
     );
   }
 

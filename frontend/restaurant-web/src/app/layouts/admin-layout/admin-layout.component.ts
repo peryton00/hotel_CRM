@@ -69,7 +69,9 @@ import { ToastService } from '../../core/services/toast.service';
               routerLinkActive="active"
               class="nav-item"
               (click)="closeMobileMenu()"
-              [attr.title]="isSidebarCollapsed() ? ('Live Orders (' + activeOrdersCount() + ' active)') : null"
+              [attr.title]="
+                isSidebarCollapsed() ? 'Live Orders (' + activeOrdersCount() + ' active)' : null
+              "
             >
               <i class="ph ph-receipt"></i>
               <span class="nav-text" *ngIf="!isSidebarCollapsed()">Live Orders</span>
@@ -82,10 +84,7 @@ import { ToastService } from '../../core/services/toast.service';
                 </span>
               }
               @if (activeOrdersCount() > 0 && isSidebarCollapsed()) {
-                <span
-                  class="live-dot"
-                  [attr.title]="activeOrdersCount() + ' active orders'"
-                ></span>
+                <span class="live-dot" [attr.title]="activeOrdersCount() + ' active orders'"></span>
               }
             </a>
           }
@@ -297,10 +296,18 @@ import { ToastService } from '../../core/services/toast.service';
                 class="connection-status-pill"
                 [class.is-online]="network.isOnline()"
                 [class.is-offline]="!network.isOnline()"
-                [attr.title]="network.isOnline() ? 'Internet Connection: Online' : 'Internet Connection: Offline'"
+                [attr.title]="
+                  network.isOnline()
+                    ? 'Internet Connection: Online'
+                    : 'Internet Connection: Offline'
+                "
               >
                 <span class="connection-dot"></span>
-                <i class="ph" [class.ph-wifi-high]="network.isOnline()" [class.ph-wifi-slash]="!network.isOnline()"></i>
+                <i
+                  class="ph"
+                  [class.ph-wifi-high]="network.isOnline()"
+                  [class.ph-wifi-slash]="!network.isOnline()"
+                ></i>
                 <span>{{ network.isOnline() ? 'Online' : 'Offline' }}</span>
               </span>
             </div>
@@ -314,12 +321,22 @@ import { ToastService } from '../../core/services/toast.service';
               [class.mode-admin]="auth.isAdmin()"
               [class.mode-staff]="!auth.isAdmin()"
               (click)="toggleRoleMode()"
-              [attr.title]="auth.isAdmin() ? 'Super Admin Mode Active (Full CRM Control) — Click to switch to Floor Staff Mode' : 'Floor Staff Mode Active (Orders & Billing Only) — Click to unlock Admin Mode'"
+              [attr.title]="
+                auth.isAdmin()
+                  ? 'Super Admin Mode Active (Full CRM Control) — Click to switch to Floor Staff Mode'
+                  : 'Floor Staff Mode Active (Orders & Billing Only) — Click to unlock Admin Mode'
+              "
               aria-label="Toggle between Admin and Staff Mode"
             >
               <span class="mode-pill-badge">
-                <i class="ph" [class.ph-crown-simple]="auth.isAdmin()" [class.ph-users-three]="!auth.isAdmin()"></i>
-                <span class="mode-pill-title">{{ auth.isAdmin() ? 'Admin Mode' : 'Staff Mode' }}</span>
+                <i
+                  class="ph"
+                  [class.ph-crown-simple]="auth.isAdmin()"
+                  [class.ph-users-three]="!auth.isAdmin()"
+                ></i>
+                <span class="mode-pill-title">{{
+                  auth.isAdmin() ? 'Admin Mode' : 'Staff Mode'
+                }}</span>
               </span>
               <span class="mode-pill-divider"></span>
               <span class="mode-pill-action">
@@ -341,10 +358,18 @@ import { ToastService } from '../../core/services/toast.service';
                 class="topbar-tool-btn sound-tool-btn"
                 [class.muted]="soundService.isMuted()"
                 (click)="soundService.toggleMute()"
-                [title]="!soundService.isMuted() ? 'Audio chimes active for incoming orders (Click to mute)' : 'Order audio muted (Click to unmute)'"
+                [title]="
+                  !soundService.isMuted()
+                    ? 'Audio chimes active for incoming orders (Click to mute)'
+                    : 'Order audio muted (Click to unmute)'
+                "
                 aria-label="Toggle Order Arrival Sound"
               >
-                <i class="ph" [class.ph-speaker-high]="!soundService.isMuted()" [class.ph-speaker-simple-slash]="soundService.isMuted()"></i>
+                <i
+                  class="ph"
+                  [class.ph-speaker-high]="!soundService.isMuted()"
+                  [class.ph-speaker-simple-slash]="soundService.isMuted()"
+                ></i>
               </button>
 
               <!-- Theme Switch -->
@@ -352,10 +377,18 @@ import { ToastService } from '../../core/services/toast.service';
                 type="button"
                 class="topbar-tool-btn theme-tool-btn"
                 (click)="themeService.toggleTheme()"
-                [attr.aria-label]="themeService.isDark() ? 'Switch to light mode' : 'Switch to dark mode'"
-                [attr.title]="themeService.isDark() ? 'Switch to light mode' : 'Switch to dark mode'"
+                [attr.aria-label]="
+                  themeService.isDark() ? 'Switch to light mode' : 'Switch to dark mode'
+                "
+                [attr.title]="
+                  themeService.isDark() ? 'Switch to light mode' : 'Switch to dark mode'
+                "
               >
-                <i class="ph" [class.ph-sun]="themeService.isDark()" [class.ph-moon-stars]="!themeService.isDark()"></i>
+                <i
+                  class="ph"
+                  [class.ph-sun]="themeService.isDark()"
+                  [class.ph-moon-stars]="!themeService.isDark()"
+                ></i>
               </button>
 
               <!-- Customer Mobile Preview Link -->
@@ -376,8 +409,12 @@ import { ToastService } from '../../core/services/toast.service';
                 <div class="avatar-circle">{{ userInitial() }}</div>
                 <div class="avatar-details">
                   <span class="avatar-name">{{ userName() }}</span>
-                  <span class="avatar-role-text" [class.role-admin]="auth.isAdmin()" [class.role-staff]="!auth.isAdmin()">
-                    {{ auth.isAdmin() ? 'Full CRM Access' : (userRoleBadge() || 'Floor Operations') }}
+                  <span
+                    class="avatar-role-text"
+                    [class.role-admin]="auth.isAdmin()"
+                    [class.role-staff]="!auth.isAdmin()"
+                  >
+                    {{ auth.isAdmin() ? 'Full CRM Access' : userRoleBadge() || 'Floor Operations' }}
                   </span>
                 </div>
               </div>
@@ -400,14 +437,19 @@ import { ToastService } from '../../core/services/toast.service';
           <div class="offline-global-banner" [class.order-active]="isOrderRoute()">
             <div class="banner-inner">
               <div class="banner-left">
-                <span class="offline-tag"><i class="ph ph-wifi-slash"></i> Offline Mode Active</span>
+                <span class="offline-tag"
+                  ><i class="ph ph-wifi-slash"></i> Offline Mode Active</span
+                >
                 @if (isOrderRoute()) {
                   <span class="banner-text">
-                    <strong>POS & Manual Orders Operational:</strong> Orders and payments are recorded locally and safely preserved. Changes will auto-sync with the database once reconnected.
+                    <strong>POS & Manual Orders Operational:</strong> Orders and payments are
+                    recorded locally and safely preserved. Changes will auto-sync with the database
+                    once reconnected.
                   </span>
                 } @else {
                   <span class="banner-text">
-                    <strong>Cloud Disconnected:</strong> Live updates for this section are paused until connection returns. Orders and Cashier billing remain fully functional.
+                    <strong>Cloud Disconnected:</strong> Live updates for this section are paused
+                    until connection returns. Orders and Cashier billing remain fully functional.
                   </span>
                 }
               </div>
@@ -415,7 +457,12 @@ import { ToastService } from '../../core/services/toast.service';
                 @if (pendingSyncCount() > 0) {
                   <div class="sync-count-tag" title="Queued actions waiting to sync with database">
                     <i class="ph ph-clock-counter-clockwise"></i>
-                    <span>{{ pendingSyncCount() }} change{{ pendingSyncCount() === 1 ? '' : 's' }} pending sync</span>
+                    <span
+                      >{{ pendingSyncCount() }} change{{
+                        pendingSyncCount() === 1 ? '' : 's'
+                      }}
+                      pending sync</span
+                    >
                   </div>
                 }
                 <button
@@ -435,7 +482,10 @@ import { ToastService } from '../../core/services/toast.service';
           <div class="syncing-global-banner">
             <div class="banner-inner">
               <i class="ph ph-arrows-clockwise banner-spin"></i>
-              <span>Reconnected to cloud. Synchronizing offline orders and payments with database...</span>
+              <span
+                >Reconnected to cloud. Synchronizing offline orders and payments with
+                database...</span
+              >
             </div>
           </div>
         }
@@ -457,10 +507,17 @@ import { ToastService } from '../../core/services/toast.service';
                 </div>
                 <div>
                   <h3 class="pin-modal-heading">Unlock Admin Mode</h3>
-                  <p class="pin-modal-subheading">Enter Super Admin password or PIN to unlock unrestricted CRM access.</p>
+                  <p class="pin-modal-subheading">
+                    Enter Super Admin password or PIN to unlock unrestricted CRM access.
+                  </p>
                 </div>
               </div>
-              <button type="button" class="pin-modal-close-btn" (click)="closePinModal()" aria-label="Close modal">
+              <button
+                type="button"
+                class="pin-modal-close-btn"
+                (click)="closePinModal()"
+                aria-label="Close modal"
+              >
                 <i class="ph ph-x"></i>
               </button>
             </div>
@@ -489,10 +546,19 @@ import { ToastService } from '../../core/services/toast.service';
               </div>
 
               <div class="pin-modal-footer">
-                <button type="button" class="btn btn-secondary" (click)="closePinModal()" [disabled]="isVerifyingPin()">
+                <button
+                  type="button"
+                  class="btn btn-secondary"
+                  (click)="closePinModal()"
+                  [disabled]="isVerifyingPin()"
+                >
                   Cancel
                 </button>
-                <button type="submit" class="btn btn-primary btn-unlock" [disabled]="isVerifyingPin() || !adminPinInput.trim()">
+                <button
+                  type="submit"
+                  class="btn btn-primary btn-unlock"
+                  [disabled]="isVerifyingPin() || !adminPinInput.trim()"
+                >
                   @if (isVerifyingPin()) {
                     <i class="ph ph-arrows-clockwise spin"></i>
                     <span>Verifying...</span>
@@ -1367,7 +1433,7 @@ import { ToastService } from '../../core/services/toast.service';
         }
       }
 
-      :host-context([data-theme="dark"]),
+      :host-context([data-theme='dark']),
       :host-context(.dark-theme) {
         .offline-global-banner {
           background-color: rgba(245, 158, 11, 0.15);
@@ -1390,8 +1456,12 @@ import { ToastService } from '../../core/services/toast.service';
       }
 
       @keyframes spin {
-        from { transform: rotate(0deg); }
-        to { transform: rotate(360deg); }
+        from {
+          transform: rotate(0deg);
+        }
+        to {
+          transform: rotate(360deg);
+        }
       }
 
       .admin-content {
@@ -1427,7 +1497,9 @@ import { ToastService } from '../../core/services/toast.service';
         background: var(--color-surface);
         border: 1px solid var(--color-border);
         border-radius: var(--radius-lg, 12px);
-        box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.3), 0 8px 10px -6px rgba(0, 0, 0, 0.2);
+        box-shadow:
+          0 20px 25px -5px rgba(0, 0, 0, 0.3),
+          0 8px 10px -6px rgba(0, 0, 0, 0.2);
         width: 100%;
         max-width: 440px;
         overflow: hidden;
@@ -1608,9 +1680,7 @@ export class AdminLayoutComponent {
         // If user is currently outside the Live Order Queue, give them a notification toast
         if (!this.currentUrl().includes('/admin/orders')) {
           const loc =
-            ev.order.orderType === 'TAKEAWAY'
-              ? 'Takeaway'
-              : `Table ${ev.order.tableNumber || '?'}`;
+            ev.order.orderType === 'TAKEAWAY' ? 'Takeaway' : `Table ${ev.order.tableNumber || '?'}`;
           this.toastService.info(
             `New order ${ev.order.orderNumber} placed for ${loc}`,
             '🔔 Real-time Order Arrival',
@@ -1622,7 +1692,11 @@ export class AdminLayoutComponent {
 
   isOrderRoute = computed(() => {
     const url = this.currentUrl();
-    return url.includes('/admin/orders') || url.includes('/admin/billing') || url.includes('/admin/tables');
+    return (
+      url.includes('/admin/orders') ||
+      url.includes('/admin/billing') ||
+      url.includes('/admin/tables')
+    );
   });
 
   pendingSyncCount = computed(() => {
@@ -1638,9 +1712,9 @@ export class AdminLayoutComponent {
   isMobileMenuOpen = signal<boolean>(false);
 
   activeOrdersCount = computed(() => {
-    return this.dataService.orders().filter(
-      (o) => o.status !== 'COMPLETED' && o.status !== 'CANCELLED'
-    ).length;
+    return this.dataService
+      .orders()
+      .filter((o) => o.status !== 'COMPLETED' && o.status !== 'CANCELLED').length;
   });
 
   userName = computed(() => {

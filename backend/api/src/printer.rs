@@ -1,9 +1,6 @@
 // Hardware / Thermal ESC/POS Receipt Printing Module
 
-use axum::{
-    http::StatusCode,
-    Json,
-};
+use axum::{http::StatusCode, Json};
 use serde::{Deserialize, Serialize};
 use std::time::Duration;
 use tracing::{error, info};
@@ -17,11 +14,11 @@ pub struct PrinterInfo {
 
 #[derive(Debug, Deserialize)]
 pub struct PrintEscposRequest {
-    pub target: Option<String>,          // "WINDOWS" | "NETWORK"
-    pub printer_name: Option<String>,    // Windows printer name or None for default
-    pub network_address: Option<String>, // e.g. "192.168.1.100:9100"
-    pub raw_bytes: Option<Vec<u8>>,      // Raw binary bytes array
-    pub raw_bytes_base64: Option<String>,// Or Base64 encoded ESC/POS string
+    pub target: Option<String>,           // "WINDOWS" | "NETWORK"
+    pub printer_name: Option<String>,     // Windows printer name or None for default
+    pub network_address: Option<String>,  // e.g. "192.168.1.100:9100"
+    pub raw_bytes: Option<Vec<u8>>,       // Raw binary bytes array
+    pub raw_bytes_base64: Option<String>, // Or Base64 encoded ESC/POS string
 }
 
 #[derive(Debug, Serialize)]
@@ -72,7 +69,12 @@ pub fn print_raw_windows(printer_name: &str, data: &[u8]) -> Result<usize, Strin
 
     let mut h_printer: *mut std::ffi::c_void = std::ptr::null_mut();
     unsafe {
-        if OpenPrinterA(name_c.as_ptr() as *const u8, &mut h_printer, std::ptr::null()) == 0 {
+        if OpenPrinterA(
+            name_c.as_ptr() as *const u8,
+            &mut h_printer,
+            std::ptr::null(),
+        ) == 0
+        {
             return Err(format!("Could not open printer '{}'", printer_name));
         }
 
@@ -95,12 +97,7 @@ pub fn print_raw_windows(printer_name: &str, data: &[u8]) -> Result<usize, Strin
         }
 
         let mut written: u32 = 0;
-        let res = WritePrinter(
-            h_printer,
-            data.as_ptr(),
-            data.len() as u32,
-            &mut written,
-        );
+        let res = WritePrinter(h_printer, data.as_ptr(), data.len() as u32, &mut written);
 
         EndPagePrinter(h_printer);
         EndDocPrinter(h_printer);
@@ -136,8 +133,13 @@ pub fn print_raw_network(address: &str, data: &[u8]) -> Result<usize, String> {
         .next()
         .ok_or_else(|| format!("Could not resolve address '{}'", target))?;
 
-    let mut stream = TcpStream::connect_timeout(&socket_addr, Duration::from_secs(3))
-        .map_err(|e| format!("Connection to network printer '{}' timed out: {}", target, e))?;
+    let mut stream =
+        TcpStream::connect_timeout(&socket_addr, Duration::from_secs(3)).map_err(|e| {
+            format!(
+                "Connection to network printer '{}' timed out: {}",
+                target, e
+            )
+        })?;
 
     stream
         .write_all(data)
@@ -172,8 +174,14 @@ pub async fn list_system_printers() -> Vec<PrinterInfo> {
                         .iter()
                         .filter_map(|item| {
                             let name = item.get("Name")?.as_str()?.to_string();
-                            let is_default = item.get("Default").and_then(|v| v.as_bool()).unwrap_or(false);
-                            let port_name = item.get("PortName").and_then(|v| v.as_str()).map(|s| s.to_string());
+                            let is_default = item
+                                .get("Default")
+                                .and_then(|v| v.as_bool())
+                                .unwrap_or(false);
+                            let port_name = item
+                                .get("PortName")
+                                .and_then(|v| v.as_str())
+                                .map(|s| s.to_string());
                             Some(PrinterInfo {
                                 name,
                                 is_default,
@@ -183,8 +191,14 @@ pub async fn list_system_printers() -> Vec<PrinterInfo> {
                         .collect();
                 } else if let Some(obj) = val.as_object() {
                     if let Some(name) = obj.get("Name").and_then(|v| v.as_str()) {
-                        let is_default = obj.get("Default").and_then(|v| v.as_bool()).unwrap_or(false);
-                        let port_name = obj.get("PortName").and_then(|v| v.as_str()).map(|s| s.to_string());
+                        let is_default = obj
+                            .get("Default")
+                            .and_then(|v| v.as_bool())
+                            .unwrap_or(false);
+                        let port_name = obj
+                            .get("PortName")
+                            .and_then(|v| v.as_str())
+                            .map(|s| s.to_string());
                         return vec![PrinterInfo {
                             name: name.to_string(),
                             is_default,
@@ -226,7 +240,9 @@ pub async fn print_escpos_route(
     } else {
         return Err((
             StatusCode::BAD_REQUEST,
-            Json(serde_json::json!({ "error": "No print data provided (raw_bytes or raw_bytes_base64 required)" })),
+            Json(
+                serde_json::json!({ "error": "No print data provided (raw_bytes or raw_bytes_base64 required)" }),
+            ),
         ));
     };
 
@@ -237,16 +253,27 @@ pub async fn print_escpos_route(
         ));
     }
 
-    let target = payload.target.unwrap_or_else(|| "WINDOWS".to_string()).to_uppercase();
+    let target = payload
+        .target
+        .unwrap_or_else(|| "WINDOWS".to_string())
+        .to_uppercase();
 
     if target == "NETWORK" {
-        let addr = payload.network_address.unwrap_or_else(|| "127.0.0.1:9100".to_string());
+        let addr = payload
+            .network_address
+            .unwrap_or_else(|| "127.0.0.1:9100".to_string());
         match print_raw_network(&addr, &bytes) {
             Ok(written) => {
-                info!("Printed {} ESC/POS bytes to network printer {}", written, addr);
+                info!(
+                    "Printed {} ESC/POS bytes to network printer {}",
+                    written, addr
+                );
                 Ok(Json(PrintResponse {
                     success: true,
-                    message: format!("Successfully sent {} bytes to network printer {}", written, addr),
+                    message: format!(
+                        "Successfully sent {} bytes to network printer {}",
+                        written, addr
+                    ),
                     bytes_written: written,
                 }))
             }
@@ -273,7 +300,10 @@ pub async fn print_escpos_route(
 
         match print_raw_windows(&printer_name, &bytes) {
             Ok(written) => {
-                info!("Printed {} ESC/POS bytes to Windows printer {}", written, printer_name);
+                info!(
+                    "Printed {} ESC/POS bytes to Windows printer {}",
+                    written, printer_name
+                );
                 Ok(Json(PrintResponse {
                     success: true,
                     message: format!("Successfully printed {} bytes to {}", written, printer_name),

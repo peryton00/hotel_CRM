@@ -439,7 +439,11 @@ export type ReportViewTab = 'overview' | 'revenue' | 'cogs' | 'wastage';
                     {{ totalTaxCollected() | currencyInr }}
                   }
                 </span>
-                <span class="kpi-sub">CGST ({{ restaurant()?.taxSettings?.cgstRate ?? 2.5 }}%) + SGST ({{ restaurant()?.taxSettings?.sgstRate ?? 2.5 }}%)</span>
+                <span class="kpi-sub"
+                  >CGST ({{ restaurant()?.taxSettings?.cgstRate ?? 2.5 }}%) + SGST ({{
+                    restaurant()?.taxSettings?.sgstRate ?? 2.5
+                  }}%)</span
+                >
               </div>
 
               <div class="kpi-card highlight-crimson">
@@ -465,11 +469,20 @@ export type ReportViewTab = 'overview' | 'revenue' | 'cogs' | 'wastage';
       </div>
 
       <!-- Empty State if no records found -->
-      @if (!isOrdersLoading() && !isInventoryLoading() && filteredOrders().length === 0 && rangeMovements().length === 0) {
+      @if (
+        !isOrdersLoading() &&
+        !isInventoryLoading() &&
+        filteredOrders().length === 0 &&
+        rangeMovements().length === 0
+      ) {
         <app-empty-state
           icon="ph-calendar-x"
           title="No Operational Records in Selected Window"
-          [message]="'There are no orders, refunds, or inventory movements matching the period ' + dateRange().label + '.'"
+          [message]="
+            'There are no orders, refunds, or inventory movements matching the period ' +
+            dateRange().label +
+            '.'
+          "
           actionText="Reset to This Month"
           actionIcon="ph-calendar"
           (actionClick)="setPreset('this_month')"
@@ -641,7 +654,9 @@ export type ReportViewTab = 'overview' | 'revenue' | 'cogs' | 'wastage';
               </div>
               <div class="ot-metric">
                 <span class="ot-label">Gross Order Value</span>
-                <span class="ot-sub">{{ orderTypeBreakdown().dineIn.grossSales | currencyInr }}</span>
+                <span class="ot-sub">{{
+                  orderTypeBreakdown().dineIn.grossSales | currencyInr
+                }}</span>
               </div>
               <div class="ot-metric">
                 <span class="ot-label">Average Bill</span>
@@ -692,7 +707,10 @@ export type ReportViewTab = 'overview' | 'revenue' | 'cogs' | 'wastage';
                     <strong>{{ cat.percentage }}% ({{ cat.amount | currencyInr }})</strong>
                   </div>
                   <div class="bar-track">
-                    <div class="bar-fill {{ cat.colorClass }}" [style.width.%]="cat.percentage"></div>
+                    <div
+                      class="bar-fill {{ cat.colorClass }}"
+                      [style.width.%]="cat.percentage"
+                    ></div>
                   </div>
                 </div>
               } @empty {
@@ -897,7 +915,9 @@ export type ReportViewTab = 'overview' | 'revenue' | 'cogs' | 'wastage';
                     <div class="d-leg-item">
                       <span class="d-dot" [style.background]="item.color"></span>
                       <span class="d-label">{{ item.label }}</span>
-                      <strong class="d-val">{{ item.percentage }}% ({{ item.value | currencyInr }})</strong>
+                      <strong class="d-val"
+                        >{{ item.percentage }}% ({{ item.value | currencyInr }})</strong
+                      >
                     </div>
                   }
                 </div>
@@ -2097,10 +2117,10 @@ export class ReportsComponent {
   private toastService = inject(ToastService);
 
   readonly isOrdersLoading = computed(
-    () => this.dataService.isOrdersLoading() || !this.dataService.ordersLoaded()
+    () => this.dataService.isOrdersLoading() || !this.dataService.ordersLoaded(),
   );
   readonly isInventoryLoading = computed(
-    () => this.dataService.isInventoryLoading() || !this.dataService.inventoryLoaded()
+    () => this.dataService.isInventoryLoading() || !this.dataService.inventoryLoaded(),
   );
   readonly isLoading = computed(() => this.isOrdersLoading() || this.isInventoryLoading());
   readonly isExporting = signal<boolean>(false);
@@ -2206,7 +2226,8 @@ export class ReportsComponent {
     const ot = this.orderTypeFilter();
     const allMovements = this.mock.stockMovements();
     return this.orders().filter((o) => {
-      if (o.status !== 'DISPATCHED' && o.status !== 'SERVED' && o.status !== 'COMPLETED') return false;
+      if (o.status !== 'DISPATCHED' && o.status !== 'SERVED' && o.status !== 'COMPLETED')
+        return false;
       const inType = ot === 'ALL' || o.orderType === ot;
       if (!inType) return false;
       const fulfillmentTs = getOrderFulfillmentTimestamp(o, allMovements);
@@ -2426,7 +2447,10 @@ export class ReportsComponent {
       };
     });
 
-    const pathD = points.length > 0 ? points.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x} ${p.y}`).join(' ') : '';
+    const pathD =
+      points.length > 0
+        ? points.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x} ${p.y}`).join(' ')
+        : '';
     const areaD =
       points.length > 0
         ? `${pathD} L ${points[points.length - 1].x} ${padY + chartH} L ${points[0].x} ${padY + chartH} Z`

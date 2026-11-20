@@ -155,8 +155,16 @@ export class MockDataService {
         discount: ord.discountAmount,
         appliedCouponCode: ord.appliedCouponCode,
         taxBreakdown: [
-          { name: `CGST (${this.restaurant()?.taxSettings?.cgstRate ?? 2.5}%)`, rate: this.restaurant()?.taxSettings?.cgstRate ?? 2.5, amount: ord.cgstAmount },
-          { name: `SGST (${this.restaurant()?.taxSettings?.sgstRate ?? 2.5}%)`, rate: this.restaurant()?.taxSettings?.sgstRate ?? 2.5, amount: ord.sgstAmount },
+          {
+            name: `CGST (${this.restaurant()?.taxSettings?.cgstRate ?? 2.5}%)`,
+            rate: this.restaurant()?.taxSettings?.cgstRate ?? 2.5,
+            amount: ord.cgstAmount,
+          },
+          {
+            name: `SGST (${this.restaurant()?.taxSettings?.sgstRate ?? 2.5}%)`,
+            rate: this.restaurant()?.taxSettings?.sgstRate ?? 2.5,
+            amount: ord.sgstAmount,
+          },
         ],
         totalTax: ord.taxAmount,
         finalTotal: ord.totalAmount,
@@ -173,8 +181,7 @@ export class MockDataService {
       slug: 'gurukripa-dhaba',
       name: 'GuruKripa Dhaba',
       tagline: 'Artisanal Mughlai & Contemporary Indian Bistro',
-      description:
-        'Traditional tandoori specialties, authentic recipes, and North Indian cuisine.',
+      description: 'Traditional tandoori specialties, authentic recipes, and North Indian cuisine.',
       coverImage:
         'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?auto=format&fit=crop&w=1400&q=80',
       logoUrl:
@@ -1268,8 +1275,16 @@ export class MockDataService {
         paymentStatus: 'UNPAID',
         totalRefunded: 0,
         taxBreakdown: [
-          { name: `CGST (${this.restaurant()?.taxSettings?.cgstRate ?? 2.5}%)`, rate: this.restaurant()?.taxSettings?.cgstRate ?? 2.5, amount: cCents / 100 },
-          { name: `SGST (${this.restaurant()?.taxSettings?.sgstRate ?? 2.5}%)`, rate: this.restaurant()?.taxSettings?.sgstRate ?? 2.5, amount: gCents / 100 },
+          {
+            name: `CGST (${this.restaurant()?.taxSettings?.cgstRate ?? 2.5}%)`,
+            rate: this.restaurant()?.taxSettings?.cgstRate ?? 2.5,
+            amount: cCents / 100,
+          },
+          {
+            name: `SGST (${this.restaurant()?.taxSettings?.sgstRate ?? 2.5}%)`,
+            rate: this.restaurant()?.taxSettings?.sgstRate ?? 2.5,
+            amount: gCents / 100,
+          },
         ],
       });
     }
@@ -1452,8 +1467,16 @@ export class MockDataService {
         paymentStatus: 'UNPAID',
         totalRefunded: 0,
         taxBreakdown: [
-          { name: `CGST (${this.restaurant()?.taxSettings?.cgstRate ?? 2.5}%)`, rate: this.restaurant()?.taxSettings?.cgstRate ?? 2.5, amount: cCents / 100 },
-          { name: `SGST (${this.restaurant()?.taxSettings?.sgstRate ?? 2.5}%)`, rate: this.restaurant()?.taxSettings?.sgstRate ?? 2.5, amount: gCents / 100 },
+          {
+            name: `CGST (${this.restaurant()?.taxSettings?.cgstRate ?? 2.5}%)`,
+            rate: this.restaurant()?.taxSettings?.cgstRate ?? 2.5,
+            amount: cCents / 100,
+          },
+          {
+            name: `SGST (${this.restaurant()?.taxSettings?.sgstRate ?? 2.5}%)`,
+            rate: this.restaurant()?.taxSettings?.sgstRate ?? 2.5,
+            amount: gCents / 100,
+          },
         ],
       });
     }
@@ -1597,7 +1620,10 @@ export class MockDataService {
     const grossTotal = Math.round(((order.subtotal || 0) + (order.taxAmount || 0)) * 100) / 100;
     const finalDiscount = Math.min(
       grossTotal,
-      Math.max(0, req.discountAmount !== undefined ? req.discountAmount : (order.discountAmount || 0)),
+      Math.max(
+        0,
+        req.discountAmount !== undefined ? req.discountAmount : order.discountAmount || 0,
+      ),
     );
     const totalAmount = Math.max(0, Math.round((grossTotal - finalDiscount) * 100) / 100);
 
@@ -1651,8 +1677,16 @@ export class MockDataService {
               discount: updatedOrder.discountAmount,
               appliedCouponCode: updatedOrder.appliedCouponCode,
               taxBreakdown: [
-                { name: `CGST (${this.restaurant()?.taxSettings?.cgstRate ?? 2.5}%)`, rate: this.restaurant()?.taxSettings?.cgstRate ?? 2.5, amount: updatedOrder.cgstAmount },
-                { name: `SGST (${this.restaurant()?.taxSettings?.sgstRate ?? 2.5}%)`, rate: this.restaurant()?.taxSettings?.sgstRate ?? 2.5, amount: updatedOrder.sgstAmount },
+                {
+                  name: `CGST (${this.restaurant()?.taxSettings?.cgstRate ?? 2.5}%)`,
+                  rate: this.restaurant()?.taxSettings?.cgstRate ?? 2.5,
+                  amount: updatedOrder.cgstAmount,
+                },
+                {
+                  name: `SGST (${this.restaurant()?.taxSettings?.sgstRate ?? 2.5}%)`,
+                  rate: this.restaurant()?.taxSettings?.sgstRate ?? 2.5,
+                  amount: updatedOrder.sgstAmount,
+                },
               ],
               totalTax: updatedOrder.taxAmount,
               finalTotal: updatedOrder.totalAmount,
@@ -1679,8 +1713,16 @@ export class MockDataService {
         discount: updatedOrder.discountAmount,
         appliedCouponCode: updatedOrder.appliedCouponCode,
         taxBreakdown: [
-          { name: `CGST (${this.restaurant()?.taxSettings?.cgstRate ?? 2.5}%)`, rate: this.restaurant()?.taxSettings?.cgstRate ?? 2.5, amount: updatedOrder.cgstAmount },
-          { name: `SGST (${this.restaurant()?.taxSettings?.sgstRate ?? 2.5}%)`, rate: this.restaurant()?.taxSettings?.sgstRate ?? 2.5, amount: updatedOrder.sgstAmount },
+          {
+            name: `CGST (${this.restaurant()?.taxSettings?.cgstRate ?? 2.5}%)`,
+            rate: this.restaurant()?.taxSettings?.cgstRate ?? 2.5,
+            amount: updatedOrder.cgstAmount,
+          },
+          {
+            name: `SGST (${this.restaurant()?.taxSettings?.sgstRate ?? 2.5}%)`,
+            rate: this.restaurant()?.taxSettings?.sgstRate ?? 2.5,
+            amount: updatedOrder.sgstAmount,
+          },
         ],
         totalTax: updatedOrder.taxAmount,
         finalTotal: updatedOrder.totalAmount,
@@ -3401,7 +3443,11 @@ export class MockDataService {
     }
 
     // 3. Transition to DISPATCHED, SERVED or COMPLETED: consume stock atomically
-    if (targetStatus === 'DISPATCHED' || targetStatus === 'SERVED' || targetStatus === 'COMPLETED') {
+    if (
+      targetStatus === 'DISPATCHED' ||
+      targetStatus === 'SERVED' ||
+      targetStatus === 'COMPLETED'
+    ) {
       const consResult = this.consumeStockForOrder(order.id);
       if (!consResult.success) {
         // Do NOT advance order status! Return clear error and preserve order state.
@@ -3520,7 +3566,8 @@ export class MockDataService {
       return {
         success: false,
         printCount: currentCount,
-        error: 'Invoice has already been printed. Admin password authorization required to reprint.',
+        error:
+          'Invoice has already been printed. Admin password authorization required to reprint.',
       };
     }
     const newCount = currentCount + 1;
@@ -3536,9 +3583,7 @@ export class MockDataService {
       {
         status: nextStatus,
         timestamp: now,
-        note: isPaid
-          ? `${note} — Order paid and invoice printed; marked COMPLETED`
-          : note,
+        note: isPaid ? `${note} — Order paid and invoice printed; marked COMPLETED` : note,
       },
     ];
 

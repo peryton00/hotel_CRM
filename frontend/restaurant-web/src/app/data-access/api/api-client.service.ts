@@ -112,16 +112,14 @@ export class ApiClientService {
       return null;
     }
 
-    return this.http
-      .get<any>(`${environment.supabaseUrl}/rest/v1/${table}`, { headers })
-      .pipe(
-        map((res) => {
-          if (isSingle) {
-            return (Array.isArray(res) ? res[0] : res) as T;
-          }
-          return res as T;
-        }),
-      );
+    return this.http.get<any>(`${environment.supabaseUrl}/rest/v1/${table}`, { headers }).pipe(
+      map((res) => {
+        if (isSingle) {
+          return (Array.isArray(res) ? res[0] : res) as T;
+        }
+        return res as T;
+      }),
+    );
   }
 
   post<T>(endpoint: string, body: any): Observable<T> {
@@ -456,7 +454,7 @@ export class ApiClientService {
               { headers },
             ),
           ),
-          map(() => ({ deleted: true } as unknown as T)),
+          map(() => ({ deleted: true }) as unknown as T),
         );
     }
 
@@ -467,7 +465,7 @@ export class ApiClientService {
           `${environment.supabaseUrl}/rest/v1/menu_categories?id=eq.${id}&restaurant_id=eq.${restaurantId}`,
           { headers },
         )
-        .pipe(map(() => ({ deleted: true } as unknown as T)));
+        .pipe(map(() => ({ deleted: true }) as unknown as T));
     }
 
     if (clean.startsWith('tables/')) {
@@ -477,7 +475,7 @@ export class ApiClientService {
           `${environment.supabaseUrl}/rest/v1/tables?id=eq.${id}&restaurant_id=eq.${restaurantId}`,
           { headers },
         )
-        .pipe(map(() => ({ deleted: true } as unknown as T)));
+        .pipe(map(() => ({ deleted: true }) as unknown as T));
     }
 
     if (clean.startsWith('coupons/')) {
@@ -487,7 +485,7 @@ export class ApiClientService {
           `${environment.supabaseUrl}/rest/v1/coupons?id=eq.${id}&restaurant_id=eq.${restaurantId}`,
           { headers },
         )
-        .pipe(map(() => ({ deleted: true } as unknown as T)));
+        .pipe(map(() => ({ deleted: true }) as unknown as T));
     }
 
     return null;
@@ -532,6 +530,9 @@ export class ApiClientService {
       localStorage.removeItem('staff_user');
       this.router?.navigate(['/admin/login'], { queryParams: { expired: 'true' } });
     }
-    this.toastService?.warning('Your session has expired. Please sign in again.', 'Authentication Expired');
+    this.toastService?.warning(
+      'Your session has expired. Please sign in again.',
+      'Authentication Expired',
+    );
   }
 }

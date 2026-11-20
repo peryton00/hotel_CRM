@@ -283,11 +283,7 @@ export class LoyaltyManagementComponent {
     const cust = this.customers().find((c) => c.id === this.selectedCustId);
     if (!cust) return;
 
-    this.mock.awardLoyaltyPoints(
-      cust.id,
-      Number(this.pointsToCredit),
-      this.creditReason.trim(),
-    );
+    this.mock.awardLoyaltyPoints(cust.id, Number(this.pointsToCredit), this.creditReason.trim());
 
     this.toastService.success(`Awarded ${this.pointsToCredit} points to ${cust.name}`);
     this.showRewardModal = false;

@@ -56,10 +56,12 @@ fn test_order_lifecycle_guards() {
 #[tokio::test]
 async fn test_sqlite_dollar_parameter_support() {
     let pool = sqlx::SqlitePool::connect("sqlite::memory:").await.unwrap();
-    sqlx::query("CREATE TABLE test (id TEXT PRIMARY KEY, val INTEGER, created_at TEXT, is_active INTEGER)")
-        .execute(&pool)
-        .await
-        .unwrap();
+    sqlx::query(
+        "CREATE TABLE test (id TEXT PRIMARY KEY, val INTEGER, created_at TEXT, is_active INTEGER)",
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
 
     let id = Uuid::new_v4();
     let now = chrono::Utc::now();
@@ -73,15 +75,16 @@ async fn test_sqlite_dollar_parameter_support() {
         .await
         .unwrap();
 
-    let row: (Uuid, i64, chrono::DateTime<chrono::Utc>, bool) = sqlx::query_as("SELECT id, val, created_at, is_active FROM test WHERE id = $1")
-        .bind(id)
-        .fetch_one(&pool)
-        .await
-        .unwrap();
+    let row: (Uuid, i64, chrono::DateTime<chrono::Utc>, bool) =
+        sqlx::query_as("SELECT id, val, created_at, is_active FROM test WHERE id = $1")
+            .bind(id)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
 
     assert_eq!(row.0, id);
     assert_eq!(row.1, 42);
-    assert_eq!(row.3, true);
+    assert!(row.3);
 }
 
 #[tokio::test]
@@ -131,12 +134,13 @@ async fn test_sqlite_pool_wal_init() {
     use sqlx::sqlite::{SqliteConnectOptions, SqliteJournalMode, SqliteSynchronous};
     use std::str::FromStr;
 
-    let options = SqliteConnectOptions::from_str(&format!("sqlite://{}", db_path.to_string_lossy()))
-        .unwrap()
-        .create_if_missing(true)
-        .journal_mode(SqliteJournalMode::Wal)
-        .synchronous(SqliteSynchronous::Normal)
-        .foreign_keys(true);
+    let options =
+        SqliteConnectOptions::from_str(&format!("sqlite://{}", db_path.to_string_lossy()))
+            .unwrap()
+            .create_if_missing(true)
+            .journal_mode(SqliteJournalMode::Wal)
+            .synchronous(SqliteSynchronous::Normal)
+            .foreign_keys(true);
 
     let pool = sqlx::SqlitePool::connect_with(options).await.unwrap();
 

@@ -1,5 +1,5 @@
-use std::time::Duration;
 use sqlx::PgPool;
+use std::time::Duration;
 use uuid::Uuid;
 
 pub struct GatewayHeartbeatClient {

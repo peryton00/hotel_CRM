@@ -34,7 +34,8 @@ pub async fn check_restaurant_availability(
     State(state): State<AppState>,
 ) -> Response {
     let pool_to_check = state.cloud_pool.as_ref().unwrap_or(&state.pool);
-    let is_online = GatewayHeartbeatClient::is_restaurant_online(pool_to_check, restaurant_id).await;
+    let is_online =
+        GatewayHeartbeatClient::is_restaurant_online(pool_to_check, restaurant_id).await;
 
     if is_online {
         (

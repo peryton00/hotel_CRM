@@ -1,6 +1,6 @@
-use std::time::Duration;
 use serde_json::Value;
 use sqlx::PgPool;
+use std::time::Duration;
 use uuid::Uuid;
 
 #[allow(dead_code)]
@@ -38,7 +38,10 @@ impl SyncWorker {
                 match self.run_sync_cycle().await {
                     Ok(events_synced) => {
                         if events_synced > 0 {
-                            tracing::info!("Cloud Sync: successfully processed {} events", events_synced);
+                            tracing::info!(
+                                "Cloud Sync: successfully processed {} events",
+                                events_synced
+                            );
                         }
                         backoff_secs = 5;
                     }
@@ -130,24 +133,71 @@ impl SyncWorker {
         match event.event_type.as_str() {
             "ORDER_CREATED" => {
                 let p = &event.payload;
-                let id = p.get("id").and_then(|v| v.as_str()).and_then(|s| Uuid::parse_str(s).ok()).unwrap_or(event.aggregate_id);
-                let restaurant_id = p.get("restaurant_id").and_then(|v| v.as_str()).and_then(|s| Uuid::parse_str(s).ok());
-                let order_number = p.get("order_number").and_then(|v| v.as_str()).unwrap_or("ORD-0000");
-                let order_type = p.get("order_type").and_then(|v| v.as_str()).unwrap_or("dine_in");
-                let status = p.get("status").and_then(|v| v.as_str()).unwrap_or("confirmed");
-                let payment_status = p.get("payment_status").and_then(|v| v.as_str()).unwrap_or("pending");
-                let table_id = p.get("table_id").and_then(|v| v.as_str()).and_then(|s| Uuid::parse_str(s).ok());
-                let customer_id = p.get("customer_id").and_then(|v| v.as_str()).and_then(|s| Uuid::parse_str(s).ok());
-                let cust_name = p.get("customer_name").and_then(|v| v.as_str()).unwrap_or("Walk-in Guest");
-                let cust_phone = p.get("customer_phone_e164").or_else(|| p.get("customer_phone")).and_then(|v| v.as_str()).unwrap_or("+919999999999");
+                let id = p
+                    .get("id")
+                    .and_then(|v| v.as_str())
+                    .and_then(|s| Uuid::parse_str(s).ok())
+                    .unwrap_or(event.aggregate_id);
+                let restaurant_id = p
+                    .get("restaurant_id")
+                    .and_then(|v| v.as_str())
+                    .and_then(|s| Uuid::parse_str(s).ok());
+                let order_number = p
+                    .get("order_number")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("ORD-0000");
+                let order_type = p
+                    .get("order_type")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("dine_in");
+                let status = p
+                    .get("status")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("confirmed");
+                let payment_status = p
+                    .get("payment_status")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("pending");
+                let table_id = p
+                    .get("table_id")
+                    .and_then(|v| v.as_str())
+                    .and_then(|s| Uuid::parse_str(s).ok());
+                let customer_id = p
+                    .get("customer_id")
+                    .and_then(|v| v.as_str())
+                    .and_then(|s| Uuid::parse_str(s).ok());
+                let cust_name = p
+                    .get("customer_name")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("Walk-in Guest");
+                let cust_phone = p
+                    .get("customer_phone_e164")
+                    .or_else(|| p.get("customer_phone"))
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("+919999999999");
                 let pickup_ref = p.get("pickup_reference").and_then(|v| v.as_str());
-                let subtotal_paise = p.get("subtotal_paise").and_then(|v| v.as_i64()).unwrap_or(0);
-                let discount_paise = p.get("discount_paise").and_then(|v| v.as_i64()).unwrap_or(0);
+                let subtotal_paise = p
+                    .get("subtotal_paise")
+                    .and_then(|v| v.as_i64())
+                    .unwrap_or(0);
+                let discount_paise = p
+                    .get("discount_paise")
+                    .and_then(|v| v.as_i64())
+                    .unwrap_or(0);
                 let coupon_code = p.get("applied_coupon_code").and_then(|v| v.as_str());
                 let tax_paise = p.get("tax_paise").and_then(|v| v.as_i64()).unwrap_or(0);
-                let service_charge_paise = p.get("service_charge_paise").and_then(|v| v.as_i64()).unwrap_or(0);
-                let round_off_paise = p.get("round_off_paise").and_then(|v| v.as_i64()).unwrap_or(0);
-                let total_amount_paise = p.get("total_amount_paise").and_then(|v| v.as_i64()).unwrap_or(0);
+                let service_charge_paise = p
+                    .get("service_charge_paise")
+                    .and_then(|v| v.as_i64())
+                    .unwrap_or(0);
+                let round_off_paise = p
+                    .get("round_off_paise")
+                    .and_then(|v| v.as_i64())
+                    .unwrap_or(0);
+                let total_amount_paise = p
+                    .get("total_amount_paise")
+                    .and_then(|v| v.as_i64())
+                    .unwrap_or(0);
                 let notes = p.get("notes").and_then(|v| v.as_str());
 
                 sqlx::query(
@@ -190,7 +240,10 @@ impl SyncWorker {
 
             "ORDER_STATUS_UPDATED" => {
                 let p = &event.payload;
-                let to_status = p.get("to_status").and_then(|v| v.as_str()).unwrap_or("confirmed");
+                let to_status = p
+                    .get("to_status")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("confirmed");
                 sqlx::query(
                     r#"
                     UPDATE orders
@@ -206,11 +259,24 @@ impl SyncWorker {
 
             "PAYMENT_SETTLED" => {
                 let p = &event.payload;
-                let payment_id = p.get("payment_id").and_then(|v| v.as_str()).and_then(|s| Uuid::parse_str(s).ok()).unwrap_or(event.aggregate_id);
-                let order_id = p.get("order_id").and_then(|v| v.as_str()).and_then(|s| Uuid::parse_str(s).ok());
-                let restaurant_id = p.get("restaurant_id").and_then(|v| v.as_str()).and_then(|s| Uuid::parse_str(s).ok());
+                let payment_id = p
+                    .get("payment_id")
+                    .and_then(|v| v.as_str())
+                    .and_then(|s| Uuid::parse_str(s).ok())
+                    .unwrap_or(event.aggregate_id);
+                let order_id = p
+                    .get("order_id")
+                    .and_then(|v| v.as_str())
+                    .and_then(|s| Uuid::parse_str(s).ok());
+                let restaurant_id = p
+                    .get("restaurant_id")
+                    .and_then(|v| v.as_str())
+                    .and_then(|s| Uuid::parse_str(s).ok());
                 let amount_paise = p.get("amount_paise").and_then(|v| v.as_i64()).unwrap_or(0);
-                let payment_method = p.get("payment_method").and_then(|v| v.as_str()).unwrap_or("cash");
+                let payment_method = p
+                    .get("payment_method")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("cash");
 
                 if let (Some(rid), Some(oid)) = (restaurant_id, order_id) {
                     sqlx::query(
@@ -248,13 +314,32 @@ impl SyncWorker {
 
             "INVENTORY_WASTAGE_RECORDED" => {
                 let p = &event.payload;
-                let wastage_id = p.get("wastage_id").and_then(|v| v.as_str()).and_then(|s| Uuid::parse_str(s).ok()).unwrap_or(event.aggregate_id);
-                let restaurant_id = p.get("restaurant_id").and_then(|v| v.as_str()).and_then(|s| Uuid::parse_str(s).ok());
-                let item_id = p.get("inventory_item_id").and_then(|v| v.as_str()).and_then(|s| Uuid::parse_str(s).ok());
+                let wastage_id = p
+                    .get("wastage_id")
+                    .and_then(|v| v.as_str())
+                    .and_then(|s| Uuid::parse_str(s).ok())
+                    .unwrap_or(event.aggregate_id);
+                let restaurant_id = p
+                    .get("restaurant_id")
+                    .and_then(|v| v.as_str())
+                    .and_then(|s| Uuid::parse_str(s).ok());
+                let item_id = p
+                    .get("inventory_item_id")
+                    .and_then(|v| v.as_str())
+                    .and_then(|s| Uuid::parse_str(s).ok());
                 let quantity = p.get("quantity").and_then(|v| v.as_f64()).unwrap_or(0.0);
-                let unit = p.get("unit_of_measure").and_then(|v| v.as_str()).unwrap_or("kg");
-                let cost_impact = p.get("cost_impact_paise").and_then(|v| v.as_i64()).unwrap_or(0);
-                let reason = p.get("reason").and_then(|v| v.as_str()).unwrap_or("Wastage");
+                let unit = p
+                    .get("unit_of_measure")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("kg");
+                let cost_impact = p
+                    .get("cost_impact_paise")
+                    .and_then(|v| v.as_i64())
+                    .unwrap_or(0);
+                let reason = p
+                    .get("reason")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("Wastage");
 
                 if let (Some(rid), Some(iid)) = (restaurant_id, item_id) {
                     let _ = sqlx::query(
@@ -282,20 +367,31 @@ impl SyncWorker {
 
             "TABLE_TRANSFERRED" => {
                 let p = &event.payload;
-                let from_table_id = p.get("from_table_id").and_then(|v| v.as_str()).and_then(|s| Uuid::parse_str(s).ok());
-                let to_table_id = p.get("to_table_id").and_then(|v| v.as_str()).and_then(|s| Uuid::parse_str(s).ok());
-                let order_id = p.get("order_id").and_then(|v| v.as_str()).and_then(|s| Uuid::parse_str(s).ok());
+                let from_table_id = p
+                    .get("from_table_id")
+                    .and_then(|v| v.as_str())
+                    .and_then(|s| Uuid::parse_str(s).ok());
+                let to_table_id = p
+                    .get("to_table_id")
+                    .and_then(|v| v.as_str())
+                    .and_then(|s| Uuid::parse_str(s).ok());
+                let order_id = p
+                    .get("order_id")
+                    .and_then(|v| v.as_str())
+                    .and_then(|s| Uuid::parse_str(s).ok());
 
                 if let (Some(from), Some(to), Some(oid)) = (from_table_id, to_table_id, order_id) {
                     let _ = sqlx::query("UPDATE tables SET status = 'available', active_order_id = NULL WHERE id = $1")
                         .bind(from)
                         .execute(&self.cloud_pool)
                         .await;
-                    let _ = sqlx::query("UPDATE tables SET status = 'occupied', active_order_id = $1 WHERE id = $2")
-                        .bind(oid)
-                        .bind(to)
-                        .execute(&self.cloud_pool)
-                        .await;
+                    let _ = sqlx::query(
+                        "UPDATE tables SET status = 'occupied', active_order_id = $1 WHERE id = $2",
+                    )
+                    .bind(oid)
+                    .bind(to)
+                    .execute(&self.cloud_pool)
+                    .await;
                 }
             }
 
@@ -310,7 +406,22 @@ impl SyncWorker {
     /// Ingests customer QR digital orders submitted to Cloud Supabase into the local PostgreSQL database
     async fn pull_inbound_cloud_orders(&self) -> Result<(), sqlx::Error> {
         // Query cloud orders placed with type 'digital_qr'
-        let cloud_orders = sqlx::query_as::<_, (Uuid, Uuid, String, Option<Uuid>, Option<String>, Option<String>, i64, i64, i64, i64, Option<String>)>(
+        let cloud_orders = sqlx::query_as::<
+            _,
+            (
+                Uuid,
+                Uuid,
+                String,
+                Option<Uuid>,
+                Option<String>,
+                Option<String>,
+                i64,
+                i64,
+                i64,
+                i64,
+                Option<String>,
+            ),
+        >(
             r#"
             SELECT id, restaurant_id, order_number, table_id, customer_name, customer_phone_e164,
                    subtotal_paise, discount_paise, tax_paise, total_amount_paise, notes
@@ -328,7 +439,20 @@ impl SyncWorker {
             Err(_) => return Ok(()),
         };
 
-        for (id, restaurant_id, order_number, table_id, customer_name, customer_phone, subtotal, discount, tax, total, notes) in orders {
+        for (
+            id,
+            restaurant_id,
+            order_number,
+            table_id,
+            customer_name,
+            customer_phone,
+            subtotal,
+            discount,
+            tax,
+            total,
+            notes,
+        ) in orders
+        {
             // Check if already in local DB
             let existing: Option<(Uuid,)> = sqlx::query_as("SELECT id FROM orders WHERE id = $1")
                 .bind(id)
@@ -365,22 +489,30 @@ impl SyncWorker {
                 .await?;
 
                 if let Some(tbl) = table_id {
-                    let _ = sqlx::query("UPDATE tables SET status = 'occupied', active_order_id = $1 WHERE id = $2")
-                        .bind(id)
-                        .bind(tbl)
-                        .execute(&mut *tx)
-                        .await;
+                    let _ = sqlx::query(
+                        "UPDATE tables SET status = 'occupied', active_order_id = $1 WHERE id = $2",
+                    )
+                    .bind(id)
+                    .bind(tbl)
+                    .execute(&mut *tx)
+                    .await;
                 }
 
                 tx.commit().await?;
 
                 // Acknowledge to cloud that local ingested this order
-                let _ = sqlx::query("UPDATE orders SET status = 'confirmed', updated_at = NOW() WHERE id = $1")
-                    .bind(id)
-                    .execute(&self.cloud_pool)
-                    .await;
+                let _ = sqlx::query(
+                    "UPDATE orders SET status = 'confirmed', updated_at = NOW() WHERE id = $1",
+                )
+                .bind(id)
+                .execute(&self.cloud_pool)
+                .await;
 
-                tracing::info!("Ingested inbound customer digital order {} (#{}) into local POS", id, order_number);
+                tracing::info!(
+                    "Ingested inbound customer digital order {} (#{}) into local POS",
+                    id,
+                    order_number
+                );
             }
         }
 

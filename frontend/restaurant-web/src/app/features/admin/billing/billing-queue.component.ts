@@ -118,241 +118,241 @@ import {
               </tr>
             } @else {
               @for (ord of filteredOrders(); track ord.id) {
-              <tr>
-                <td>
-                  <div class="ord-tbl-cell">
-                    @if (ord.orderType === 'TAKEAWAY') {
-                      <span class="table-tag takeaway-tag">
-                        <i class="ph ph-bag"></i> Takeaway ({{
-                          ord.pickupReference || ord.orderNumber
-                        }})
-                      </span>
-                    } @else {
-                      <span class="table-tag">Table {{ ord.tableNumber }}</span>
-                    }
-                    <span class="order-id-text">{{ ord.orderNumber }}</span>
-                    <span class="time-text">{{ ord.createdAt | date: 'shortTime' }}</span>
-                  </div>
-                </td>
-                <td>
-                  <div class="guest-cell">
-                    <strong>{{ ord.customerName }}</strong>
-                    <span class="phone-text">{{ ord.customerPhone }}</span>
-                  </div>
-                </td>
-                <td>
-                  <div class="items-cell">
-                    {{ ord.items.length }} dishes
-                    <span class="dishes-preview text-muted">
-                      ({{ ord.items[0]?.name }}
-                      @if (ord.items.length > 1) {
-                        +{{ ord.items.length - 1 }} more
-                      }
-                      )
-                    </span>
-                    @if (ord.isSplit) {
-                      <span class="split-pill"
-                        ><i class="ph ph-split-horizontal"></i> Split ({{
-                          getOrderSplitBills(ord.id).length
-                        }}
-                        Bills)</span
-                      >
-                    }
-                  </div>
-                </td>
-                <td>{{ ord.subtotal | currencyInr }}</td>
-                <td>
-                  <span class="text-sm text-muted">{{ ord.taxAmount | currencyInr }}</span>
-                </td>
-                <td>
-                  <span class="text-price" style="font-size: 1rem; color: var(--color-crimson);">
-                    {{ ord.totalAmount | currencyInr }}
-                  </span>
-                </td>
-                <td>
-                  <app-status-badge [status]="ord.paymentStatus"></app-status-badge>
-                </td>
-                <td>
-                  <div class="billing-actions">
-                    <a
-                      [routerLink]="['/admin/billing', ord.id]"
-                      class="btn btn-secondary btn-sm"
-                      title="Preview Bill"
-                    >
-                      <i class="ph ph-receipt"></i>
-                      <span>Bill Preview</span>
-                      @if (ord.printCount && ord.printCount > 0) {
-                        <span class="badge badge-subtle print-count-badge">
-                          {{ ord.printCount }}x
+                <tr>
+                  <td>
+                    <div class="ord-tbl-cell">
+                      @if (ord.orderType === 'TAKEAWAY') {
+                        <span class="table-tag takeaway-tag">
+                          <i class="ph ph-bag"></i> Takeaway ({{
+                            ord.pickupReference || ord.orderNumber
+                          }})
                         </span>
+                      } @else {
+                        <span class="table-tag">Table {{ ord.tableNumber }}</span>
                       }
-                    </a>
-                    <button
-                      type="button"
-                      class="btn btn-whatsapp btn-sm"
-                      (click)="openWhatsAppForOrder(ord)"
-                      title="Send Bill via WhatsApp"
-                    >
-                      <i class="ph ph-whatsapp-logo"></i>
-                      <span>WhatsApp</span>
-                    </button>
-
-                    @if (!ord.isSplit && ord.paymentStatus === 'UNPAID') {
-                      <button
-                        class="btn btn-secondary btn-sm"
-                        (click)="openSplitModal(ord)"
-                        title="Divide bill into multiple parts"
-                      >
-                        <i class="ph ph-split-horizontal"></i>
-                        <span>Split Bill</span>
-                      </button>
-                      <button class="btn btn-primary btn-sm" (click)="openSettleModal(ord)">
-                        <i class="ph ph-check"></i>
-                        <span>Settle Bill</span>
-                      </button>
-                    }
-
-                    @if (ord.paymentStatus === 'PAID' || ord.paymentStatus === 'PARTIALLY_PAID') {
-                      <button
-                        class="btn btn-secondary btn-sm"
-                        (click)="openRefundModal(ord)"
-                        title="Record Refund"
-                      >
-                        <i class="ph ph-arrow-counter-clockwise"></i>
-                        <span>Refund</span>
-                      </button>
-                    }
-                  </div>
-                </td>
-              </tr>
-
-              <!-- Nested Split Bills Breakdown if Order is Split -->
-              @if (ord.isSplit && getOrderSplitBills(ord.id).length > 0) {
-                <tr class="split-bills-row">
-                  <td colspan="8">
-                    <div class="split-bills-container">
-                      <div class="split-banner">
-                        <i class="ph ph-split-horizontal"></i>
-                        <span
-                          >Split Bills for {{ ord.orderNumber }} ({{
+                      <span class="order-id-text">{{ ord.orderNumber }}</span>
+                      <span class="time-text">{{ ord.createdAt | date: 'shortTime' }}</span>
+                    </div>
+                  </td>
+                  <td>
+                    <div class="guest-cell">
+                      <strong>{{ ord.customerName }}</strong>
+                      <span class="phone-text">{{ ord.customerPhone }}</span>
+                    </div>
+                  </td>
+                  <td>
+                    <div class="items-cell">
+                      {{ ord.items.length }} dishes
+                      <span class="dishes-preview text-muted">
+                        ({{ ord.items[0]?.name }}
+                        @if (ord.items.length > 1) {
+                          +{{ ord.items.length - 1 }} more
+                        }
+                        )
+                      </span>
+                      @if (ord.isSplit) {
+                        <span class="split-pill"
+                          ><i class="ph ph-split-horizontal"></i> Split ({{
                             getOrderSplitBills(ord.id).length
                           }}
-                          Payable Bills)</span
+                          Bills)</span
                         >
-                      </div>
-                      <div class="split-table-wrap">
-                        <table class="sub-data-table">
-                          <thead>
-                            <tr>
-                              <th>Part</th>
-                              <th>Split Mode</th>
-                              <th>Item Breakdown</th>
-                              <th>Subtotal</th>
-                              <th>Taxes</th>
-                              <th>Total Amount</th>
-                              <th>Payment Status</th>
-                              <th>Payment Action</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            @for (split of getOrderSplitBills(ord.id); track split.id) {
-                              <tr>
-                                <td>
-                                  <strong
-                                    >Bill #{{ split.splitIndex }}/{{
-                                      split.splitTotalCount
-                                    }}</strong
-                                  >
-                                </td>
-                                <td>
-                                  <span class="badge-mode">{{ split.splitType }}</span>
-                                </td>
-                                <td>
-                                  @if (split.allocatedItems && split.allocatedItems.length > 0) {
-                                    <div class="alloc-items-summary">
-                                      @for (it of split.allocatedItems; track it.orderItemId) {
-                                        <span class="it-chip"
-                                          >{{ it.name }} (x{{ it.quantity }})</span
-                                        >
-                                      }
-                                    </div>
-                                  } @else {
-                                    <span class="text-xs text-muted">Equal share</span>
-                                  }
-                                </td>
-                                <td>{{ split.subtotal | currencyInr }}</td>
-                                <td>{{ split.taxAmount | currencyInr }}</td>
-                                <td>
-                                  <strong class="text-crimson">{{
-                                    split.totalAmount | currencyInr
-                                  }}</strong>
-                                </td>
-                                <td>
-                                  <app-status-badge
-                                    [status]="split.paymentStatus"
-                                  ></app-status-badge>
-                                </td>
-                                <td>
-                                  <div class="billing-actions">
-                                    <a
-                                      [routerLink]="['/admin/billing', ord.id]"
-                                      [queryParams]="{ splitId: split.id }"
-                                      class="btn btn-secondary btn-xs"
-                                      title="Print Split Slip"
-                                    >
-                                      <i class="ph ph-receipt"></i>
-                                      <span>Slip</span>
-                                    </a>
-                                    <button
-                                      type="button"
-                                      class="btn btn-whatsapp btn-xs"
-                                      (click)="openWhatsAppForSplit(ord, split)"
-                                      title="Send Split Bill via WhatsApp"
-                                    >
-                                      <i class="ph ph-whatsapp-logo"></i>
-                                      <span>WhatsApp</span>
-                                    </button>
-                                    @if (split.paymentStatus === 'UNPAID') {
-                                      <button
-                                        class="btn btn-primary btn-xs"
-                                        (click)="openSettleSplitModal(ord, split)"
-                                      >
-                                        <i class="ph ph-check"></i>
-                                        <span>Settle Part #{{ split.splitIndex }}</span>
-                                      </button>
-                                    } @else if (split.paymentStatus === 'PAID') {
-                                      <button
-                                        class="btn btn-secondary btn-xs"
-                                        (click)="openRefundSplitModal(ord, split)"
-                                      >
-                                        <i class="ph ph-arrow-counter-clockwise"></i>
-                                        <span>Refund Part</span>
-                                      </button>
-                                    }
-                                  </div>
-                                </td>
-                              </tr>
-                            }
-                          </tbody>
-                        </table>
-                      </div>
+                      }
+                    </div>
+                  </td>
+                  <td>{{ ord.subtotal | currencyInr }}</td>
+                  <td>
+                    <span class="text-sm text-muted">{{ ord.taxAmount | currencyInr }}</span>
+                  </td>
+                  <td>
+                    <span class="text-price" style="font-size: 1rem; color: var(--color-crimson);">
+                      {{ ord.totalAmount | currencyInr }}
+                    </span>
+                  </td>
+                  <td>
+                    <app-status-badge [status]="ord.paymentStatus"></app-status-badge>
+                  </td>
+                  <td>
+                    <div class="billing-actions">
+                      <a
+                        [routerLink]="['/admin/billing', ord.id]"
+                        class="btn btn-secondary btn-sm"
+                        title="Preview Bill"
+                      >
+                        <i class="ph ph-receipt"></i>
+                        <span>Bill Preview</span>
+                        @if (ord.printCount && ord.printCount > 0) {
+                          <span class="badge badge-subtle print-count-badge">
+                            {{ ord.printCount }}x
+                          </span>
+                        }
+                      </a>
+                      <button
+                        type="button"
+                        class="btn btn-whatsapp btn-sm"
+                        (click)="openWhatsAppForOrder(ord)"
+                        title="Send Bill via WhatsApp"
+                      >
+                        <i class="ph ph-whatsapp-logo"></i>
+                        <span>WhatsApp</span>
+                      </button>
+
+                      @if (!ord.isSplit && ord.paymentStatus === 'UNPAID') {
+                        <button
+                          class="btn btn-secondary btn-sm"
+                          (click)="openSplitModal(ord)"
+                          title="Divide bill into multiple parts"
+                        >
+                          <i class="ph ph-split-horizontal"></i>
+                          <span>Split Bill</span>
+                        </button>
+                        <button class="btn btn-primary btn-sm" (click)="openSettleModal(ord)">
+                          <i class="ph ph-check"></i>
+                          <span>Settle Bill</span>
+                        </button>
+                      }
+
+                      @if (ord.paymentStatus === 'PAID' || ord.paymentStatus === 'PARTIALLY_PAID') {
+                        <button
+                          class="btn btn-secondary btn-sm"
+                          (click)="openRefundModal(ord)"
+                          title="Record Refund"
+                        >
+                          <i class="ph ph-arrow-counter-clockwise"></i>
+                          <span>Refund</span>
+                        </button>
+                      }
                     </div>
                   </td>
                 </tr>
+
+                <!-- Nested Split Bills Breakdown if Order is Split -->
+                @if (ord.isSplit && getOrderSplitBills(ord.id).length > 0) {
+                  <tr class="split-bills-row">
+                    <td colspan="8">
+                      <div class="split-bills-container">
+                        <div class="split-banner">
+                          <i class="ph ph-split-horizontal"></i>
+                          <span
+                            >Split Bills for {{ ord.orderNumber }} ({{
+                              getOrderSplitBills(ord.id).length
+                            }}
+                            Payable Bills)</span
+                          >
+                        </div>
+                        <div class="split-table-wrap">
+                          <table class="sub-data-table">
+                            <thead>
+                              <tr>
+                                <th>Part</th>
+                                <th>Split Mode</th>
+                                <th>Item Breakdown</th>
+                                <th>Subtotal</th>
+                                <th>Taxes</th>
+                                <th>Total Amount</th>
+                                <th>Payment Status</th>
+                                <th>Payment Action</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              @for (split of getOrderSplitBills(ord.id); track split.id) {
+                                <tr>
+                                  <td>
+                                    <strong
+                                      >Bill #{{ split.splitIndex }}/{{
+                                        split.splitTotalCount
+                                      }}</strong
+                                    >
+                                  </td>
+                                  <td>
+                                    <span class="badge-mode">{{ split.splitType }}</span>
+                                  </td>
+                                  <td>
+                                    @if (split.allocatedItems && split.allocatedItems.length > 0) {
+                                      <div class="alloc-items-summary">
+                                        @for (it of split.allocatedItems; track it.orderItemId) {
+                                          <span class="it-chip"
+                                            >{{ it.name }} (x{{ it.quantity }})</span
+                                          >
+                                        }
+                                      </div>
+                                    } @else {
+                                      <span class="text-xs text-muted">Equal share</span>
+                                    }
+                                  </td>
+                                  <td>{{ split.subtotal | currencyInr }}</td>
+                                  <td>{{ split.taxAmount | currencyInr }}</td>
+                                  <td>
+                                    <strong class="text-crimson">{{
+                                      split.totalAmount | currencyInr
+                                    }}</strong>
+                                  </td>
+                                  <td>
+                                    <app-status-badge
+                                      [status]="split.paymentStatus"
+                                    ></app-status-badge>
+                                  </td>
+                                  <td>
+                                    <div class="billing-actions">
+                                      <a
+                                        [routerLink]="['/admin/billing', ord.id]"
+                                        [queryParams]="{ splitId: split.id }"
+                                        class="btn btn-secondary btn-xs"
+                                        title="Print Split Slip"
+                                      >
+                                        <i class="ph ph-receipt"></i>
+                                        <span>Slip</span>
+                                      </a>
+                                      <button
+                                        type="button"
+                                        class="btn btn-whatsapp btn-xs"
+                                        (click)="openWhatsAppForSplit(ord, split)"
+                                        title="Send Split Bill via WhatsApp"
+                                      >
+                                        <i class="ph ph-whatsapp-logo"></i>
+                                        <span>WhatsApp</span>
+                                      </button>
+                                      @if (split.paymentStatus === 'UNPAID') {
+                                        <button
+                                          class="btn btn-primary btn-xs"
+                                          (click)="openSettleSplitModal(ord, split)"
+                                        >
+                                          <i class="ph ph-check"></i>
+                                          <span>Settle Part #{{ split.splitIndex }}</span>
+                                        </button>
+                                      } @else if (split.paymentStatus === 'PAID') {
+                                        <button
+                                          class="btn btn-secondary btn-xs"
+                                          (click)="openRefundSplitModal(ord, split)"
+                                        >
+                                          <i class="ph ph-arrow-counter-clockwise"></i>
+                                          <span>Refund Part</span>
+                                        </button>
+                                      }
+                                    </div>
+                                  </td>
+                                </tr>
+                              }
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    </td>
+                  </tr>
+                }
+              } @empty {
+                <tr>
+                  <td colspan="8" style="padding: 0;">
+                    <app-empty-state
+                      icon="ph-receipt"
+                      title="No Orders in Billing Queue"
+                      message="No dining orders currently match the selected payment or order filter."
+                      [bordered]="false"
+                    />
+                  </td>
+                </tr>
               }
-            } @empty {
-              <tr>
-                <td colspan="8" style="padding: 0;">
-                  <app-empty-state
-                    icon="ph-receipt"
-                    title="No Orders in Billing Queue"
-                    message="No dining orders currently match the selected payment or order filter."
-                    [bordered]="false"
-                  />
-                </td>
-              </tr>
             }
-          }
           </tbody>
         </table>
       </div>
@@ -385,8 +385,16 @@ import {
                 </div>
                 @if (getEffectiveDiscount(ord) > 0) {
                   <div class="settle-row discount">
-                    <span>Discount ({{ settleDiscountMode() === 'COUPON' && selectedCouponCode() ? selectedCouponCode() : 'Counter Off' }})</span>
-                    <span class="text-success font-semibold">-{{ getEffectiveDiscount(ord) | currencyInr }}</span>
+                    <span
+                      >Discount ({{
+                        settleDiscountMode() === 'COUPON' && selectedCouponCode()
+                          ? selectedCouponCode()
+                          : 'Counter Off'
+                      }})</span
+                    >
+                    <span class="text-success font-semibold"
+                      >-{{ getEffectiveDiscount(ord) | currencyInr }}</span
+                    >
                   </div>
                 }
                 <div class="settle-row">
@@ -403,9 +411,7 @@ import {
               <!-- Counter Discount & Coupons Block -->
               <div class="settle-discount-card">
                 <div class="discount-header-row">
-                  <span class="discount-title">
-                    <i class="ph ph-tag"></i> Discount & Offers
-                  </span>
+                  <span class="discount-title"> <i class="ph ph-tag"></i> Discount & Offers </span>
                   <div class="discount-segmented-control">
                     <button
                       type="button"
@@ -498,7 +504,11 @@ import {
                         <option value="">-- Select Active Coupon --</option>
                         @for (c of activeCoupons(); track c.id) {
                           <option [value]="c.code">
-                            {{ c.code }} ({{ c.discountType === 'PERCENTAGE' ? c.discountValue + '% OFF' : '₹' + c.discountValue + ' OFF' }}{{ c.minOrderValue ? ', min ₹' + c.minOrderValue : '' }})
+                            {{ c.code }} ({{
+                              c.discountType === 'PERCENTAGE'
+                                ? c.discountValue + '% OFF'
+                                : '₹' + c.discountValue + ' OFF'
+                            }}{{ c.minOrderValue ? ', min ₹' + c.minOrderValue : '' }})
                           </option>
                         }
                       </select>
@@ -507,7 +517,11 @@ import {
                     @if (selectedCouponCode()) {
                       <div class="applied-coupon-badge">
                         <i class="ph ph-seal-check"></i>
-                        <span>Coupon <strong>{{ selectedCouponCode() }}</strong> applied: -{{ getEffectiveDiscount(ord) | currencyInr }}</span>
+                        <span
+                          >Coupon <strong>{{ selectedCouponCode() }}</strong> applied: -{{
+                            getEffectiveDiscount(ord) | currencyInr
+                          }}</span
+                        >
                         <button type="button" class="btn-disc-clear-pill" (click)="clearDiscount()">
                           <i class="ph ph-x"></i>
                         </button>
@@ -1032,11 +1046,7 @@ import {
                   </span>
                 </div>
               </div>
-              <button
-                class="close-btn"
-                (click)="closeWhatsAppModal()"
-                aria-label="Close dialog"
-              >
+              <button class="close-btn" (click)="closeWhatsAppModal()" aria-label="Close dialog">
                 <i class="ph ph-x"></i>
               </button>
             </div>
@@ -1057,7 +1067,10 @@ import {
                     autofocus
                   />
                 </div>
-                <span class="hint-text">Enter 10-digit mobile number. Country code defaults to +91 (India) if omitted.</span>
+                <span class="hint-text"
+                  >Enter 10-digit mobile number. Country code defaults to +91 (India) if
+                  omitted.</span
+                >
               </div>
 
               <div class="form-group">
@@ -1067,9 +1080,7 @@ import {
             </div>
 
             <div class="modal-footer whatsapp-modal-footer">
-              <button class="btn btn-secondary" (click)="closeWhatsAppModal()">
-                Cancel
-              </button>
+              <button class="btn btn-secondary" (click)="closeWhatsAppModal()">Cancel</button>
               <button
                 type="button"
                 class="btn btn-secondary"
@@ -1979,7 +1990,7 @@ export class BillingQueueComponent {
       this.dataService.isOrdersLoading() ||
       !this.dataService.ordersLoaded() ||
       this.dataService.isTablesLoading() ||
-      !this.dataService.tablesLoaded()
+      !this.dataService.tablesLoaded(),
   );
 
   orders = this.mock.orders;
@@ -1996,7 +2007,9 @@ export class BillingQueueComponent {
   settleDiscountMode = signal<'CUSTOM' | 'COUPON'>('CUSTOM');
   customDiscountRupees = signal<number>(0);
   selectedCouponCode = signal<string>('');
-  activeCoupons = computed(() => (this.mock.coupons ? this.mock.coupons().filter((c) => c.isActive) : []));
+  activeCoupons = computed(() =>
+    this.mock.coupons ? this.mock.coupons().filter((c) => c.isActive) : [],
+  );
 
   // Settle Split Bill State
   showSettleSplitModal = signal<boolean>(false);
@@ -2195,7 +2208,9 @@ export class BillingQueueComponent {
       return;
     }
     this.selectedOrderForSettlement.set(order);
-    this.selectedPaymentMethod.set(order.paymentMethod === 'CARD' ? 'CARD' : order.paymentMethod === 'UPI' ? 'UPI' : 'CASH');
+    this.selectedPaymentMethod.set(
+      order.paymentMethod === 'CARD' ? 'CARD' : order.paymentMethod === 'UPI' ? 'UPI' : 'CASH',
+    );
     this.customDiscountRupees.set(order.discountAmount || 0);
     this.selectedCouponCode.set(order.appliedCouponCode || '');
     this.settleDiscountMode.set(order.appliedCouponCode ? 'COUPON' : 'CUSTOM');

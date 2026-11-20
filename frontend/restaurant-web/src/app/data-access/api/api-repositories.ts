@@ -63,15 +63,15 @@ export class ApiRestaurantRepository implements IRestaurantRepository {
           cgstRate:
             res.cgst_rate !== undefined && res.cgst_rate !== null
               ? Number(res.cgst_rate)
-              : (res.gst_rate !== undefined && res.gst_rate !== null
-                  ? Number(res.gst_rate) / 2
-                  : 2.5),
+              : res.gst_rate !== undefined && res.gst_rate !== null
+                ? Number(res.gst_rate) / 2
+                : 2.5,
           sgstRate:
             res.sgst_rate !== undefined && res.sgst_rate !== null
               ? Number(res.sgst_rate)
-              : (res.gst_rate !== undefined && res.gst_rate !== null
-                  ? Number(res.gst_rate) / 2
-                  : 2.5),
+              : res.gst_rate !== undefined && res.gst_rate !== null
+                ? Number(res.gst_rate) / 2
+                : 2.5,
           serviceChargeRate:
             res.service_charge_rate !== undefined && res.service_charge_rate !== null
               ? Number(res.service_charge_rate)
@@ -343,15 +343,22 @@ export class ApiOrderRepository implements IOrderRepository {
   }
 
   private mapOrder(o: any): Order {
-    const orderCgstRate = o.cgst_rate !== undefined && o.cgst_rate !== null
-      ? Number(o.cgst_rate)
-      : (o.subtotal_paise && o.tax_paise ? Math.round(((o.tax_paise / o.subtotal_paise) * 50.0) * 10) / 10 : 2.5);
-    const orderSgstRate = o.sgst_rate !== undefined && o.sgst_rate !== null
-      ? Number(o.sgst_rate)
-      : (o.subtotal_paise && o.tax_paise ? Math.round(((o.tax_paise / o.subtotal_paise) * 50.0) * 10) / 10 : 2.5);
+    const orderCgstRate =
+      o.cgst_rate !== undefined && o.cgst_rate !== null
+        ? Number(o.cgst_rate)
+        : o.subtotal_paise && o.tax_paise
+          ? Math.round((o.tax_paise / o.subtotal_paise) * 50.0 * 10) / 10
+          : 2.5;
+    const orderSgstRate =
+      o.sgst_rate !== undefined && o.sgst_rate !== null
+        ? Number(o.sgst_rate)
+        : o.subtotal_paise && o.tax_paise
+          ? Math.round((o.tax_paise / o.subtotal_paise) * 50.0 * 10) / 10
+          : 2.5;
     const totalTax = (o.tax_paise || 0) / 100;
     const rateSum = orderCgstRate + orderSgstRate;
-    const calculatedCgst = rateSum > 0 ? Math.round((totalTax * (orderCgstRate / rateSum)) * 100) / 100 : totalTax / 2;
+    const calculatedCgst =
+      rateSum > 0 ? Math.round(totalTax * (orderCgstRate / rateSum) * 100) / 100 : totalTax / 2;
     const calculatedSgst = Math.round((totalTax - calculatedCgst) * 100) / 100;
 
     return {
@@ -366,9 +373,10 @@ export class ApiOrderRepository implements IOrderRepository {
       paymentStatus: (o.payment_status === 'paid' ? 'PAID' : 'UNPAID') as PaymentStatus,
       paymentMethod: 'UPI',
       items: (o.items || []).map((it: any) => {
-        const unitPrice = (it.unit_price_paise || it.unitPrice || 0) > 1000
-          ? (it.unit_price_paise || 0) / 100
-          : (it.unitPrice || (it.unit_price_paise || 0) / 100);
+        const unitPrice =
+          (it.unit_price_paise || it.unitPrice || 0) > 1000
+            ? (it.unit_price_paise || 0) / 100
+            : it.unitPrice || (it.unit_price_paise || 0) / 100;
         const quantity = it.quantity || 1;
         const itemTotal = it.subtotal_paise ? it.subtotal_paise / 100 : unitPrice * quantity;
 
@@ -578,7 +586,10 @@ export class ApiStaffRepository implements IStaffRepository {
     if (updates.assignedSection !== undefined && updates.assigned_section === undefined) {
       payload.assigned_section = updates.assignedSection;
     }
-    if (updates.payrollCycleStartDay !== undefined && updates.payroll_cycle_start_day === undefined) {
+    if (
+      updates.payrollCycleStartDay !== undefined &&
+      updates.payroll_cycle_start_day === undefined
+    ) {
       payload.payroll_cycle_start_day = updates.payrollCycleStartDay;
     }
     return this.api.put<StaffMember>(`/restaurants/staff/${id}`, payload);

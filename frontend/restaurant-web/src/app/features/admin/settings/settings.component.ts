@@ -144,7 +144,9 @@ type SettingsTab = 'general' | 'tax' | 'printer' | 'service' | 'maintenance' | '
                 </div>
                 <div class="panel-title-text">
                   <h2 class="heading-card">Brand Identity</h2>
-                  <p class="panel-subtitle">Public restaurant name, menu banner details, and concept description.</p>
+                  <p class="panel-subtitle">
+                    Public restaurant name, menu banner details, and concept description.
+                  </p>
                 </div>
               </div>
               <span class="panel-badge">Public Display</span>
@@ -169,7 +171,10 @@ type SettingsTab = 'general' | 'tax' | 'printer' | 'service' | 'maintenance' | '
             <div class="form-group">
               <label class="form-label">Concept Description</label>
               <textarea class="form-textarea" rows="3" [(ngModel)]="profile.description"></textarea>
-              <span class="field-hint">Appears on the digital QR ordering welcome screen and customer receipt header.</span>
+              <span class="field-hint"
+                >Appears on the digital QR ordering welcome screen and customer receipt
+                header.</span
+              >
             </div>
           </div>
 
@@ -181,7 +186,9 @@ type SettingsTab = 'general' | 'tax' | 'printer' | 'service' | 'maintenance' | '
                 </div>
                 <div class="panel-title-text">
                   <h2 class="heading-card">Contact & Location</h2>
-                  <p class="panel-subtitle">Physical address and official customer support contact lines.</p>
+                  <p class="panel-subtitle">
+                    Physical address and official customer support contact lines.
+                  </p>
                 </div>
               </div>
             </div>
@@ -191,14 +198,22 @@ type SettingsTab = 'general' | 'tax' | 'printer' | 'service' | 'maintenance' | '
                 <label class="form-label">Contact Phone</label>
                 <div class="input-with-icon">
                   <i class="ph ph-phone field-icon"></i>
-                  <input type="text" class="form-input has-icon" [(ngModel)]="profile.contactPhone" />
+                  <input
+                    type="text"
+                    class="form-input has-icon"
+                    [(ngModel)]="profile.contactPhone"
+                  />
                 </div>
               </div>
               <div class="form-group">
                 <label class="form-label">Support Email</label>
                 <div class="input-with-icon">
                   <i class="ph ph-envelope field-icon"></i>
-                  <input type="email" class="form-input has-icon" [(ngModel)]="profile.contactEmail" />
+                  <input
+                    type="email"
+                    class="form-input has-icon"
+                    [(ngModel)]="profile.contactEmail"
+                  />
                 </div>
               </div>
             </div>
@@ -236,7 +251,9 @@ type SettingsTab = 'general' | 'tax' | 'printer' | 'service' | 'maintenance' | '
                 </div>
                 <div class="panel-title-text">
                   <h2 class="heading-card">Goods & Services Tax (GST)</h2>
-                  <p class="panel-subtitle">Standard Indian GST tax brackets applied at POS checkout.</p>
+                  <p class="panel-subtitle">
+                    Standard Indian GST tax brackets applied at POS checkout.
+                  </p>
                 </div>
               </div>
               <span class="panel-badge">Tax Slab: 5.0%</span>
@@ -246,14 +263,28 @@ type SettingsTab = 'general' | 'tax' | 'printer' | 'service' | 'maintenance' | '
               <div class="form-group">
                 <label class="form-label">CGST Rate</label>
                 <div class="input-with-suffix">
-                  <input type="number" step="0.1" min="0" max="28" class="form-input has-suffix" [(ngModel)]="profile.cgstRate" />
+                  <input
+                    type="number"
+                    step="0.1"
+                    min="0"
+                    max="28"
+                    class="form-input has-suffix"
+                    [(ngModel)]="profile.cgstRate"
+                  />
                   <span class="field-suffix">%</span>
                 </div>
               </div>
               <div class="form-group">
                 <label class="form-label">SGST Rate</label>
                 <div class="input-with-suffix">
-                  <input type="number" step="0.1" min="0" max="28" class="form-input has-suffix" [(ngModel)]="profile.sgstRate" />
+                  <input
+                    type="number"
+                    step="0.1"
+                    min="0"
+                    max="28"
+                    class="form-input has-suffix"
+                    [(ngModel)]="profile.sgstRate"
+                  />
                   <span class="field-suffix">%</span>
                 </div>
               </div>
@@ -263,16 +294,29 @@ type SettingsTab = 'general' | 'tax' | 'printer' | 'service' | 'maintenance' | '
               <label class="form-label">GST Identification Number (GSTIN)</label>
               <div class="input-with-icon">
                 <i class="ph ph-identification-card field-icon"></i>
-                <input type="text" class="form-input has-icon font-mono uppercase" [(ngModel)]="profile.gstNumber" />
+                <input
+                  type="text"
+                  class="form-input has-icon font-mono uppercase"
+                  [(ngModel)]="profile.gstNumber"
+                />
               </div>
-              <span class="field-hint">15-digit statutory GSTIN displayed on customer bills and B2B reports.</span>
+              <span class="field-hint"
+                >15-digit statutory GSTIN displayed on customer bills and B2B reports.</span
+              >
             </div>
 
             <div class="form-row-2">
               <div class="form-group">
                 <label class="form-label">Service Charge</label>
                 <div class="input-with-suffix">
-                  <input type="number" step="0.5" min="0" max="20" class="form-input has-suffix" [(ngModel)]="profile.serviceChargeRate" />
+                  <input
+                    type="number"
+                    step="0.5"
+                    min="0"
+                    max="20"
+                    class="form-input has-suffix"
+                    [(ngModel)]="profile.serviceChargeRate"
+                  />
                   <span class="field-suffix">%</span>
                 </div>
               </div>
@@ -291,7 +335,9 @@ type SettingsTab = 'general' | 'tax' | 'printer' | 'service' | 'maintenance' | '
                 </div>
                 <div class="panel-title-text">
                   <h2 class="heading-card">Receipt & Bill Customization</h2>
-                  <p class="panel-subtitle">Mandated licenses and customized guest checkout notes.</p>
+                  <p class="panel-subtitle">
+                    Mandated licenses and customized guest checkout notes.
+                  </p>
                 </div>
               </div>
             </div>
@@ -307,7 +353,9 @@ type SettingsTab = 'general' | 'tax' | 'printer' | 'service' | 'maintenance' | '
                   placeholder="14-digit FSSAI License Number"
                 />
               </div>
-              <span class="field-hint">Mandated food safety license number printed on physical receipts.</span>
+              <span class="field-hint"
+                >Mandated food safety license number printed on physical receipts.</span
+              >
             </div>
 
             <div class="form-group">
@@ -318,7 +366,9 @@ type SettingsTab = 'general' | 'tax' | 'printer' | 'service' | 'maintenance' | '
                 [(ngModel)]="profile.invoiceFooter"
                 placeholder="e.g. Thank you for dining with us! Please visit us again."
               ></textarea>
-              <span class="field-hint">Printed at the bottom of customer receipts before the QR code.</span>
+              <span class="field-hint"
+                >Printed at the bottom of customer receipts before the QR code.</span
+              >
             </div>
           </div>
         </div>
@@ -335,7 +385,9 @@ type SettingsTab = 'general' | 'tax' | 'printer' | 'service' | 'maintenance' | '
                 </div>
                 <div class="panel-title-text">
                   <h2 class="heading-card">Hardware Receipt Printer (ESC/POS)</h2>
-                  <p class="panel-subtitle">Raw spooling to USB thermal printers or Network LAN sockets.</p>
+                  <p class="panel-subtitle">
+                    Raw spooling to USB thermal printers or Network LAN sockets.
+                  </p>
                 </div>
               </div>
               <span class="panel-badge highlight">Raw Protocol</span>
@@ -419,12 +471,14 @@ type SettingsTab = 'general' | 'tax' | 'printer' | 'service' | 'maintenance' | '
                   <option value="">-- Use System Default Printer --</option>
                   @for (p of availablePrinters(); track p.name) {
                     <option [value]="p.name">
-                      {{ p.name }} {{ p.is_default ? '(Default)' : '' }} {{ p.port_name ? '[' + p.port_name + ']' : '' }}
+                      {{ p.name }} {{ p.is_default ? '(Default)' : '' }}
+                      {{ p.port_name ? '[' + p.port_name + ']' : '' }}
                     </option>
                   }
                 </select>
                 <span class="field-hint">
-                  Detected {{ availablePrinters().length }} printer(s) installed on this workstation.
+                  Detected {{ availablePrinters().length }} printer(s) installed on this
+                  workstation.
                 </span>
               </div>
             }
@@ -440,7 +494,8 @@ type SettingsTab = 'general' | 'tax' | 'printer' | 'service' | 'maintenance' | '
                   (ngModelChange)="updatePrinterConfig('networkAddress', $event)"
                 />
                 <span class="field-hint">
-                  Standard ESC/POS thermal printers listen for raw socket print jobs on TCP port 9100.
+                  Standard ESC/POS thermal printers listen for raw socket print jobs on TCP port
+                  9100.
                 </span>
               </div>
             }
@@ -454,7 +509,9 @@ type SettingsTab = 'general' | 'tax' | 'printer' | 'service' | 'maintenance' | '
                 </div>
                 <div class="panel-title-text">
                   <h2 class="heading-card">Formatting & Mechanics</h2>
-                  <p class="panel-subtitle">Paper roll width, automatic cutting, and drawer kick pulses.</p>
+                  <p class="panel-subtitle">
+                    Paper roll width, automatic cutting, and drawer kick pulses.
+                  </p>
                 </div>
               </div>
             </div>
@@ -492,7 +549,9 @@ type SettingsTab = 'general' | 'tax' | 'printer' | 'service' | 'maintenance' | '
                 />
                 <div class="checkbox-text">
                   <strong>Automatic Paper Cutting</strong>
-                  <span class="text-xs text-muted">Sends ESC/POS cut sequence (GS V A 3) at receipt completion.</span>
+                  <span class="text-xs text-muted"
+                    >Sends ESC/POS cut sequence (GS V A 3) at receipt completion.</span
+                  >
                 </div>
               </label>
 
@@ -504,7 +563,9 @@ type SettingsTab = 'general' | 'tax' | 'printer' | 'service' | 'maintenance' | '
                 />
                 <div class="checkbox-text">
                   <strong>Open Cash Drawer (Kick Pulse)</strong>
-                  <span class="text-xs text-muted">Sends drawer pulse (ESC p 0) to trigger connected cash drawer.</span>
+                  <span class="text-xs text-muted"
+                    >Sends drawer pulse (ESC p 0) to trigger connected cash drawer.</span
+                  >
                 </div>
               </label>
             </div>
@@ -512,7 +573,9 @@ type SettingsTab = 'general' | 'tax' | 'printer' | 'service' | 'maintenance' | '
             <div class="printer-test-cluster">
               <div class="cluster-info">
                 <strong>Verify Hardware Communication</strong>
-                <p class="text-xs text-muted">Send an instant test slip with alignment, font scale, and auto-cut.</p>
+                <p class="text-xs text-muted">
+                  Send an instant test slip with alignment, font scale, and auto-cut.
+                </p>
               </div>
               <button
                 type="button"
@@ -553,14 +616,26 @@ type SettingsTab = 'general' | 'tax' | 'printer' | 'service' | 'maintenance' | '
               <div class="form-group">
                 <label class="form-label">Estimated Prep Time</label>
                 <div class="input-with-suffix">
-                  <input type="number" min="5" max="120" class="form-input has-suffix" [(ngModel)]="profile.estimatedPrepMinutes" />
+                  <input
+                    type="number"
+                    min="5"
+                    max="120"
+                    class="form-input has-suffix"
+                    [(ngModel)]="profile.estimatedPrepMinutes"
+                  />
                   <span class="field-suffix">mins</span>
                 </div>
               </div>
               <div class="form-group">
                 <label class="form-label">Minimum Order Spend</label>
                 <div class="input-with-suffix">
-                  <input type="number" min="0" step="50" class="form-input has-suffix" [(ngModel)]="profile.minOrderAmount" />
+                  <input
+                    type="number"
+                    min="0"
+                    step="50"
+                    class="form-input has-suffix"
+                    [(ngModel)]="profile.minOrderAmount"
+                  />
                   <span class="field-suffix">₹</span>
                 </div>
               </div>
@@ -572,7 +647,9 @@ type SettingsTab = 'general' | 'tax' | 'printer' | 'service' | 'maintenance' | '
                 <option [ngValue]="true">Enabled (Accept QR code table orders)</option>
                 <option [ngValue]="false">Disabled (Pause digital table ordering)</option>
               </select>
-              <span class="field-hint">When disabled, customers scanning table QR codes see menu in view-only mode.</span>
+              <span class="field-hint"
+                >When disabled, customers scanning table QR codes see menu in view-only mode.</span
+              >
             </div>
           </div>
 
@@ -600,10 +677,18 @@ type SettingsTab = 'general' | 'tax' | 'printer' | 'service' | 'maintenance' | '
             <div class="form-group">
               <label class="form-label">Pickup Time Buffer</label>
               <div class="input-with-suffix">
-                <input type="number" min="5" max="60" class="form-input has-suffix" [(ngModel)]="profile.pickupBufferMinutes" />
+                <input
+                  type="number"
+                  min="5"
+                  max="60"
+                  class="form-input has-suffix"
+                  [(ngModel)]="profile.pickupBufferMinutes"
+                />
                 <span class="field-suffix">mins</span>
               </div>
-              <span class="field-hint">Buffer time added to takeaway order preparation estimates.</span>
+              <span class="field-hint"
+                >Buffer time added to takeaway order preparation estimates.</span
+              >
             </div>
           </div>
         </div>
@@ -620,7 +705,9 @@ type SettingsTab = 'general' | 'tax' | 'printer' | 'service' | 'maintenance' | '
                 </div>
                 <div class="panel-title-text">
                   <h2 class="heading-card">Local Storage Diagnostics</h2>
-                  <p class="panel-subtitle">Zero-latency offline data snapshots cached in browser memory.</p>
+                  <p class="panel-subtitle">
+                    Zero-latency offline data snapshots cached in browser memory.
+                  </p>
                 </div>
               </div>
               <span class="panel-badge success">Synchronized</span>
@@ -661,7 +748,8 @@ type SettingsTab = 'general' | 'tax' | 'printer' | 'service' | 'maintenance' | '
             </div>
 
             <p class="text-sm text-secondary">
-              Clears local session cache and restores the standard catalog, table layout, and sample orders to factory demo state.
+              Clears local session cache and restores the standard catalog, table layout, and sample
+              orders to factory demo state.
             </p>
 
             <div class="action-footer">
@@ -685,7 +773,10 @@ type SettingsTab = 'general' | 'tax' | 'printer' | 'service' | 'maintenance' | '
                 </div>
                 <div class="panel-title-text">
                   <h2 class="heading-card">Master Admin Credentials</h2>
-                  <p class="panel-subtitle">Authorize bills, reprint duplicates, modify paid orders, and change system settings.</p>
+                  <p class="panel-subtitle">
+                    Authorize bills, reprint duplicates, modify paid orders, and change system
+                    settings.
+                  </p>
                 </div>
               </div>
               <span class="panel-badge warning">High Privilege</span>
@@ -695,7 +786,10 @@ type SettingsTab = 'general' | 'tax' | 'printer' | 'service' | 'maintenance' | '
               <i class="ph ph-info"></i>
               <div>
                 <strong>Single Password Security</strong>
-                <span>Changing this updates the master admin credentials across local storage and the cloud database.</span>
+                <span
+                  >Changing this updates the master admin credentials across local storage and the
+                  cloud database.</span
+                >
               </div>
             </div>
 
@@ -714,7 +808,11 @@ type SettingsTab = 'general' | 'tax' | 'printer' | 'service' | 'maintenance' | '
                   (click)="showCurrentPwd = !showCurrentPwd"
                   [attr.aria-label]="showCurrentPwd ? 'Hide password' : 'Show password'"
                 >
-                  <i class="ph" [class.ph-eye]="!showCurrentPwd" [class.ph-eye-slash]="showCurrentPwd"></i>
+                  <i
+                    class="ph"
+                    [class.ph-eye]="!showCurrentPwd"
+                    [class.ph-eye-slash]="showCurrentPwd"
+                  ></i>
                 </button>
               </div>
             </div>
@@ -754,10 +852,18 @@ type SettingsTab = 'general' | 'tax' | 'printer' | 'service' | 'maintenance' | '
                   (click)="showConfirmPwd = !showConfirmPwd"
                   [attr.aria-label]="showConfirmPwd ? 'Hide password' : 'Show password'"
                 >
-                  <i class="ph" [class.ph-eye]="!showConfirmPwd" [class.ph-eye-slash]="showConfirmPwd"></i>
+                  <i
+                    class="ph"
+                    [class.ph-eye]="!showConfirmPwd"
+                    [class.ph-eye-slash]="showConfirmPwd"
+                  ></i>
                 </button>
               </div>
-              @if (pwdForm.newPassword && pwdForm.confirmPassword && pwdForm.newPassword !== pwdForm.confirmPassword) {
+              @if (
+                pwdForm.newPassword &&
+                pwdForm.confirmPassword &&
+                pwdForm.newPassword !== pwdForm.confirmPassword
+              ) {
                 <span class="field-error-text">Passwords do not match</span>
               }
             </div>
@@ -767,7 +873,12 @@ type SettingsTab = 'general' | 'tax' | 'printer' | 'service' | 'maintenance' | '
                 type="button"
                 class="btn btn-primary"
                 (click)="updateAdminPassword()"
-                [disabled]="isUpdatingPassword || !pwdForm.newPassword || pwdForm.newPassword !== pwdForm.confirmPassword || pwdForm.newPassword.length < 4"
+                [disabled]="
+                  isUpdatingPassword ||
+                  !pwdForm.newPassword ||
+                  pwdForm.newPassword !== pwdForm.confirmPassword ||
+                  pwdForm.newPassword.length < 4
+                "
               >
                 @if (isUpdatingPassword) {
                   <i class="ph ph-spinner ph-spin"></i>
@@ -803,17 +914,14 @@ type SettingsTab = 'general' | 'tax' | 'printer' | 'service' | 'maintenance' | '
               <div class="unsaved-modal-text">
                 <h3 class="unsaved-modal-title">Unsaved Changes</h3>
                 <p class="unsaved-modal-desc">
-                  You have unsaved changes in restaurant settings. Would you like to save your modifications or reset them before leaving?
+                  You have unsaved changes in restaurant settings. Would you like to save your
+                  modifications or reset them before leaving?
                 </p>
               </div>
             </div>
 
             <div class="unsaved-modal-actions">
-              <button
-                type="button"
-                class="btn btn-secondary"
-                (click)="dismissUnsavedModal(false)"
-              >
+              <button type="button" class="btn btn-secondary" (click)="dismissUnsavedModal(false)">
                 <span>Stay on Page</span>
               </button>
               <button
@@ -824,11 +932,7 @@ type SettingsTab = 'general' | 'tax' | 'printer' | 'service' | 'maintenance' | '
                 <i class="ph ph-arrow-u-up-left"></i>
                 <span>Reset & Leave</span>
               </button>
-              <button
-                type="button"
-                class="btn btn-primary"
-                (click)="resolveUnsavedModal('save')"
-              >
+              <button type="button" class="btn btn-primary" (click)="resolveUnsavedModal('save')">
                 <i class="ph ph-floppy-disk"></i>
                 <span>Save & Leave</span>
               </button>
@@ -1196,7 +1300,7 @@ type SettingsTab = 'general' | 'tax' | 'printer' | 'service' | 'maintenance' | '
         transition: all var(--transition-fast);
         background: var(--color-surface);
 
-        input[type="radio"] {
+        input[type='radio'] {
           margin-right: 12px;
           accent-color: var(--color-primary);
           cursor: pointer;
@@ -1295,7 +1399,7 @@ type SettingsTab = 'general' | 'tax' | 'printer' | 'service' | 'maintenance' | '
         gap: 10px;
         cursor: pointer;
 
-        input[type="checkbox"] {
+        input[type='checkbox'] {
           margin-top: 2px;
           accent-color: var(--color-primary);
           cursor: pointer;

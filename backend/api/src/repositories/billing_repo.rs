@@ -174,9 +174,13 @@ impl BillingRepository {
         .await;
 
         if inv_res.is_err() {
-            let _ = sqlx::query("ROLLBACK TO SAVEPOINT invoice_sp").execute(&mut *tx).await;
+            let _ = sqlx::query("ROLLBACK TO SAVEPOINT invoice_sp")
+                .execute(&mut *tx)
+                .await;
         } else {
-            let _ = sqlx::query("RELEASE SAVEPOINT invoice_sp").execute(&mut *tx).await;
+            let _ = sqlx::query("RELEASE SAVEPOINT invoice_sp")
+                .execute(&mut *tx)
+                .await;
         }
 
         // 7. Emit outbox event for sync
@@ -477,7 +481,11 @@ impl BillingRepository {
             "completed_at": updated_refund.completed_at,
             "cancelled_at": updated_refund.cancelled_at,
         });
-        let idem = format!("refund-status-{}-{}", updated_refund.id, Utc::now().timestamp_millis());
+        let idem = format!(
+            "refund-status-{}-{}",
+            updated_refund.id,
+            Utc::now().timestamp_millis()
+        );
         OutboxService::emit_event(
             &mut tx,
             "refund",

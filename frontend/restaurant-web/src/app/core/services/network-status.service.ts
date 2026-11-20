@@ -5,20 +5,17 @@ import { environment } from '../../../environments/environment';
   providedIn: 'root',
 })
 export class NetworkStatusService implements OnDestroy {
-  readonly isOnline = signal<boolean>(
-    typeof navigator !== 'undefined' ? navigator.onLine : true,
-  );
+  readonly isOnline = signal<boolean>(typeof navigator !== 'undefined' ? navigator.onLine : true);
 
-  readonly isBroadcastChannelSupported = signal<boolean>(
-    typeof BroadcastChannel !== 'undefined',
-  );
+  readonly isBroadcastChannelSupported = signal<boolean>(typeof BroadcastChannel !== 'undefined');
 
   readonly isChecking = signal<boolean>(false);
 
   private probeIntervalId: any = null;
   private readonly healthUrl =
-    (environment?.apiBaseUrl ? environment.apiBaseUrl.replace(/\/api\/v1\/?$/, '') : 'http://localhost:3000') +
-    '/health/ready';
+    (environment?.apiBaseUrl
+      ? environment.apiBaseUrl.replace(/\/api\/v1\/?$/, '')
+      : 'http://localhost:3000') + '/health/ready';
 
   private readonly onlineHandler = () => {
     this.setOnline();

@@ -1,9 +1,5 @@
 use argon2::PasswordVerifier;
-use axum::{
-    extract::State,
-    response::IntoResponse,
-    Json,
-};
+use axum::{extract::State, response::IntoResponse, Json};
 use chrono::Utc;
 use jsonwebtoken::{encode, EncodingKey, Header};
 use serde::{Deserialize, Serialize};
@@ -113,14 +109,16 @@ pub async fn login(
         Some(s) => s,
         None => {
             return Err(AppError::Unauthorized(
-                "Invalid ID or password. Access is restricted to credentials set in Supabase.".to_string(),
+                "Invalid ID or password. Access is restricted to credentials set in Supabase."
+                    .to_string(),
             ));
         }
     };
 
     if !verify_password(&staff.pin_hash, password) {
         return Err(AppError::Unauthorized(
-            "Invalid ID or password. Access is restricted to credentials set in Supabase.".to_string(),
+            "Invalid ID or password. Access is restricted to credentials set in Supabase."
+                .to_string(),
         ));
     }
 
@@ -132,7 +130,11 @@ pub async fn login(
         aud: Some("authenticated".to_string()),
         exp,
         iat: Some(Utc::now().timestamp()),
-        iss: state.config.supabase_url.clone().map(|u| format!("{}/auth/v1", u.trim_end_matches('/'))),
+        iss: state
+            .config
+            .supabase_url
+            .clone()
+            .map(|u| format!("{}/auth/v1", u.trim_end_matches('/'))),
         app_metadata: Some(AppMetadata {
             provider: Some("email".to_string()),
             providers: Some(vec!["email".to_string()]),
@@ -149,12 +151,9 @@ pub async fn login(
     let encoding_key = EncodingKey::from_base64_secret(&state.config.supabase_jwt_secret)
         .unwrap_or_else(|_| EncodingKey::from_secret(state.config.supabase_jwt_secret.as_bytes()));
 
-    let token = encode(
-        &Header::default(),
-        &claims,
-        &encoding_key,
-    )
-    .map_err(|e| AppError::Internal(format!("Failed to generate authentication token: {}", e)))?;
+    let token = encode(&Header::default(), &claims, &encoding_key).map_err(|e| {
+        AppError::Internal(format!("Failed to generate authentication token: {}", e))
+    })?;
 
     Ok(Json(ApiResponse::success(json!({
         "token": token,

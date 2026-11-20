@@ -1,10 +1,25 @@
-import { Component, inject, signal, computed, ViewChild, ElementRef, OnInit, effect } from '@angular/core';
+import {
+  Component,
+  inject,
+  signal,
+  computed,
+  ViewChild,
+  ElementRef,
+  OnInit,
+  effect,
+} from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { RouterModule } from '@angular/router';
 import { FormsModule } from '@angular/forms';
 import * as QRCode from 'qrcode';
 import { RestaurantDataService } from '../../../data-access/services/restaurant-data.service';
-import { Table, TableStatus, TableSection, FloorElement, FloorElementType } from '../../../core/models/table.model';
+import {
+  Table,
+  TableStatus,
+  TableSection,
+  FloorElement,
+  FloorElementType,
+} from '../../../core/models/table.model';
 import { Order } from '../../../core/models/order.model';
 import { StatusBadgeComponent } from '../../../shared/components/status-badge/status-badge.component';
 import { ConfirmModalComponent } from '../../../shared/components/confirm-modal/confirm-modal.component';
@@ -37,9 +52,7 @@ import { environment } from '../../../../environments/environment';
       <div class="page-header">
         <div>
           <h1 class="heading-display">Dining Floor &amp; Tables</h1>
-          <p class="text-muted">
-            Live occupancy, section seating, and interactive floor layout.
-          </p>
+          <p class="text-muted">Live occupancy, section seating, and interactive floor layout.</p>
         </div>
 
         <div class="header-actions">
@@ -67,7 +80,11 @@ import { environment } from '../../../../environments/environment';
             </button>
           </div>
 
-          <button class="btn btn-secondary" (click)="openAddPlaceModal()" title="Create a new dining section">
+          <button
+            class="btn btn-secondary"
+            (click)="openAddPlaceModal()"
+            title="Create a new dining section"
+          >
             <i class="ph ph-folder-plus"></i>
             <span>Add Section</span>
           </button>
@@ -115,7 +132,11 @@ import { environment } from '../../../../environments/environment';
               </div>
             }
 
-            <button class="tab-btn add-place-tab-btn" (click)="openAddPlaceModal()" title="Create Section">
+            <button
+              class="tab-btn add-place-tab-btn"
+              (click)="openAddPlaceModal()"
+              title="Create Section"
+            >
               <i class="ph ph-plus"></i>
               <span>New Section</span>
             </button>
@@ -173,19 +194,39 @@ import { environment } from '../../../../environments/environment';
               @if (isDesignMode()) {
                 <div class="element-picker-group">
                   <span class="group-label">Add Fixture:</span>
-                  <button class="btn btn-secondary btn-xs" (click)="addFloorElement('ENTRANCE')" title="Add Entrance Door">
+                  <button
+                    class="btn btn-secondary btn-xs"
+                    (click)="addFloorElement('ENTRANCE')"
+                    title="Add Entrance Door"
+                  >
                     <i class="ph ph-door"></i> Entrance
                   </button>
-                  <button class="btn btn-secondary btn-xs" (click)="addFloorElement('KITCHEN')" title="Add Kitchen Pass">
+                  <button
+                    class="btn btn-secondary btn-xs"
+                    (click)="addFloorElement('KITCHEN')"
+                    title="Add Kitchen Pass"
+                  >
                     <i class="ph ph-cooking-pot"></i> Kitchen Pass
                   </button>
-                  <button class="btn btn-secondary btn-xs" (click)="addFloorElement('BAR')" title="Add Beverage Bar">
+                  <button
+                    class="btn btn-secondary btn-xs"
+                    (click)="addFloorElement('BAR')"
+                    title="Add Beverage Bar"
+                  >
                     <i class="ph ph-martini"></i> Bar Counter
                   </button>
-                  <button class="btn btn-secondary btn-xs" (click)="addFloorElement('RESTROOM')" title="Add Restroom Door">
+                  <button
+                    class="btn btn-secondary btn-xs"
+                    (click)="addFloorElement('RESTROOM')"
+                    title="Add Restroom Door"
+                  >
                     <i class="ph ph-toilet"></i> Restroom
                   </button>
-                  <button class="btn btn-secondary btn-xs" (click)="addFloorElement('WALL')" title="Add Plant / Partition">
+                  <button
+                    class="btn btn-secondary btn-xs"
+                    (click)="addFloorElement('WALL')"
+                    title="Add Plant / Partition"
+                  >
                     <i class="ph ph-plant"></i> Partition/Plant
                   </button>
                 </div>
@@ -248,7 +289,10 @@ import { environment } from '../../../../environments/environment';
             <div class="place-assign-strip">
               <span class="assign-strip-label">
                 <i class="ph ph-arrows-merge"></i>
-                <span>Assign existing tables to <strong>{{ selectedSection() }}</strong>:</span>
+                <span
+                  >Assign existing tables to <strong>{{ selectedSection() }}</strong
+                  >:</span
+                >
               </span>
               <div class="assign-chips-wrap">
                 @for (otherTbl of tablesFromOtherPlaces(); track otherTbl.id) {
@@ -256,7 +300,14 @@ import { environment } from '../../../../environments/environment';
                     type="button"
                     class="assign-tbl-btn"
                     (click)="reassignTableSection(otherTbl, selectedSection())"
-                    [title]="'Move ' + otherTbl.number + ' (currently in ' + otherTbl.section + ') to ' + selectedSection()"
+                    [title]="
+                      'Move ' +
+                      otherTbl.number +
+                      ' (currently in ' +
+                      otherTbl.section +
+                      ') to ' +
+                      selectedSection()
+                    "
                   >
                     <i class="ph ph-plus"></i>
                     <span>{{ otherTbl.number }}</span>
@@ -264,7 +315,9 @@ import { environment } from '../../../../environments/environment';
                   </button>
                 }
                 @if (tablesFromOtherPlaces().length === 0) {
-                  <span class="text-xs text-muted">All {{ tables().length }} restaurant tables are in this place.</span>
+                  <span class="text-xs text-muted"
+                    >All {{ tables().length }} restaurant tables are in this place.</span
+                  >
                 }
               </div>
             </div>
@@ -282,176 +335,202 @@ import { environment } from '../../../../environments/environment';
                 [style.transform]="'scale(' + zoom() + ')'"
                 [class.design-mode]="isDesignMode()"
               >
-              <!-- Area Watermark / Room Title -->
-              <div class="canvas-area-watermark">
-                <i class="ph ph-map-pin"></i>
-                <span>{{ selectedSection() === 'ALL' ? 'All Restaurant Areas (' + filteredTables().length + ' Tables)' : selectedSection() + ' (' + filteredTables().length + ' Tables)' }}</span>
-                @if (isDesignMode()) {
-                  <span class="watermark-tip">• Drag items to position • Snap: {{ snapToGrid() ? 'ON' : 'OFF' }}</span>
-                }
-              </div>
-
-              <!-- Architectural Floor Fixtures (Entrance, Kitchen Pass, Bar, Restroom) -->
-              @for (elem of visibleFloorElements(); track elem.id) {
-                <div
-                  class="floor-element"
-                  [class.elem-entrance]="elem.type === 'ENTRANCE'"
-                  [class.elem-kitchen]="elem.type === 'KITCHEN'"
-                  [class.elem-bar]="elem.type === 'BAR'"
-                  [class.elem-restroom]="elem.type === 'RESTROOM'"
-                  [class.elem-wall]="elem.type === 'WALL'"
-                  [class.elem-stage]="elem.type === 'STAGE'"
-                  [class.dragging]="draggingElementId() === elem.id"
-                  [style.left.px]="elem.posX"
-                  [style.top.px]="elem.posY"
-                  (pointerdown)="onCanvasPointerDownElement($event, elem)"
-                  [title]="isDesignMode() ? 'Drag fixture to place anywhere on floor' : elem.label"
-                >
-                  <div class="elem-content">
-                    <i class="ph" [class]="getElementIcon(elem.type)"></i>
-                    <span class="elem-label">{{ elem.label }}</span>
-                  </div>
+                <!-- Area Watermark / Room Title -->
+                <div class="canvas-area-watermark">
+                  <i class="ph ph-map-pin"></i>
+                  <span>{{
+                    selectedSection() === 'ALL'
+                      ? 'All Restaurant Areas (' + filteredTables().length + ' Tables)'
+                      : selectedSection() + ' (' + filteredTables().length + ' Tables)'
+                  }}</span>
                   @if (isDesignMode()) {
-                    <button
-                      type="button"
-                      class="elem-delete-btn"
-                      (click)="removeFloorElement(elem.id); $event.stopPropagation()"
-                      title="Remove fixture"
+                    <span class="watermark-tip"
+                      >• Drag items to position • Snap: {{ snapToGrid() ? 'ON' : 'OFF' }}</span
                     >
-                      <i class="ph ph-x"></i>
-                    </button>
                   }
                 </div>
-              }
 
-              <!-- Section Room Boxes on Canvas -->
-              @for (sec of visibleSections(); track sec) {
-                <div
-                  class="canvas-section-box"
-                  [class.is-dragging]="draggingSectionName() === sec"
-                  [class.design-mode]="isDesignMode()"
-                  [style.left.px]="getSectionBoxX(sec)"
-                  [style.top.px]="getSectionBoxY(sec)"
-                >
-                  <!-- Section Box Header Bar -->
+                <!-- Architectural Floor Fixtures (Entrance, Kitchen Pass, Bar, Restroom) -->
+                @for (elem of visibleFloorElements(); track elem.id) {
                   <div
-                    class="section-box-header"
-                    (pointerdown)="onCanvasPointerDownSection($event, sec)"
-                    [title]="isDesignMode() ? 'Drag room header to move ' + sec + ' with all its tables' : sec"
+                    class="floor-element"
+                    [class.elem-entrance]="elem.type === 'ENTRANCE'"
+                    [class.elem-kitchen]="elem.type === 'KITCHEN'"
+                    [class.elem-bar]="elem.type === 'BAR'"
+                    [class.elem-restroom]="elem.type === 'RESTROOM'"
+                    [class.elem-wall]="elem.type === 'WALL'"
+                    [class.elem-stage]="elem.type === 'STAGE'"
+                    [class.dragging]="draggingElementId() === elem.id"
+                    [style.left.px]="elem.posX"
+                    [style.top.px]="elem.posY"
+                    (pointerdown)="onCanvasPointerDownElement($event, elem)"
+                    [title]="
+                      isDesignMode() ? 'Drag fixture to place anywhere on floor' : elem.label
+                    "
                   >
-                    <div class="sec-header-left">
-                      <i class="ph" [class]="getSectionIcon(sec)"></i>
-                      <span class="sec-name">{{ sec }}</span>
-                      <span class="sec-badge">
-                        {{ getTablesBySection(sec).length }} Tables
-                        @if (getOccupiedCountBySection(sec) > 0) {
-                          • <strong class="text-crimson">{{ getOccupiedCountBySection(sec) }} Occupied</strong>
-                        }
-                      </span>
+                    <div class="elem-content">
+                      <i class="ph" [class]="getElementIcon(elem.type)"></i>
+                      <span class="elem-label">{{ elem.label }}</span>
                     </div>
-
-                    <div class="sec-header-right">
+                    @if (isDesignMode()) {
                       <button
                         type="button"
-                        class="sec-add-tbl-btn"
-                        (click)="openAddTableModalForSection(sec); $event.stopPropagation()"
-                        title="Add new table directly to {{ sec }}"
+                        class="elem-delete-btn"
+                        (click)="removeFloorElement(elem.id); $event.stopPropagation()"
+                        title="Remove fixture"
                       >
-                        <i class="ph ph-plus"></i>
-                        <span>Add Table</span>
+                        <i class="ph ph-x"></i>
                       </button>
-                      @if (isDesignMode()) {
-                        <span class="sec-drag-pill" title="Drag to move entire section room with its tables">
-                          <i class="ph ph-hand-grabbing"></i>
-                          <span>Move Room</span>
+                    }
+                  </div>
+                }
+
+                <!-- Section Room Boxes on Canvas -->
+                @for (sec of visibleSections(); track sec) {
+                  <div
+                    class="canvas-section-box"
+                    [class.is-dragging]="draggingSectionName() === sec"
+                    [class.design-mode]="isDesignMode()"
+                    [style.left.px]="getSectionBoxX(sec)"
+                    [style.top.px]="getSectionBoxY(sec)"
+                  >
+                    <!-- Section Box Header Bar -->
+                    <div
+                      class="section-box-header"
+                      (pointerdown)="onCanvasPointerDownSection($event, sec)"
+                      [title]="
+                        isDesignMode()
+                          ? 'Drag room header to move ' + sec + ' with all its tables'
+                          : sec
+                      "
+                    >
+                      <div class="sec-header-left">
+                        <i class="ph" [class]="getSectionIcon(sec)"></i>
+                        <span class="sec-name">{{ sec }}</span>
+                        <span class="sec-badge">
+                          {{ getTablesBySection(sec).length }} Tables
+                          @if (getOccupiedCountBySection(sec) > 0) {
+                            •
+                            <strong class="text-crimson"
+                              >{{ getOccupiedCountBySection(sec) }} Occupied</strong
+                            >
+                          }
                         </span>
+                      </div>
+
+                      <div class="sec-header-right">
+                        <button
+                          type="button"
+                          class="sec-add-tbl-btn"
+                          (click)="openAddTableModalForSection(sec); $event.stopPropagation()"
+                          title="Add new table directly to {{ sec }}"
+                        >
+                          <i class="ph ph-plus"></i>
+                          <span>Add Table</span>
+                        </button>
+                        @if (isDesignMode()) {
+                          <span
+                            class="sec-drag-pill"
+                            title="Drag to move entire section room with its tables"
+                          >
+                            <i class="ph ph-hand-grabbing"></i>
+                            <span>Move Room</span>
+                          </span>
+                        }
+                      </div>
+                    </div>
+
+                    <!-- Dining Tables in this Section Box (Auto-growing Grid) -->
+                    <div class="section-tables-grid">
+                      @for (tbl of getTablesBySection(sec); track tbl.id) {
+                        <div
+                          class="canvas-table"
+                          [class.is-round]="getTableShape(tbl) === 'ROUND'"
+                          [class.is-rect]="getTableShape(tbl) === 'RECT'"
+                          [class.status-available]="tbl.status === 'AVAILABLE'"
+                          [class.status-occupied]="tbl.status === 'OCCUPIED'"
+                          [class.status-reserved]="tbl.status === 'RESERVED'"
+                          [class.status-dirty]="tbl.status === 'DIRTY'"
+                          [class.is-selected]="selectedTableForInspector()?.id === tbl.id"
+                          [class.disabled-order]="!tbl.orderingEnabled"
+                          (click)="selectTable(tbl); $event.stopPropagation()"
+                          [title]="'Table ' + tbl.number + ' (' + tbl.status + ')'"
+                        >
+                          <!-- Visual Chairs Around Table -->
+                          <div class="table-chairs">
+                            <span class="chair chair-top"></span>
+                            <span class="chair chair-bottom"></span>
+                            <span class="chair chair-left"></span>
+                            <span class="chair chair-right"></span>
+                            @if (tbl.capacity >= 6) {
+                              <span class="chair chair-top-2"></span>
+                              <span class="chair chair-bottom-2"></span>
+                            }
+                          </div>
+
+                          <!-- Table Surface -->
+                          <div class="table-surface">
+                            <span class="tbl-num">{{ tbl.number }}</span>
+                            <span class="tbl-capacity">{{ tbl.capacity }}p</span>
+
+                            @if (getActiveOrderByTable(tbl); as actOrd) {
+                              <div
+                                class="tbl-active-pill"
+                                title="Order #{{ actOrd.orderNumber }} is active"
+                              >
+                                {{ actOrd.orderNumber }}
+                              </div>
+                            } @else {
+                              <span
+                                class="tbl-status-dot"
+                                [class]="tbl.status.toLowerCase()"
+                              ></span>
+                            }
+
+                            @if (!tbl.orderingEnabled) {
+                              <span class="tbl-lock-badge" title="QR Ordering Disabled">
+                                <i class="ph ph-lock"></i>
+                              </span>
+                            }
+                          </div>
+                        </div>
+                      }
+
+                      @if (getTablesBySection(sec).length === 0) {
+                        <div class="empty-sec-placeholder">
+                          <i class="ph ph-fork-knife"></i>
+                          <span>No tables in {{ sec }} yet</span>
+                          <button
+                            type="button"
+                            class="btn btn-secondary btn-xs"
+                            (click)="openAddTableModalForSection(sec); $event.stopPropagation()"
+                          >
+                            <i class="ph ph-plus"></i>
+                            <span>Add First Table</span>
+                          </button>
+                        </div>
                       }
                     </div>
                   </div>
+                }
 
-                  <!-- Dining Tables in this Section Box (Auto-growing Grid) -->
-                  <div class="section-tables-grid">
-                    @for (tbl of getTablesBySection(sec); track tbl.id) {
-                      <div
-                        class="canvas-table"
-                        [class.is-round]="getTableShape(tbl) === 'ROUND'"
-                        [class.is-rect]="getTableShape(tbl) === 'RECT'"
-                        [class.status-available]="tbl.status === 'AVAILABLE'"
-                        [class.status-occupied]="tbl.status === 'OCCUPIED'"
-                        [class.status-reserved]="tbl.status === 'RESERVED'"
-                        [class.status-dirty]="tbl.status === 'DIRTY'"
-                        [class.is-selected]="selectedTableForInspector()?.id === tbl.id"
-                        [class.disabled-order]="!tbl.orderingEnabled"
-                        (click)="selectTable(tbl); $event.stopPropagation()"
-                        [title]="'Table ' + tbl.number + ' (' + tbl.status + ')'"
-                      >
-                        <!-- Visual Chairs Around Table -->
-                        <div class="table-chairs">
-                          <span class="chair chair-top"></span>
-                          <span class="chair chair-bottom"></span>
-                          <span class="chair chair-left"></span>
-                          <span class="chair chair-right"></span>
-                          @if (tbl.capacity >= 6) {
-                            <span class="chair chair-top-2"></span>
-                            <span class="chair chair-bottom-2"></span>
-                          }
-                        </div>
-
-                        <!-- Table Surface -->
-                        <div class="table-surface">
-                          <span class="tbl-num">{{ tbl.number }}</span>
-                          <span class="tbl-capacity">{{ tbl.capacity }}p</span>
-
-                          @if (getActiveOrderByTable(tbl); as actOrd) {
-                            <div class="tbl-active-pill" title="Order #{{ actOrd.orderNumber }} is active">
-                              {{ actOrd.orderNumber }}
-                            </div>
-                          } @else {
-                            <span class="tbl-status-dot" [class]="tbl.status.toLowerCase()"></span>
-                          }
-
-                          @if (!tbl.orderingEnabled) {
-                            <span class="tbl-lock-badge" title="QR Ordering Disabled">
-                              <i class="ph ph-lock"></i>
-                            </span>
-                          }
-                        </div>
-                      </div>
-                    }
-
-                    @if (getTablesBySection(sec).length === 0) {
-                      <div class="empty-sec-placeholder">
-                        <i class="ph ph-fork-knife"></i>
-                        <span>No tables in {{ sec }} yet</span>
-                        <button
-                          type="button"
-                          class="btn btn-secondary btn-xs"
-                          (click)="openAddTableModalForSection(sec); $event.stopPropagation()"
-                        >
-                          <i class="ph ph-plus"></i>
-                          <span>Add First Table</span>
-                        </button>
-                      </div>
-                    }
+                <!-- Empty Room State -->
+                @if (filteredTables().length === 0) {
+                  <div
+                    style="padding: 48px 24px; width: 100%; display: flex; justify-content: center;"
+                  >
+                    <app-empty-state
+                      icon="ph-layout"
+                      [title]="'No Tables Placed in ' + selectedSection()"
+                      message="Design your floor layout by adding tables or dragging them into this room."
+                      [actionText]="'Add Table to ' + selectedSection()"
+                      actionIcon="ph-plus-circle"
+                      (actionClick)="openAddTableModal()"
+                    />
                   </div>
-                </div>
-              }
-
-              <!-- Empty Room State -->
-              @if (filteredTables().length === 0) {
-                <div style="padding: 48px 24px; width: 100%; display: flex; justify-content: center;">
-                  <app-empty-state
-                    icon="ph-layout"
-                    [title]="'No Tables Placed in ' + selectedSection()"
-                    message="Design your floor layout by adding tables or dragging them into this room."
-                    [actionText]="'Add Table to ' + selectedSection()"
-                    actionIcon="ph-plus-circle"
-                    (actionClick)="openAddTableModal()"
-                  />
-                </div>
-              }
-            </div>
-          }
+                }
+              </div>
+            }
           </div>
         </div>
       }
@@ -465,164 +544,169 @@ import { environment } from '../../../../environments/environment';
             <app-skeleton variant="table-card" [count]="8" />
           } @else {
             @for (tbl of filteredTables(); track tbl.id) {
-            <div
-              class="table-card"
-              [class.status-available]="tbl.status === 'AVAILABLE'"
-              [class.status-occupied]="tbl.status === 'OCCUPIED'"
-              [class.status-reserved]="tbl.status === 'RESERVED'"
-              [class.status-dirty]="tbl.status === 'DIRTY'"
-              [class.disabled-order]="!tbl.orderingEnabled"
-              (click)="selectTable(tbl)"
-            >
-              <div class="table-card-top">
-                <div class="table-num-wrap">
-                  <span class="table-number">{{ tbl.number }}</span>
-                  <span class="table-capacity"
-                    ><i class="ph ph-users"></i> {{ tbl.capacity }} Seats • {{ getTableShape(tbl) }}</span
-                  >
-                </div>
-                <app-status-badge [status]="tbl.status"></app-status-badge>
-              </div>
-
-              <div class="table-section-tag">
-                <i class="ph ph-map-pin"></i>
-                <span>{{ tbl.section }}</span>
-              </div>
-
-              <div class="table-token-box">
-                <span class="token-label">QR Token:</span>
-                <code class="token-code">{{ tbl.qrToken }}</code>
-              </div>
-
-              <!-- Table Status Selector -->
-              <div class="status-select-wrap">
-                <label class="text-xs text-muted" [attr.for]="'status-' + tbl.id">Change Status:</label>
-                <select
-                  [id]="'status-' + tbl.id"
-                  class="form-select status-dropdown"
-                  [ngModel]="tbl.status"
-                  (ngModelChange)="onStatusChange(tbl.id, $event)"
-                  (click)="$event.stopPropagation()"
-                >
-                  <option value="AVAILABLE">Available</option>
-                  <option value="OCCUPIED">Occupied</option>
-                  <option value="RESERVED">Reserved</option>
-                  <option value="DIRTY">Cleaning</option>
-                </select>
-              </div>
-
-              <!-- Active Customer & Serving Staff -->
-              @if (getActiveOrderByTable(tbl); as activeOrd) {
-                <div class="active-customer-box">
-                  <div class="active-cust-header">
-                    <span class="active-dot"></span>
-                    <strong class="cust-name">{{ activeOrd.customerName || 'Walk-in Guest' }}</strong>
-                    <span class="order-chip">{{ activeOrd.orderNumber }}</span>
+              <div
+                class="table-card"
+                [class.status-available]="tbl.status === 'AVAILABLE'"
+                [class.status-occupied]="tbl.status === 'OCCUPIED'"
+                [class.status-reserved]="tbl.status === 'RESERVED'"
+                [class.status-dirty]="tbl.status === 'DIRTY'"
+                [class.disabled-order]="!tbl.orderingEnabled"
+                (click)="selectTable(tbl)"
+              >
+                <div class="table-card-top">
+                  <div class="table-num-wrap">
+                    <span class="table-number">{{ tbl.number }}</span>
+                    <span class="table-capacity"
+                      ><i class="ph ph-users"></i> {{ tbl.capacity }} Seats •
+                      {{ getTableShape(tbl) }}</span
+                    >
                   </div>
-                  <div class="status-select-wrap">
-                    <label class="text-xs text-muted" [attr.for]="'staff-' + tbl.id">
-                      <i class="ph ph-user-check"></i> Serving Customer:
-                    </label>
-                    @if (isOrderPaid(activeOrd)) {
-                      <div class="locked-server-row">
-                        <span class="font-semibold text-xs">
-                          <i class="ph ph-lock-key text-muted"></i>
-                          {{ getServerStaffName(activeOrd.serverStaffId) || 'Unassigned' }}
-                        </span>
-                        <button
-                          type="button"
-                          class="btn-unlock-server"
-                          (click)="promptChangePaidServer(activeOrd); $event.stopPropagation()"
-                          title="Change serving staff on paid order"
-                        >
-                          <i class="ph ph-lock-key"></i>
-                          <span>Change</span>
-                        </button>
-                      </div>
-                    } @else {
-                      <select
-                        [id]="'staff-' + tbl.id"
-                        class="form-select status-dropdown active-server-select"
-                        [ngModel]="activeOrd.serverStaffId || ''"
-                        (ngModelChange)="onAssignActiveOrderServer(activeOrd, $event)"
-                        (click)="$event.stopPropagation()"
-                      >
-                        <option value="">Unassigned</option>
-                        @for (s of staffMembers(); track s.id) {
-                          <option [value]="s.id">{{ s.name }} ({{ s.role }})</option>
-                        }
-                      </select>
-                    }
-                  </div>
+                  <app-status-badge [status]="tbl.status"></app-status-badge>
                 </div>
-              } @else {
+
+                <div class="table-section-tag">
+                  <i class="ph ph-map-pin"></i>
+                  <span>{{ tbl.section }}</span>
+                </div>
+
+                <div class="table-token-box">
+                  <span class="token-label">QR Token:</span>
+                  <code class="token-code">{{ tbl.qrToken }}</code>
+                </div>
+
+                <!-- Table Status Selector -->
                 <div class="status-select-wrap">
-                  <label class="text-xs text-muted" [attr.for]="'staff-' + tbl.id">
-                    <i class="ph ph-user"></i> Default Server (Optional):
-                  </label>
+                  <label class="text-xs text-muted" [attr.for]="'status-' + tbl.id"
+                    >Change Status:</label
+                  >
                   <select
-                    [id]="'staff-' + tbl.id"
+                    [id]="'status-' + tbl.id"
                     class="form-select status-dropdown"
-                    [ngModel]="tbl.assignedStaffId || ''"
-                    (ngModelChange)="onStaffAssign(tbl.id, $event)"
+                    [ngModel]="tbl.status"
+                    (ngModelChange)="onStatusChange(tbl.id, $event)"
                     (click)="$event.stopPropagation()"
                   >
-                    <option value="">Dynamic (Assigned per Order)</option>
-                    @for (s of staffMembers(); track s.id) {
-                      <option [value]="s.id">{{ s.name }} ({{ s.role }})</option>
-                    }
+                    <option value="AVAILABLE">Available</option>
+                    <option value="OCCUPIED">Occupied</option>
+                    <option value="RESERVED">Reserved</option>
+                    <option value="DIRTY">Cleaning</option>
                   </select>
                 </div>
-              }
 
-              <!-- Card Actions -->
-              <div class="table-card-actions">
-                <button
-                  type="button"
-                  class="btn btn-secondary btn-sm"
-                  (click)="openQrModal(tbl); $event.stopPropagation()"
-                  title="View & Print QR"
-                >
-                  <i class="ph ph-qr-code"></i>
-                  <span>QR Code</span>
-                </button>
+                <!-- Active Customer & Serving Staff -->
+                @if (getActiveOrderByTable(tbl); as activeOrd) {
+                  <div class="active-customer-box">
+                    <div class="active-cust-header">
+                      <span class="active-dot"></span>
+                      <strong class="cust-name">{{
+                        activeOrd.customerName || 'Walk-in Guest'
+                      }}</strong>
+                      <span class="order-chip">{{ activeOrd.orderNumber }}</span>
+                    </div>
+                    <div class="status-select-wrap">
+                      <label class="text-xs text-muted" [attr.for]="'staff-' + tbl.id">
+                        <i class="ph ph-user-check"></i> Serving Customer:
+                      </label>
+                      @if (isOrderPaid(activeOrd)) {
+                        <div class="locked-server-row">
+                          <span class="font-semibold text-xs">
+                            <i class="ph ph-lock-key text-muted"></i>
+                            {{ getServerStaffName(activeOrd.serverStaffId) || 'Unassigned' }}
+                          </span>
+                          <button
+                            type="button"
+                            class="btn-unlock-server"
+                            (click)="promptChangePaidServer(activeOrd); $event.stopPropagation()"
+                            title="Change serving staff on paid order"
+                          >
+                            <i class="ph ph-lock-key"></i>
+                            <span>Change</span>
+                          </button>
+                        </div>
+                      } @else {
+                        <select
+                          [id]="'staff-' + tbl.id"
+                          class="form-select status-dropdown active-server-select"
+                          [ngModel]="activeOrd.serverStaffId || ''"
+                          (ngModelChange)="onAssignActiveOrderServer(activeOrd, $event)"
+                          (click)="$event.stopPropagation()"
+                        >
+                          <option value="">Unassigned</option>
+                          @for (s of staffMembers(); track s.id) {
+                            <option [value]="s.id">{{ s.name }} ({{ s.role }})</option>
+                          }
+                        </select>
+                      }
+                    </div>
+                  </div>
+                } @else {
+                  <div class="status-select-wrap">
+                    <label class="text-xs text-muted" [attr.for]="'staff-' + tbl.id">
+                      <i class="ph ph-user"></i> Default Server (Optional):
+                    </label>
+                    <select
+                      [id]="'staff-' + tbl.id"
+                      class="form-select status-dropdown"
+                      [ngModel]="tbl.assignedStaffId || ''"
+                      (ngModelChange)="onStaffAssign(tbl.id, $event)"
+                      (click)="$event.stopPropagation()"
+                    >
+                      <option value="">Dynamic (Assigned per Order)</option>
+                      @for (s of staffMembers(); track s.id) {
+                        <option [value]="s.id">{{ s.name }} ({{ s.role }})</option>
+                      }
+                    </select>
+                  </div>
+                }
 
-                <button
-                  type="button"
-                  class="btn btn-secondary btn-sm"
-                  (click)="toggleOrdering(tbl); $event.stopPropagation()"
-                  [title]="tbl.orderingEnabled ? 'Disable Ordering' : 'Enable Ordering'"
-                >
-                  <i
-                    class="ph"
-                    [class.ph-lock]="tbl.orderingEnabled"
-                    [class.ph-lock-open]="!tbl.orderingEnabled"
-                  ></i>
-                </button>
+                <!-- Card Actions -->
+                <div class="table-card-actions">
+                  <button
+                    type="button"
+                    class="btn btn-secondary btn-sm"
+                    (click)="openQrModal(tbl); $event.stopPropagation()"
+                    title="View & Print QR"
+                  >
+                    <i class="ph ph-qr-code"></i>
+                    <span>QR Code</span>
+                  </button>
 
-                <button
-                  type="button"
-                  class="btn btn-secondary btn-sm btn-icon-danger"
-                  (click)="confirmDeleteTable(tbl); $event.stopPropagation()"
-                  title="Delete Table"
-                >
-                  <i class="ph ph-trash"></i>
-                </button>
+                  <button
+                    type="button"
+                    class="btn btn-secondary btn-sm"
+                    (click)="toggleOrdering(tbl); $event.stopPropagation()"
+                    [title]="tbl.orderingEnabled ? 'Disable Ordering' : 'Enable Ordering'"
+                  >
+                    <i
+                      class="ph"
+                      [class.ph-lock]="tbl.orderingEnabled"
+                      [class.ph-lock-open]="!tbl.orderingEnabled"
+                    ></i>
+                  </button>
+
+                  <button
+                    type="button"
+                    class="btn btn-secondary btn-sm btn-icon-danger"
+                    (click)="confirmDeleteTable(tbl); $event.stopPropagation()"
+                    title="Delete Table"
+                  >
+                    <i class="ph ph-trash"></i>
+                  </button>
+                </div>
               </div>
-            </div>
-          } @empty {
-            <div style="grid-column: 1 / -1; width: 100%;">
-              <app-empty-state
-                icon="ph-table"
-                title="No Dining Tables Found"
-                message="No dining tables match your selected room or status filter."
-                actionText="Add New Table"
-                actionIcon="ph-plus-circle"
-                (actionClick)="openAddTableModal()"
-              />
-            </div>
+            } @empty {
+              <div style="grid-column: 1 / -1; width: 100%;">
+                <app-empty-state
+                  icon="ph-table"
+                  title="No Dining Tables Found"
+                  message="No dining tables match your selected room or status filter."
+                  actionText="Add New Table"
+                  actionIcon="ph-plus-circle"
+                  (actionClick)="openAddTableModal()"
+                />
+              </div>
+            }
           }
-        }
         </div>
       }
 
@@ -635,11 +719,17 @@ import { environment } from '../../../../environments/environment';
             <div class="drawer-header">
               <div class="drawer-title-wrap">
                 <span class="drawer-shape-icon">
-                  <i class="ph" [class.ph-circle]="getTableShape(insTbl) === 'ROUND'" [class.ph-square]="getTableShape(insTbl) === 'RECT'"></i>
+                  <i
+                    class="ph"
+                    [class.ph-circle]="getTableShape(insTbl) === 'ROUND'"
+                    [class.ph-square]="getTableShape(insTbl) === 'RECT'"
+                  ></i>
                 </span>
                 <div>
                   <h3 class="drawer-table-num">Table {{ insTbl.number }}</h3>
-                  <span class="drawer-section-pill">{{ insTbl.section }} • {{ insTbl.capacity }} Seats</span>
+                  <span class="drawer-section-pill"
+                    >{{ insTbl.section }} • {{ insTbl.capacity }} Seats</span
+                  >
                 </div>
               </div>
               <button type="button" class="close-btn" (click)="selectedTableForInspector.set(null)">
@@ -697,7 +787,9 @@ import { environment } from '../../../../environments/environment';
                   <div class="order-details-grid">
                     <div>
                       <span class="text-xs text-muted">Customer:</span>
-                      <strong class="d-block">{{ actOrder.customerName || 'Walk-in Guest' }}</strong>
+                      <strong class="d-block">{{
+                        actOrder.customerName || 'Walk-in Guest'
+                      }}</strong>
                     </div>
                     <div>
                       <span class="text-xs text-muted">Amount:</span>
@@ -705,7 +797,9 @@ import { environment } from '../../../../environments/environment';
                     </div>
                     <div>
                       <span class="text-xs text-muted">Payment:</span>
-                      <span class="d-block text-xs font-semibold">{{ actOrder.paymentStatus }}</span>
+                      <span class="d-block text-xs font-semibold">{{
+                        actOrder.paymentStatus
+                      }}</span>
                     </div>
                     <div>
                       <span class="text-xs text-muted">Status:</span>
@@ -716,7 +810,10 @@ import { environment } from '../../../../environments/environment';
                     <a [routerLink]="['/admin/orders']" class="btn btn-secondary btn-xs">
                       <i class="ph ph-receipt"></i> View in Order Queue
                     </a>
-                    <a [routerLink]="['/admin/billing', actOrder.id]" class="btn btn-primary btn-xs">
+                    <a
+                      [routerLink]="['/admin/billing', actOrder.id]"
+                      class="btn btn-primary btn-xs"
+                    >
                       <i class="ph ph-printer"></i> View & Print Bill
                     </a>
                   </div>
@@ -781,7 +878,11 @@ import { environment } from '../../../../environments/environment';
               <div class="drawer-section">
                 <label class="drawer-label">QR Standee & Mobile Ordering</label>
                 <div class="drawer-action-buttons">
-                  <button type="button" class="btn btn-secondary w-100" (click)="openQrModal(insTbl)">
+                  <button
+                    type="button"
+                    class="btn btn-secondary w-100"
+                    (click)="openQrModal(insTbl)"
+                  >
                     <i class="ph ph-qr-code"></i> View & Print Table QR Standee
                   </button>
                   <button
@@ -789,8 +890,14 @@ import { environment } from '../../../../environments/environment';
                     class="btn btn-secondary w-100"
                     (click)="toggleOrdering(insTbl)"
                   >
-                    <i class="ph" [class.ph-lock]="insTbl.orderingEnabled" [class.ph-lock-open]="!insTbl.orderingEnabled"></i>
-                    <span>{{ insTbl.orderingEnabled ? 'Disable Mobile Ordering' : 'Enable Mobile Ordering' }}</span>
+                    <i
+                      class="ph"
+                      [class.ph-lock]="insTbl.orderingEnabled"
+                      [class.ph-lock-open]="!insTbl.orderingEnabled"
+                    ></i>
+                    <span>{{
+                      insTbl.orderingEnabled ? 'Disable Mobile Ordering' : 'Enable Mobile Ordering'
+                    }}</span>
                   </button>
                 </div>
               </div>
@@ -804,7 +911,11 @@ import { environment } from '../../../../environments/environment';
               >
                 <i class="ph ph-trash"></i> Delete Table
               </button>
-              <button type="button" class="btn btn-primary" (click)="selectedTableForInspector.set(null)">
+              <button
+                type="button"
+                class="btn btn-primary"
+                (click)="selectedTableForInspector.set(null)"
+              >
                 Done
               </button>
             </div>
@@ -817,13 +928,20 @@ import { environment } from '../../../../environments/environment';
       <!-- ============================================================ -->
       @if (showAddPlaceModal()) {
         <div class="modal-overlay" (click)="showAddPlaceModal.set(false)">
-          <div class="modal-card add-place-card" role="dialog" aria-modal="true" (click)="$event.stopPropagation()">
+          <div
+            class="modal-card add-place-card"
+            role="dialog"
+            aria-modal="true"
+            (click)="$event.stopPropagation()"
+          >
             <div class="modal-header">
               <div class="modal-title-with-icon">
                 <div class="icon-circle"><i class="ph ph-folder-plus"></i></div>
                 <div>
                   <h3 class="heading-card">Add Restaurant Place</h3>
-                  <p class="text-xs text-muted" style="margin: 2px 0 0;">Create a new room, floor, or outdoor dining zone</p>
+                  <p class="text-xs text-muted" style="margin: 2px 0 0;">
+                    Create a new room, floor, or outdoor dining zone
+                  </p>
                 </div>
               </div>
               <button type="button" class="close-btn" (click)="showAddPlaceModal.set(false)">
@@ -847,19 +965,57 @@ import { environment } from '../../../../environments/environment';
               </div>
 
               <div class="place-suggestions">
-                <span class="text-xs text-muted d-block" style="margin-bottom: 6px;">Suggested Places:</span>
+                <span class="text-xs text-muted d-block" style="margin-bottom: 6px;"
+                  >Suggested Places:</span
+                >
                 <div class="suggestion-pills">
-                  <button type="button" class="sug-pill" (click)="newPlaceName.set('Terrace Garden')">Terrace Garden</button>
-                  <button type="button" class="sug-pill" (click)="newPlaceName.set('Rooftop Lounge')">Rooftop Lounge</button>
-                  <button type="button" class="sug-pill" (click)="newPlaceName.set('Poolside Patio')">Poolside Patio</button>
-                  <button type="button" class="sug-pill" (click)="newPlaceName.set('VIP Banquet Hall')">VIP Banquet Hall</button>
-                  <button type="button" class="sug-pill" (click)="newPlaceName.set('Courtyard Dining')">Courtyard Dining</button>
+                  <button
+                    type="button"
+                    class="sug-pill"
+                    (click)="newPlaceName.set('Terrace Garden')"
+                  >
+                    Terrace Garden
+                  </button>
+                  <button
+                    type="button"
+                    class="sug-pill"
+                    (click)="newPlaceName.set('Rooftop Lounge')"
+                  >
+                    Rooftop Lounge
+                  </button>
+                  <button
+                    type="button"
+                    class="sug-pill"
+                    (click)="newPlaceName.set('Poolside Patio')"
+                  >
+                    Poolside Patio
+                  </button>
+                  <button
+                    type="button"
+                    class="sug-pill"
+                    (click)="newPlaceName.set('VIP Banquet Hall')"
+                  >
+                    VIP Banquet Hall
+                  </button>
+                  <button
+                    type="button"
+                    class="sug-pill"
+                    (click)="newPlaceName.set('Courtyard Dining')"
+                  >
+                    Courtyard Dining
+                  </button>
                 </div>
               </div>
             </div>
 
             <div class="modal-footer">
-              <button type="button" class="btn btn-secondary" (click)="showAddPlaceModal.set(false)">Cancel</button>
+              <button
+                type="button"
+                class="btn btn-secondary"
+                (click)="showAddPlaceModal.set(false)"
+              >
+                Cancel
+              </button>
               <button
                 type="button"
                 class="btn btn-primary"
@@ -878,7 +1034,12 @@ import { environment } from '../../../../environments/environment';
       <!-- ============================================================ -->
       @if (showAddModal) {
         <div class="modal-overlay" (click)="onBackdropClick($event)">
-          <div class="modal-card" role="dialog" aria-modal="true" (click)="$event.stopPropagation()">
+          <div
+            class="modal-card"
+            role="dialog"
+            aria-modal="true"
+            (click)="$event.stopPropagation()"
+          >
             <div class="modal-header">
               <h3 class="heading-card">Add Dining Table</h3>
               <button type="button" class="close-btn" (click)="showAddModal = false">
@@ -938,7 +1099,9 @@ import { environment } from '../../../../environments/environment';
               </div>
             </div>
             <div class="modal-footer">
-              <button type="button" class="btn btn-secondary" (click)="showAddModal = false">Cancel</button>
+              <button type="button" class="btn btn-secondary" (click)="showAddModal = false">
+                Cancel
+              </button>
               <button
                 type="button"
                 class="btn btn-primary"
@@ -957,7 +1120,12 @@ import { environment } from '../../../../environments/environment';
       <!-- ============================================================ -->
       @if (activeQrTable) {
         <div class="modal-overlay qr-modal-overlay" (click)="onBackdropClick($event)">
-          <div class="modal-card qr-preview-card" role="dialog" aria-modal="true" (click)="$event.stopPropagation()">
+          <div
+            class="modal-card qr-preview-card"
+            role="dialog"
+            aria-modal="true"
+            (click)="$event.stopPropagation()"
+          >
             <div class="modal-header no-print">
               <div class="modal-title-wrap">
                 <div class="qr-header-icon"><i class="ph ph-qr-code"></i></div>
@@ -984,8 +1152,12 @@ import { environment } from '../../../../environments/environment';
                   <div class="standee-crest">
                     <i class="ph-fill ph-crown"></i>
                   </div>
-                  <div class="standee-brand font-display">{{ restaurant()?.name || 'GuruKripa Dhaba' }}</div>
-                  <div class="standee-sub">Pure Veg Punjabi Dhaba • {{ activeQrTable.section }}</div>
+                  <div class="standee-brand font-display">
+                    {{ restaurant()?.name || 'GuruKripa Dhaba' }}
+                  </div>
+                  <div class="standee-sub">
+                    Pure Veg Punjabi Dhaba • {{ activeQrTable.section }}
+                  </div>
                   <div class="standee-divider">
                     <span class="divider-line"></span>
                     <span class="divider-gem">◆</span>
@@ -1009,7 +1181,9 @@ import { environment } from '../../../../environments/environment';
                 </div>
 
                 <div class="standee-footer">
-                  <div class="standee-table-badge font-display">TABLE {{ activeQrTable.number }}</div>
+                  <div class="standee-table-badge font-display">
+                    TABLE {{ activeQrTable.number }}
+                  </div>
 
                   <div class="standee-steps">
                     <span class="step-badge"><span class="step-num">1</span> Scan QR</span>
@@ -1050,7 +1224,11 @@ import { environment } from '../../../../environments/environment';
       <app-confirm-modal
         [isOpen]="!!tableToDelete"
         title="Remove Dining Table"
-        [message]="'Are you sure you want to remove ' + (tableToDelete?.number || 'this table') + '? Its QR ordering link will become inactive.'"
+        [message]="
+          'Are you sure you want to remove ' +
+          (tableToDelete?.number || 'this table') +
+          '? Its QR ordering link will become inactive.'
+        "
         confirmText="Remove Table"
         confirmVariant="danger"
         (confirm)="executeDeleteTable()"
@@ -1131,7 +1309,9 @@ import { environment } from '../../../../environments/environment';
               }
             </div>
             <div class="modal-footer">
-              <button type="button" class="btn btn-secondary" (click)="cancelServerAdminModal()">Cancel</button>
+              <button type="button" class="btn btn-secondary" (click)="cancelServerAdminModal()">
+                Cancel
+              </button>
               <button
                 type="button"
                 class="btn btn-primary"
@@ -1708,7 +1888,9 @@ import { environment } from '../../../../environments/environment';
         border: 2px dashed rgba(148, 163, 184, 0.65);
         border-radius: 18px;
         box-shadow: 0 4px 20px rgba(0, 0, 0, 0.04);
-        transition: border-color 0.2s ease, box-shadow 0.2s ease;
+        transition:
+          border-color 0.2s ease,
+          box-shadow 0.2s ease;
         display: flex;
         flex-direction: column;
         user-select: none;
@@ -1949,7 +2131,9 @@ import { environment } from '../../../../environments/environment';
         display: flex;
         align-items: center;
         justify-content: center;
-        transition: box-shadow 0.15s ease, transform 0.15s ease;
+        transition:
+          box-shadow 0.15s ease,
+          transform 0.15s ease;
 
         &.dragging {
           cursor: grabbing;
@@ -1977,10 +2161,34 @@ import { environment } from '../../../../environments/environment';
             border-radius: 50%;
           }
 
-          .chair-top { top: 0; left: 50%; transform: translateX(-50%); width: 22px; height: 10px; }
-          .chair-bottom { bottom: 0; left: 50%; transform: translateX(-50%); width: 22px; height: 10px; }
-          .chair-left { left: 0; top: 50%; transform: translateY(-50%); width: 10px; height: 22px; }
-          .chair-right { right: 0; top: 50%; transform: translateY(-50%); width: 10px; height: 22px; }
+          .chair-top {
+            top: 0;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 22px;
+            height: 10px;
+          }
+          .chair-bottom {
+            bottom: 0;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 22px;
+            height: 10px;
+          }
+          .chair-left {
+            left: 0;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 10px;
+            height: 22px;
+          }
+          .chair-right {
+            right: 0;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 10px;
+            height: 22px;
+          }
         }
 
         /* Rectangular Table */
@@ -1994,12 +2202,48 @@ import { environment } from '../../../../environments/environment';
             border-radius: 14px;
           }
 
-          .chair-top { top: 0; left: 36%; transform: translateX(-50%); width: 24px; height: 10px; }
-          .chair-top-2 { top: 0; left: 64%; transform: translateX(-50%); width: 24px; height: 10px; }
-          .chair-bottom { bottom: 0; left: 36%; transform: translateX(-50%); width: 24px; height: 10px; }
-          .chair-bottom-2 { bottom: 0; left: 64%; transform: translateX(-50%); width: 24px; height: 10px; }
-          .chair-left { left: 0; top: 50%; transform: translateY(-50%); width: 10px; height: 24px; }
-          .chair-right { right: 0; top: 50%; transform: translateY(-50%); width: 10px; height: 24px; }
+          .chair-top {
+            top: 0;
+            left: 36%;
+            transform: translateX(-50%);
+            width: 24px;
+            height: 10px;
+          }
+          .chair-top-2 {
+            top: 0;
+            left: 64%;
+            transform: translateX(-50%);
+            width: 24px;
+            height: 10px;
+          }
+          .chair-bottom {
+            bottom: 0;
+            left: 36%;
+            transform: translateX(-50%);
+            width: 24px;
+            height: 10px;
+          }
+          .chair-bottom-2 {
+            bottom: 0;
+            left: 64%;
+            transform: translateX(-50%);
+            width: 24px;
+            height: 10px;
+          }
+          .chair-left {
+            left: 0;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 10px;
+            height: 24px;
+          }
+          .chair-right {
+            right: 0;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 10px;
+            height: 24px;
+          }
         }
 
         /* Chairs */
@@ -2048,10 +2292,18 @@ import { environment } from '../../../../environments/environment';
             border-radius: 50%;
             margin-top: 1px;
 
-            &.available { background: #10b981; }
-            &.occupied { background: #dc2626; }
-            &.reserved { background: #f59e0b; }
-            &.dirty { background: #6b7280; }
+            &.available {
+              background: #10b981;
+            }
+            &.occupied {
+              background: #dc2626;
+            }
+            &.reserved {
+              background: #f59e0b;
+            }
+            &.dirty {
+              background: #6b7280;
+            }
           }
 
           .tbl-active-pill {
@@ -2082,8 +2334,12 @@ import { environment } from '../../../../environments/environment';
             background: #f0fdf4;
             border-color: #10b981;
             box-shadow: 0 4px 10px rgba(16, 185, 129, 0.15);
-            .tbl-num { color: #065f46; }
-            .tbl-capacity { color: #047857; }
+            .tbl-num {
+              color: #065f46;
+            }
+            .tbl-capacity {
+              color: #047857;
+            }
           }
           .chair {
             background: #a7f3d0;
@@ -2094,7 +2350,9 @@ import { environment } from '../../../../environments/environment';
           .table-surface {
             background: linear-gradient(135deg, #fef2f2 0%, #fee2e2 100%) !important;
             border: 2.5px solid #ef4444 !important;
-            box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.22), 0 8px 18px rgba(239, 68, 68, 0.32) !important;
+            box-shadow:
+              0 0 0 3px rgba(239, 68, 68, 0.22),
+              0 8px 18px rgba(239, 68, 68, 0.32) !important;
             .tbl-num {
               color: #991b1b !important;
               font-weight: 800;
@@ -2121,7 +2379,9 @@ import { environment } from '../../../../environments/environment';
             background: #fffbeb;
             border-color: #f59e0b;
             box-shadow: 0 4px 10px rgba(245, 158, 11, 0.15);
-            .tbl-num { color: #92400e; }
+            .tbl-num {
+              color: #92400e;
+            }
           }
           .chair {
             background: #fde68a;
@@ -2133,7 +2393,9 @@ import { environment } from '../../../../environments/environment';
             background: #f3f4f6;
             border-color: #6b7280;
             box-shadow: 0 4px 10px rgba(107, 114, 128, 0.12);
-            .tbl-num { color: #374151; }
+            .tbl-num {
+              color: #374151;
+            }
           }
           .chair {
             background: #d1d5db;
@@ -2306,20 +2568,40 @@ import { environment } from '../../../../environments/environment';
               border-radius: 50%;
             }
 
-            &.available .choice-dot { background: #10b981; }
-            &.occupied .choice-dot { background: #dc2626; }
-            &.reserved .choice-dot { background: #f59e0b; }
-            &.dirty .choice-dot { background: #6b7280; }
+            &.available .choice-dot {
+              background: #10b981;
+            }
+            &.occupied .choice-dot {
+              background: #dc2626;
+            }
+            &.reserved .choice-dot {
+              background: #f59e0b;
+            }
+            &.dirty .choice-dot {
+              background: #6b7280;
+            }
 
             &.selected {
               border-color: currentColor;
               box-shadow: 0 0 0 2px currentColor;
             }
 
-            &.available.selected { color: #059669; background: #ecfdf5; }
-            &.occupied.selected { color: #dc2626; background: #fef2f2; }
-            &.reserved.selected { color: #d97706; background: #fffbeb; }
-            &.dirty.selected { color: #4b5563; background: #f3f4f6; }
+            &.available.selected {
+              color: #059669;
+              background: #ecfdf5;
+            }
+            &.occupied.selected {
+              color: #dc2626;
+              background: #fef2f2;
+            }
+            &.reserved.selected {
+              color: #d97706;
+              background: #fffbeb;
+            }
+            &.dirty.selected {
+              color: #4b5563;
+              background: #f3f4f6;
+            }
           }
         }
 
@@ -2408,8 +2690,12 @@ import { environment } from '../../../../environments/environment';
       }
 
       @keyframes slideInRight {
-        from { transform: translateX(100%); }
-        to { transform: translateX(0); }
+        from {
+          transform: translateX(100%);
+        }
+        to {
+          transform: translateX(0);
+        }
       }
 
       /* Add Place Modal */
@@ -3106,7 +3392,8 @@ import { environment } from '../../../../environments/environment';
           margin: 10mm;
         }
 
-        html, body {
+        html,
+        body {
           background: #ffffff !important;
           color: #14161b !important;
           margin: 0 !important;
@@ -3310,7 +3597,7 @@ export class TableListComponent implements OnInit {
   private adminAuth = inject(AdminAuthService);
 
   readonly isLoading = computed(
-    () => this.dataService.isTablesLoading() || !this.dataService.tablesLoaded()
+    () => this.dataService.isTablesLoading() || !this.dataService.tablesLoaded(),
   );
 
   readonly Math = Math;
@@ -3364,11 +3651,15 @@ export class TableListComponent implements OnInit {
   selectedTableForInspector = signal<Table | null>(null);
 
   // Section Boxes (Room Zones) State
-  sectionBoxes = signal<Record<string, { x: number; y: number; width: number; height: number }>>({});
+  sectionBoxes = signal<Record<string, { x: number; y: number; width: number; height: number }>>(
+    {},
+  );
   draggingSectionName = signal<string | null>(null);
 
   // Canvas Layout Persistence
-  tableCoords = signal<Record<string, { x: number; y: number; relX?: number; relY?: number; shape?: 'ROUND' | 'RECT' }>>({});
+  tableCoords = signal<
+    Record<string, { x: number; y: number; relX?: number; relY?: number; shape?: 'ROUND' | 'RECT' }>
+  >({});
   floorElements = signal<FloorElement[]>([]);
 
   // Dragging State
@@ -3546,7 +3837,9 @@ export class TableListComponent implements OnInit {
     this.sectionBoxes.set({});
   }
 
-  saveSectionBoxes(boxes: Record<string, { x: number; y: number; width: number; height: number }>): void {
+  saveSectionBoxes(
+    boxes: Record<string, { x: number; y: number; width: number; height: number }>,
+  ): void {
     this.sectionBoxes.set({ ...boxes });
     try {
       localStorage.setItem('restaurant_section_boxes', JSON.stringify(boxes));
@@ -3625,7 +3918,10 @@ export class TableListComponent implements OnInit {
     if (c?.relX !== undefined && !isNaN(c.relX)) return c.relX;
     if (c?.x !== undefined && !isNaN(c.x) && c.x < 500) return c.x;
     const secTables = this.getTablesBySection(table.section);
-    const idx = Math.max(0, secTables.findIndex((t) => t.id === table.id || t.number === table.number));
+    const idx = Math.max(
+      0,
+      secTables.findIndex((t) => t.id === table.id || t.number === table.number),
+    );
     const col = idx % 3;
     return 35 + col * 175;
   }
@@ -3635,7 +3931,10 @@ export class TableListComponent implements OnInit {
     if (c?.relY !== undefined && !isNaN(c.relY)) return c.relY;
     if (c?.y !== undefined && !isNaN(c.y) && c.y < 350) return c.y;
     const secTables = this.getTablesBySection(table.section);
-    const idx = Math.max(0, secTables.findIndex((t) => t.id === table.id || t.number === table.number));
+    const idx = Math.max(
+      0,
+      secTables.findIndex((t) => t.id === table.id || t.number === table.number),
+    );
     const row = Math.floor(idx / 3);
     return 65 + row * 155;
   }
@@ -3719,10 +4018,38 @@ export class TableListComponent implements OnInit {
     } catch (e) {}
 
     const defaults: FloorElement[] = [
-      { id: 'elem-entry-main', type: 'ENTRANCE', label: 'Main Entrance', section: 'ALL', posX: 40, posY: 20 },
-      { id: 'elem-kitchen-main', type: 'KITCHEN', label: 'Kitchen Pass', section: 'ALL', posX: 220, posY: 20 },
-      { id: 'elem-bar-main', type: 'BAR', label: 'Beverage Bar', section: 'ALL', posX: 400, posY: 20 },
-      { id: 'elem-restroom-main', type: 'RESTROOM', label: 'Restrooms', section: 'ALL', posX: 580, posY: 20 },
+      {
+        id: 'elem-entry-main',
+        type: 'ENTRANCE',
+        label: 'Main Entrance',
+        section: 'ALL',
+        posX: 40,
+        posY: 20,
+      },
+      {
+        id: 'elem-kitchen-main',
+        type: 'KITCHEN',
+        label: 'Kitchen Pass',
+        section: 'ALL',
+        posX: 220,
+        posY: 20,
+      },
+      {
+        id: 'elem-bar-main',
+        type: 'BAR',
+        label: 'Beverage Bar',
+        section: 'ALL',
+        posX: 400,
+        posY: 20,
+      },
+      {
+        id: 'elem-restroom-main',
+        type: 'RESTROOM',
+        label: 'Restrooms',
+        section: 'ALL',
+        posX: 580,
+        posY: 20,
+      },
     ];
     this.saveFloorElements(defaults);
   }
@@ -3766,13 +4093,20 @@ export class TableListComponent implements OnInit {
 
   getElementIcon(type: FloorElementType): string {
     switch (type) {
-      case 'ENTRANCE': return 'ph-door';
-      case 'KITCHEN': return 'ph-cooking-pot';
-      case 'BAR': return 'ph-martini';
-      case 'RESTROOM': return 'ph-toilet';
-      case 'WALL': return 'ph-plant';
-      case 'STAGE': return 'ph-speaker-high';
-      default: return 'ph-square';
+      case 'ENTRANCE':
+        return 'ph-door';
+      case 'KITCHEN':
+        return 'ph-cooking-pot';
+      case 'BAR':
+        return 'ph-martini';
+      case 'RESTROOM':
+        return 'ph-toilet';
+      case 'WALL':
+        return 'ph-plant';
+      case 'STAGE':
+        return 'ph-speaker-high';
+      default:
+        return 'ph-square';
     }
   }
 
@@ -3867,7 +4201,7 @@ export class TableListComponent implements OnInit {
         newY = Math.round(newY / 20) * 20;
       }
       const elems = this.floorElements().map((el) =>
-        el.id === elemId ? { ...el, posX: newX, posY: newY } : el
+        el.id === elemId ? { ...el, posX: newX, posY: newY } : el,
       );
       this.floorElements.set(elems);
     }
@@ -3914,19 +4248,26 @@ export class TableListComponent implements OnInit {
       shape: next,
     };
     this.saveCoords(coords);
-    this.toastService.info(`Table ${table.number} set to ${next === 'ROUND' ? 'Round' : 'Rectangle'}`);
+    this.toastService.info(
+      `Table ${table.number} set to ${next === 'ROUND' ? 'Round' : 'Rectangle'}`,
+    );
   }
 
   reassignTableSection(table: Table, newSection: string): void {
     if (table.section === newSection) return;
-    const updated = this.mock.tables().map((t) => (t.id === table.id ? { ...t, section: newSection } : t));
+    const updated = this.mock
+      .tables()
+      .map((t) => (t.id === table.id ? { ...t, section: newSection } : t));
     this.mock.tables.set(updated);
     this.mock.saveLocal('tables', updated);
 
     // Give it a neat non-overlapping spot in the destination section box
     const coords = { ...this.tableCoords() };
     const secTables = updated.filter((t) => t.section === newSection);
-    const idx = Math.max(0, secTables.findIndex((t) => t.id === table.id));
+    const idx = Math.max(
+      0,
+      secTables.findIndex((t) => t.id === table.id),
+    );
     const relX = 35 + (idx % 3) * 175;
     const relY = 65 + Math.floor(idx / 3) * 155;
     coords[table.id] = {
@@ -3983,7 +4324,9 @@ export class TableListComponent implements OnInit {
 
     this.saveCoords(coords);
     this.saveSectionBoxes(secBoxUpdates);
-    this.toastService.success(`Neatly arranged tables into section rooms for ${sec === 'ALL' ? 'All Places' : sec}`);
+    this.toastService.success(
+      `Neatly arranged tables into section rooms for ${sec === 'ALL' ? 'All Places' : sec}`,
+    );
   }
 
   zoomIn(): void {
@@ -4209,7 +4552,8 @@ export class TableListComponent implements OnInit {
     const brandName = (this.restaurant()?.name || 'GuruKripa Dhaba').toUpperCase();
     const section = (table.section || 'Main Dining Floor').toUpperCase();
     const tableNum = `TABLE ${table.number}`.toUpperCase();
-    const scanUrl = this.activeQrFullUrl() || `${window.location.origin}/table/${table.qrToken || table.number}`;
+    const scanUrl =
+      this.activeQrFullUrl() || `${window.location.origin}/table/${table.qrToken || table.number}`;
 
     try {
       // 1. Create high-resolution 300 DPI Standee canvas (800 x 1160 px)

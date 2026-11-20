@@ -483,7 +483,7 @@ export class CustomerDetailComponent implements OnInit {
   private toastService = inject(ToastService);
 
   readonly isLoading = computed(
-    () => this.dataService.isCustomersLoading() || !this.dataService.customersLoaded()
+    () => this.dataService.isCustomersLoading() || !this.dataService.customersLoaded(),
   );
   readonly isSavingPoints = signal<boolean>(false);
 
@@ -527,7 +527,11 @@ export class CustomerDetailComponent implements OnInit {
     const cust = this.customer();
     if (!cust || !this.pointsDelta) return;
 
-    this.mock.awardLoyaltyPoints(cust.id, this.pointsDelta, this.pointsReason || 'Manual adjustment');
+    this.mock.awardLoyaltyPoints(
+      cust.id,
+      this.pointsDelta,
+      this.pointsReason || 'Manual adjustment',
+    );
     const newPoints = Math.max(0, cust.loyaltyPoints + this.pointsDelta);
     this.toastService.success(`Updated loyalty balance for ${cust.name}: ${newPoints} pts`);
     this.showPointsModal = false;

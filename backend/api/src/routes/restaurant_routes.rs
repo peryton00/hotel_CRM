@@ -314,10 +314,14 @@ pub async fn mark_staff_attendance(
     Json(payload): Json<MarkAttendancePayload>,
 ) -> Result<impl IntoResponse, AppError> {
     let date = chrono::NaiveDate::parse_from_str(payload.attendance_date.trim(), "%Y-%m-%d")
-        .map_err(|_| AppError::BadRequest("Invalid date format, expected YYYY-MM-DD".to_string()))?;
+        .map_err(|_| {
+            AppError::BadRequest("Invalid date format, expected YYYY-MM-DD".to_string())
+        })?;
     let today = chrono::Utc::now().date_naive();
     if date > today {
-        return Err(AppError::BadRequest("Cannot mark attendance for future dates".to_string()));
+        return Err(AppError::BadRequest(
+            "Cannot mark attendance for future dates".to_string(),
+        ));
     }
     let status = payload.status.trim().to_uppercase();
 
@@ -373,9 +377,9 @@ pub async fn get_staff_performance(
     tenant: TenantContext,
     axum::extract::Query(query): axum::extract::Query<AttendanceQuery>,
 ) -> Result<impl IntoResponse, AppError> {
-    let month_str = query.month.unwrap_or_else(|| {
-        chrono::Utc::now().format("%Y-%m").to_string()
-    });
+    let month_str = query
+        .month
+        .unwrap_or_else(|| chrono::Utc::now().format("%Y-%m").to_string());
 
     let (year, month): (i32, u32) = if let Some((y, m)) = month_str.split_once('-') {
         (y.parse().unwrap_or(2026), m.parse().unwrap_or(11))
@@ -383,7 +387,11 @@ pub async fn get_staff_performance(
         (2026, 11)
     };
 
-    let (next_year, next_month) = if month == 12 { (year + 1, 1) } else { (year, month + 1) };
+    let (next_year, next_month) = if month == 12 {
+        (year + 1, 1)
+    } else {
+        (year, month + 1)
+    };
     let start_bound = chrono::NaiveDate::from_ymd_opt(year, month, 1)
         .unwrap_or_else(|| chrono::NaiveDate::from_ymd_opt(2026, 1, 1).unwrap());
     let end_bound = chrono::NaiveDate::from_ymd_opt(next_year, next_month, 28)
@@ -424,12 +432,16 @@ pub async fn get_staff_performance(
     .await
     .unwrap_or_default();
 
-    let mut att_map: std::collections::HashMap<Uuid, Vec<StaffAttendance>> = std::collections::HashMap::new();
+    let mut att_map: std::collections::HashMap<Uuid, Vec<StaffAttendance>> =
+        std::collections::HashMap::new();
     for att in attendance_rows {
         att_map.entry(att.staff_id).or_default().push(att);
     }
 
-    let mut order_list_map: std::collections::HashMap<Uuid, Vec<(i64, chrono::DateTime<chrono::Utc>)>> = std::collections::HashMap::new();
+    let mut order_list_map: std::collections::HashMap<
+        Uuid,
+        Vec<(i64, chrono::DateTime<chrono::Utc>)>,
+    > = std::collections::HashMap::new();
     for (sid, total, dt) in order_stats {
         order_list_map.entry(sid).or_default().push((total, dt));
     }
@@ -449,7 +461,12 @@ pub async fn get_staff_performance(
             (s, e)
         } else {
             let s = chrono::NaiveDate::from_ymd_opt(year, month, cycle_start_day as u32).unwrap();
-            let e = chrono::NaiveDate::from_ymd_opt(next_year, next_month, (cycle_start_day - 1) as u32).unwrap();
+            let e = chrono::NaiveDate::from_ymd_opt(
+                next_year,
+                next_month,
+                (cycle_start_day - 1) as u32,
+            )
+            .unwrap();
             (s, e)
         };
 

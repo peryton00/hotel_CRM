@@ -113,21 +113,15 @@ impl OrderService {
             ),
             OrderStatus::Ready => matches!(
                 target,
-                OrderStatus::Dispatched
-                    | OrderStatus::Served
-                    | OrderStatus::Completed
+                OrderStatus::Dispatched | OrderStatus::Served | OrderStatus::Completed
             ),
             OrderStatus::Dispatched => matches!(
                 target,
-                OrderStatus::Served
-                    | OrderStatus::Completed
-                    | OrderStatus::Ready
+                OrderStatus::Served | OrderStatus::Completed | OrderStatus::Ready
             ),
-            OrderStatus::Served => matches!(
-                target,
-                OrderStatus::Completed
-                    | OrderStatus::Dispatched
-            ),
+            OrderStatus::Served => {
+                matches!(target, OrderStatus::Completed | OrderStatus::Dispatched)
+            }
             _ => false,
         };
 

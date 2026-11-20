@@ -108,9 +108,7 @@ export function launchExternalUrl(url: string): void {
   try {
     const w = window as any;
     const tauriInvoke =
-      w.__TAURI__?.core?.invoke ||
-      w.__TAURI__?.invoke ||
-      w.__TAURI_INTERNALS__?.invoke;
+      w.__TAURI__?.core?.invoke || w.__TAURI__?.invoke || w.__TAURI_INTERNALS__?.invoke;
     if (typeof tauriInvoke === 'function') {
       tauriInvoke('open_external_url', { url }).catch(() => {});
     }

@@ -117,10 +117,7 @@ export class EscPosBuilder {
 
   text(str: string): this {
     // Convert ascii/utf8 string to bytes (sanitize non-ascii symbols for thermal printers)
-    const sanitized = str
-      .replace(/₹/g, 'Rs.')
-      .replace(/•/g, '-')
-      .replace(/—/g, '-');
+    const sanitized = str.replace(/₹/g, 'Rs.').replace(/•/g, '-').replace(/—/g, '-');
     for (let i = 0; i < sanitized.length; i++) {
       const code = sanitized.charCodeAt(i);
       this.buffer.push(code <= 255 ? code : 63); // 63 is '?'
@@ -262,7 +259,9 @@ export function buildEscPosReceipt(
   if (street) {
     b.textLine(street);
   }
-  const cityState = [restaurant.address?.city, restaurant.address?.state].filter(Boolean).join(', ');
+  const cityState = [restaurant.address?.city, restaurant.address?.state]
+    .filter(Boolean)
+    .join(', ');
   if (cityState) {
     b.textLine(cityState);
   }
@@ -355,13 +354,13 @@ export function buildEscPosReceipt(
       (order as any)?.cgstRate ??
       (order.subtotal > 0 && cgstAmount
         ? Math.round((cgstAmount / order.subtotal) * 1000) / 10
-        : restaurant?.taxSettings?.cgstRate ?? 2.5);
+        : (restaurant?.taxSettings?.cgstRate ?? 2.5));
     const sgstRate =
       tax?.sgstRate ??
       (order as any)?.sgstRate ??
       (order.subtotal > 0 && sgstAmount
         ? Math.round((sgstAmount / order.subtotal) * 1000) / 10
-        : restaurant?.taxSettings?.sgstRate ?? 2.5);
+        : (restaurant?.taxSettings?.sgstRate ?? 2.5));
     if (cgstAmount) {
       b.twoColumnRow(`CGST (${cgstRate}%):`, `Rs. ${cgstAmount.toFixed(2)}`);
     }
@@ -456,7 +455,9 @@ export function renderEscPosPreviewText(
   if (restaurant.tagline) lines.push(center(restaurant.tagline));
   const street = restaurant.address?.street;
   if (street) lines.push(center(street));
-  const cityState = [restaurant.address?.city, restaurant.address?.state].filter(Boolean).join(', ');
+  const cityState = [restaurant.address?.city, restaurant.address?.state]
+    .filter(Boolean)
+    .join(', ');
   if (cityState) lines.push(center(cityState));
   const phone = restaurant.contact?.phone;
   if (phone) lines.push(center(`Tel: ${phone}`));
@@ -563,13 +564,13 @@ export function renderEscPosPreviewText(
       (order as any)?.cgstRate ??
       (order.subtotal > 0 && cgstAmount
         ? Math.round((cgstAmount / order.subtotal) * 1000) / 10
-        : restaurant?.taxSettings?.cgstRate ?? 2.5);
+        : (restaurant?.taxSettings?.cgstRate ?? 2.5));
     const sgstRate =
       tax?.sgstRate ??
       (order as any)?.sgstRate ??
       (order.subtotal > 0 && sgstAmount
         ? Math.round((sgstAmount / order.subtotal) * 1000) / 10
-        : restaurant?.taxSettings?.sgstRate ?? 2.5);
+        : (restaurant?.taxSettings?.sgstRate ?? 2.5));
     if (cgstAmount) {
       lines.push(row(`CGST (${cgstRate}%):`, `Rs. ${cgstAmount.toFixed(2)}`));
     }

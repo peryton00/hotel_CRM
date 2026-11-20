@@ -1,6 +1,4 @@
 pub mod auth_routes;
-pub mod public_routes;
-pub mod ws_routes;
 pub mod billing_routes;
 pub mod coupon_routes;
 pub mod customer_routes;
@@ -9,9 +7,11 @@ pub mod health;
 pub mod inventory_routes;
 pub mod menu_routes;
 pub mod order_routes;
+pub mod public_routes;
 pub mod reports_routes;
 pub mod restaurant_routes;
 pub mod table_routes;
+pub mod ws_routes;
 
 use axum::{
     routing::{delete, get, post, put},
@@ -48,8 +48,7 @@ pub fn create_router(state: AppState) -> Router {
         )
         .route(
             "/restaurants/staff",
-            get(restaurant_routes::list_staff_members)
-                .post(restaurant_routes::create_staff_member),
+            get(restaurant_routes::list_staff_members).post(restaurant_routes::create_staff_member),
         )
         .route(
             "/restaurants/staff/attendance",
@@ -79,10 +78,7 @@ pub fn create_router(state: AppState) -> Router {
             "/menu/categories",
             get(menu_routes::list_categories).post(menu_routes::create_category),
         )
-        .route(
-            "/menu/categories/:id",
-            delete(menu_routes::delete_category),
-        )
+        .route("/menu/categories/:id", delete(menu_routes::delete_category))
         .route(
             "/menu/items",
             get(menu_routes::list_items).post(menu_routes::create_item),
@@ -117,10 +113,7 @@ pub fn create_router(state: AppState) -> Router {
             "/inventory/items",
             get(inventory_routes::list_items).post(inventory_routes::create_item),
         )
-        .route(
-            "/inventory/items/:id",
-            put(inventory_routes::update_item),
-        )
+        .route("/inventory/items/:id", put(inventory_routes::update_item))
         .route("/inventory/wastage", post(inventory_routes::record_wastage))
         .route(
             "/inventory/movements",
@@ -157,10 +150,7 @@ pub fn create_router(state: AppState) -> Router {
             "/feedback",
             get(feedback_routes::list_feedback).post(feedback_routes::create_feedback),
         )
-        .route(
-            "/feedback/:id/reply",
-            put(feedback_routes::reply_feedback),
-        )
+        .route("/feedback/:id/reply", put(feedback_routes::reply_feedback))
         // Reports & Dashboard
         .route("/reports/period", get(reports_routes::get_period_report))
         .route(
@@ -184,7 +174,10 @@ pub fn create_router(state: AppState) -> Router {
             get(health::check_restaurant_availability),
         )
         // Public unauthenticated routes
-        .route("/public/tables/:token", get(public_routes::get_public_table))
+        .route(
+            "/public/tables/:token",
+            get(public_routes::get_public_table),
+        )
         .route("/public/menu", get(public_routes::get_public_menu))
         .route(
             "/public/restaurant-status",
@@ -213,12 +206,18 @@ pub struct OpenExternalRequest {
 
 pub async fn system_open_external(
     axum::Json(payload): axum::Json<OpenExternalRequest>,
-) -> Result<axum::Json<serde_json::Value>, (axum::http::StatusCode, axum::Json<serde_json::Value>)> {
+) -> Result<axum::Json<serde_json::Value>, (axum::http::StatusCode, axum::Json<serde_json::Value>)>
+{
     let url = payload.url.trim().to_string();
-    if !url.starts_with("https://") && !url.starts_with("http://") && !url.starts_with("whatsapp://") {
+    if !url.starts_with("https://")
+        && !url.starts_with("http://")
+        && !url.starts_with("whatsapp://")
+    {
         return Err((
             axum::http::StatusCode::BAD_REQUEST,
-            axum::Json(serde_json::json!({ "error": "Invalid URL protocol. Only http, https, and whatsapp URLs allowed." })),
+            axum::Json(
+                serde_json::json!({ "error": "Invalid URL protocol. Only http, https, and whatsapp URLs allowed." }),
+            ),
         ));
     }
 
@@ -226,7 +225,12 @@ pub async fn system_open_external(
     {
         let escaped = url.replace('\'', "''");
         let _ = std::process::Command::new("powershell")
-            .args(["-NoProfile", "-NonInteractive", "-Command", &format!("Start-Process '{}'", escaped)])
+            .args([
+                "-NoProfile",
+                "-NonInteractive",
+                "-Command",
+                &format!("Start-Process '{}'", escaped),
+            ])
             .spawn();
     }
     #[cfg(target_os = "macos")]

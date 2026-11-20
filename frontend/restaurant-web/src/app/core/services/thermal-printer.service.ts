@@ -99,9 +99,7 @@ export class ThermalPrinterService {
     // 1. Try Tauri native print_escpos_raw if running in Tauri desktop shell
     const w = typeof window !== 'undefined' ? (window as any) : null;
     const tauriInvoke =
-      w?.__TAURI__?.core?.invoke ||
-      w?.__TAURI__?.invoke ||
-      w?.__TAURI_INTERNALS__?.invoke;
+      w?.__TAURI__?.core?.invoke || w?.__TAURI__?.invoke || w?.__TAURI_INTERNALS__?.invoke;
 
     if (typeof tauriInvoke === 'function') {
       return from(

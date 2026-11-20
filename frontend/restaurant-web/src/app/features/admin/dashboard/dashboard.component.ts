@@ -206,12 +206,25 @@ import {
             <div class="svg-chart-wrap">
               <svg viewBox="0 0 520 180" class="bar-chart-svg">
                 <line x1="40" y1="140" x2="500" y2="140" class="chart-grid-line" stroke-width="1" />
-                <line x1="40" y1="80" x2="500" y2="80" class="chart-grid-line dashed" stroke-dasharray="3,3" />
+                <line
+                  x1="40"
+                  y1="80"
+                  x2="500"
+                  y2="80"
+                  class="chart-grid-line dashed"
+                  stroke-dasharray="3,3"
+                />
                 <line x1="40" y1="20" x2="500" y2="20" stroke="transparent" />
 
-                <text x="32" y="143" font-size="10" class="chart-axis-text" text-anchor="end">0</text>
-                <text x="32" y="83" font-size="10" class="chart-axis-text" text-anchor="end">20k</text>
-                <text x="32" y="23" font-size="10" class="chart-axis-text" text-anchor="end">40k</text>
+                <text x="32" y="143" font-size="10" class="chart-axis-text" text-anchor="end">
+                  0
+                </text>
+                <text x="32" y="83" font-size="10" class="chart-axis-text" text-anchor="end">
+                  20k
+                </text>
+                <text x="32" y="23" font-size="10" class="chart-axis-text" text-anchor="end">
+                  40k
+                </text>
 
                 <!-- Bars -->
                 <g class="bars-group">
@@ -249,11 +262,12 @@ import {
               <span class="panel-pulse-dot"></span>
               <h2 class="heading-card">Active Orders Dispatch</h2>
             </div>
-            <a
-              routerLink="/admin/orders"
-              class="panel-action-link"
-              >View All @if (!isOrdersLoading()) { ({{ orders().length }}) }</a
-            >
+            <a routerLink="/admin/orders" class="panel-action-link"
+              >View All
+              @if (!isOrdersLoading()) {
+                ({{ orders().length }})
+              }
+            </a>
           </div>
 
           <div class="queue-list">
@@ -309,11 +323,7 @@ import {
         <div class="dashboard-panel">
           <div class="panel-header">
             <h2 class="heading-card">Top Selling Dishes</h2>
-            <a
-              routerLink="/admin/menu"
-              class="panel-action-link"
-              >Manage Menu</a
-            >
+            <a routerLink="/admin/menu" class="panel-action-link">Manage Menu</a>
           </div>
 
           <div class="table-container">
@@ -338,7 +348,13 @@ import {
                     <tr>
                       <td>
                         <div class="dish-name-cell">
-                          <span class="dish-rank-badge" [class.rank-gold]="idx === 0" [class.rank-silver]="idx === 1" [class.rank-bronze]="idx === 2">{{ idx + 1 }}</span>
+                          <span
+                            class="dish-rank-badge"
+                            [class.rank-gold]="idx === 0"
+                            [class.rank-silver]="idx === 1"
+                            [class.rank-bronze]="idx === 2"
+                            >{{ idx + 1 }}</span
+                          >
                           <strong>{{ item.name }}</strong>
                         </div>
                       </td>
@@ -347,7 +363,9 @@ import {
                       </td>
                       <td class="text-right font-mono">{{ item.ordersCount }} orders</td>
                       <td class="text-right">
-                        <span class="text-price font-mono font-bold">{{ item.revenue | currencyInr }}</span>
+                        <span class="text-price font-mono font-bold">{{
+                          item.revenue | currencyInr
+                        }}</span>
                       </td>
                     </tr>
                   } @empty {
@@ -372,10 +390,7 @@ import {
         <div class="dashboard-panel tables-summary-panel">
           <div class="panel-header">
             <h2 class="heading-card">Table Status</h2>
-            <a
-              routerLink="/admin/tables"
-              class="panel-action-link"
-              title="Open Floor Map"
+            <a routerLink="/admin/tables" class="panel-action-link" title="Open Floor Map"
               ><span>Manage Tables</span> <i class="ph ph-arrow-up-right"></i
             ></a>
           </div>
@@ -384,14 +399,32 @@ import {
             <div class="meter-meta">
               <span class="meter-title">Floor Utilization</span>
               <span class="meter-stat">
-                <strong>{{ occupiedTablesCount() }}</strong> / {{ totalTablesCount() }} Seated ({{ tableOccupancyRate() }}%)
+                <strong>{{ occupiedTablesCount() }}</strong> / {{ totalTablesCount() }} Seated ({{
+                  tableOccupancyRate()
+                }}%)
               </span>
             </div>
             <div class="capacity-bar-track">
-              <div class="capacity-seg seg-occupied" [style.width.%]="tableOccupiedPercent()" [title]="'Occupied: ' + occupiedTablesCount()"></div>
-              <div class="capacity-seg seg-reserved" [style.width.%]="tableReservedPercent()" [title]="'Reserved: ' + reservedTablesCount()"></div>
-              <div class="capacity-seg seg-dirty" [style.width.%]="tableDirtyPercent()" [title]="'Cleaning: ' + dirtyTablesCount()"></div>
-              <div class="capacity-seg seg-available" [style.width.%]="tableAvailablePercent()" [title]="'Available: ' + availableTablesCount()"></div>
+              <div
+                class="capacity-seg seg-occupied"
+                [style.width.%]="tableOccupiedPercent()"
+                [title]="'Occupied: ' + occupiedTablesCount()"
+              ></div>
+              <div
+                class="capacity-seg seg-reserved"
+                [style.width.%]="tableReservedPercent()"
+                [title]="'Reserved: ' + reservedTablesCount()"
+              ></div>
+              <div
+                class="capacity-seg seg-dirty"
+                [style.width.%]="tableDirtyPercent()"
+                [title]="'Cleaning: ' + dirtyTablesCount()"
+              ></div>
+              <div
+                class="capacity-seg seg-available"
+                [style.width.%]="tableAvailablePercent()"
+                [title]="'Available: ' + availableTablesCount()"
+              ></div>
             </div>
           </div>
 
@@ -1250,13 +1283,13 @@ export class AdminDashboardComponent {
   private mock = this.dataService;
 
   readonly isOrdersLoading = computed(
-    () => this.dataService.isOrdersLoading() || !this.dataService.ordersLoaded()
+    () => this.dataService.isOrdersLoading() || !this.dataService.ordersLoaded(),
   );
   readonly isTablesLoading = computed(
-    () => this.dataService.isTablesLoading() || !this.dataService.tablesLoaded()
+    () => this.dataService.isTablesLoading() || !this.dataService.tablesLoaded(),
   );
   readonly isMenuLoading = computed(
-    () => this.dataService.isMenuLoading() || !this.dataService.menuLoaded()
+    () => this.dataService.isMenuLoading() || !this.dataService.menuLoaded(),
   );
   readonly isLoading = computed(() => this.isOrdersLoading() || this.isTablesLoading());
 
@@ -1459,7 +1492,20 @@ export class AdminDashboardComponent {
       });
     }
 
-    const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    const monthNames = [
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
+    ];
     const currentMonth = new Date().getMonth();
     const monthsToShow: number[] = [];
     for (let offset = 6; offset >= 0; offset--) {
@@ -1501,7 +1547,10 @@ export class AdminDashboardComponent {
 
   popularItems = computed(() => {
     const orders = this.timeframeOrders();
-    const map = new Map<string, { name: string; category: string; ordersCount: number; revenue: number }>();
+    const map = new Map<
+      string,
+      { name: string; category: string; ordersCount: number; revenue: number }
+    >();
     const menu = this.mock.menuItems();
 
     for (const ord of orders) {

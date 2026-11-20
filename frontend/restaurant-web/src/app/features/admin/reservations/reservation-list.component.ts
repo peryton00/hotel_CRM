@@ -327,7 +327,7 @@ export class ReservationListComponent {
   private toastService = inject(ToastService);
 
   readonly isLoading = computed(
-    () => this.dataService.isReservationsLoading() || !this.dataService.reservationsLoaded()
+    () => this.dataService.isReservationsLoading() || !this.dataService.reservationsLoaded(),
   );
   readonly isSaving = signal<boolean>(false);
 

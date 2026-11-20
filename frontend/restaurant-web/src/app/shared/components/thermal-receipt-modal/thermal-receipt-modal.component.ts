@@ -9,10 +9,7 @@ import {
 } from '../../../core/services/thermal-printer.service';
 import { AdminAuthService } from '../../../core/services/admin-auth.service';
 import { ToastService } from '../../../core/services/toast.service';
-import {
-  renderEscPosPreviewText,
-  EscPosPrinterConfig,
-} from '../../../core/utils/escpos.util';
+import { renderEscPosPreviewText, EscPosPrinterConfig } from '../../../core/utils/escpos.util';
 
 @Component({
   selector: 'app-thermal-receipt-modal',
@@ -44,7 +41,13 @@ import {
                     [class.offline]="!activePrinterDisplayName()"
                   >
                     <span class="status-dot"></span>
-                    {{ config().target === 'WINDOWS' ? 'Windows RAW' : config().target === 'NETWORK' ? 'Network POS' : 'Browser Fallback' }}
+                    {{
+                      config().target === 'WINDOWS'
+                        ? 'Windows RAW'
+                        : config().target === 'NETWORK'
+                          ? 'Network POS'
+                          : 'Browser Fallback'
+                    }}
                   </span>
                 </div>
                 <p class="modal-subtitle">
@@ -165,7 +168,8 @@ import {
                   <div class="browser-info-card">
                     <i class="ph ph-info text-sky"></i>
                     <p class="text-xs">
-                      Uses your operating system's standard print dialog. Ideal for A4 laser printing, PDF archiving, or when no ESC/POS hardware is connected.
+                      Uses your operating system's standard print dialog. Ideal for A4 laser
+                      printing, PDF archiving, or when no ESC/POS hardware is connected.
                     </p>
                   </div>
                 }
@@ -254,12 +258,18 @@ import {
                     </div>
                     <div class="meta-cell">
                       <span class="meta-label">Bill Total</span>
-                      <span class="meta-val font-semibold">₹{{ (order.totalAmount || 0).toFixed(2) }}</span>
+                      <span class="meta-val font-semibold"
+                        >₹{{ (order.totalAmount || 0).toFixed(2) }}</span
+                      >
                     </div>
                     <div class="meta-cell">
                       <span class="meta-label">Print Status</span>
                       <span class="meta-val" [class.text-amber]="effectivePrintCount > 0">
-                        {{ effectivePrintCount > 0 ? 'Copy #' + (effectivePrintCount + 1) : 'Original' }}
+                        {{
+                          effectivePrintCount > 0
+                            ? 'Copy #' + (effectivePrintCount + 1)
+                            : 'Original'
+                        }}
                       </span>
                     </div>
                   </div>
@@ -302,10 +312,13 @@ import {
                     <div class="auth-text-wrap">
                       <div class="auth-title-row">
                         <strong class="auth-title">Supervisor Authorization Required</strong>
-                        <span class="auth-badge-pill">Copy #{{ (effectivePrintCount || 0) + 1 }}</span>
+                        <span class="auth-badge-pill"
+                          >Copy #{{ (effectivePrintCount || 0) + 1 }}</span
+                        >
                       </div>
                       <p class="auth-desc">
-                        Original bill has already been issued. Enter Admin PIN to print duplicate copy.
+                        Original bill has already been issued. Enter Admin PIN to print duplicate
+                        copy.
                       </p>
                     </div>
                     <button
@@ -364,11 +377,12 @@ import {
                 <div class="preview-specs">
                   <i class="ph ph-article"></i>
                   <span class="specs-title">ESC/POS Slip Preview</span>
-                  <span class="specs-badge">{{ config().paperWidth }} • {{ config().paperWidth === '80mm' ? '48' : '32' }} Cols</span>
+                  <span class="specs-badge"
+                    >{{ config().paperWidth }} •
+                    {{ config().paperWidth === '80mm' ? '48' : '32' }} Cols</span
+                  >
                 </div>
-                <div class="specs-hint">
-                  Exact monospace hardware output
-                </div>
+                <div class="specs-hint">Exact monospace hardware output</div>
               </div>
 
               <div class="tape-canvas">
@@ -408,18 +422,14 @@ import {
             <div class="footer-status-hint">
               <span class="hint-dot"></span>
               <span class="hint-text">
-                Target: <strong>{{ activePrinterDisplayName() }}</strong> ({{ config().paperWidth }})
+                Target: <strong>{{ activePrinterDisplayName() }}</strong> ({{
+                  config().paperWidth
+                }})
               </span>
             </div>
 
             <div class="footer-btn-group">
-              <button
-                type="button"
-                class="btn btn-ghost"
-                (click)="onClose()"
-              >
-                Close
-              </button>
+              <button type="button" class="btn btn-ghost" (click)="onClose()">Close</button>
 
               <button
                 type="button"
@@ -491,7 +501,12 @@ import {
         animation: modalScaleIn 0.18s cubic-bezier(0.16, 1, 0.3, 1);
 
         // Prevent theme inversion: ensure modal typography always stays sharp and high contrast
-        h1, h2, h3, h4, strong, b {
+        h1,
+        h2,
+        h3,
+        h4,
+        strong,
+        b {
           color: #0f172a;
         }
       }
@@ -1080,7 +1095,9 @@ import {
         display: flex;
         flex-direction: column;
         gap: 10px;
-        box-shadow: 0 4px 12px -2px rgba(217, 119, 6, 0.12), 0 2px 4px -1px rgba(0, 0, 0, 0.04);
+        box-shadow:
+          0 4px 12px -2px rgba(217, 119, 6, 0.12),
+          0 2px 4px -1px rgba(0, 0, 0, 0.04);
         animation: authCardIn 0.2s cubic-bezier(0.16, 1, 0.3, 1);
       }
 
@@ -1308,7 +1325,9 @@ import {
         .admin-auth-card {
           background: linear-gradient(145deg, #1e1910 0%, #15120d 100%) !important;
           border-color: rgba(245, 158, 11, 0.35) !important;
-          box-shadow: 0 6px 18px -4px rgba(0, 0, 0, 0.6), 0 0 12px rgba(245, 158, 11, 0.08) !important;
+          box-shadow:
+            0 6px 18px -4px rgba(0, 0, 0, 0.6),
+            0 0 12px rgba(245, 158, 11, 0.08) !important;
         }
 
         .auth-icon-badge {
@@ -1476,13 +1495,15 @@ import {
 
         &.top {
           top: -6px;
-          background-image: linear-gradient(135deg, #f1f5f9 50%, transparent 50%),
-                            linear-gradient(-135deg, #f1f5f9 50%, #ffffff 50%);
+          background-image:
+            linear-gradient(135deg, #f1f5f9 50%, transparent 50%),
+            linear-gradient(-135deg, #f1f5f9 50%, #ffffff 50%);
         }
         &.bottom {
           bottom: -6px;
-          background-image: linear-gradient(45deg, #f1f5f9 50%, #ffffff 50%),
-                            linear-gradient(-45deg, #f1f5f9 50%, transparent 50%);
+          background-image:
+            linear-gradient(45deg, #f1f5f9 50%, #ffffff 50%),
+            linear-gradient(-45deg, #f1f5f9 50%, transparent 50%);
         }
       }
 
@@ -1506,7 +1527,8 @@ import {
       /* Receipt Monospace Content */
       .paper-mono-content {
         margin: 0;
-        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Courier New", monospace;
+        font-family:
+          ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Courier New', monospace;
         font-size: 11px;
         line-height: 1.35;
         white-space: pre;

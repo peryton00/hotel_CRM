@@ -80,11 +80,23 @@ export type SkeletonVariant =
           @case ('stat-card') {
             <div class="skeleton-stat-card">
               <div class="stat-header">
-                <div class="skeleton-base" style="width: 45%; height: 14px; border-radius: 4px;"></div>
-                <div class="skeleton-base skeleton-circle" style="width: 32px; height: 32px; border-radius: 8px;"></div>
+                <div
+                  class="skeleton-base"
+                  style="width: 45%; height: 14px; border-radius: 4px;"
+                ></div>
+                <div
+                  class="skeleton-base skeleton-circle"
+                  style="width: 32px; height: 32px; border-radius: 8px;"
+                ></div>
               </div>
-              <div class="skeleton-base" style="width: 65%; height: 28px; margin: 14px 0 10px 0; border-radius: 6px;"></div>
-              <div class="skeleton-base" style="width: 50%; height: 12px; border-radius: 4px;"></div>
+              <div
+                class="skeleton-base"
+                style="width: 65%; height: 28px; margin: 14px 0 10px 0; border-radius: 6px;"
+              ></div>
+              <div
+                class="skeleton-base"
+                style="width: 50%; height: 12px; border-radius: 4px;"
+              ></div>
             </div>
           }
 
@@ -93,28 +105,58 @@ export type SkeletonVariant =
               <!-- Top Row: ID + Status -->
               <div class="order-card-top">
                 <div style="display: flex; align-items: center; gap: 8px;">
-                  <div class="skeleton-base" style="width: 80px; height: 20px; border-radius: 4px;"></div>
-                  <div class="skeleton-base" style="width: 50px; height: 14px; border-radius: 4px;"></div>
+                  <div
+                    class="skeleton-base"
+                    style="width: 80px; height: 20px; border-radius: 4px;"
+                  ></div>
+                  <div
+                    class="skeleton-base"
+                    style="width: 50px; height: 14px; border-radius: 4px;"
+                  ></div>
                 </div>
-                <div class="skeleton-base" style="width: 70px; height: 22px; border-radius: 9999px;"></div>
+                <div
+                  class="skeleton-base"
+                  style="width: 70px; height: 22px; border-radius: 9999px;"
+                ></div>
               </div>
               <!-- Guest Bar -->
               <div class="order-card-guest">
-                <div class="skeleton-base" style="width: 88px; height: 26px; border-radius: 6px;"></div>
+                <div
+                  class="skeleton-base"
+                  style="width: 88px; height: 26px; border-radius: 6px;"
+                ></div>
                 <div style="display: flex; flex-direction: column; gap: 4px; flex: 1;">
-                  <div class="skeleton-base" style="width: 55%; height: 14px; border-radius: 4px;"></div>
-                  <div class="skeleton-base" style="width: 35%; height: 11px; border-radius: 4px;"></div>
+                  <div
+                    class="skeleton-base"
+                    style="width: 55%; height: 14px; border-radius: 4px;"
+                  ></div>
+                  <div
+                    class="skeleton-base"
+                    style="width: 35%; height: 11px; border-radius: 4px;"
+                  ></div>
                 </div>
               </div>
               <!-- Dishes Summary -->
               <div class="order-card-dishes">
-                <div class="skeleton-base" style="width: 90%; height: 13px; border-radius: 4px;"></div>
-                <div class="skeleton-base" style="width: 75%; height: 13px; border-radius: 4px;"></div>
+                <div
+                  class="skeleton-base"
+                  style="width: 90%; height: 13px; border-radius: 4px;"
+                ></div>
+                <div
+                  class="skeleton-base"
+                  style="width: 75%; height: 13px; border-radius: 4px;"
+                ></div>
               </div>
               <!-- Pricing Row -->
               <div class="order-card-pricing">
-                <div class="skeleton-base" style="width: 30%; height: 12px; border-radius: 4px;"></div>
-                <div class="skeleton-base" style="width: 60px; height: 20px; border-radius: 4px;"></div>
+                <div
+                  class="skeleton-base"
+                  style="width: 30%; height: 12px; border-radius: 4px;"
+                ></div>
+                <div
+                  class="skeleton-base"
+                  style="width: 60px; height: 20px; border-radius: 4px;"
+                ></div>
               </div>
               <!-- Stepper bar -->
               <div class="order-card-stepper">
@@ -126,7 +168,10 @@ export type SkeletonVariant =
               </div>
               <!-- Action Button -->
               <div class="order-card-btn">
-                <div class="skeleton-base" style="width: 100%; height: 36px; border-radius: 6px;"></div>
+                <div
+                  class="skeleton-base"
+                  style="width: 100%; height: 36px; border-radius: 6px;"
+                ></div>
               </div>
             </div>
           }
@@ -135,17 +180,35 @@ export type SkeletonVariant =
             <div class="skeleton-table-card">
               <div class="tbl-top">
                 <div>
-                  <div class="skeleton-base" style="width: 60px; height: 26px; border-radius: 4px; margin-bottom: 6px;"></div>
-                  <div class="skeleton-base" style="width: 90px; height: 12px; border-radius: 4px;"></div>
+                  <div
+                    class="skeleton-base"
+                    style="width: 60px; height: 26px; border-radius: 4px; margin-bottom: 6px;"
+                  ></div>
+                  <div
+                    class="skeleton-base"
+                    style="width: 90px; height: 12px; border-radius: 4px;"
+                  ></div>
                 </div>
-                <div class="skeleton-base" style="width: 75px; height: 24px; border-radius: 9999px;"></div>
+                <div
+                  class="skeleton-base"
+                  style="width: 75px; height: 24px; border-radius: 9999px;"
+                ></div>
               </div>
               <div class="tbl-mid">
-                <div class="skeleton-base" style="width: 100%; height: 42px; border-radius: 8px;"></div>
+                <div
+                  class="skeleton-base"
+                  style="width: 100%; height: 42px; border-radius: 8px;"
+                ></div>
               </div>
               <div class="tbl-actions">
-                <div class="skeleton-base" style="width: 65%; height: 32px; border-radius: 6px;"></div>
-                <div class="skeleton-base" style="width: 32px; height: 32px; border-radius: 6px;"></div>
+                <div
+                  class="skeleton-base"
+                  style="width: 65%; height: 32px; border-radius: 6px;"
+                ></div>
+                <div
+                  class="skeleton-base"
+                  style="width: 32px; height: 32px; border-radius: 6px;"
+                ></div>
               </div>
             </div>
           }
@@ -154,17 +217,41 @@ export type SkeletonVariant =
             <div class="skeleton-food-card">
               <div class="food-card-left">
                 <div style="display: flex; gap: 6px; margin-bottom: 8px;">
-                  <div class="skeleton-base" style="width: 18px; height: 18px; border-radius: 3px;"></div>
-                  <div class="skeleton-base" style="width: 70px; height: 18px; border-radius: 4px;"></div>
+                  <div
+                    class="skeleton-base"
+                    style="width: 18px; height: 18px; border-radius: 3px;"
+                  ></div>
+                  <div
+                    class="skeleton-base"
+                    style="width: 70px; height: 18px; border-radius: 4px;"
+                  ></div>
                 </div>
-                <div class="skeleton-base" style="width: 75%; height: 20px; border-radius: 4px; margin-bottom: 6px;"></div>
-                <div class="skeleton-base" style="width: 50px; height: 16px; border-radius: 4px; margin-bottom: 8px;"></div>
-                <div class="skeleton-base" style="width: 95%; height: 12px; border-radius: 4px; margin-bottom: 4px;"></div>
-                <div class="skeleton-base" style="width: 80%; height: 12px; border-radius: 4px;"></div>
+                <div
+                  class="skeleton-base"
+                  style="width: 75%; height: 20px; border-radius: 4px; margin-bottom: 6px;"
+                ></div>
+                <div
+                  class="skeleton-base"
+                  style="width: 50px; height: 16px; border-radius: 4px; margin-bottom: 8px;"
+                ></div>
+                <div
+                  class="skeleton-base"
+                  style="width: 95%; height: 12px; border-radius: 4px; margin-bottom: 4px;"
+                ></div>
+                <div
+                  class="skeleton-base"
+                  style="width: 80%; height: 12px; border-radius: 4px;"
+                ></div>
               </div>
               <div class="food-card-right">
-                <div class="skeleton-base" style="width: 96px; height: 96px; border-radius: 10px;"></div>
-                <div class="skeleton-base" style="width: 64px; height: 28px; border-radius: 6px; margin-top: -14px;"></div>
+                <div
+                  class="skeleton-base"
+                  style="width: 96px; height: 96px; border-radius: 10px;"
+                ></div>
+                <div
+                  class="skeleton-base"
+                  style="width: 64px; height: 28px; border-radius: 6px; margin-top: -14px;"
+                ></div>
               </div>
             </div>
           }
@@ -173,14 +260,26 @@ export type SkeletonVariant =
             <div class="skeleton-canvas-floor">
               <!-- Architectural fixtures corridor -->
               <div class="canvas-corridor">
-                <div class="skeleton-base" style="width: 120px; height: 32px; border-radius: 6px;"></div>
-                <div class="skeleton-base" style="width: 130px; height: 32px; border-radius: 6px;"></div>
-                <div class="skeleton-base" style="width: 110px; height: 32px; border-radius: 6px;"></div>
+                <div
+                  class="skeleton-base"
+                  style="width: 120px; height: 32px; border-radius: 6px;"
+                ></div>
+                <div
+                  class="skeleton-base"
+                  style="width: 130px; height: 32px; border-radius: 6px;"
+                ></div>
+                <div
+                  class="skeleton-base"
+                  style="width: 110px; height: 32px; border-radius: 6px;"
+                ></div>
               </div>
               <!-- Room Sections Grid -->
               <div class="canvas-rooms-grid">
                 <div class="canvas-room-box">
-                  <div class="skeleton-base room-title-skel" style="width: 140px; height: 20px; border-radius: 4px;"></div>
+                  <div
+                    class="skeleton-base room-title-skel"
+                    style="width: 140px; height: 20px; border-radius: 4px;"
+                  ></div>
                   <div class="room-tables-wrap">
                     <div class="canvas-tbl-skel skeleton-base"></div>
                     <div class="canvas-tbl-skel skeleton-base"></div>
@@ -189,7 +288,10 @@ export type SkeletonVariant =
                   </div>
                 </div>
                 <div class="canvas-room-box">
-                  <div class="skeleton-base room-title-skel" style="width: 120px; height: 20px; border-radius: 4px;"></div>
+                  <div
+                    class="skeleton-base room-title-skel"
+                    style="width: 120px; height: 20px; border-radius: 4px;"
+                  ></div>
                   <div class="room-tables-wrap">
                     <div class="canvas-tbl-skel skeleton-base"></div>
                     <div class="canvas-tbl-skel skeleton-base"></div>
@@ -205,39 +307,72 @@ export type SkeletonVariant =
               <div style="display: flex; align-items: center; gap: 10px; width: 22%;">
                 <div class="skeleton-base skeleton-circle" style="width: 32px; height: 32px;"></div>
                 <div style="display: flex; flex-direction: column; gap: 4px; flex: 1;">
-                  <div class="skeleton-base" style="width: 70%; height: 14px; border-radius: 4px;"></div>
-                  <div class="skeleton-base" style="width: 40%; height: 11px; border-radius: 4px;"></div>
+                  <div
+                    class="skeleton-base"
+                    style="width: 70%; height: 14px; border-radius: 4px;"
+                  ></div>
+                  <div
+                    class="skeleton-base"
+                    style="width: 40%; height: 11px; border-radius: 4px;"
+                  ></div>
                 </div>
               </div>
               <!-- Col 2: Phone & Email -->
               <div style="display: flex; flex-direction: column; gap: 4px; width: 18%;">
-                <div class="skeleton-base" style="width: 75%; height: 13px; border-radius: 4px;"></div>
-                <div class="skeleton-base" style="width: 55%; height: 11px; border-radius: 4px;"></div>
+                <div
+                  class="skeleton-base"
+                  style="width: 75%; height: 13px; border-radius: 4px;"
+                ></div>
+                <div
+                  class="skeleton-base"
+                  style="width: 55%; height: 11px; border-radius: 4px;"
+                ></div>
               </div>
               <!-- Col 3: Loyalty Tier -->
               <div style="width: 12%;">
-                <div class="skeleton-base" style="width: 68px; height: 22px; border-radius: 9999px;"></div>
+                <div
+                  class="skeleton-base"
+                  style="width: 68px; height: 22px; border-radius: 9999px;"
+                ></div>
               </div>
               <!-- Col 4: Status -->
               <div style="width: 10%;">
-                <div class="skeleton-base" style="width: 55px; height: 20px; border-radius: 9999px;"></div>
+                <div
+                  class="skeleton-base"
+                  style="width: 55px; height: 20px; border-radius: 9999px;"
+                ></div>
               </div>
               <!-- Col 5: Visits -->
               <div style="width: 8%;">
-                <div class="skeleton-base" style="width: 28px; height: 14px; border-radius: 4px;"></div>
+                <div
+                  class="skeleton-base"
+                  style="width: 28px; height: 14px; border-radius: 4px;"
+                ></div>
               </div>
               <!-- Col 6: Lifetime Spend -->
               <div style="width: 12%;">
-                <div class="skeleton-base" style="width: 60px; height: 14px; border-radius: 4px;"></div>
+                <div
+                  class="skeleton-base"
+                  style="width: 60px; height: 14px; border-radius: 4px;"
+                ></div>
               </div>
               <!-- Col 7: Last Dining -->
               <div style="width: 10%;">
-                <div class="skeleton-base" style="width: 64px; height: 12px; border-radius: 4px;"></div>
+                <div
+                  class="skeleton-base"
+                  style="width: 64px; height: 12px; border-radius: 4px;"
+                ></div>
               </div>
               <!-- Col 8: Actions -->
               <div style="width: 8%; display: flex; gap: 6px; justify-content: flex-end;">
-                <div class="skeleton-base" style="width: 28px; height: 28px; border-radius: 6px;"></div>
-                <div class="skeleton-base" style="width: 28px; height: 28px; border-radius: 6px;"></div>
+                <div
+                  class="skeleton-base"
+                  style="width: 28px; height: 28px; border-radius: 6px;"
+                ></div>
+                <div
+                  class="skeleton-base"
+                  style="width: 28px; height: 28px; border-radius: 6px;"
+                ></div>
               </div>
             </div>
           }
@@ -246,33 +381,60 @@ export type SkeletonVariant =
             <div class="skeleton-table-row reservation-row-layout">
               <!-- Guest Details -->
               <div style="display: flex; flex-direction: column; gap: 4px; width: 22%;">
-                <div class="skeleton-base" style="width: 70%; height: 14px; border-radius: 4px;"></div>
-                <div class="skeleton-base" style="width: 50%; height: 11px; border-radius: 4px;"></div>
+                <div
+                  class="skeleton-base"
+                  style="width: 70%; height: 14px; border-radius: 4px;"
+                ></div>
+                <div
+                  class="skeleton-base"
+                  style="width: 50%; height: 11px; border-radius: 4px;"
+                ></div>
               </div>
               <!-- Date & Time -->
               <div style="width: 18%;">
-                <div class="skeleton-base" style="width: 80%; height: 14px; border-radius: 4px;"></div>
+                <div
+                  class="skeleton-base"
+                  style="width: 80%; height: 14px; border-radius: 4px;"
+                ></div>
               </div>
               <!-- Party Size -->
               <div style="width: 14%;">
-                <div class="skeleton-base" style="width: 70px; height: 22px; border-radius: 9999px;"></div>
+                <div
+                  class="skeleton-base"
+                  style="width: 70px; height: 22px; border-radius: 9999px;"
+                ></div>
               </div>
               <!-- Table & Section -->
               <div style="display: flex; flex-direction: column; gap: 4px; width: 16%;">
-                <div class="skeleton-base" style="width: 60%; height: 14px; border-radius: 4px;"></div>
-                <div class="skeleton-base" style="width: 45%; height: 11px; border-radius: 4px;"></div>
+                <div
+                  class="skeleton-base"
+                  style="width: 60%; height: 14px; border-radius: 4px;"
+                ></div>
+                <div
+                  class="skeleton-base"
+                  style="width: 45%; height: 11px; border-radius: 4px;"
+                ></div>
               </div>
               <!-- Special Requests -->
               <div style="width: 12%;">
-                <div class="skeleton-base" style="width: 75%; height: 12px; border-radius: 4px;"></div>
+                <div
+                  class="skeleton-base"
+                  style="width: 75%; height: 12px; border-radius: 4px;"
+                ></div>
               </div>
               <!-- Status -->
               <div style="width: 10%;">
-                <div class="skeleton-base" style="width: 65px; height: 22px; border-radius: 9999px;"></div>
+                <div
+                  class="skeleton-base"
+                  style="width: 65px; height: 22px; border-radius: 9999px;"
+                ></div>
               </div>
               <!-- Actions -->
               <div style="width: 8%; display: flex; justify-content: flex-end;">
-                <div class="skeleton-base" style="width: 72px; height: 28px; border-radius: 6px;"></div>
+                <div
+                  class="skeleton-base"
+                  style="width: 72px; height: 28px; border-radius: 6px;"
+                ></div>
               </div>
             </div>
           }
@@ -281,37 +443,67 @@ export type SkeletonVariant =
             <div class="skeleton-table-row billing-row-layout">
               <!-- Order & Table -->
               <div style="display: flex; flex-direction: column; gap: 4px; width: 18%;">
-                <div class="skeleton-base" style="width: 70px; height: 20px; border-radius: 4px;"></div>
-                <div class="skeleton-base" style="width: 85px; height: 12px; border-radius: 4px;"></div>
+                <div
+                  class="skeleton-base"
+                  style="width: 70px; height: 20px; border-radius: 4px;"
+                ></div>
+                <div
+                  class="skeleton-base"
+                  style="width: 85px; height: 12px; border-radius: 4px;"
+                ></div>
               </div>
               <!-- Guest Details -->
               <div style="display: flex; flex-direction: column; gap: 4px; width: 16%;">
-                <div class="skeleton-base" style="width: 80%; height: 14px; border-radius: 4px;"></div>
-                <div class="skeleton-base" style="width: 60%; height: 11px; border-radius: 4px;"></div>
+                <div
+                  class="skeleton-base"
+                  style="width: 80%; height: 14px; border-radius: 4px;"
+                ></div>
+                <div
+                  class="skeleton-base"
+                  style="width: 60%; height: 11px; border-radius: 4px;"
+                ></div>
               </div>
               <!-- Items Summary -->
               <div style="width: 20%;">
-                <div class="skeleton-base" style="width: 85%; height: 13px; border-radius: 4px;"></div>
+                <div
+                  class="skeleton-base"
+                  style="width: 85%; height: 13px; border-radius: 4px;"
+                ></div>
               </div>
               <!-- Subtotal -->
               <div style="width: 10%;">
-                <div class="skeleton-base" style="width: 55px; height: 14px; border-radius: 4px;"></div>
+                <div
+                  class="skeleton-base"
+                  style="width: 55px; height: 14px; border-radius: 4px;"
+                ></div>
               </div>
               <!-- Taxes -->
               <div style="width: 10%;">
-                <div class="skeleton-base" style="width: 45px; height: 14px; border-radius: 4px;"></div>
+                <div
+                  class="skeleton-base"
+                  style="width: 45px; height: 14px; border-radius: 4px;"
+                ></div>
               </div>
               <!-- Total -->
               <div style="width: 10%;">
-                <div class="skeleton-base" style="width: 60px; height: 16px; border-radius: 4px;"></div>
+                <div
+                  class="skeleton-base"
+                  style="width: 60px; height: 16px; border-radius: 4px;"
+                ></div>
               </div>
               <!-- Payment Status -->
               <div style="width: 8%;">
-                <div class="skeleton-base" style="width: 60px; height: 22px; border-radius: 9999px;"></div>
+                <div
+                  class="skeleton-base"
+                  style="width: 60px; height: 22px; border-radius: 9999px;"
+                ></div>
               </div>
               <!-- Actions -->
               <div style="width: 8%; display: flex; justify-content: flex-end; gap: 6px;">
-                <div class="skeleton-base" style="width: 64px; height: 28px; border-radius: 6px;"></div>
+                <div
+                  class="skeleton-base"
+                  style="width: 64px; height: 28px; border-radius: 6px;"
+                ></div>
               </div>
             </div>
           }
@@ -320,69 +512,138 @@ export type SkeletonVariant =
             <div class="skeleton-table-row ingredient-row-layout">
               <!-- Spec & Supplier -->
               <div style="display: flex; flex-direction: column; gap: 4px; width: 22%;">
-                <div class="skeleton-base" style="width: 75%; height: 14px; border-radius: 4px;"></div>
-                <div class="skeleton-base" style="width: 50%; height: 11px; border-radius: 4px;"></div>
+                <div
+                  class="skeleton-base"
+                  style="width: 75%; height: 14px; border-radius: 4px;"
+                ></div>
+                <div
+                  class="skeleton-base"
+                  style="width: 50%; height: 11px; border-radius: 4px;"
+                ></div>
               </div>
               <!-- Category -->
               <div style="width: 12%;">
-                <div class="skeleton-base" style="width: 65px; height: 20px; border-radius: 9999px;"></div>
+                <div
+                  class="skeleton-base"
+                  style="width: 65px; height: 20px; border-radius: 9999px;"
+                ></div>
               </div>
               <!-- Current Stock + bar -->
               <div style="display: flex; flex-direction: column; gap: 4px; width: 16%;">
-                <div class="skeleton-base" style="width: 55px; height: 14px; border-radius: 4px;"></div>
-                <div class="skeleton-base" style="width: 80px; height: 5px; border-radius: 3px;"></div>
+                <div
+                  class="skeleton-base"
+                  style="width: 55px; height: 14px; border-radius: 4px;"
+                ></div>
+                <div
+                  class="skeleton-base"
+                  style="width: 80px; height: 5px; border-radius: 3px;"
+                ></div>
               </div>
               <!-- Min Threshold -->
               <div style="width: 12%;">
-                <div class="skeleton-base" style="width: 45px; height: 13px; border-radius: 4px;"></div>
+                <div
+                  class="skeleton-base"
+                  style="width: 45px; height: 13px; border-radius: 4px;"
+                ></div>
               </div>
               <!-- Unit Rate -->
               <div style="width: 12%;">
-                <div class="skeleton-base" style="width: 55px; height: 13px; border-radius: 4px;"></div>
+                <div
+                  class="skeleton-base"
+                  style="width: 55px; height: 13px; border-radius: 4px;"
+                ></div>
               </div>
               <!-- Valuation -->
               <div style="width: 12%;">
-                <div class="skeleton-base" style="width: 60px; height: 14px; border-radius: 4px;"></div>
+                <div
+                  class="skeleton-base"
+                  style="width: 60px; height: 14px; border-radius: 4px;"
+                ></div>
               </div>
               <!-- Status -->
               <div style="width: 8%;">
-                <div class="skeleton-base" style="width: 55px; height: 20px; border-radius: 9999px;"></div>
+                <div
+                  class="skeleton-base"
+                  style="width: 55px; height: 20px; border-radius: 9999px;"
+                ></div>
               </div>
               <!-- Actions -->
               <div style="width: 6%; display: flex; justify-content: flex-end; gap: 4px;">
-                <div class="skeleton-base" style="width: 24px; height: 24px; border-radius: 4px;"></div>
-                <div class="skeleton-base" style="width: 24px; height: 24px; border-radius: 4px;"></div>
+                <div
+                  class="skeleton-base"
+                  style="width: 24px; height: 24px; border-radius: 4px;"
+                ></div>
+                <div
+                  class="skeleton-base"
+                  style="width: 24px; height: 24px; border-radius: 4px;"
+                ></div>
               </div>
             </div>
           }
 
           @case ('card') {
             <div class="skeleton-card">
-              <div class="card-thumb skeleton-base" style="width: 100%; height: 140px; border-radius: 8px 8px 0 0;"></div>
+              <div
+                class="card-thumb skeleton-base"
+                style="width: 100%; height: 140px; border-radius: 8px 8px 0 0;"
+              ></div>
               <div class="card-body">
-                <div class="skeleton-base" style="width: 70%; height: 18px; margin-bottom: 8px; border-radius: 4px;"></div>
-                <div class="skeleton-base" style="width: 40%; height: 14px; margin-bottom: 12px; border-radius: 4px;"></div>
-                <div class="skeleton-base" style="width: 100%; height: 12px; margin-bottom: 6px; border-radius: 4px;"></div>
-                <div class="skeleton-base" style="width: 85%; height: 12px; border-radius: 4px;"></div>
+                <div
+                  class="skeleton-base"
+                  style="width: 70%; height: 18px; margin-bottom: 8px; border-radius: 4px;"
+                ></div>
+                <div
+                  class="skeleton-base"
+                  style="width: 40%; height: 14px; margin-bottom: 12px; border-radius: 4px;"
+                ></div>
+                <div
+                  class="skeleton-base"
+                  style="width: 100%; height: 12px; margin-bottom: 6px; border-radius: 4px;"
+                ></div>
+                <div
+                  class="skeleton-base"
+                  style="width: 85%; height: 12px; border-radius: 4px;"
+                ></div>
               </div>
             </div>
           }
 
           @case ('table-row') {
             <div class="skeleton-table-row">
-              <div class="skeleton-base cell-1" style="width: 28%; height: 14px; border-radius: 4px;"></div>
-              <div class="skeleton-base cell-2" style="width: 20%; height: 14px; border-radius: 4px;"></div>
-              <div class="skeleton-base cell-3" style="width: 15%; height: 14px; border-radius: 4px;"></div>
-              <div class="skeleton-base cell-4" style="width: 12%; height: 14px; border-radius: 4px;"></div>
-              <div class="skeleton-base cell-5" style="width: 15%; height: 14px; border-radius: 4px;"></div>
+              <div
+                class="skeleton-base cell-1"
+                style="width: 28%; height: 14px; border-radius: 4px;"
+              ></div>
+              <div
+                class="skeleton-base cell-2"
+                style="width: 20%; height: 14px; border-radius: 4px;"
+              ></div>
+              <div
+                class="skeleton-base cell-3"
+                style="width: 15%; height: 14px; border-radius: 4px;"
+              ></div>
+              <div
+                class="skeleton-base cell-4"
+                style="width: 12%; height: 14px; border-radius: 4px;"
+              ></div>
+              <div
+                class="skeleton-base cell-5"
+                style="width: 15%; height: 14px; border-radius: 4px;"
+              ></div>
             </div>
           }
 
           @case ('chart') {
             <div class="skeleton-chart-panel">
               <div class="chart-header">
-                <div class="skeleton-base" style="width: 35%; height: 20px; border-radius: 4px;"></div>
-                <div class="skeleton-base" style="width: 20%; height: 14px; border-radius: 4px;"></div>
+                <div
+                  class="skeleton-base"
+                  style="width: 35%; height: 20px; border-radius: 4px;"
+                ></div>
+                <div
+                  class="skeleton-base"
+                  style="width: 20%; height: 14px; border-radius: 4px;"
+                ></div>
               </div>
               <div class="chart-bars-wrap">
                 <div class="skeleton-bar" style="height: 45%;"></div>
@@ -399,24 +660,62 @@ export type SkeletonVariant =
 
           @case ('menu-card') {
             <div class="skeleton-dish-card">
-              <div class="skeleton-base dish-thumb" style="width: 100%; height: 160px; border-radius: 8px 8px 0 0;"></div>
-              <div class="dish-content-pad" style="padding: 16px; display: flex; flex-direction: column; gap: 10px;">
+              <div
+                class="skeleton-base dish-thumb"
+                style="width: 100%; height: 160px; border-radius: 8px 8px 0 0;"
+              ></div>
+              <div
+                class="dish-content-pad"
+                style="padding: 16px; display: flex; flex-direction: column; gap: 10px;"
+              >
                 <div style="display: flex; justify-content: space-between; align-items: center;">
-                  <div class="skeleton-base" style="width: 55%; height: 18px; border-radius: 4px;"></div>
-                  <div class="skeleton-base" style="width: 25%; height: 18px; border-radius: 4px;"></div>
+                  <div
+                    class="skeleton-base"
+                    style="width: 55%; height: 18px; border-radius: 4px;"
+                  ></div>
+                  <div
+                    class="skeleton-base"
+                    style="width: 25%; height: 18px; border-radius: 4px;"
+                  ></div>
                 </div>
-                <div class="skeleton-base" style="width: 85px; height: 22px; border-radius: 9999px;"></div>
-                <div class="skeleton-base" style="width: 90%; height: 12px; border-radius: 4px;"></div>
-                <div class="skeleton-base" style="width: 65%; height: 12px; border-radius: 4px;"></div>
+                <div
+                  class="skeleton-base"
+                  style="width: 85px; height: 22px; border-radius: 9999px;"
+                ></div>
+                <div
+                  class="skeleton-base"
+                  style="width: 90%; height: 12px; border-radius: 4px;"
+                ></div>
+                <div
+                  class="skeleton-base"
+                  style="width: 65%; height: 12px; border-radius: 4px;"
+                ></div>
                 <div style="display: flex; gap: 8px; margin-top: 4px;">
-                  <div class="skeleton-base" style="width: 65px; height: 20px; border-radius: 4px;"></div>
-                  <div class="skeleton-base" style="width: 60px; height: 20px; border-radius: 4px;"></div>
+                  <div
+                    class="skeleton-base"
+                    style="width: 65px; height: 20px; border-radius: 4px;"
+                  ></div>
+                  <div
+                    class="skeleton-base"
+                    style="width: 60px; height: 20px; border-radius: 4px;"
+                  ></div>
                 </div>
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--color-border-subtle, rgba(0, 0, 0, 0.05));">
-                  <div class="skeleton-base" style="width: 80px; height: 30px; border-radius: 6px;"></div>
+                <div
+                  style="display: flex; justify-content: space-between; align-items: center; margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--color-border-subtle, rgba(0, 0, 0, 0.05));"
+                >
+                  <div
+                    class="skeleton-base"
+                    style="width: 80px; height: 30px; border-radius: 6px;"
+                  ></div>
                   <div style="display: flex; gap: 6px;">
-                    <div class="skeleton-base" style="width: 30px; height: 30px; border-radius: 6px;"></div>
-                    <div class="skeleton-base" style="width: 30px; height: 30px; border-radius: 6px;"></div>
+                    <div
+                      class="skeleton-base"
+                      style="width: 30px; height: 30px; border-radius: 6px;"
+                    ></div>
+                    <div
+                      class="skeleton-base"
+                      style="width: 30px; height: 30px; border-radius: 6px;"
+                    ></div>
                   </div>
                 </div>
               </div>
@@ -426,19 +725,42 @@ export type SkeletonVariant =
           @case ('staff-card') {
             <div class="skeleton-staff-card">
               <div style="display: flex; gap: 14px; align-items: center;">
-                <div class="skeleton-base skeleton-circle" style="width: 48px; height: 48px; border-radius: 50%;"></div>
+                <div
+                  class="skeleton-base skeleton-circle"
+                  style="width: 48px; height: 48px; border-radius: 50%;"
+                ></div>
                 <div style="display: flex; flex-direction: column; gap: 6px; flex: 1;">
-                  <div class="skeleton-base" style="width: 60%; height: 18px; border-radius: 4px;"></div>
-                  <div class="skeleton-base" style="width: 35%; height: 14px; border-radius: 4px;"></div>
+                  <div
+                    class="skeleton-base"
+                    style="width: 60%; height: 18px; border-radius: 4px;"
+                  ></div>
+                  <div
+                    class="skeleton-base"
+                    style="width: 35%; height: 14px; border-radius: 4px;"
+                  ></div>
                 </div>
               </div>
-              <div class="skeleton-base" style="width: 100%; height: 44px; border-radius: 8px; margin: 12px 0;"></div>
+              <div
+                class="skeleton-base"
+                style="width: 100%; height: 44px; border-radius: 8px; margin: 12px 0;"
+              ></div>
               <div style="display: flex; flex-direction: column; gap: 8px;">
-                <div class="skeleton-base" style="width: 70%; height: 14px; border-radius: 4px;"></div>
-                <div class="skeleton-base" style="width: 60%; height: 14px; border-radius: 4px;"></div>
-                <div class="skeleton-base" style="width: 80%; height: 14px; border-radius: 4px;"></div>
+                <div
+                  class="skeleton-base"
+                  style="width: 70%; height: 14px; border-radius: 4px;"
+                ></div>
+                <div
+                  class="skeleton-base"
+                  style="width: 60%; height: 14px; border-radius: 4px;"
+                ></div>
+                <div
+                  class="skeleton-base"
+                  style="width: 80%; height: 14px; border-radius: 4px;"
+                ></div>
               </div>
-              <div style="display: flex; gap: 8px; margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--color-border-subtle, rgba(0, 0, 0, 0.05));">
+              <div
+                style="display: flex; gap: 8px; margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--color-border-subtle, rgba(0, 0, 0, 0.05));"
+              >
                 <div class="skeleton-base" style="flex: 1; height: 32px; border-radius: 6px;"></div>
                 <div class="skeleton-base" style="flex: 1; height: 32px; border-radius: 6px;"></div>
               </div>
@@ -448,15 +770,38 @@ export type SkeletonVariant =
           @case ('coupon-card') {
             <div class="skeleton-coupon-card">
               <div style="display: flex; justify-content: space-between; align-items: center;">
-                <div class="skeleton-base" style="width: 90px; height: 26px; border-radius: 6px;"></div>
-                <div class="skeleton-base" style="width: 50px; height: 22px; border-radius: 9999px;"></div>
+                <div
+                  class="skeleton-base"
+                  style="width: 90px; height: 26px; border-radius: 6px;"
+                ></div>
+                <div
+                  class="skeleton-base"
+                  style="width: 50px; height: 22px; border-radius: 9999px;"
+                ></div>
               </div>
-              <div class="skeleton-base" style="width: 70%; height: 20px; border-radius: 4px; margin: 12px 0 6px 0;"></div>
-              <div class="skeleton-base" style="width: 90%; height: 13px; border-radius: 4px;"></div>
-              <div class="skeleton-base" style="width: 100%; height: 42px; border-radius: 8px; margin: 14px 0;"></div>
-              <div style="display: flex; justify-content: space-between; align-items: center; padding-top: 10px; border-top: 1px solid var(--color-border-subtle, rgba(0, 0, 0, 0.05));">
-                <div class="skeleton-base" style="width: 80px; height: 14px; border-radius: 4px;"></div>
-                <div class="skeleton-base" style="width: 65px; height: 28px; border-radius: 6px;"></div>
+              <div
+                class="skeleton-base"
+                style="width: 70%; height: 20px; border-radius: 4px; margin: 12px 0 6px 0;"
+              ></div>
+              <div
+                class="skeleton-base"
+                style="width: 90%; height: 13px; border-radius: 4px;"
+              ></div>
+              <div
+                class="skeleton-base"
+                style="width: 100%; height: 42px; border-radius: 8px; margin: 14px 0;"
+              ></div>
+              <div
+                style="display: flex; justify-content: space-between; align-items: center; padding-top: 10px; border-top: 1px solid var(--color-border-subtle, rgba(0, 0, 0, 0.05));"
+              >
+                <div
+                  class="skeleton-base"
+                  style="width: 80px; height: 14px; border-radius: 4px;"
+                ></div>
+                <div
+                  class="skeleton-base"
+                  style="width: 65px; height: 28px; border-radius: 6px;"
+                ></div>
               </div>
             </div>
           }

@@ -16,10 +16,7 @@ import { LoadingService } from '../../../core/services/loading.service';
         aria-valuemax="100"
         aria-label="Page loading"
       >
-        <div
-          class="route-loading-bar"
-          [style.width.%]="loadingService.navigationProgress()"
-        >
+        <div class="route-loading-bar" [style.width.%]="loadingService.navigationProgress()">
           <div class="glow-effect"></div>
         </div>
       </div>
@@ -41,10 +38,15 @@ import { LoadingService } from '../../../core/services/loading.service';
 
       .route-loading-bar {
         height: 100%;
-        background: var(--loading-bar-gradient, linear-gradient(90deg, #c21807 0%, #d4af37 50%, #c21807 100%));
+        background: var(
+          --loading-bar-gradient,
+          linear-gradient(90deg, #c21807 0%, #d4af37 50%, #c21807 100%)
+        );
         transition: width 150ms cubic-bezier(0.4, 0, 0.2, 1);
         position: relative;
-        box-shadow: 0 0 10px rgba(194, 24, 7, 0.6), 0 0 5px rgba(212, 175, 55, 0.5);
+        box-shadow:
+          0 0 10px rgba(194, 24, 7, 0.6),
+          0 0 5px rgba(212, 175, 55, 0.5);
       }
 
       .glow-effect {

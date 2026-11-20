@@ -48,9 +48,7 @@ import { ThermalReceiptModalComponent } from '../../../shared/components/thermal
               <h1 class="heading-display">{{ ord.orderNumber }}</h1>
               @if (ord.orderType === 'TAKEAWAY') {
                 <span class="tbl-pill takeaway-pill">
-                  <i class="ph ph-bag"></i> Takeaway ({{
-                    ord.pickupReference || ord.orderNumber
-                  }})
+                  <i class="ph ph-bag"></i> Takeaway ({{ ord.pickupReference || ord.orderNumber }})
                 </span>
               } @else {
                 <span class="tbl-pill">Table {{ ord.tableNumber }}</span>
@@ -303,7 +301,9 @@ import { ThermalReceiptModalComponent } from '../../../shared/components/thermal
                       <i class="ph ph-x-circle"></i>
                       <span>Cancelled</span>
                     </span>
-                    <span class="text-xs text-muted" style="margin-left: 8px;">Order has been cancelled; modifications disabled.</span>
+                    <span class="text-xs text-muted" style="margin-left: 8px;"
+                      >Order has been cancelled; modifications disabled.</span
+                    >
                   </div>
                 } @else if (ord.status === 'COMPLETED') {
                   <div class="completed-status-badge-box">
@@ -322,7 +322,8 @@ import { ThermalReceiptModalComponent } from '../../../shared/components/thermal
                       </span>
                     </div>
                     <div class="completed-hint-text">
-                      <i class="ph ph-lock-key"></i> Order finalized: marked completed, settled, and invoice printed.
+                      <i class="ph ph-lock-key"></i> Order finalized: marked completed, settled, and
+                      invoice printed.
                     </div>
                   </div>
                 } @else {
@@ -403,7 +404,8 @@ import { ThermalReceiptModalComponent } from '../../../shared/components/thermal
                         @if (!ord.printCount || ord.printCount === 0) {
                           <i class="ph ph-receipt"></i> Ready to print Original Invoice
                         } @else {
-                          <i class="ph ph-check-circle text-success"></i> Printed {{ ord.printCount }} time{{ ord.printCount > 1 ? 's' : '' }}
+                          <i class="ph ph-check-circle text-success"></i> Printed
+                          {{ ord.printCount }} time{{ ord.printCount > 1 ? 's' : '' }}
                         }
                       </span>
                     </div>
@@ -427,7 +429,11 @@ import { ThermalReceiptModalComponent } from '../../../shared/components/thermal
                           <span>Reprint (Copy #{{ ord.printCount + 1 }})</span>
                         </button>
                       }
-                      <a [routerLink]="['/admin/billing', ord.id]" class="btn btn-secondary btn-sm" title="Detailed Invoice View">
+                      <a
+                        [routerLink]="['/admin/billing', ord.id]"
+                        class="btn btn-secondary btn-sm"
+                        title="Detailed Invoice View"
+                      >
                         <i class="ph ph-arrow-square-out"></i>
                         <span>Full Invoice</span>
                       </a>
@@ -441,7 +447,11 @@ import { ThermalReceiptModalComponent } from '../../../shared/components/thermal
             <div class="panel-box">
               <div class="panel-header-row">
                 <h2 class="heading-card">
-                  {{ ord.orderType === 'TAKEAWAY' ? 'Takeaway Customer Details' : 'Dine-In Guest Details' }}
+                  {{
+                    ord.orderType === 'TAKEAWAY'
+                      ? 'Takeaway Customer Details'
+                      : 'Dine-In Guest Details'
+                  }}
                 </h2>
                 @if (ord.status !== 'COMPLETED' && ord.status !== 'CANCELLED') {
                   <button
@@ -903,9 +913,12 @@ import { ThermalReceiptModalComponent } from '../../../shared/components/thermal
                     <i class="ph ph-shield-lock"></i>
                   </div>
                   <div>
-                    <h3 id="detail-server-admin-dialog-title" class="heading-card">Admin Password Required</h3>
+                    <h3 id="detail-server-admin-dialog-title" class="heading-card">
+                      Admin Password Required
+                    </h3>
                     <span class="text-xs text-muted"
-                      >Authorization required to change serving staff for completed order {{ curOrd.orderNumber }}</span
+                      >Authorization required to change serving staff for completed order
+                      {{ curOrd.orderNumber }}</span
                     >
                   </div>
                 </div>
@@ -923,12 +936,15 @@ import { ThermalReceiptModalComponent } from '../../../shared/components/thermal
                   <i class="ph ph-warning-circle"></i>
                   <p>
                     Order <strong>{{ curOrd.orderNumber }}</strong> is finalized and completed.
-                    Changing the assigned serving staff impacts service records, audit logs, and tip distribution.
+                    Changing the assigned serving staff impacts service records, audit logs, and tip
+                    distribution.
                   </p>
                 </div>
 
                 <div class="form-group">
-                  <label class="form-label" for="detailNewServerSelect">Select New Serving Staff</label>
+                  <label class="form-label" for="detailNewServerSelect"
+                    >Select New Serving Staff</label
+                  >
                   <select
                     id="detailNewServerSelect"
                     class="form-select"
@@ -943,7 +959,9 @@ import { ThermalReceiptModalComponent } from '../../../shared/components/thermal
                 </div>
 
                 <div class="form-group">
-                  <label class="form-label" for="detailServerAdminPassword">Enter Admin Password / Staff PIN</label>
+                  <label class="form-label" for="detailServerAdminPassword"
+                    >Enter Admin Password / Staff PIN</label
+                  >
                   <div class="input-with-icon">
                     <i class="ph ph-lock-key"></i>
                     <input
@@ -959,7 +977,8 @@ import { ThermalReceiptModalComponent } from '../../../shared/components/thermal
                     />
                   </div>
                   <span class="hint-text"
-                    >Staff/Manager PIN: <strong>1234</strong> or password <strong>admin</strong></span
+                    >Staff/Manager PIN: <strong>1234</strong> or password
+                    <strong>admin</strong></span
                   >
                 </div>
 
@@ -1148,7 +1167,7 @@ import { ThermalReceiptModalComponent } from '../../../shared/components/thermal
                       <span>{{ editSubtotal() | currencyInr }}</span>
                     </div>
                     <div class="dt-row">
-                      <span>GST ({{ (getOrderCgstRate(ord) + getOrderSgstRate(ord)) }}%)</span>
+                      <span>GST ({{ getOrderCgstRate(ord) + getOrderSgstRate(ord) }}%)</span>
                       <span>{{ editTax() | currencyInr }}</span>
                     </div>
                     @if (ord.discountAmount > 0) {
@@ -1315,24 +1334,46 @@ import { ThermalReceiptModalComponent } from '../../../shared/components/thermal
       <div class="order-detail-page skeleton-detail-loading" style="padding: 24px; gap: 24px;">
         <div style="display: flex; justify-content: space-between; align-items: flex-start;">
           <div style="display: flex; flex-direction: column; gap: 10px; width: 45%;">
-            <div class="skeleton-base" style="width: 140px; height: 16px; border-radius: 4px;"></div>
-            <div class="skeleton-base" style="width: 220px; height: 32px; border-radius: 6px;"></div>
-            <div class="skeleton-base" style="width: 180px; height: 14px; border-radius: 4px;"></div>
+            <div
+              class="skeleton-base"
+              style="width: 140px; height: 16px; border-radius: 4px;"
+            ></div>
+            <div
+              class="skeleton-base"
+              style="width: 220px; height: 32px; border-radius: 6px;"
+            ></div>
+            <div
+              class="skeleton-base"
+              style="width: 180px; height: 14px; border-radius: 4px;"
+            ></div>
           </div>
           <div style="display: flex; gap: 10px;">
-            <div class="skeleton-base" style="width: 110px; height: 38px; border-radius: 6px;"></div>
-            <div class="skeleton-base" style="width: 120px; height: 38px; border-radius: 6px;"></div>
+            <div
+              class="skeleton-base"
+              style="width: 110px; height: 38px; border-radius: 6px;"
+            ></div>
+            <div
+              class="skeleton-base"
+              style="width: 120px; height: 38px; border-radius: 6px;"
+            ></div>
           </div>
         </div>
         <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 24px;">
-          <div style="background: var(--color-surface, #fff); border: 1px solid var(--color-border, #e5ded4); border-radius: var(--radius-md, 12px); padding: 24px; display: flex; flex-direction: column; gap: 16px;">
+          <div
+            style="background: var(--color-surface, #fff); border: 1px solid var(--color-border, #e5ded4); border-radius: var(--radius-md, 12px); padding: 24px; display: flex; flex-direction: column; gap: 16px;"
+          >
             <div class="skeleton-base" style="width: 30%; height: 22px; border-radius: 4px;"></div>
             <app-skeleton variant="table-row" [count]="4" />
           </div>
-          <div style="background: var(--color-surface, #fff); border: 1px solid var(--color-border, #e5ded4); border-radius: var(--radius-md, 12px); padding: 24px; display: flex; flex-direction: column; gap: 16px;">
+          <div
+            style="background: var(--color-surface, #fff); border: 1px solid var(--color-border, #e5ded4); border-radius: var(--radius-md, 12px); padding: 24px; display: flex; flex-direction: column; gap: 16px;"
+          >
             <div class="skeleton-base" style="width: 50%; height: 22px; border-radius: 4px;"></div>
             <div class="skeleton-base" style="width: 100%; height: 60px; border-radius: 6px;"></div>
-            <div class="skeleton-base" style="width: 100%; height: 100px; border-radius: 6px;"></div>
+            <div
+              class="skeleton-base"
+              style="width: 100%; height: 100px; border-radius: 6px;"
+            ></div>
           </div>
         </div>
       </div>
@@ -2666,7 +2707,7 @@ export class OrderDetailComponent implements OnInit {
 
   editTax = computed(() => {
     const ord = this.order();
-    const rate = ord ? (this.getOrderCgstRate(ord) + this.getOrderSgstRate(ord)) : this.gstRate;
+    const rate = ord ? this.getOrderCgstRate(ord) + this.getOrderSgstRate(ord) : this.gstRate;
     return Math.round(this.editSubtotal() * (rate / 100) * 100) / 100;
   });
 
@@ -2753,7 +2794,9 @@ export class OrderDetailComponent implements OnInit {
     const updated = this.mock
       .orders()
       .map((o) =>
-        o.id === ord.id ? { ...o, paymentStatus: status, status: nextStatus, updatedAt: new Date().toISOString() } : o,
+        o.id === ord.id
+          ? { ...o, paymentStatus: status, status: nextStatus, updatedAt: new Date().toISOString() }
+          : o,
       );
     this.mock.orders.set(updated);
     this.mock.saveLocal('orders', updated);
@@ -2808,11 +2851,7 @@ export class OrderDetailComponent implements OnInit {
     }
 
     const newStaffId = this.selectedNewStaffId();
-    const res = this.dataService.assignOrderServer(
-      ord.id,
-      newStaffId ? newStaffId : null,
-      pwd,
-    );
+    const res = this.dataService.assignOrderServer(ord.id, newStaffId ? newStaffId : null, pwd);
 
     if (res.success) {
       const staffName = this.getServerStaffName(newStaffId) || 'Unassigned';
@@ -2866,7 +2905,9 @@ export class OrderDetailComponent implements OnInit {
               : cfg.printerName || 'Default Windows Printer';
           this.toastService.success(`Thermal receipt sent to ${targetName}.`);
         } else {
-          this.toastService.warning(`Thermal printer error: ${res.message}. Opening standard print.`);
+          this.toastService.warning(
+            `Thermal printer error: ${res.message}. Opening standard print.`,
+          );
           window.print();
         }
       },

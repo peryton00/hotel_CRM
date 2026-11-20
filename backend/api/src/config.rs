@@ -37,9 +37,7 @@ impl AppConfig {
         let database_url = local_database_url
             .clone()
             .or_else(|| env::var("DATABASE_URL").ok())
-            .unwrap_or_else(|| {
-                "postgres://postgres:postgres@localhost:5432/hotel_crm".to_string()
-            });
+            .unwrap_or_else(|| "postgres://postgres:postgres@localhost:5432/hotel_crm".to_string());
 
         let is_offline_first = local_database_url.is_some();
 
