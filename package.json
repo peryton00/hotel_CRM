@@ -16,10 +16,6 @@
     "test": "npm --prefix frontend/restaurant-web test -- --watch=false",
     "lint": "npm --prefix frontend/restaurant-web run lint"
   },
-  "workspaces": [
-    "frontend/restaurant-web",
-    "customer-menu"
-  ],
   "keywords": [
     "restaurant",
     "crm",
