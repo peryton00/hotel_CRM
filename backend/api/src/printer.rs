@@ -53,6 +53,7 @@ extern "system" {
     ) -> i32;
 }
 
+#[cfg(target_os = "windows")]
 #[repr(C)]
 struct DocInfo1A {
     p_doc_name: *const u8,
