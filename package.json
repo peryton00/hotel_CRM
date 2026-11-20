@@ -6,18 +6,19 @@
   "scripts": {
     "start": "npm --prefix frontend/restaurant-web start",
     "start:admin": "npm --prefix frontend/restaurant-web start",
-    "start:customer": "npm --prefix frontend/restaurant-web run start:customer",
+    "start:customer": "npm --prefix customer-menu run dev",
     "start:server": "cargo run --manifest-path backend/api/Cargo.toml",
     "build": "npm --prefix frontend/restaurant-web run build",
     "build:desktop": "npm --prefix frontend/restaurant-web run build:desktop",
-    "build:customer": "npm --prefix frontend/restaurant-web run build:customer",
+    "build:customer": "npm --prefix customer-menu run build",
     "tauri:dev": "npx @tauri-apps/cli dev",
     "tauri:build": "npx @tauri-apps/cli build",
     "test": "npm --prefix frontend/restaurant-web test -- --watch=false",
     "lint": "npm --prefix frontend/restaurant-web run lint"
   },
   "workspaces": [
-    "frontend/restaurant-web"
+    "frontend/restaurant-web",
+    "customer-menu"
   ],
   "keywords": [
     "restaurant",

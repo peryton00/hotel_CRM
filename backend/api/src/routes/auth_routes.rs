@@ -146,10 +146,13 @@ pub async fn login(
         }),
     };
 
+    let encoding_key = EncodingKey::from_base64_secret(&state.config.supabase_jwt_secret)
+        .unwrap_or_else(|_| EncodingKey::from_secret(state.config.supabase_jwt_secret.as_bytes()));
+
     let token = encode(
         &Header::default(),
         &claims,
-        &EncodingKey::from_secret(state.config.supabase_jwt_secret.as_bytes()),
+        &encoding_key,
     )
     .map_err(|e| AppError::Internal(format!("Failed to generate authentication token: {}", e)))?;
 

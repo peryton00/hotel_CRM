@@ -53,9 +53,9 @@
   --skeleton-shimmer: rgba(255, 255, 255, 0.65);
   --loading-bar-gradient: linear-gradient(90deg, #c21807 0%, #d4af37 50%, #c21807 100%);
 
-  // Typography Tokens
-  --font-display: 'Libre Baskerville', Georgia, serif;
-  --font-ui: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  // Typography Tokens: Crimson Text (Editorial Display) & Source Sans Pro (UI Workspace)
+  --font-display: 'Crimson Text', Georgia, 'Times New Roman', serif;
+  --font-ui: 'Source Sans 3', 'Source Sans Pro', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
 
   // Elevation & Shadows
   --shadow-xs: 0 1px 2px rgba(18, 18, 18, 0.04);
@@ -87,9 +87,11 @@
   --spacing-xl: var(--space-xl);
   --spacing-2xl: var(--space-2xl);
 
-  // Transitions
-  --transition-fast: 150ms cubic-bezier(0.4, 0, 0.2, 1);
-  --transition-normal: 250ms cubic-bezier(0.4, 0, 0.2, 1);
+  // Transitions & Spring Dynamics (GPU-friendly cubic-beziers)
+  --transition-fast: 160ms cubic-bezier(0.16, 1, 0.3, 1);
+  --transition-normal: 260ms cubic-bezier(0.16, 1, 0.3, 1);
+  --transition-spring: 360ms cubic-bezier(0.16, 1, 0.3, 1);
+  --transition-bounce: 400ms cubic-bezier(0.34, 1.56, 0.64, 1);
 
   // Layout metrics
   --sidebar-width: 260px;

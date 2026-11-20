@@ -311,7 +311,7 @@ import {
                     }
                   } @else {
                     <div class="total-line tax-line">
-                      <span class="t-label">GST (5%):</span>
+                      <span class="t-label">GST ({{ ((getOrderCgstRate(ord)) + (getOrderSgstRate(ord))) }}%):</span>
                       <span class="t-val">{{ split.taxAmount | currencyInr }}</span>
                     </div>
                   }
@@ -537,11 +537,11 @@ import {
                     <span class="t-val">{{ (ord.subtotal - (ord.discountAmount || 0)) | currencyInr }}</span>
                   </div>
                   <div class="total-line tax-line">
-                    <span class="t-label">CGST ({{ restaurant()?.taxSettings?.cgstRate ?? 2.5 }}%):</span>
+                    <span class="t-label">CGST ({{ getOrderCgstRate(ord) }}%):</span>
                     <span class="t-val">{{ ord.cgstAmount | currencyInr }}</span>
                   </div>
                   <div class="total-line tax-line">
-                    <span class="t-label">SGST ({{ restaurant()?.taxSettings?.sgstRate ?? 2.5 }}%):</span>
+                    <span class="t-label">SGST ({{ getOrderSgstRate(ord) }}%):</span>
                     <span class="t-val">{{ ord.sgstAmount | currencyInr }}</span>
                   </div>
                   <div class="totals-separator"></div>
@@ -2043,6 +2043,27 @@ export class InvoicePreviewComponent implements OnInit {
   );
 
   restaurant = this.mock.restaurant;
+
+  getOrderCgstRate(ord: Order | null | undefined): number {
+    if (!ord) return this.restaurant()?.taxSettings?.cgstRate ?? 2.5;
+    if (typeof (ord as any).cgstRate === 'number') return (ord as any).cgstRate;
+    if (typeof (ord as any).cgst_rate === 'number') return (ord as any).cgst_rate;
+    if (ord.subtotal > 0 && ord.cgstAmount) {
+      return Math.round((ord.cgstAmount / ord.subtotal) * 1000) / 10;
+    }
+    return this.restaurant()?.taxSettings?.cgstRate ?? 2.5;
+  }
+
+  getOrderSgstRate(ord: Order | null | undefined): number {
+    if (!ord) return this.restaurant()?.taxSettings?.sgstRate ?? 2.5;
+    if (typeof (ord as any).sgstRate === 'number') return (ord as any).sgstRate;
+    if (typeof (ord as any).sgst_rate === 'number') return (ord as any).sgst_rate;
+    if (ord.subtotal > 0 && ord.sgstAmount) {
+      return Math.round((ord.sgstAmount / ord.subtotal) * 1000) / 10;
+    }
+    return this.restaurant()?.taxSettings?.sgstRate ?? 2.5;
+  }
+
   orderId = signal<string>('');
   splitBillId = signal<string>('');
 

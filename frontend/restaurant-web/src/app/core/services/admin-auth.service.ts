@@ -473,13 +473,17 @@ export class AdminAuthService {
     return '/admin/orders';
   }
 
-  logout(): void {
+  logout(isExpired = false): void {
     this.isAuthenticated.set(false);
     this.currentUser.set(null);
     localStorage.removeItem(AUTH_TOKEN_KEY);
     localStorage.removeItem('supabase_auth_token');
     localStorage.removeItem(STAFF_ROLE_KEY);
     localStorage.removeItem(STAFF_USER_KEY);
-    this.router.navigate(['/admin/login']);
+    if (isExpired) {
+      this.router.navigate(['/admin/login'], { queryParams: { expired: 'true' } });
+    } else {
+      this.router.navigate(['/admin/login']);
+    }
   }
 }

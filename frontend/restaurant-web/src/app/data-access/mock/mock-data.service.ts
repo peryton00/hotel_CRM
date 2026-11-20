@@ -155,8 +155,8 @@ export class MockDataService {
         discount: ord.discountAmount,
         appliedCouponCode: ord.appliedCouponCode,
         taxBreakdown: [
-          { name: 'CGST (2.5%)', rate: 2.5, amount: ord.cgstAmount },
-          { name: 'SGST (2.5%)', rate: 2.5, amount: ord.sgstAmount },
+          { name: `CGST (${this.restaurant()?.taxSettings?.cgstRate ?? 2.5}%)`, rate: this.restaurant()?.taxSettings?.cgstRate ?? 2.5, amount: ord.cgstAmount },
+          { name: `SGST (${this.restaurant()?.taxSettings?.sgstRate ?? 2.5}%)`, rate: this.restaurant()?.taxSettings?.sgstRate ?? 2.5, amount: ord.sgstAmount },
         ],
         totalTax: ord.taxAmount,
         finalTotal: ord.totalAmount,
@@ -1268,8 +1268,8 @@ export class MockDataService {
         paymentStatus: 'UNPAID',
         totalRefunded: 0,
         taxBreakdown: [
-          { name: 'CGST (2.5%)', rate: 2.5, amount: cCents / 100 },
-          { name: 'SGST (2.5%)', rate: 2.5, amount: gCents / 100 },
+          { name: `CGST (${this.restaurant()?.taxSettings?.cgstRate ?? 2.5}%)`, rate: this.restaurant()?.taxSettings?.cgstRate ?? 2.5, amount: cCents / 100 },
+          { name: `SGST (${this.restaurant()?.taxSettings?.sgstRate ?? 2.5}%)`, rate: this.restaurant()?.taxSettings?.sgstRate ?? 2.5, amount: gCents / 100 },
         ],
       });
     }
@@ -1452,8 +1452,8 @@ export class MockDataService {
         paymentStatus: 'UNPAID',
         totalRefunded: 0,
         taxBreakdown: [
-          { name: 'CGST (2.5%)', rate: 2.5, amount: cCents / 100 },
-          { name: 'SGST (2.5%)', rate: 2.5, amount: gCents / 100 },
+          { name: `CGST (${this.restaurant()?.taxSettings?.cgstRate ?? 2.5}%)`, rate: this.restaurant()?.taxSettings?.cgstRate ?? 2.5, amount: cCents / 100 },
+          { name: `SGST (${this.restaurant()?.taxSettings?.sgstRate ?? 2.5}%)`, rate: this.restaurant()?.taxSettings?.sgstRate ?? 2.5, amount: gCents / 100 },
         ],
       });
     }
@@ -1651,8 +1651,8 @@ export class MockDataService {
               discount: updatedOrder.discountAmount,
               appliedCouponCode: updatedOrder.appliedCouponCode,
               taxBreakdown: [
-                { name: 'CGST (2.5%)', rate: 2.5, amount: updatedOrder.cgstAmount },
-                { name: 'SGST (2.5%)', rate: 2.5, amount: updatedOrder.sgstAmount },
+                { name: `CGST (${this.restaurant()?.taxSettings?.cgstRate ?? 2.5}%)`, rate: this.restaurant()?.taxSettings?.cgstRate ?? 2.5, amount: updatedOrder.cgstAmount },
+                { name: `SGST (${this.restaurant()?.taxSettings?.sgstRate ?? 2.5}%)`, rate: this.restaurant()?.taxSettings?.sgstRate ?? 2.5, amount: updatedOrder.sgstAmount },
               ],
               totalTax: updatedOrder.taxAmount,
               finalTotal: updatedOrder.totalAmount,
@@ -1679,8 +1679,8 @@ export class MockDataService {
         discount: updatedOrder.discountAmount,
         appliedCouponCode: updatedOrder.appliedCouponCode,
         taxBreakdown: [
-          { name: 'CGST (2.5%)', rate: 2.5, amount: updatedOrder.cgstAmount },
-          { name: 'SGST (2.5%)', rate: 2.5, amount: updatedOrder.sgstAmount },
+          { name: `CGST (${this.restaurant()?.taxSettings?.cgstRate ?? 2.5}%)`, rate: this.restaurant()?.taxSettings?.cgstRate ?? 2.5, amount: updatedOrder.cgstAmount },
+          { name: `SGST (${this.restaurant()?.taxSettings?.sgstRate ?? 2.5}%)`, rate: this.restaurant()?.taxSettings?.sgstRate ?? 2.5, amount: updatedOrder.sgstAmount },
         ],
         totalTax: updatedOrder.taxAmount,
         finalTotal: updatedOrder.totalAmount,

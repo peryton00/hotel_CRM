@@ -12,6 +12,7 @@ import { SkeletonLoaderComponent } from '../../../shared/components/loading/skel
 import { EmptyStateComponent } from '../../../shared/components/empty-state/empty-state.component';
 import { ToastService } from '../../../core/services/toast.service';
 import { AdminAuthService } from '../../../core/services/admin-auth.service';
+import { environment } from '../../../../environments/environment';
 
 @Component({
   selector: 'app-table-list',
@@ -958,7 +959,13 @@ import { AdminAuthService } from '../../../core/services/admin-auth.service';
         <div class="modal-overlay qr-modal-overlay" (click)="onBackdropClick($event)">
           <div class="modal-card qr-preview-card" role="dialog" aria-modal="true" (click)="$event.stopPropagation()">
             <div class="modal-header no-print">
-              <h3 class="heading-card">Table {{ activeQrTable.number }} QR Standee</h3>
+              <div class="modal-title-wrap">
+                <div class="qr-header-icon"><i class="ph ph-qr-code"></i></div>
+                <div>
+                  <h3 class="heading-card">Table {{ activeQrTable.number }} QR Standee</h3>
+                  <p class="modal-subtext">Table tent standee &amp; instant contactless menu</p>
+                </div>
+              </div>
               <button type="button" class="close-btn" (click)="activeQrTable = null">
                 <i class="ph ph-x"></i>
               </button>
@@ -966,33 +973,69 @@ import { AdminAuthService } from '../../../core/services/admin-auth.service';
 
             <!-- Print-Ready Standee Tent Card -->
             <div class="qr-standee" #printContainer>
-              <div class="standee-header">
-                <div class="standee-crest"><i class="ph ph-crown"></i></div>
-                <div class="standee-brand">{{ restaurant()?.name || 'GuruKripa Dhaba' }}</div>
-                <div class="standee-sub">{{ activeQrTable.section }}</div>
-              </div>
+              <div class="standee-inner-frame">
+                <!-- Corner Ornamental Brackets -->
+                <div class="frame-corner corner-tl"></div>
+                <div class="frame-corner corner-tr"></div>
+                <div class="frame-corner corner-bl"></div>
+                <div class="frame-corner corner-br"></div>
 
-              <div class="qr-image-container">
-                @if (qrDataUrl) {
-                  <img [src]="qrDataUrl" alt="Table QR Code" class="qr-canvas-img" />
-                } @else {
-                  <div class="qr-loading">Generating QR...</div>
-                }
-              </div>
-
-              <div class="standee-footer">
-                <div class="standee-table-num">TABLE {{ activeQrTable.number }}</div>
-                <div class="standee-inst">
-                  Scan with smartphone camera to view menu & place your order
+                <div class="standee-header">
+                  <div class="standee-crest">
+                    <i class="ph-fill ph-crown"></i>
+                  </div>
+                  <div class="standee-brand font-display">{{ restaurant()?.name || 'GuruKripa Dhaba' }}</div>
+                  <div class="standee-sub">Pure Veg Punjabi Dhaba • {{ activeQrTable.section }}</div>
+                  <div class="standee-divider">
+                    <span class="divider-line"></span>
+                    <span class="divider-gem">◆</span>
+                    <span class="divider-line"></span>
+                  </div>
                 </div>
-                <div class="standee-url">{{ activeQrTable.qrUrl }}</div>
+
+                <div class="qr-center-block">
+                  <div class="scan-pill">
+                    <i class="ph-bold ph-camera"></i>
+                    <span>SCAN TO ORDER</span>
+                  </div>
+
+                  <div class="qr-image-container">
+                    @if (qrDataUrl) {
+                      <img [src]="qrDataUrl" alt="Table QR Code" class="qr-canvas-img" />
+                    } @else {
+                      <div class="qr-loading">Generating QR Code...</div>
+                    }
+                  </div>
+                </div>
+
+                <div class="standee-footer">
+                  <div class="standee-table-badge font-display">TABLE {{ activeQrTable.number }}</div>
+
+                  <div class="standee-steps">
+                    <span class="step-badge"><span class="step-num">1</span> Scan QR</span>
+                    <span class="step-sep">•</span>
+                    <span class="step-badge"><span class="step-num">2</span> View Menu</span>
+                    <span class="step-sep">•</span>
+                    <span class="step-badge"><span class="step-num">3</span> Order Directly</span>
+                  </div>
+
+                  <div class="standee-meta">
+                    <span class="meta-dot"></span>
+                    <span>Instant Kitchen KOT • Contactless Service</span>
+                  </div>
+
+                  <div class="standee-print-cut-line">
+                    <span class="cut-icon">✂</span>
+                    <span>Cut along outer border for acrylic stand or table tent</span>
+                  </div>
+                </div>
               </div>
             </div>
 
             <div class="modal-footer no-print">
               <button type="button" class="btn btn-secondary" (click)="downloadQrImage()">
                 <i class="ph ph-download-simple"></i>
-                <span>Download PNG</span>
+                <span>Download Standee PNG</span>
               </button>
               <button type="button" class="btn btn-primary" (click)="printQrStandee()">
                 <i class="ph ph-printer"></i>
@@ -2788,60 +2831,176 @@ import { AdminAuthService } from '../../../core/services/admin-auth.service';
 
       /* QR Standee Styles */
       .qr-preview-card {
-        max-width: 400px;
+        max-width: 440px;
+        width: 100%;
       }
 
+      .qr-header-icon {
+        width: 38px;
+        height: 38px;
+        border-radius: var(--radius-sm);
+        background: rgba(194, 24, 7, 0.1);
+        color: var(--color-crimson);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.25rem;
+      }
+
+      .modal-subtext {
+        font-size: 0.75rem;
+        color: var(--color-text-muted);
+        margin-top: 2px;
+      }
+
+      /* QR Standee Styles (Guaranteed Light-Mode Presentation) */
       .qr-standee {
-        background: #ffffff;
-        border: 2px solid #1a1a1a;
-        border-radius: var(--radius-md);
-        padding: 24px 20px;
+        background: #faf8f5 !important;
+        color: #14161b !important;
+        border: 2px solid #14161b;
+        border-radius: var(--radius-lg);
+        padding: 8px;
         text-align: center;
+        box-shadow: 0 8px 30px rgba(0, 0, 0, 0.22);
+        margin: 12px 0;
+        position: relative;
+        color-scheme: light !important;
+      }
+
+      .standee-inner-frame {
+        position: relative;
+        border: 1.5px dashed rgba(212, 175, 55, 0.7);
+        border-radius: calc(var(--radius-lg) - 4px);
+        padding: 20px 16px;
         display: flex;
         flex-direction: column;
         align-items: center;
-        gap: 14px;
-        box-shadow: var(--shadow-sm);
-        margin: 10px 0;
+        gap: 12px;
+        background: #ffffff !important;
+        color: #14161b !important;
+      }
+
+      .frame-corner {
+        position: absolute;
+        width: 14px;
+        height: 14px;
+        border-color: #d4af37;
+        border-style: solid;
+        pointer-events: none;
+
+        &.corner-tl {
+          top: 6px;
+          left: 6px;
+          border-width: 2px 0 0 2px;
+        }
+        &.corner-tr {
+          top: 6px;
+          right: 6px;
+          border-width: 2px 2px 0 0;
+        }
+        &.corner-bl {
+          bottom: 6px;
+          left: 6px;
+          border-width: 0 0 2px 2px;
+        }
+        &.corner-br {
+          bottom: 6px;
+          right: 6px;
+          border-width: 0 2px 2px 0;
+        }
       }
 
       .standee-crest {
-        font-size: 1.75rem;
-        color: #b8860b;
-        margin-bottom: 2px;
+        width: 40px;
+        height: 40px;
+        border-radius: 50%;
+        background: #d4af37 !important;
+        color: #121212 !important;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.3rem;
+        margin: 0 auto 6px auto;
+        box-shadow: 0 2px 8px rgba(212, 175, 55, 0.35);
       }
 
       .standee-brand {
         font-family: var(--font-display);
-        font-size: 1.25rem;
+        font-size: 1.35rem;
         font-weight: 700;
-        letter-spacing: 0.04em;
-        text-transform: uppercase;
-        color: #1a1a1a;
+        letter-spacing: 0.03em;
+        color: #c21807 !important;
+        line-height: 1.2;
       }
 
       .standee-sub {
         font-size: 0.6875rem;
         text-transform: uppercase;
-        letter-spacing: 0.12em;
-        color: #737373;
+        letter-spacing: 0.1em;
+        color: #525252 !important;
         font-weight: 600;
+        margin-top: 2px;
+      }
+
+      .standee-divider {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        width: 70%;
+        margin: 4px auto 0 auto;
+
+        .divider-line {
+          flex: 1;
+          height: 1px;
+          background: rgba(212, 175, 55, 0.45);
+        }
+
+        .divider-gem {
+          font-size: 8px;
+          color: #d4af37;
+          line-height: 1;
+        }
+      }
+
+      .qr-center-block {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 8px;
+        width: 100%;
+      }
+
+      .scan-pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        background: #14161b !important;
+        color: #ffffff !important;
+        font-size: 0.6875rem;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        padding: 4px 12px;
+        border-radius: var(--radius-full);
+        box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
       }
 
       .qr-image-container {
         padding: 10px;
-        background: #ffffff;
-        border: 1px solid #e5e5e5;
-        border-radius: var(--radius-sm);
+        background: #ffffff !important;
+        border: 1.5px solid #e5ded4;
+        border-radius: var(--radius-md);
         display: flex;
         align-items: center;
         justify-content: center;
+        box-shadow: 0 2px 10px rgba(0, 0, 0, 0.04);
       }
 
       .qr-canvas-img {
         width: 200px;
         height: 200px;
         display: block;
+        image-rendering: pixelated;
       }
 
       .qr-loading {
@@ -2851,53 +3010,294 @@ import { AdminAuthService } from '../../../core/services/admin-auth.service';
         align-items: center;
         justify-content: center;
         font-size: 0.8125rem;
-        color: var(--color-text-muted);
+        color: #737373 !important;
       }
 
-      .standee-table-num {
-        font-family: var(--font-display);
-        font-size: 1.125rem;
-        font-weight: 800;
-        letter-spacing: 0.05em;
-        color: #1a1a1a;
-        border-top: 1px solid #e5e5e5;
-        border-bottom: 1px solid #e5e5e5;
-        padding: 6px 0;
+      .standee-footer {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 8px;
         width: 100%;
-        margin-bottom: 4px;
       }
 
-      .standee-inst {
-        font-size: 0.6875rem;
-        color: #525252;
-        line-height: 1.3;
-        max-width: 220px;
+      .standee-table-badge {
+        font-family: var(--font-display);
+        background: #c21807 !important;
+        color: #ffffff !important;
+        font-size: 1.15rem;
+        font-weight: 800;
+        letter-spacing: 0.06em;
+        padding: 6px 24px;
+        border-radius: var(--radius-sm);
+        width: 85%;
+        box-shadow: 0 3px 8px rgba(194, 24, 7, 0.25);
       }
 
-      .standee-url {
+      .standee-steps {
+        font-size: 0.72rem;
+        font-weight: 600;
+        color: #262626 !important;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-wrap: wrap;
+        gap: 4px;
+
+        .step-badge {
+          display: inline-flex;
+          align-items: center;
+          gap: 4px;
+        }
+
+        .step-num {
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          width: 16px;
+          height: 16px;
+          background: #d4af37 !important;
+          color: #121212 !important;
+          border-radius: 50%;
+          font-size: 0.625rem;
+          font-weight: 800;
+        }
+
+        .step-sep {
+          color: #9ca3af;
+        }
+      }
+
+      .standee-meta {
         font-size: 0.625rem;
-        color: #a3a3a3;
-        font-family: monospace;
+        color: #525252 !important;
+        font-weight: 600;
+        display: flex;
+        align-items: center;
+        gap: 5px;
+
+        .meta-dot {
+          width: 5px;
+          height: 5px;
+          border-radius: 50%;
+          background: #10b981 !important;
+        }
+      }
+
+      .standee-print-cut-line {
+        display: none;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+        font-size: 0.58rem;
+        font-weight: 600;
+        letter-spacing: 0.07em;
+        text-transform: uppercase;
+        color: #78716c;
+        margin-top: 4px;
+        padding-top: 6px;
+        border-top: 1px dashed #dcd7ce;
+        width: 90%;
       }
 
       @media print {
-        body * {
-          visibility: hidden;
+        @page {
+          size: portrait;
+          margin: 10mm;
         }
-        .qr-standee,
-        .qr-standee * {
-          visibility: visible;
+
+        html, body {
+          background: #ffffff !important;
+          color: #14161b !important;
+          margin: 0 !important;
+          padding: 0 !important;
+          width: 100% !important;
+          height: auto !important;
+          min-height: auto !important;
+          overflow: visible !important;
+          color-scheme: light !important;
+          -webkit-print-color-adjust: exact !important;
+          print-color-adjust: exact !important;
         }
-        .qr-standee {
-          position: absolute;
-          left: 50%;
-          top: 50%;
-          transform: translate(-50%, -50%);
-          width: 80mm;
-          border: 2px solid #000;
-        }
-        .no-print {
+
+        /* Crucial: Completely remove background page content from layout so it causes ZERO extra pages */
+        .tables-page > *:not(.qr-modal-overlay) {
           display: none !important;
+        }
+
+        .no-print,
+        .modal-header,
+        .modal-footer {
+          display: none !important;
+        }
+
+        .qr-modal-overlay {
+          position: static !important;
+          inset: auto !important;
+          width: 100% !important;
+          height: auto !important;
+          min-height: auto !important;
+          display: flex !important;
+          align-items: center !important;
+          justify-content: center !important;
+          background: transparent !important;
+          padding: 0 !important;
+          margin: 0 !important;
+          box-shadow: none !important;
+          border: none !important;
+          overflow: visible !important;
+        }
+
+        .qr-preview-card {
+          border: none !important;
+          box-shadow: none !important;
+          background: transparent !important;
+          padding: 0 !important;
+          margin: 0 auto !important;
+          max-width: 100% !important;
+          width: 100% !important;
+          display: flex !important;
+          flex-direction: column !important;
+          align-items: center !important;
+          justify-content: center !important;
+        }
+
+        .qr-standee {
+          display: flex !important;
+          flex-direction: column !important;
+          position: relative !important;
+          left: auto !important;
+          top: auto !important;
+          transform: none !important;
+          margin: 6mm auto !important;
+          width: 100mm !important; /* Standard Table Tent Standee format */
+          max-width: 100mm !important;
+          border: 2.5px solid #14161b !important;
+          border-radius: 12px !important;
+          padding: 6px !important;
+          box-shadow: none !important;
+          background: #faf8f5 !important;
+          color: #14161b !important;
+          color-scheme: light !important;
+          page-break-inside: avoid !important;
+          break-inside: avoid !important;
+          page-break-after: avoid !important;
+          break-after: avoid !important;
+          page-break-before: avoid !important;
+          break-before: avoid !important;
+          -webkit-print-color-adjust: exact !important;
+          print-color-adjust: exact !important;
+        }
+
+        .standee-inner-frame {
+          border: 2px dashed #b8860b !important;
+          padding: 14px 10px !important;
+          background: #ffffff !important;
+          color: #14161b !important;
+          -webkit-print-color-adjust: exact !important;
+          print-color-adjust: exact !important;
+        }
+
+        .frame-corner {
+          display: block !important;
+          border-color: #b8860b !important;
+          -webkit-print-color-adjust: exact !important;
+          print-color-adjust: exact !important;
+        }
+
+        .standee-crest {
+          -webkit-print-color-adjust: exact !important;
+          print-color-adjust: exact !important;
+          background: #d4af37 !important;
+          color: #121212 !important;
+        }
+
+        .standee-brand {
+          color: #c21807 !important;
+          -webkit-print-color-adjust: exact !important;
+          print-color-adjust: exact !important;
+        }
+
+        .standee-sub {
+          color: #525252 !important;
+          -webkit-print-color-adjust: exact !important;
+          print-color-adjust: exact !important;
+        }
+
+        .standee-divider {
+          display: flex !important;
+          .divider-line {
+            background: #b8860b !important;
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
+          }
+          .divider-gem {
+            color: #b8860b !important;
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
+          }
+        }
+
+        .scan-pill {
+          background: #14161b !important;
+          color: #ffffff !important;
+          -webkit-print-color-adjust: exact !important;
+          print-color-adjust: exact !important;
+        }
+
+        .qr-image-container {
+          background: #ffffff !important;
+          border: 1.5px solid #dcd7ce !important;
+          padding: 6px !important;
+          -webkit-print-color-adjust: exact !important;
+          print-color-adjust: exact !important;
+        }
+
+        .qr-canvas-img {
+          width: 50mm !important;
+          height: 50mm !important;
+          -webkit-print-color-adjust: exact !important;
+          print-color-adjust: exact !important;
+        }
+
+        .standee-table-badge {
+          background: #c21807 !important;
+          color: #ffffff !important;
+          -webkit-print-color-adjust: exact !important;
+          print-color-adjust: exact !important;
+        }
+
+        .standee-steps {
+          color: #262626 !important;
+          -webkit-print-color-adjust: exact !important;
+          print-color-adjust: exact !important;
+
+          .step-num {
+            background: #d4af37 !important;
+            color: #121212 !important;
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
+          }
+        }
+
+        .standee-meta {
+          color: #525252 !important;
+          -webkit-print-color-adjust: exact !important;
+          print-color-adjust: exact !important;
+
+          .meta-dot {
+            background: #10b981 !important;
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
+          }
+        }
+
+        .standee-print-cut-line {
+          display: flex !important;
+          color: #78716c !important;
+          border-color: #dcd7ce !important;
+          -webkit-print-color-adjust: exact !important;
+          print-color-adjust: exact !important;
         }
       }
     `,
@@ -3000,6 +3400,7 @@ export class TableListComponent implements OnInit {
   tableToDelete: Table | null = null;
   activeQrTable: Table | null = null;
   qrDataUrl: string | null = null;
+  activeQrFullUrl = signal<string>('');
 
   showServerAdminModal = signal<boolean>(false);
   serverAdminPassword = signal<string>('');
@@ -3780,33 +4181,183 @@ export class TableListComponent implements OnInit {
   async openQrModal(table: Table): Promise<void> {
     this.activeQrTable = table;
     this.qrDataUrl = null;
-    const fullUrl = `${window.location.origin}${table.qrUrl}`;
+    const base = environment.customerMenuUrl || window.location.origin;
+    const token = table.qrToken || table.number;
+    const fullUrl = `${base}/table/${encodeURIComponent(token)}`;
+    this.activeQrFullUrl.set(fullUrl);
 
     try {
       this.qrDataUrl = await QRCode.toDataURL(fullUrl, {
-        width: 320,
-        margin: 2,
+        width: 480,
+        margin: 1,
+        errorCorrectionLevel: 'M',
         color: {
-          dark: '#121212',
-          light: '#FFFFFF',
+          dark: '#0c0e12',
+          light: '#ffffff',
         },
       });
     } catch (e) {
       console.error('QR generation failed', e);
+      this.toastService.error('Failed to generate table QR code');
     }
   }
 
-  downloadQrImage(): void {
+  async downloadQrImage(): Promise<void> {
     if (!this.qrDataUrl || !this.activeQrTable) return;
-    const link = document.createElement('a');
-    link.download = `RoyalSpice_Table_${this.activeQrTable.number}_QR.png`;
-    link.href = this.qrDataUrl;
-    link.click();
-    this.toastService.success(`Downloaded QR PNG for Table ${this.activeQrTable.number}`);
+
+    const table = this.activeQrTable;
+    const brandName = (this.restaurant()?.name || 'GuruKripa Dhaba').toUpperCase();
+    const section = (table.section || 'Main Dining Floor').toUpperCase();
+    const tableNum = `TABLE ${table.number}`.toUpperCase();
+    const scanUrl = this.activeQrFullUrl() || `${window.location.origin}/table/${table.qrToken || table.number}`;
+
+    try {
+      // 1. Create high-resolution 300 DPI Standee canvas (800 x 1160 px)
+      const canvas = document.createElement('canvas');
+      canvas.width = 800;
+      canvas.height = 1160;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) throw new Error('Canvas 2D context not available');
+
+      // Warm Bone / Fine Dhaba Parchment background
+      ctx.fillStyle = '#faf8f4';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      // Outer Solid Frame
+      ctx.strokeStyle = '#14161b';
+      ctx.lineWidth = 4;
+      ctx.strokeRect(28, 28, canvas.width - 56, canvas.height - 56);
+
+      // Inner Royal Gold Frame
+      ctx.strokeStyle = '#d4af37';
+      ctx.lineWidth = 2;
+      ctx.strokeRect(40, 40, canvas.width - 80, canvas.height - 80);
+
+      // Corner gold bracket decorations
+      const corner = 28;
+      ctx.fillStyle = '#d4af37';
+      ctx.fillRect(40, 40, corner, 4);
+      ctx.fillRect(40, 40, 4, corner);
+      ctx.fillRect(canvas.width - 40 - corner, 40, corner, 4);
+      ctx.fillRect(canvas.width - 44, 40, 4, corner);
+      ctx.fillRect(40, canvas.height - 44, corner, 4);
+      ctx.fillRect(40, canvas.height - 40 - corner, 4, corner);
+      ctx.fillRect(canvas.width - 40 - corner, canvas.height - 44, corner, 4);
+      ctx.fillRect(canvas.width - 44, canvas.height - 40 - corner, 4, corner);
+
+      // Crest Icon Badge
+      ctx.beginPath();
+      ctx.arc(400, 110, 32, 0, Math.PI * 2);
+      ctx.fillStyle = '#d4af37';
+      ctx.fill();
+
+      ctx.fillStyle = '#14161b';
+      ctx.font = 'bold 28px serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('👑', 400, 110);
+
+      // Restaurant Brand Header
+      ctx.font = 'bold 36px "Crimson Text", Georgia, serif';
+      ctx.fillStyle = '#c21807';
+      ctx.fillText(brandName, 400, 178);
+
+      // Subtitle
+      ctx.font = '600 16px "Source Sans 3", "Source Sans Pro", sans-serif';
+      ctx.fillStyle = '#737373';
+      ctx.fillText(`PURE VEG DHABA  •  ${section}`, 400, 215);
+
+      // Thin divider
+      ctx.strokeStyle = '#e5ded4';
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.moveTo(120, 245);
+      ctx.lineTo(680, 245);
+      ctx.stroke();
+
+      // "SCAN WITH CAMERA" dark pill
+      ctx.fillStyle = '#14161b';
+      ctx.beginPath();
+      ctx.roundRect(260, 270, 280, 38, 19);
+      ctx.fill();
+
+      ctx.fillStyle = '#ffffff';
+      ctx.font = 'bold 15px "Source Sans 3", "Source Sans Pro", sans-serif';
+      ctx.fillText('📷  SCAN WITH CAMERA', 400, 289);
+
+      // White Well behind QR Code
+      ctx.fillStyle = '#ffffff';
+      ctx.strokeStyle = '#e5ded4';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.roundRect(165, 330, 470, 470, 24);
+      ctx.fill();
+      ctx.stroke();
+
+      // Load and draw QR matrix
+      const qrImg = new Image();
+      qrImg.crossOrigin = 'anonymous';
+      await new Promise<void>((resolve, reject) => {
+        qrImg.onload = () => resolve();
+        qrImg.onerror = reject;
+        qrImg.src = this.qrDataUrl!;
+      });
+      ctx.drawImage(qrImg, 185, 350, 430, 430);
+
+      // Table Number Crimson Banner
+      ctx.fillStyle = '#c21807';
+      ctx.beginPath();
+      ctx.roundRect(190, 830, 420, 62, 16);
+      ctx.fill();
+
+      ctx.fillStyle = '#ffffff';
+      ctx.font = 'bold 32px "Crimson Text", Georgia, serif';
+      ctx.fillText(tableNum, 400, 861);
+
+      // Ordering 3-Step Guide
+      ctx.fillStyle = '#262626';
+      ctx.font = '600 18px "Source Sans 3", "Source Sans Pro", sans-serif';
+      ctx.fillText('1. Scan QR   •   2. Browse Menu   •   3. Place Order', 400, 935);
+
+      // Scan detail note
+      ctx.fillStyle = '#737373';
+      ctx.font = '400 15px "Source Sans 3", "Source Sans Pro", sans-serif';
+      ctx.fillText('Instant kitchen KOT • Contactless Ordering • Live Kitchen Queue', 400, 975);
+
+      // Footer note
+      ctx.fillStyle = '#9ca3af';
+      ctx.font = '500 14px "Source Sans 3", sans-serif';
+      ctx.fillText('Free Guest Wi-Fi Available  •  GuruKripa Dhaba Management', 400, 1035);
+
+      // Download triggered via dataURL
+      const standeePng = canvas.toDataURL('image/png');
+      const link = document.createElement('a');
+      link.download = `GuruKripa_Table_${table.number}_Standee.png`;
+      link.href = standeePng;
+      link.click();
+      this.toastService.success(`Downloaded Table ${table.number} Standee PNG`);
+    } catch (err) {
+      console.warn('Canvas export failed, falling back to raw QR PNG', err);
+      const link = document.createElement('a');
+      link.download = `GuruKripa_Table_${table.number}_QR.png`;
+      link.href = this.qrDataUrl;
+      link.click();
+      this.toastService.success(`Downloaded QR PNG for Table ${table.number}`);
+    }
   }
 
   printQrStandee(): void {
-    window.print();
+    if (!this.activeQrTable) return;
+    document.body.classList.add('is-printing-qr-standee');
+    const cleanup = () => {
+      document.body.classList.remove('is-printing-qr-standee');
+      window.removeEventListener('afterprint', cleanup);
+    };
+    window.addEventListener('afterprint', cleanup);
+    setTimeout(() => {
+      window.print();
+      setTimeout(cleanup, 2000);
+    }, 60);
   }
 
   onBackdropClick(event: MouseEvent): void {

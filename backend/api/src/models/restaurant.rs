@@ -20,6 +20,14 @@ pub struct Restaurant {
     pub currency: String,
     pub timezone: String,
     pub is_active: bool,
+    #[sqlx(default)]
+    pub gst_rate: Option<f64>,
+    #[sqlx(default)]
+    pub cgst_rate: Option<f64>,
+    #[sqlx(default)]
+    pub sgst_rate: Option<f64>,
+    #[sqlx(default)]
+    pub service_charge_rate: Option<f64>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }
@@ -37,6 +45,10 @@ pub struct UpdateRestaurantPayload {
     pub postal_code: Option<String>,
     pub gstin: Option<String>,
     pub fssai_license: Option<String>,
+    pub gst_rate: Option<f64>,
+    pub cgst_rate: Option<f64>,
+    pub sgst_rate: Option<f64>,
+    pub service_charge_rate: Option<f64>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

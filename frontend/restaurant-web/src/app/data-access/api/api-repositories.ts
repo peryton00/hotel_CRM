@@ -60,9 +60,22 @@ export class ApiRestaurantRepository implements IRestaurantRepository {
         currencySymbol: '₹',
         taxSettings: {
           enableGst: true,
-          cgstRate: 2.5,
-          sgstRate: 2.5,
-          serviceChargeRate: 0,
+          cgstRate:
+            res.cgst_rate !== undefined && res.cgst_rate !== null
+              ? Number(res.cgst_rate)
+              : (res.gst_rate !== undefined && res.gst_rate !== null
+                  ? Number(res.gst_rate) / 2
+                  : 2.5),
+          sgstRate:
+            res.sgst_rate !== undefined && res.sgst_rate !== null
+              ? Number(res.sgst_rate)
+              : (res.gst_rate !== undefined && res.gst_rate !== null
+                  ? Number(res.gst_rate) / 2
+                  : 2.5),
+          serviceChargeRate:
+            res.service_charge_rate !== undefined && res.service_charge_rate !== null
+              ? Number(res.service_charge_rate)
+              : 0,
           gstNumber: res.gstin || '03AABCG1234F1Z5',
         },
         orderingSettings: {
@@ -330,6 +343,17 @@ export class ApiOrderRepository implements IOrderRepository {
   }
 
   private mapOrder(o: any): Order {
+    const orderCgstRate = o.cgst_rate !== undefined && o.cgst_rate !== null
+      ? Number(o.cgst_rate)
+      : (o.subtotal_paise && o.tax_paise ? Math.round(((o.tax_paise / o.subtotal_paise) * 50.0) * 10) / 10 : 2.5);
+    const orderSgstRate = o.sgst_rate !== undefined && o.sgst_rate !== null
+      ? Number(o.sgst_rate)
+      : (o.subtotal_paise && o.tax_paise ? Math.round(((o.tax_paise / o.subtotal_paise) * 50.0) * 10) / 10 : 2.5);
+    const totalTax = (o.tax_paise || 0) / 100;
+    const rateSum = orderCgstRate + orderSgstRate;
+    const calculatedCgst = rateSum > 0 ? Math.round((totalTax * (orderCgstRate / rateSum)) * 100) / 100 : totalTax / 2;
+    const calculatedSgst = Math.round((totalTax - calculatedCgst) * 100) / 100;
+
     return {
       id: o.id,
       orderNumber: o.order_number,
@@ -360,9 +384,11 @@ export class ApiOrderRepository implements IOrderRepository {
         };
       }),
       subtotal: (o.subtotal_paise || 0) / 100,
-      taxAmount: (o.tax_paise || 0) / 100,
-      cgstAmount: (o.tax_paise || 0) / 2 / 100,
-      sgstAmount: (o.tax_paise || 0) / 2 / 100,
+      taxAmount: totalTax,
+      cgstRate: orderCgstRate,
+      sgstRate: orderSgstRate,
+      cgstAmount: calculatedCgst,
+      sgstAmount: calculatedSgst,
       discountAmount: (o.discount_paise || 0) / 100,
       totalAmount: (o.total_amount_paise || 0) / 100,
       createdAt: o.created_at,

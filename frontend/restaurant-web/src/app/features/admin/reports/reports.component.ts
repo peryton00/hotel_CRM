@@ -439,7 +439,7 @@ export type ReportViewTab = 'overview' | 'revenue' | 'cogs' | 'wastage';
                     {{ totalTaxCollected() | currencyInr }}
                   }
                 </span>
-                <span class="kpi-sub">CGST (2.5%) + SGST (2.5%)</span>
+                <span class="kpi-sub">CGST ({{ restaurant()?.taxSettings?.cgstRate ?? 2.5 }}%) + SGST ({{ restaurant()?.taxSettings?.sgstRate ?? 2.5 }}%)</span>
               </div>
 
               <div class="kpi-card highlight-crimson">
@@ -2108,6 +2108,7 @@ export class ReportsComponent {
   orders = this.mock.orders;
   categories = this.mock.categories;
   menuItems = this.mock.menuItems;
+  restaurant = this.dataService.restaurant;
 
   // Tab View Navigation
   activeReportTab = signal<ReportViewTab>('overview');

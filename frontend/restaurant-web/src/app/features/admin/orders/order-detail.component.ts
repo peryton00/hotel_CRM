@@ -258,11 +258,11 @@ import { ThermalReceiptModalComponent } from '../../../shared/components/thermal
                   </div>
                 }
                 <div class="sum-row">
-                  <span>CGST (2.5%)</span>
+                  <span>CGST ({{ getOrderCgstRate(ord) }}%)</span>
                   <span>{{ ord.cgstAmount | currencyInr }}</span>
                 </div>
                 <div class="sum-row">
-                  <span>SGST (2.5%)</span>
+                  <span>SGST ({{ getOrderSgstRate(ord) }}%)</span>
                   <span>{{ ord.sgstAmount | currencyInr }}</span>
                 </div>
                 <div class="sum-row total">
@@ -1148,7 +1148,7 @@ import { ThermalReceiptModalComponent } from '../../../shared/components/thermal
                       <span>{{ editSubtotal() | currencyInr }}</span>
                     </div>
                     <div class="dt-row">
-                      <span>GST (5%)</span>
+                      <span>GST ({{ (getOrderCgstRate(ord) + getOrderSgstRate(ord)) }}%)</span>
                       <span>{{ editTax() | currencyInr }}</span>
                     </div>
                     @if (ord.discountAmount > 0) {
@@ -2632,8 +2632,42 @@ export class OrderDetailComponent implements OnInit {
     return this.editItems().reduce((acc, it) => acc + it.itemTotal, 0);
   });
 
+  get cgstRate(): number {
+    return this.restaurant()?.taxSettings?.cgstRate ?? 2.5;
+  }
+
+  get sgstRate(): number {
+    return this.restaurant()?.taxSettings?.sgstRate ?? 2.5;
+  }
+
+  get gstRate(): number {
+    return this.cgstRate + this.sgstRate;
+  }
+
+  getOrderCgstRate(ord: Order | null | undefined): number {
+    if (!ord) return this.cgstRate;
+    if (typeof (ord as any).cgstRate === 'number') return (ord as any).cgstRate;
+    if (typeof (ord as any).cgst_rate === 'number') return (ord as any).cgst_rate;
+    if (ord.subtotal > 0 && ord.cgstAmount) {
+      return Math.round((ord.cgstAmount / ord.subtotal) * 1000) / 10;
+    }
+    return this.cgstRate;
+  }
+
+  getOrderSgstRate(ord: Order | null | undefined): number {
+    if (!ord) return this.sgstRate;
+    if (typeof (ord as any).sgstRate === 'number') return (ord as any).sgstRate;
+    if (typeof (ord as any).sgst_rate === 'number') return (ord as any).sgst_rate;
+    if (ord.subtotal > 0 && ord.sgstAmount) {
+      return Math.round((ord.sgstAmount / ord.subtotal) * 1000) / 10;
+    }
+    return this.sgstRate;
+  }
+
   editTax = computed(() => {
-    return Math.round(this.editSubtotal() * 0.05 * 100) / 100;
+    const ord = this.order();
+    const rate = ord ? (this.getOrderCgstRate(ord) + this.getOrderSgstRate(ord)) : this.gstRate;
+    return Math.round(this.editSubtotal() * (rate / 100) * 100) / 100;
   });
 
   editTotal = computed(() => {
@@ -3025,8 +3059,11 @@ export class OrderDetailComponent implements OnInit {
     this.isSavingEdit.set(true);
 
     const sub = this.editSubtotal();
-    const tax = this.editTax();
-    const halfTax = Math.round((tax / 2) * 100) / 100;
+    const orderCgst = this.getOrderCgstRate(ord);
+    const orderSgst = this.getOrderSgstRate(ord);
+    const cgstAmt = Math.round(sub * (orderCgst / 100) * 100) / 100;
+    const sgstAmt = Math.round(sub * (orderSgst / 100) * 100) / 100;
+    const tax = Math.round((cgstAmt + sgstAmt) * 100) / 100;
     const tot = this.editTotal();
 
     const isOverride = this.isManagerOverrideActive() || ord.paymentStatus === 'PAID';
@@ -3052,8 +3089,10 @@ export class OrderDetailComponent implements OnInit {
           items: [...this.editItems()],
           subtotal: sub,
           taxAmount: tax,
-          cgstAmount: halfTax,
-          sgstAmount: halfTax,
+          cgstRate: orderCgst,
+          sgstRate: orderSgst,
+          cgstAmount: cgstAmt,
+          sgstAmount: sgstAmt,
           totalAmount: tot,
           updatedAt: new Date().toISOString(),
           timeline: updatedTimeline,

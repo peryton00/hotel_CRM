@@ -5,5 +5,6 @@ export const environment = {
   supabaseAnonKey: 'sb_publishable_TdK7jGjgRUVAlz5-67Cvwg_IiOD09NB',
   useMockRepositories: false,
   isDesktop: false,
-  appMode: 'admin' as 'admin' | 'customer' | 'unified',
+  customerMenuUrl: 'http://localhost:3001',
+  wsOrdersUrl: 'ws://localhost:3000/ws/orders',
 };

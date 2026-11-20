@@ -150,15 +150,16 @@ impl BillingRepository {
         .execute(&mut *tx)
         .await?;
 
-        // 6. Generate and store invoice (non-blocking best-effort insert with DB-safe fallback)
+        // 6. Generate and store invoice (wrapped in a savepoint so best-effort failure never aborts order settlement tx)
         let invoice_num = format!("INV-{}", order.order_number);
-        let _ = sqlx::query(
+        let _ = sqlx::query("SAVEPOINT invoice_sp").execute(&mut *tx).await;
+        let inv_res = sqlx::query(
             r#"
             INSERT INTO invoices (
                 restaurant_id, order_id, invoice_number, subtotal_paise, discount_amount_paise,
-                tax_amount_paise, total_amount_paise, payment_status
+                discount_paise, tax_amount_paise, tax_paise, total_amount_paise, total_paise, payment_status
             )
-            VALUES ($1, $2, $3, $4, $5, $6, $7, 'PAID')
+            VALUES ($1, $2, $3, $4, $5, $5, $6, $6, $7, $7, 'PAID')
             ON CONFLICT DO NOTHING
             "#,
         )
@@ -171,6 +172,12 @@ impl BillingRepository {
         .bind(final_total_paise)
         .execute(&mut *tx)
         .await;
+
+        if inv_res.is_err() {
+            let _ = sqlx::query("ROLLBACK TO SAVEPOINT invoice_sp").execute(&mut *tx).await;
+        } else {
+            let _ = sqlx::query("RELEASE SAVEPOINT invoice_sp").execute(&mut *tx).await;
+        }
 
         // 7. Emit outbox event for sync
         let outbox_payload = serde_json::json!({

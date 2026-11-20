@@ -54,10 +54,14 @@ where
                     }
                 }
 
-                let decoding_key = DecodingKey::from_base64_secret(&config.supabase_jwt_secret)
+                let primary_key = DecodingKey::from_base64_secret(&config.supabase_jwt_secret)
                     .unwrap_or_else(|_| DecodingKey::from_secret(config.supabase_jwt_secret.as_bytes()));
+                let fallback_key = DecodingKey::from_secret(config.supabase_jwt_secret.as_bytes());
 
-                match decode::<SupabaseClaims>(token, &decoding_key, &validation) {
+                let decoded = decode::<SupabaseClaims>(token, &primary_key, &validation)
+                    .or_else(|_| decode::<SupabaseClaims>(token, &fallback_key, &validation));
+
+                match decoded {
                     Ok(token_data) => {
                         let claims = token_data.claims;
                         let user_id = claims.user_id().map_err(|_| {
@@ -79,10 +83,8 @@ where
                         });
                     }
                     Err(err) => {
-                        tracing::warn!("JWT decode error: {:?}", err);
-                        if !config.allow_dev_auth {
-                            return Err(AppError::Unauthorized(format!("Invalid token: {}", err)));
-                        }
+                        tracing::warn!("Session expired or invalid JWT: {:?}", err);
+                        return Err(AppError::Unauthorized(format!("Session expired: {}", err)));
                     }
                 }
             }

@@ -1,4 +1,6 @@
 pub mod auth_routes;
+pub mod public_routes;
+pub mod ws_routes;
 pub mod billing_routes;
 pub mod coupon_routes;
 pub mod customer_routes;
@@ -181,6 +183,19 @@ pub fn create_router(state: AppState) -> Router {
             "/health/restaurant/:id",
             get(health::check_restaurant_availability),
         )
+        // Public unauthenticated routes
+        .route("/public/tables/:token", get(public_routes::get_public_table))
+        .route("/public/menu", get(public_routes::get_public_menu))
+        .route(
+            "/public/restaurant-status",
+            get(public_routes::get_public_restaurant_status),
+        )
+        .route(
+            "/public/orders",
+            post(public_routes::create_public_order).get(public_routes::get_customer_orders),
+        )
+        // WebSocket
+        .route("/ws/orders", get(ws_routes::ws_handler))
         // API v1 prefix
         .nest("/api/v1", api_v1)
         .route(

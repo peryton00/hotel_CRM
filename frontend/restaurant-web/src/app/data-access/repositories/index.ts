@@ -445,6 +445,9 @@ export class MockBillingRepository implements IBillingRepository {
     const order = this.mock.orders().find((o) => o.id === orderId);
     if (!order) throw new Error('Order not found');
 
+    const cgstRate = this.mock.restaurant()?.taxSettings?.cgstRate ?? 2.5;
+    const sgstRate = this.mock.restaurant()?.taxSettings?.sgstRate ?? 2.5;
+
     const newInv: Invoice = {
       id: `inv-${Date.now().toString().slice(-4)}`,
       invoiceNumber: `INV-2026-${order.orderNumber.replace(/[^0-9]/g, '') || '001'}`,
@@ -459,8 +462,8 @@ export class MockBillingRepository implements IBillingRepository {
       discount: order.discountAmount,
       appliedCouponCode: order.appliedCouponCode,
       taxBreakdown: [
-        { name: 'CGST (2.5%)', rate: 2.5, amount: order.cgstAmount },
-        { name: 'SGST (2.5%)', rate: 2.5, amount: order.sgstAmount },
+        { name: `CGST (${cgstRate}%)`, rate: cgstRate, amount: order.cgstAmount },
+        { name: `SGST (${sgstRate}%)`, rate: sgstRate, amount: order.sgstAmount },
       ],
       totalTax: order.taxAmount,
       finalTotal: order.totalAmount,

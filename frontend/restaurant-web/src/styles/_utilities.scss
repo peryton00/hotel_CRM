@@ -718,3 +718,135 @@
     transform: rotate(360deg);
   }
 }
+
+// =============================================================================
+// Fluid Motion Choreography & Spring Dynamics (GPU Composited)
+// =============================================================================
+
+@keyframes adminPageFade {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes modalEnterSpring {
+  0% {
+    opacity: 0;
+    transform: scale(0.94) translateY(12px);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+@keyframes drawerSlideRight {
+  from {
+    transform: translateX(100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+
+@keyframes pipPulse {
+  0%, 100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(1.18);
+    opacity: 0.75;
+  }
+}
+
+@keyframes subtleShimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+// Page View Entrances
+.admin-content,
+.admin-main router-outlet + *,
+.dashboard-container,
+.orders-container,
+.tables-view,
+.menu-management-container,
+.settings-container,
+.inventory-container,
+.reports-container,
+.staff-container {
+  animation: adminPageFade 0.32s cubic-bezier(0.16, 1, 0.3, 1) both;
+  will-change: transform, opacity;
+}
+
+// Card Micro-interactions & Tactile Depth
+.card,
+.stat-card,
+.table-card,
+.order-card,
+.inventory-card,
+.metric-card,
+.menu-item-row {
+  transition: transform 0.24s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.24s cubic-bezier(0.16, 1, 0.3, 1), border-color 0.2s ease !important;
+  will-change: transform;
+
+  &:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-card-hover) !important;
+  }
+}
+
+// Button & Interactive Tap Feedback
+.btn,
+.action-btn,
+.icon-btn,
+.collapse-toggle,
+.mobile-toggle-btn,
+.tab-btn,
+.filter-btn {
+  transition: transform 0.16s cubic-bezier(0.16, 1, 0.3, 1), background-color 0.16s ease, border-color 0.16s ease, box-shadow 0.16s ease !important;
+  will-change: transform;
+
+  &:active:not(:disabled) {
+    transform: scale(0.96) !important;
+  }
+}
+
+// Modal & Dialog Spring Dynamics
+.modal-box,
+.modal-dialog,
+.dialog-box,
+.confirm-modal,
+.modal-card {
+  animation: modalEnterSpring 0.34s cubic-bezier(0.16, 1, 0.3, 1) both;
+  will-change: transform, opacity;
+}
+
+.modal-overlay,
+.drawer-backdrop {
+  animation: adminPageFade 0.22s cubic-bezier(0.16, 1, 0.3, 1) both;
+  backdrop-blur-sm: 4px;
+}
+
+// Live Status Pulse Pips
+.status-pip,
+.live-dot,
+.pulse-dot {
+  animation: pipPulse 2.2s infinite ease-in-out;
+  will-change: transform, opacity;
+}
+
+// Smooth Row Highlights
+tbody tr {
+  transition: background-color 0.18s ease;
+}

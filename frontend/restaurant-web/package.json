@@ -4,10 +4,8 @@
   "scripts": {
     "ng": "ng",
     "start": "ng serve",
-    "start:customer": "ng serve --configuration customer --port 4300",
     "build": "ng build",
     "build:desktop": "ng build --configuration desktop",
-    "build:customer": "ng build --configuration customer",
     "watch": "ng build --watch --configuration development",
     "test": "ng test",
     "lint": "prettier --check \"src/**/*.{ts,html,scss}\"",

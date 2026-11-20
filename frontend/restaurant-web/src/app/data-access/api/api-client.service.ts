@@ -1,8 +1,11 @@
 import { Injectable, inject } from '@angular/core';
 import { HttpClient, HttpHeaders, HttpParams } from '@angular/common/http';
+import { Router } from '@angular/router';
 import { Observable, throwError, of } from 'rxjs';
 import { catchError, map, switchMap } from 'rxjs/operators';
 import { environment } from '../../../environments/environment';
+import { AdminAuthService } from '../../core/services/admin-auth.service';
+import { ToastService } from '../../core/services/toast.service';
 
 export interface ApiResponse<T> {
   success: boolean;
@@ -13,6 +16,9 @@ export interface ApiResponse<T> {
 @Injectable({ providedIn: 'root' })
 export class ApiClientService {
   private http = inject(HttpClient);
+  private router = inject(Router, { optional: true });
+  private toastService = inject(ToastService, { optional: true });
+  private auth = inject(AdminAuthService, { optional: true });
   private baseUrl = environment.apiBaseUrl;
 
   private getHeaders(): HttpHeaders {
@@ -505,9 +511,27 @@ export class ApiClientService {
     }
 
     console.error('API Client Error:', errorMsg, error);
+
+    if (error?.status === 401) {
+      this.handleSessionExpired();
+    }
+
     const errObj: any = new Error(errorMsg);
     errObj.status = error?.status;
     errObj.originalError = error;
     return throwError(() => errObj);
+  }
+
+  private handleSessionExpired(): void {
+    if (this.auth) {
+      this.auth.logout(true);
+    } else {
+      localStorage.removeItem('sb-access-token');
+      localStorage.removeItem('supabase_auth_token');
+      localStorage.removeItem('staff_role');
+      localStorage.removeItem('staff_user');
+      this.router?.navigate(['/admin/login'], { queryParams: { expired: 'true' } });
+    }
+    this.toastService?.warning('Your session has expired. Please sign in again.', 'Authentication Expired');
   }
 }

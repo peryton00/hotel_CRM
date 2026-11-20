@@ -1,6 +1,6 @@
-import { Component, inject, signal } from '@angular/core';
+import { Component, inject, signal, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { RouterModule, Router } from '@angular/router';
+import { RouterModule, Router, ActivatedRoute } from '@angular/router';
 import { FormsModule } from '@angular/forms';
 import { AdminAuthService } from '../../../core/services/admin-auth.service';
 import { ToastService } from '../../../core/services/toast.service';
@@ -294,16 +294,23 @@ import { ToastService } from '../../../core/services/toast.service';
     `,
   ],
 })
-export class AdminLoginComponent {
+export class AdminLoginComponent implements OnInit {
   private auth = inject(AdminAuthService);
   private toastService = inject(ToastService);
   private router = inject(Router);
+  private route = inject(ActivatedRoute);
 
   loginId = '';
   password = '';
   showPassword = signal<boolean>(false);
   isLoading = signal<boolean>(false);
   errorMessage = signal<string>('');
+
+  ngOnInit(): void {
+    if (this.route.snapshot.queryParamMap.get('expired') === 'true') {
+      this.errorMessage.set('Your session has expired. Please log in again to continue.');
+    }
+  }
 
   togglePasswordVisibility(): void {
     this.showPassword.set(!this.showPassword());

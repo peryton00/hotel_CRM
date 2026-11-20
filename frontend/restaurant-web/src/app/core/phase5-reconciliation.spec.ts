@@ -12,7 +12,6 @@ import { AdminDashboardComponent } from '../features/admin/dashboard/dashboard.c
 import { ReportsComponent } from '../features/admin/reports/reports.component';
 import { TableListComponent } from '../features/admin/tables/table-list.component';
 import { MenuManagementComponent } from '../features/admin/menu/menu-management.component';
-import { CartService } from './services/cart.service';
 
 import { provideRouter } from '@angular/router';
 
@@ -466,42 +465,6 @@ describe('Phase 5 — Operational Consistency & Financial Reconciliation', () =>
       expect(second.isCachedReplay).toBe(true);
       expect(mock.orders().length).toBe(countAfterFirst);
       expect(second.order.id).toBe(first.order.id);
-    });
-
-    it('preserves cart contents when checkout is rejected', () => {
-      const cart = TestBed.inject(CartService);
-      cart.clearCart();
-
-      const item = mock.menuItems().find((m) => m.id === 'item-005')!;
-      cart.addItem(item, 2);
-      expect(cart.itemCount()).toBe(2);
-
-      // Deplete paneer stock
-      mock.adjustStock({
-        ingredientId: 'ing-02',
-        delta: -mock.ingredients().find((i) => i.id === 'ing-02')!.currentStock,
-        type: 'WASTAGE',
-        reason: 'Deplete for cart check',
-      });
-
-      const orderToSubmit = createMockOrder(
-        'ord-cart-preserve',
-        'ORD-CP',
-        600,
-        'PENDING',
-        'UNPAID',
-      );
-      orderToSubmit.items = [createMockItem('item-005', 'Paneer Tikka Angara', 2)];
-
-      const result = mock.simulateIdempotentOrderSubmission({
-        idempotencyKey: 'idem-cart-check',
-        order: orderToSubmit,
-      });
-
-      expect(result.success).toBe(false);
-      // Cart items remain intact
-      expect(cart.itemCount()).toBe(2);
-      expect(cart.items().length).toBe(1);
     });
 
     it('allows untracked items without recipes to check out normally', () => {

@@ -122,6 +122,10 @@ pub struct Order {
     #[sqlx(default)]
     pub applied_coupon_code: Option<String>,
     pub tax_paise: i64,
+    #[sqlx(default)]
+    pub cgst_rate: Option<f64>,
+    #[sqlx(default)]
+    pub sgst_rate: Option<f64>,
     pub service_charge_paise: i64,
     pub round_off_paise: i64,
     pub total_amount_paise: i64,

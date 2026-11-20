@@ -2,9 +2,10 @@
 name = "hotel_crm_api"
 version = "0.1.0"
 edition = "2021"
+default-run = "hotel_crm_api"
 
 [dependencies]
-axum = "0.7"
+axum = { version = "0.7", features = ["ws"] }
 tokio = { version = "1.38", features = ["full"] }
 tower = { version = "0.4", features = ["util"] }
 tower-http = { version = "0.5", features = ["cors", "trace"] }

@@ -2,7 +2,6 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import { TestBed } from '@angular/core/testing';
 import { provideHttpClient } from '@angular/common/http';
 import { MockDataService } from '../data-access/mock/mock-data.service';
-import { CartService } from './services/cart.service';
 import { Order, OrderItem } from './models/order.model';
 import { Reservation } from './models/reservation.model';
 
@@ -41,15 +40,13 @@ function createMockOrder(overrides: Partial<Order> = {}): Order {
 
 describe('Phase 1 Hardening & Correctness Verification', () => {
   let mockData: MockDataService;
-  let cartService: CartService;
 
   beforeEach(() => {
     TestBed.configureTestingModule({
-      providers: [provideHttpClient(), MockDataService, CartService],
+      providers: [provideHttpClient(), MockDataService],
     });
 
     mockData = TestBed.inject(MockDataService);
-    cartService = TestBed.inject(CartService);
 
     // Initialize clean tables
     mockData.tables.set([
@@ -169,14 +166,6 @@ describe('Phase 1 Hardening & Correctness Verification', () => {
       });
 
       expect(result.success).toBe(true);
-    });
-
-    it('CartService resets table context cleanly', () => {
-      cartService.setTableContext('tbl-001', 'T-01', 'tbl-01');
-      expect(cartService.tableContext()?.tableNumber).toBe('T-01');
-
-      cartService.clearTableContext();
-      expect(cartService.tableContext()).toBeNull();
     });
   });
 

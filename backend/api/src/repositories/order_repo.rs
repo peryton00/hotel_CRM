@@ -24,19 +24,27 @@ impl OrderRepository {
 
         // 1. Calculate items total in paise
         let mut subtotal_paise: i64 = 0;
-        let mut _tax_paise: i64 = 0;
 
         for item in &req.items {
             let item_subtotal = item.unit_price_paise * item.quantity as i64;
             subtotal_paise += item_subtotal;
-            // 5% standard tax per item
-            let item_tax = (item_subtotal as f64 * 0.05).round() as i64;
-            _tax_paise += item_tax;
         }
+
+        // Fetch tax settings configured by admin from database
+        let rest_rates: Option<(Option<f64>, Option<f64>, Option<f64>, Option<f64>)> = sqlx::query_as(
+            "SELECT COALESCE(gst_rate, 5.0)::float8, COALESCE(cgst_rate, gst_rate / 2.0, 2.5)::float8, COALESCE(sgst_rate, gst_rate / 2.0, 2.5)::float8, COALESCE(service_charge_rate, 0.0)::float8 FROM restaurants WHERE id = $1"
+        )
+        .bind(restaurant_id)
+        .fetch_optional(&mut *tx)
+        .await?;
+
+        let (gst_rate, cgst_rate, sgst_rate, service_charge_rate) = rest_rates
+            .map(|(g, c, s, sc)| (g.unwrap_or(5.0), c.unwrap_or(2.5), s.unwrap_or(2.5), sc.unwrap_or(0.0)))
+            .unwrap_or((5.0, 2.5, 2.5, 0.0));
 
         let discount_paise = req.discount_paise.unwrap_or(0).min(subtotal_paise);
         let breakdown =
-            OrderService::calculate_bill(subtotal_paise, discount_paise, 5.0, 0.0, true);
+            OrderService::calculate_bill(subtotal_paise, discount_paise, gst_rate, service_charge_rate, true);
 
         // 2. Generate sequential order number count
         let _count_row: (i64,) =
@@ -76,12 +84,14 @@ impl OrderRepository {
                 restaurant_id, order_type, pickup_reference, status, payment_status,
                 table_id, customer_id, customer_name, customer_phone_e164, customer_phone,
                 subtotal_paise, discount_paise, applied_coupon_code, tax_paise,
+                cgst_rate, sgst_rate,
                 service_charge_paise, round_off_paise, total_amount_paise, notes,
                 server_staff_id, legacy_unknown_timestamp
             )
-            VALUES ($1, $2, $3, 'confirmed', 'pending', $4, $5, $6, $7, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, false)
+            VALUES ($1, $2, $3, 'confirmed', 'pending', $4, $5, $6, $7, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, false)
             RETURNING id, restaurant_id, 'ORD-' || UPPER(SUBSTRING(id::text, 1, 8)) AS order_number, order_type, pickup_reference, status, payment_status, payment_method,
                       table_id, customer_id, customer_name, customer_phone_e164, subtotal_paise, discount_paise, applied_coupon_code, tax_paise,
+                      cgst_rate::float8 AS cgst_rate, sgst_rate::float8 AS sgst_rate,
                       service_charge_paise, round_off_paise, total_amount_paise, notes,
                       server_staff_id, created_at, updated_at, NULL::timestamptz AS settled_at, cancelled_at,
                       legacy_unknown_timestamp
@@ -98,6 +108,8 @@ impl OrderRepository {
         .bind(breakdown.discount_paise)
         .bind(&req.applied_coupon_code)
         .bind(breakdown.tax_paise)
+        .bind(cgst_rate)
+        .bind(sgst_rate)
         .bind(breakdown.service_charge_paise)
         .bind(breakdown.round_off_paise)
         .bind(breakdown.final_amount_paise)
@@ -110,7 +122,7 @@ impl OrderRepository {
         let mut inserted_items = Vec::new();
         for item in req.items {
             let item_sub = item.unit_price_paise * item.quantity as i64;
-            let item_tx = (item_sub as f64 * 0.05).round() as i64;
+            let item_tx = (item_sub as f64 * (gst_rate / 100.0)).round() as i64;
             let item_tot = item_sub + item_tx;
 
             let order_item = sqlx::query_as::<_, OrderItem>(
@@ -199,6 +211,8 @@ impl OrderRepository {
                    'ORD-' || UPPER(SUBSTRING(id::text, 1, 8)) AS order_number,
                    order_type, pickup_reference, status, payment_status, payment_method,
                    table_id, customer_id, customer_name, customer_phone_e164, subtotal_paise, discount_paise, applied_coupon_code, tax_paise,
+                   COALESCE(cgst_rate, CASE WHEN subtotal_paise > 0 AND tax_paise > 0 THEN ROUND((tax_paise::numeric / subtotal_paise::numeric * 50.0), 2) ELSE 2.5 END)::float8 AS cgst_rate,
+                   COALESCE(sgst_rate, CASE WHEN subtotal_paise > 0 AND tax_paise > 0 THEN ROUND((tax_paise::numeric / subtotal_paise::numeric * 50.0), 2) ELSE 2.5 END)::float8 AS sgst_rate,
                    service_charge_paise, round_off_paise, total_amount_paise, notes,
                    server_staff_id, created_at, updated_at, NULL::timestamptz AS settled_at, cancelled_at,
                    legacy_unknown_timestamp
@@ -231,6 +245,84 @@ impl OrderRepository {
         }
     }
 
+    pub async fn list_orders_by_customer_phone(
+        pool: &PgPool,
+        restaurant_id: Uuid,
+        customer_phone: &str,
+        table_id: Option<Uuid>,
+    ) -> Result<Vec<OrderWithItems>, AppError> {
+        let phone_pattern = format!("%{}%", customer_phone.trim());
+        let orders = if let Some(tid) = table_id {
+            sqlx::query_as::<_, Order>(
+                r#"
+                SELECT id, restaurant_id,
+                       'ORD-' || UPPER(SUBSTRING(id::text, 1, 8)) AS order_number,
+                       order_type, pickup_reference, status, payment_status, payment_method,
+                       table_id, customer_id, customer_name, customer_phone_e164, subtotal_paise, discount_paise, applied_coupon_code, tax_paise,
+                       COALESCE(cgst_rate, CASE WHEN subtotal_paise > 0 AND tax_paise > 0 THEN ROUND((tax_paise::numeric / subtotal_paise::numeric * 50.0), 2) ELSE 2.5 END)::float8 AS cgst_rate,
+                       COALESCE(sgst_rate, CASE WHEN subtotal_paise > 0 AND tax_paise > 0 THEN ROUND((tax_paise::numeric / subtotal_paise::numeric * 50.0), 2) ELSE 2.5 END)::float8 AS sgst_rate,
+                       service_charge_paise, round_off_paise, total_amount_paise, notes,
+                       server_staff_id, created_at, updated_at, NULL::timestamptz AS settled_at, cancelled_at,
+                       legacy_unknown_timestamp
+                FROM orders
+                WHERE restaurant_id = $1
+                  AND (customer_phone_e164 LIKE $2 OR customer_phone LIKE $2)
+                  AND table_id = $3
+                  AND created_at >= NOW() - INTERVAL '24 hours'
+                ORDER BY created_at DESC
+                "#,
+            )
+            .bind(restaurant_id)
+            .bind(&phone_pattern)
+            .bind(tid)
+            .fetch_all(pool)
+            .await?
+        } else {
+            sqlx::query_as::<_, Order>(
+                r#"
+                SELECT id, restaurant_id,
+                       'ORD-' || UPPER(SUBSTRING(id::text, 1, 8)) AS order_number,
+                       order_type, pickup_reference, status, payment_status, payment_method,
+                       table_id, customer_id, customer_name, customer_phone_e164, subtotal_paise, discount_paise, applied_coupon_code, tax_paise,
+                       COALESCE(cgst_rate, CASE WHEN subtotal_paise > 0 AND tax_paise > 0 THEN ROUND((tax_paise::numeric / subtotal_paise::numeric * 50.0), 2) ELSE 2.5 END)::float8 AS cgst_rate,
+                       COALESCE(sgst_rate, CASE WHEN subtotal_paise > 0 AND tax_paise > 0 THEN ROUND((tax_paise::numeric / subtotal_paise::numeric * 50.0), 2) ELSE 2.5 END)::float8 AS sgst_rate,
+                       service_charge_paise, round_off_paise, total_amount_paise, notes,
+                       server_staff_id, created_at, updated_at, NULL::timestamptz AS settled_at, cancelled_at,
+                       legacy_unknown_timestamp
+                FROM orders
+                WHERE restaurant_id = $1
+                  AND (customer_phone_e164 LIKE $2 OR customer_phone LIKE $2)
+                  AND created_at >= NOW() - INTERVAL '24 hours'
+                ORDER BY created_at DESC
+                "#,
+            )
+            .bind(restaurant_id)
+            .bind(&phone_pattern)
+            .fetch_all(pool)
+            .await?
+        };
+
+        let mut result = Vec::with_capacity(orders.len());
+        for order in orders {
+            let items = sqlx::query_as::<_, OrderItem>(
+                r#"
+                SELECT id, order_id, menu_item_id, name AS item_name, quantity, unit_price_paise,
+                       subtotal_paise, tax_paise, discount_paise, total_paise, notes, status, created_at
+                FROM order_items
+                WHERE order_id = $1
+                ORDER BY created_at ASC
+                "#,
+            )
+            .bind(order.id)
+            .fetch_all(pool)
+            .await?;
+
+            result.push(OrderWithItems { order, items });
+        }
+
+        Ok(result)
+    }
+
     pub async fn list_orders(
         pool: &PgPool,
         restaurant_id: Uuid,
@@ -248,6 +340,8 @@ impl OrderRepository {
                    'ORD-' || UPPER(SUBSTRING(id::text, 1, 8)) AS order_number,
                    order_type, pickup_reference, status, payment_status, payment_method,
                    table_id, customer_id, customer_name, customer_phone_e164, subtotal_paise, discount_paise, applied_coupon_code, tax_paise,
+                   COALESCE(cgst_rate, CASE WHEN subtotal_paise > 0 AND tax_paise > 0 THEN ROUND((tax_paise::numeric / subtotal_paise::numeric * 50.0), 2) ELSE 2.5 END)::float8 AS cgst_rate,
+                   COALESCE(sgst_rate, CASE WHEN subtotal_paise > 0 AND tax_paise > 0 THEN ROUND((tax_paise::numeric / subtotal_paise::numeric * 50.0), 2) ELSE 2.5 END)::float8 AS sgst_rate,
                    service_charge_paise, round_off_paise, total_amount_paise, notes,
                    server_staff_id, created_at, updated_at, NULL::timestamptz AS settled_at, cancelled_at,
                    legacy_unknown_timestamp
@@ -337,6 +431,8 @@ impl OrderRepository {
                    'ORD-' || UPPER(SUBSTRING(id::text, 1, 8)) AS order_number,
                    order_type, pickup_reference, status, payment_status, payment_method,
                    table_id, customer_id, customer_name, customer_phone_e164, subtotal_paise, discount_paise, applied_coupon_code, tax_paise,
+                   COALESCE(cgst_rate, CASE WHEN subtotal_paise > 0 AND tax_paise > 0 THEN ROUND((tax_paise::numeric / subtotal_paise::numeric * 50.0), 2) ELSE 2.5 END)::float8 AS cgst_rate,
+                   COALESCE(sgst_rate, CASE WHEN subtotal_paise > 0 AND tax_paise > 0 THEN ROUND((tax_paise::numeric / subtotal_paise::numeric * 50.0), 2) ELSE 2.5 END)::float8 AS sgst_rate,
                    service_charge_paise, round_off_paise, total_amount_paise, notes,
                    server_staff_id, created_at, updated_at, NULL::timestamptz AS settled_at, cancelled_at,
                    legacy_unknown_timestamp
@@ -369,6 +465,8 @@ impl OrderRepository {
                       'ORD-' || UPPER(SUBSTRING(id::text, 1, 8)) AS order_number,
                       order_type, pickup_reference, status, payment_status, payment_method,
                       table_id, customer_id, customer_name, customer_phone_e164, subtotal_paise, discount_paise, applied_coupon_code, tax_paise,
+                      COALESCE(cgst_rate, CASE WHEN subtotal_paise > 0 AND tax_paise > 0 THEN ROUND((tax_paise::numeric / subtotal_paise::numeric * 50.0), 2) ELSE 2.5 END)::float8 AS cgst_rate,
+                      COALESCE(sgst_rate, CASE WHEN subtotal_paise > 0 AND tax_paise > 0 THEN ROUND((tax_paise::numeric / subtotal_paise::numeric * 50.0), 2) ELSE 2.5 END)::float8 AS sgst_rate,
                       service_charge_paise, round_off_paise, total_amount_paise, notes,
                       server_staff_id, created_at, updated_at, NULL::timestamptz AS settled_at, cancelled_at,
                       legacy_unknown_timestamp
@@ -492,6 +590,8 @@ impl OrderRepository {
                       'ORD-' || UPPER(SUBSTRING(id::text, 1, 8)) AS order_number,
                       order_type, pickup_reference, status, payment_status, payment_method,
                       table_id, customer_id, customer_name, customer_phone_e164, subtotal_paise, discount_paise, applied_coupon_code, tax_paise,
+                      COALESCE(cgst_rate, CASE WHEN subtotal_paise > 0 AND tax_paise > 0 THEN ROUND((tax_paise::numeric / subtotal_paise::numeric * 50.0), 2) ELSE 2.5 END)::float8 AS cgst_rate,
+                      COALESCE(sgst_rate, CASE WHEN subtotal_paise > 0 AND tax_paise > 0 THEN ROUND((tax_paise::numeric / subtotal_paise::numeric * 50.0), 2) ELSE 2.5 END)::float8 AS sgst_rate,
                       service_charge_paise, round_off_paise, total_amount_paise, notes,
                       server_staff_id, created_at, updated_at, NULL::timestamptz AS settled_at, cancelled_at,
                       legacy_unknown_timestamp

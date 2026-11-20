@@ -347,27 +347,40 @@ export function buildEscPosReceipt(
   b.twoColumnRow('Sub Total:', `Rs. ${subtotal.toFixed(2)}`);
 
   if (!isSplit) {
-    const tax = (order as any).taxBreakdown;
-    if (tax) {
-      if (tax.cgstAmount) {
-        b.twoColumnRow(`CGST (${tax.cgstRate || 2.5}%):`, `Rs. ${tax.cgstAmount.toFixed(2)}`);
-      }
-      if (tax.sgstAmount) {
-        b.twoColumnRow(`SGST (${tax.sgstRate || 2.5}%):`, `Rs. ${tax.sgstAmount.toFixed(2)}`);
-      }
-      if (tax.serviceChargeAmount) {
-        b.twoColumnRow(`Service Charge:`, `Rs. ${tax.serviceChargeAmount.toFixed(2)}`);
-      }
-      if (tax.discountAmount) {
-        b.twoColumnRow(`Discount:`, `-Rs. ${tax.discountAmount.toFixed(2)}`);
-      }
-      if (tax.roundOffAmount) {
-        b.twoColumnRow(`Round Off:`, `Rs. ${tax.roundOffAmount.toFixed(2)}`);
-      }
-    } else if (order.taxAmount) {
+    const tax = (order as any)?.taxBreakdown;
+    const cgstAmount = tax?.cgstAmount ?? order.cgstAmount;
+    const sgstAmount = tax?.sgstAmount ?? order.sgstAmount;
+    const cgstRate =
+      tax?.cgstRate ??
+      (order as any)?.cgstRate ??
+      (order.subtotal > 0 && cgstAmount
+        ? Math.round((cgstAmount / order.subtotal) * 1000) / 10
+        : restaurant?.taxSettings?.cgstRate ?? 2.5);
+    const sgstRate =
+      tax?.sgstRate ??
+      (order as any)?.sgstRate ??
+      (order.subtotal > 0 && sgstAmount
+        ? Math.round((sgstAmount / order.subtotal) * 1000) / 10
+        : restaurant?.taxSettings?.sgstRate ?? 2.5);
+    if (cgstAmount) {
+      b.twoColumnRow(`CGST (${cgstRate}%):`, `Rs. ${cgstAmount.toFixed(2)}`);
+    }
+    if (sgstAmount) {
+      b.twoColumnRow(`SGST (${sgstRate}%):`, `Rs. ${sgstAmount.toFixed(2)}`);
+    }
+    if (tax?.serviceChargeAmount) {
+      b.twoColumnRow(`Service Charge:`, `Rs. ${tax.serviceChargeAmount.toFixed(2)}`);
+    }
+    if (tax?.discountAmount) {
+      b.twoColumnRow(`Discount:`, `-Rs. ${tax.discountAmount.toFixed(2)}`);
+    }
+    if (tax?.roundOffAmount) {
+      b.twoColumnRow(`Round Off:`, `Rs. ${tax.roundOffAmount.toFixed(2)}`);
+    }
+    if (!cgstAmount && !sgstAmount && order.taxAmount) {
       b.twoColumnRow('Taxes:', `Rs. ${order.taxAmount.toFixed(2)}`);
     }
-    if (order.discountAmount) {
+    if (order.discountAmount && !tax?.discountAmount) {
       b.twoColumnRow('Discount:', `-Rs. ${order.discountAmount.toFixed(2)}`);
     }
   }
@@ -543,26 +556,39 @@ export function renderEscPosPreviewText(
 
   if (!isSplit) {
     const tax = (order as any)?.taxBreakdown;
-    if (tax) {
-      if (tax.cgstAmount) {
-        lines.push(row(`CGST (${tax.cgstRate || 2.5}%):`, `Rs. ${tax.cgstAmount.toFixed(2)}`));
-      }
-      if (tax.sgstAmount) {
-        lines.push(row(`SGST (${tax.sgstRate || 2.5}%):`, `Rs. ${tax.sgstAmount.toFixed(2)}`));
-      }
-      if (tax.serviceChargeAmount) {
-        lines.push(row(`Service Charge:`, `Rs. ${tax.serviceChargeAmount.toFixed(2)}`));
-      }
-      if (tax.discountAmount) {
-        lines.push(row(`Discount:`, `-Rs. ${tax.discountAmount.toFixed(2)}`));
-      }
-      if (tax.roundOffAmount) {
-        lines.push(row(`Round Off:`, `Rs. ${tax.roundOffAmount.toFixed(2)}`));
-      }
-    } else if (order.taxAmount) {
+    const cgstAmount = tax?.cgstAmount ?? order.cgstAmount;
+    const sgstAmount = tax?.sgstAmount ?? order.sgstAmount;
+    const cgstRate =
+      tax?.cgstRate ??
+      (order as any)?.cgstRate ??
+      (order.subtotal > 0 && cgstAmount
+        ? Math.round((cgstAmount / order.subtotal) * 1000) / 10
+        : restaurant?.taxSettings?.cgstRate ?? 2.5);
+    const sgstRate =
+      tax?.sgstRate ??
+      (order as any)?.sgstRate ??
+      (order.subtotal > 0 && sgstAmount
+        ? Math.round((sgstAmount / order.subtotal) * 1000) / 10
+        : restaurant?.taxSettings?.sgstRate ?? 2.5);
+    if (cgstAmount) {
+      lines.push(row(`CGST (${cgstRate}%):`, `Rs. ${cgstAmount.toFixed(2)}`));
+    }
+    if (sgstAmount) {
+      lines.push(row(`SGST (${sgstRate}%):`, `Rs. ${sgstAmount.toFixed(2)}`));
+    }
+    if (tax?.serviceChargeAmount) {
+      lines.push(row(`Service Charge:`, `Rs. ${tax.serviceChargeAmount.toFixed(2)}`));
+    }
+    if (tax?.discountAmount) {
+      lines.push(row(`Discount:`, `-Rs. ${tax.discountAmount.toFixed(2)}`));
+    }
+    if (tax?.roundOffAmount) {
+      lines.push(row(`Round Off:`, `Rs. ${tax.roundOffAmount.toFixed(2)}`));
+    }
+    if (!cgstAmount && !sgstAmount && order.taxAmount) {
       lines.push(row('Taxes:', `Rs. ${order.taxAmount.toFixed(2)}`));
     }
-    if (order.discountAmount) {
+    if (order.discountAmount && !tax?.discountAmount) {
       lines.push(row('Discount:', `-Rs. ${order.discountAmount.toFixed(2)}`));
     }
   }

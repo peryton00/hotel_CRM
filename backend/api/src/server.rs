@@ -75,14 +75,19 @@ pub async fn start_server(
         None
     };
 
-    // 3. Spawn background sync worker & gateway heartbeat if cloud pool is configured
+    // 3. Spawn background sync worker & gateway heartbeat
+    let default_restaurant_id =
+        uuid::Uuid::parse_str("00000000-0000-0000-0000-000000000001").unwrap_or_default();
+
     if let Some(ref cp) = cloud_pool {
         let worker = SyncWorker::new(pool.clone(), cp.clone());
         worker.spawn();
 
-        let default_restaurant_id =
-            uuid::Uuid::parse_str("00000000-0000-0000-0000-000000000001").unwrap_or_default();
         let gateway_client = GatewayHeartbeatClient::new(cp.clone(), default_restaurant_id);
+        gateway_client.spawn();
+    } else {
+        // When running in local-only / standalone mode, pulse heartbeat to local pool
+        let gateway_client = GatewayHeartbeatClient::new(pool.clone(), default_restaurant_id);
         gateway_client.spawn();
     }
 
@@ -212,6 +217,14 @@ pub async fn ensure_schema_and_seed(pool: &sqlx::PgPool) {
         ALTER TABLE restaurants ADD COLUMN IF NOT EXISTS postal_code VARCHAR(20);
         ALTER TABLE restaurants ADD COLUMN IF NOT EXISTS gstin VARCHAR(50);
         ALTER TABLE restaurants ADD COLUMN IF NOT EXISTS fssai_license VARCHAR(50);
+        ALTER TABLE restaurants ADD COLUMN IF NOT EXISTS cgst_rate NUMERIC(5,2);
+        ALTER TABLE restaurants ADD COLUMN IF NOT EXISTS sgst_rate NUMERIC(5,2);
+        ALTER TABLE restaurants ADD COLUMN IF NOT EXISTS gst_rate NUMERIC(5,2);
+        UPDATE restaurants SET cgst_rate = COALESCE(cgst_rate, gst_rate / 2.0, 2.5) WHERE cgst_rate IS NULL;
+        UPDATE restaurants SET sgst_rate = COALESCE(sgst_rate, gst_rate / 2.0, 2.5) WHERE sgst_rate IS NULL;
+        UPDATE restaurants SET gst_rate = COALESCE(gst_rate, cgst_rate + sgst_rate, 5.0) WHERE gst_rate IS NULL;
+        ALTER TABLE tables ADD COLUMN IF NOT EXISTS number VARCHAR(20);
+        ALTER TABLE tables ADD COLUMN IF NOT EXISTS qr_token VARCHAR(64);
         ALTER TABLE tables ADD COLUMN IF NOT EXISTS table_number VARCHAR(20);
         ALTER TABLE tables ADD COLUMN IF NOT EXISTS qr_code_identifier VARCHAR(64);
         ALTER TABLE tables ADD COLUMN IF NOT EXISTS active_order_id UUID;
@@ -236,6 +249,12 @@ pub async fn ensure_schema_and_seed(pool: &sqlx::PgPool) {
         ALTER TABLE staff_members ADD COLUMN IF NOT EXISTS permissions JSONB DEFAULT '[]'::jsonb;
         ALTER TABLE staff_members ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW();
         ALTER TABLE tables ADD COLUMN IF NOT EXISTS assigned_staff_id UUID;
+        CREATE TABLE IF NOT EXISTS restaurant_heartbeats (
+            restaurant_id UUID PRIMARY KEY,
+            is_online BOOLEAN NOT NULL DEFAULT TRUE,
+            last_seen_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            metadata JSONB
+        );
         CREATE TABLE IF NOT EXISTS staff_attendance (
             id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
             restaurant_id UUID NOT NULL,
@@ -251,26 +270,35 @@ pub async fn ensure_schema_and_seed(pool: &sqlx::PgPool) {
         );
         GRANT ALL ON ALL TABLES IN SCHEMA public TO service_role, anon, authenticated;
         GRANT ALL ON ALL SEQUENCES IN SCHEMA public TO service_role, anon, authenticated;
+        ALTER TABLE customers ADD COLUMN IF NOT EXISTS phone_e164 VARCHAR(50);
         ALTER TABLE customers ALTER COLUMN phone_e164 DROP NOT NULL;
         ALTER TABLE customers ADD COLUMN IF NOT EXISTS phone VARCHAR(50);
         ALTER TABLE customers ADD COLUMN IF NOT EXISTS address TEXT;
         ALTER TABLE customers ADD COLUMN IF NOT EXISTS notes TEXT;
         ALTER TABLE customers ADD COLUMN IF NOT EXISTS total_orders INT DEFAULT 0;
         UPDATE customers SET phone = COALESCE(phone, phone_e164) WHERE phone IS NULL;
+        ALTER TABLE reservations ADD COLUMN IF NOT EXISTS customer_phone_e164 VARCHAR(50);
+        ALTER TABLE reservations ADD COLUMN IF NOT EXISTS party_size INT DEFAULT 2;
+        ALTER TABLE reservations ADD COLUMN IF NOT EXISTS assigned_table_id UUID;
+        ALTER TABLE reservations ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT NOW();
         ALTER TABLE reservations ADD COLUMN IF NOT EXISTS customer_phone VARCHAR(50);
         ALTER TABLE reservations ADD COLUMN IF NOT EXISTS guest_count INT DEFAULT 2;
         ALTER TABLE reservations ADD COLUMN IF NOT EXISTS table_id UUID;
         ALTER TABLE reservations ADD COLUMN IF NOT EXISTS customer_id UUID;
-        ALTER TABLE reservations ADD COLUMN IF NOT EXISTS assigned_table_id UUID;
         ALTER TABLE reservations ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW();
         UPDATE reservations SET customer_phone = COALESCE(customer_phone, customer_phone_e164) WHERE customer_phone IS NULL;
         UPDATE reservations SET guest_count = COALESCE(guest_count, party_size) WHERE guest_count IS NULL;
         UPDATE reservations SET table_id = COALESCE(table_id, assigned_table_id) WHERE table_id IS NULL;
         UPDATE reservations SET updated_at = COALESCE(updated_at, created_at, NOW()) WHERE updated_at IS NULL;
         ALTER TABLE stock_movements ADD COLUMN IF NOT EXISTS inventory_item_id UUID;
+        ALTER TABLE stock_movements ADD COLUMN IF NOT EXISTS ingredient_id UUID;
+        ALTER TABLE stock_movements ADD COLUMN IF NOT EXISTS previous_stock NUMERIC(12, 4);
+        ALTER TABLE stock_movements ADD COLUMN IF NOT EXISTS new_stock NUMERIC(12, 4);
         ALTER TABLE stock_movements ADD COLUMN IF NOT EXISTS reference_order_id UUID;
         ALTER TABLE stock_movements ADD COLUMN IF NOT EXISTS reference_wastage_id UUID;
         ALTER TABLE stock_movements ADD COLUMN IF NOT EXISTS idempotency_key VARCHAR(100);
+        ALTER TABLE stock_movements ADD COLUMN IF NOT EXISTS reason TEXT;
+        ALTER TABLE stock_movements ADD COLUMN IF NOT EXISTS "timestamp" TIMESTAMPTZ DEFAULT NOW();
         ALTER TABLE stock_movements ALTER COLUMN ingredient_id DROP NOT NULL;
         ALTER TABLE stock_movements ALTER COLUMN previous_stock DROP NOT NULL;
         ALTER TABLE stock_movements ALTER COLUMN new_stock DROP NOT NULL;
@@ -281,9 +309,12 @@ pub async fn ensure_schema_and_seed(pool: &sqlx::PgPool) {
         UPDATE stock_movements SET created_at = COALESCE(created_at, "timestamp") WHERE created_at IS NULL;
         UPDATE stock_movements SET inventory_item_id = COALESCE(inventory_item_id, ingredient_id) WHERE inventory_item_id IS NULL;
         ALTER TABLE wastage_records ADD COLUMN IF NOT EXISTS inventory_item_id UUID;
+        ALTER TABLE wastage_records ADD COLUMN IF NOT EXISTS ingredient_id UUID;
         ALTER TABLE wastage_records ADD COLUMN IF NOT EXISTS unit_of_measure VARCHAR(20);
+        ALTER TABLE wastage_records ADD COLUMN IF NOT EXISTS unit VARCHAR(20);
         ALTER TABLE wastage_records ADD COLUMN IF NOT EXISTS cost_impact_paise BIGINT DEFAULT 0;
         ALTER TABLE wastage_records ADD COLUMN IF NOT EXISTS reported_by_staff_id UUID;
+        ALTER TABLE wastage_records ADD COLUMN IF NOT EXISTS reported_by VARCHAR(100);
         ALTER TABLE wastage_records ADD COLUMN IF NOT EXISTS idempotency_key VARCHAR(100);
         ALTER TABLE wastage_records ALTER COLUMN ingredient_id DROP NOT NULL;
         ALTER TABLE wastage_records ALTER COLUMN unit DROP NOT NULL;
@@ -291,9 +322,13 @@ pub async fn ensure_schema_and_seed(pool: &sqlx::PgPool) {
         UPDATE wastage_records SET inventory_item_id = COALESCE(inventory_item_id, ingredient_id) WHERE inventory_item_id IS NULL;
         ALTER TABLE coupon_redemptions ADD COLUMN IF NOT EXISTS customer_phone VARCHAR(50);
         ALTER TABLE coupon_redemptions ADD COLUMN IF NOT EXISTS discount_applied_paise BIGINT DEFAULT 0;
+        ALTER TABLE coupon_redemptions ADD COLUMN IF NOT EXISTS discount_amount_applied_paise BIGINT DEFAULT 0;
+        ALTER TABLE coupon_redemptions ADD COLUMN IF NOT EXISTS idempotency_key VARCHAR(100);
         ALTER TABLE coupon_redemptions ALTER COLUMN customer_id DROP NOT NULL;
         ALTER TABLE coupon_redemptions ALTER COLUMN discount_amount_applied_paise DROP NOT NULL;
         ALTER TABLE coupon_redemptions ALTER COLUMN idempotency_key DROP NOT NULL;
+        ALTER TABLE invoices ADD COLUMN IF NOT EXISTS discount_amount_paise BIGINT DEFAULT 0;
+        ALTER TABLE invoices ADD COLUMN IF NOT EXISTS tax_amount_paise BIGINT DEFAULT 0;
         ALTER TABLE invoices ADD COLUMN IF NOT EXISTS discount_paise BIGINT DEFAULT 0;
         ALTER TABLE invoices ADD COLUMN IF NOT EXISTS tax_paise BIGINT DEFAULT 0;
         UPDATE invoices SET discount_paise = COALESCE(discount_paise, discount_amount_paise) WHERE discount_paise IS NULL;
@@ -314,6 +349,12 @@ pub async fn ensure_schema_and_seed(pool: &sqlx::PgPool) {
         ALTER TABLE orders ALTER COLUMN payment_status TYPE VARCHAR(50) USING payment_status::text;
         ALTER TABLE orders ADD COLUMN IF NOT EXISTS discount_paise BIGINT DEFAULT 0;
         ALTER TABLE orders ADD COLUMN IF NOT EXISTS tax_paise BIGINT DEFAULT 0;
+        ALTER TABLE orders ADD COLUMN IF NOT EXISTS cgst_rate NUMERIC(5,2);
+        ALTER TABLE orders ADD COLUMN IF NOT EXISTS sgst_rate NUMERIC(5,2);
+        UPDATE orders SET
+            cgst_rate = COALESCE(cgst_rate, CASE WHEN subtotal_paise > 0 AND tax_paise > 0 THEN ROUND((tax_paise::numeric / subtotal_paise::numeric * 50.0), 2) ELSE 2.5 END),
+            sgst_rate = COALESCE(sgst_rate, CASE WHEN subtotal_paise > 0 AND tax_paise > 0 THEN ROUND((tax_paise::numeric / subtotal_paise::numeric * 50.0), 2) ELSE 2.5 END)
+        WHERE cgst_rate IS NULL OR sgst_rate IS NULL;
         ALTER TABLE orders ADD COLUMN IF NOT EXISTS service_charge_paise BIGINT DEFAULT 0;
         ALTER TABLE orders ADD COLUMN IF NOT EXISTS round_off_paise BIGINT DEFAULT 0;
         ALTER TABLE orders ADD COLUMN IF NOT EXISTS notes TEXT;
@@ -348,14 +389,57 @@ pub async fn ensure_schema_and_seed(pool: &sqlx::PgPool) {
         ALTER TABLE order_timeline_events ADD COLUMN IF NOT EXISTS notes TEXT;
         ALTER TABLE order_timeline_events ADD COLUMN IF NOT EXISTS performed_by UUID;
         ALTER TABLE order_timeline_events ALTER COLUMN status DROP NOT NULL;
+        ALTER TABLE payments ADD COLUMN IF NOT EXISTS idempotency_key VARCHAR(64);
+        ALTER TABLE payments ADD COLUMN IF NOT EXISTS split_bill_id UUID;
+        ALTER TABLE payments ADD COLUMN IF NOT EXISTS notes TEXT;
         ALTER TABLE payments ADD COLUMN IF NOT EXISTS upi_transaction_ref VARCHAR(100);
         ALTER TABLE payments ADD COLUMN IF NOT EXISTS settled_at TIMESTAMPTZ DEFAULT NOW();
         ALTER TABLE payments ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW();
         ALTER TABLE payments ADD COLUMN IF NOT EXISTS legacy_unknown_timestamp BOOLEAN DEFAULT FALSE;
         ALTER TABLE payments ALTER COLUMN legacy_unknown_timestamp TYPE BOOLEAN USING FALSE;
         ALTER TABLE payments ALTER COLUMN legacy_unknown_timestamp SET DEFAULT FALSE;
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_payments_idempotency ON payments(idempotency_key) WHERE idempotency_key IS NOT NULL;
         ALTER TABLE split_bills ADD COLUMN IF NOT EXISTS settled_at TIMESTAMPTZ;
+        ALTER TABLE split_bills ADD COLUMN IF NOT EXISTS total_refunded_paise BIGINT DEFAULT 0;
+        ALTER TABLE split_bills ADD COLUMN IF NOT EXISTS print_count INT DEFAULT 0;
+
+        CREATE TABLE IF NOT EXISTS refunds (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            restaurant_id UUID NOT NULL REFERENCES restaurants(id) ON DELETE CASCADE,
+            order_id UUID NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
+            refund_amount_paise BIGINT NOT NULL CHECK (refund_amount_paise > 0),
+            reason TEXT NOT NULL,
+            status VARCHAR(20) NOT NULL DEFAULT 'requested',
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        );
+        ALTER TABLE refunds ADD COLUMN IF NOT EXISTS idempotency_key VARCHAR(64);
+        ALTER TABLE refunds ADD COLUMN IF NOT EXISTS payment_id UUID;
+        ALTER TABLE refunds ADD COLUMN IF NOT EXISTS processed_by_staff_id UUID;
+        ALTER TABLE refunds ADD COLUMN IF NOT EXISTS split_bill_id UUID;
+        ALTER TABLE refunds ADD COLUMN IF NOT EXISTS table_number VARCHAR(20);
+        ALTER TABLE refunds ADD COLUMN IF NOT EXISTS customer_name VARCHAR(100);
+        ALTER TABLE refunds ADD COLUMN IF NOT EXISTS original_payment_method VARCHAR(50);
+        ALTER TABLE refunds ADD COLUMN IF NOT EXISTS refund_method VARCHAR(50);
+        ALTER TABLE refunds ADD COLUMN IF NOT EXISTS staff_name VARCHAR(100) DEFAULT 'Staff';
+        ALTER TABLE refunds ADD COLUMN IF NOT EXISTS requested_at TIMESTAMPTZ DEFAULT NOW();
+        ALTER TABLE refunds ADD COLUMN IF NOT EXISTS completed_at TIMESTAMPTZ;
+        ALTER TABLE refunds ADD COLUMN IF NOT EXISTS cancelled_at TIMESTAMPTZ;
+        ALTER TABLE refunds ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW();
+        ALTER TABLE refunds ADD COLUMN IF NOT EXISTS legacy_unknown_timestamp BOOLEAN DEFAULT FALSE;
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_refunds_idempotency ON refunds(idempotency_key) WHERE idempotency_key IS NOT NULL;
+        ALTER TABLE invoices ADD COLUMN IF NOT EXISTS total_amount_paise BIGINT;
+        ALTER TABLE invoices ADD COLUMN IF NOT EXISTS total_paise BIGINT;
+        ALTER TABLE invoices ADD COLUMN IF NOT EXISTS payment_status VARCHAR(50) DEFAULT 'PAID';
+        ALTER TABLE invoices ADD COLUMN IF NOT EXISTS is_printed BOOLEAN DEFAULT FALSE;
+        ALTER TABLE invoices ADD COLUMN IF NOT EXISTS print_count INT DEFAULT 0;
+        ALTER TABLE invoices ADD COLUMN IF NOT EXISTS last_printed_at TIMESTAMPTZ;
+        ALTER TABLE invoices ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW();
+        UPDATE invoices SET total_amount_paise = COALESCE(total_amount_paise, total_paise, 0) WHERE total_amount_paise IS NULL;
+        UPDATE invoices SET total_paise = COALESCE(total_paise, total_amount_paise, 0) WHERE total_paise IS NULL;
         ALTER TABLE inventory_items ADD COLUMN IF NOT EXISTS sku VARCHAR(50);
+        ALTER TABLE inventory_items ADD COLUMN IF NOT EXISTS unit VARCHAR(20);
+        ALTER TABLE inventory_items ADD COLUMN IF NOT EXISTS min_threshold NUMERIC(12, 4) DEFAULT 0.0000;
+        ALTER TABLE inventory_items ADD COLUMN IF NOT EXISTS unit_cost_paise BIGINT DEFAULT 0;
         ALTER TABLE inventory_items ADD COLUMN IF NOT EXISTS unit_of_measure VARCHAR(20);
         ALTER TABLE inventory_items ADD COLUMN IF NOT EXISTS reorder_level NUMERIC(12, 4) DEFAULT 0.0000;
         ALTER TABLE inventory_items ADD COLUMN IF NOT EXISTS cost_per_unit_paise BIGINT DEFAULT 0;

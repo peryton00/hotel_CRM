@@ -13,7 +13,12 @@ impl RestaurantRepository {
         let restaurant = sqlx::query_as::<_, Restaurant>(
             r#"
             SELECT id, name, slug, tagline, description, phone, email, address, city, state, postal_code,
-                   gstin, fssai_license, currency, timezone, is_active, created_at, updated_at
+                   gstin, fssai_license, currency, timezone, is_active,
+                   COALESCE(gst_rate, 5.0)::float8 AS gst_rate,
+                   COALESCE(cgst_rate, gst_rate / 2.0, 2.5)::float8 AS cgst_rate,
+                   COALESCE(sgst_rate, gst_rate / 2.0, 2.5)::float8 AS sgst_rate,
+                   COALESCE(service_charge_rate, 0.0)::float8 AS service_charge_rate,
+                   created_at, updated_at
             FROM restaurants
             WHERE id = $1
             "#,
@@ -30,6 +35,14 @@ impl RestaurantRepository {
         id: Uuid,
         payload: &UpdateRestaurantPayload,
     ) -> Result<Option<Restaurant>, AppError> {
+        let derived_gst_rate = match (payload.cgst_rate, payload.sgst_rate, payload.gst_rate) {
+            (Some(c), Some(s), _) => Some(c + s),
+            (Some(c), None, _) => Some(c * 2.0),
+            (None, Some(s), _) => Some(s * 2.0),
+            (None, None, Some(g)) => Some(g),
+            (None, None, None) => None,
+        };
+
         let restaurant = sqlx::query_as::<_, Restaurant>(
             r#"
             UPDATE restaurants
@@ -44,10 +57,19 @@ impl RestaurantRepository {
                 postal_code = COALESCE($9, postal_code),
                 gstin = COALESCE($10, gstin),
                 fssai_license = COALESCE($11, fssai_license),
+                gst_rate = COALESCE($12, gst_rate),
+                cgst_rate = COALESCE($13, cgst_rate),
+                sgst_rate = COALESCE($14, sgst_rate),
+                service_charge_rate = COALESCE($15, service_charge_rate),
                 updated_at = NOW()
-            WHERE id = $12
+            WHERE id = $16
             RETURNING id, name, slug, tagline, description, phone, email, address, city, state, postal_code,
-                      gstin, fssai_license, currency, timezone, is_active, created_at, updated_at
+                      gstin, fssai_license, currency, timezone, is_active,
+                      COALESCE(gst_rate, 5.0)::float8 AS gst_rate,
+                      COALESCE(cgst_rate, gst_rate / 2.0, 2.5)::float8 AS cgst_rate,
+                      COALESCE(sgst_rate, gst_rate / 2.0, 2.5)::float8 AS sgst_rate,
+                      COALESCE(service_charge_rate, 0.0)::float8 AS service_charge_rate,
+                      created_at, updated_at
             "#,
         )
         .bind(&payload.name)
@@ -61,6 +83,10 @@ impl RestaurantRepository {
         .bind(&payload.postal_code)
         .bind(&payload.gstin)
         .bind(&payload.fssai_license)
+        .bind(derived_gst_rate)
+        .bind(payload.cgst_rate)
+        .bind(payload.sgst_rate)
+        .bind(payload.service_charge_rate)
         .bind(id)
         .fetch_optional(pool)
         .await?;

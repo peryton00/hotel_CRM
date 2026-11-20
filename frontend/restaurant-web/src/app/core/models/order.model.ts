@@ -71,6 +71,8 @@ export interface Order {
   appliedCouponId?: string; // Foreign key to coupons
   appliedCouponCode?: string;
   taxAmount: number;
+  cgstRate?: number;
+  sgstRate?: number;
   cgstAmount: number;
   sgstAmount: number;
   serviceChargeAmount?: number;

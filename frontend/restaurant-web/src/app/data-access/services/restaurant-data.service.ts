@@ -40,6 +40,7 @@ import { AdminAuthService } from '../../core/services/admin-auth.service';
 import { ToastService } from '../../core/services/toast.service';
 import { NetworkStatusService } from '../../core/services/network-status.service';
 import { SoundService } from '../../core/services/sound.service';
+import { environment } from '../../../environments/environment';
 
 export interface OfflineSyncAction {
   id: string;
@@ -358,13 +359,17 @@ export class RestaurantDataService {
             taxSettings: {
               enableGst: true,
               cgstRate:
-                res.gst_rate !== undefined && res.gst_rate !== null
-                  ? Number(res.gst_rate) / 2
-                  : (cached?.taxSettings?.cgstRate ?? 2.5),
+                res.cgst_rate !== undefined && res.cgst_rate !== null
+                  ? Number(res.cgst_rate)
+                  : (res.gst_rate !== undefined && res.gst_rate !== null
+                      ? Number(res.gst_rate) / 2
+                      : (cached?.taxSettings?.cgstRate ?? 2.5)),
               sgstRate:
-                res.gst_rate !== undefined && res.gst_rate !== null
-                  ? Number(res.gst_rate) / 2
-                  : (cached?.taxSettings?.sgstRate ?? 2.5),
+                res.sgst_rate !== undefined && res.sgst_rate !== null
+                  ? Number(res.sgst_rate)
+                  : (res.gst_rate !== undefined && res.gst_rate !== null
+                      ? Number(res.gst_rate) / 2
+                      : (cached?.taxSettings?.sgstRate ?? 2.5)),
               serviceChargeRate:
                 res.service_charge_rate !== undefined && res.service_charge_rate !== null
                   ? Number(res.service_charge_rate)
@@ -902,6 +907,17 @@ export class RestaurantDataService {
     const tbl = this.tables().find((t) => t.id === o.table_id);
     const tableNumber = o.table_number || (tbl ? tbl.number : '');
 
+    const orderCgstRate = o.cgst_rate !== undefined && o.cgst_rate !== null
+      ? Number(o.cgst_rate)
+      : (o.subtotal_paise && o.tax_paise ? Math.round(((o.tax_paise / o.subtotal_paise) * 50.0) * 10) / 10 : 2.5);
+    const orderSgstRate = o.sgst_rate !== undefined && o.sgst_rate !== null
+      ? Number(o.sgst_rate)
+      : (o.subtotal_paise && o.tax_paise ? Math.round(((o.tax_paise / o.subtotal_paise) * 50.0) * 10) / 10 : 2.5);
+    const totalTax = (o.tax_paise || 0) / 100;
+    const rateSum = orderCgstRate + orderSgstRate;
+    const calculatedCgst = rateSum > 0 ? Math.round((totalTax * (orderCgstRate / rateSum)) * 100) / 100 : totalTax / 2;
+    const calculatedSgst = Math.round((totalTax - calculatedCgst) * 100) / 100;
+
     return {
       id: o.id,
       orderNumber: o.order_number,
@@ -948,9 +964,11 @@ export class RestaurantDataService {
         };
       }),
       subtotal: (o.subtotal_paise || 0) / 100,
-      taxAmount: (o.tax_paise || 0) / 100,
-      cgstAmount: (o.tax_paise || 0) / 2 / 100,
-      sgstAmount: (o.tax_paise || 0) / 2 / 100,
+      taxAmount: totalTax,
+      cgstRate: orderCgstRate,
+      sgstRate: orderSgstRate,
+      cgstAmount: calculatedCgst,
+      sgstAmount: calculatedSgst,
       discountAmount: (o.discount_paise || 0) / 100,
       appliedCouponCode: o.applied_coupon_code || o.appliedCouponCode || undefined,
       totalAmount: (o.total_amount_paise || 0) / 100,
@@ -1769,6 +1787,9 @@ export class RestaurantDataService {
     }
   }
 
+  private orderWs: WebSocket | null = null;
+  private wsReconnectTimer: any = null;
+
   private setupRealtimeListeners(): void {
     if (typeof window === 'undefined') return;
 
@@ -1783,6 +1804,9 @@ export class RestaurantDataService {
       }
     }
 
+    // Connect to WebSocket backend for cross-origin customer site orders
+    this.connectOrderWebSocket();
+
     window.addEventListener('storage', (e: StorageEvent) => {
       if (e.key === 'royal_spice_order_stream_event' && e.newValue) {
         try {
@@ -1791,6 +1815,48 @@ export class RestaurantDataService {
         } catch {}
       }
     });
+  }
+
+  private connectOrderWebSocket(): void {
+    if (typeof window === 'undefined' || typeof WebSocket === 'undefined') return;
+    // Skip real WebSocket in Node.js/Vitest test runner to prevent cross-realm Event conflicts
+    if (typeof process !== 'undefined' && ((process as any).env?.['VITEST'] || (process as any).env?.['NODE_ENV'] === 'test')) {
+      return;
+    }
+    const wsUrl = environment.wsOrdersUrl || 'ws://localhost:3000/ws/orders';
+
+    try {
+      this.orderWs = new WebSocket(wsUrl);
+      this.orderWs.onopen = () => {
+        if (this.wsReconnectTimer) {
+          clearTimeout(this.wsReconnectTimer);
+          this.wsReconnectTimer = null;
+        }
+      };
+      this.orderWs.onmessage = (ev) => {
+        try {
+          const raw = JSON.parse(ev.data);
+          const mapped = this.mapApiOrder(raw.order || raw);
+          this.handleIncomingSyncEvent({ type: 'ORDER_CREATED', order: mapped });
+        } catch (e) {
+          console.warn('[RestaurantDataService] WS parse error:', e);
+        }
+      };
+      this.orderWs.onclose = () => {
+        if (!this.wsReconnectTimer) {
+          this.wsReconnectTimer = setTimeout(() => this.connectOrderWebSocket(), 5000);
+        }
+      };
+      this.orderWs.onerror = () => {
+        try {
+          this.orderWs?.close();
+        } catch {}
+      };
+    } catch {
+      if (!this.wsReconnectTimer) {
+        this.wsReconnectTimer = setTimeout(() => this.connectOrderWebSocket(), 10000);
+      }
+    }
   }
 
   private handleIncomingSyncEvent(ev: any): void {
@@ -3220,6 +3286,8 @@ export class RestaurantDataService {
     this.restaurant.set(updated);
     this.saveLocal('restaurant', updated);
 
+    const cgst = Number(updated.taxSettings?.cgstRate) || 0;
+    const sgst = Number(updated.taxSettings?.sgstRate) || 0;
     const payload = {
       name: updated.name,
       tagline: updated.tagline,
@@ -3231,6 +3299,10 @@ export class RestaurantDataService {
       state: updated.address?.state,
       postal_code: updated.address?.zip,
       gstin: updated.taxSettings?.gstNumber,
+      gst_rate: cgst + sgst,
+      cgst_rate: cgst,
+      sgst_rate: sgst,
+      service_charge_rate: Number(updated.taxSettings?.serviceChargeRate) || 0,
     };
 
     return this.api.put<any>('/restaurants', payload).pipe(
@@ -3258,6 +3330,14 @@ export class RestaurantDataService {
               taxSettings: {
                 ...current.taxSettings,
                 gstNumber: res.gstin || current.taxSettings.gstNumber,
+                cgstRate:
+                  res.cgst_rate !== undefined && res.cgst_rate !== null
+                    ? Number(res.cgst_rate)
+                    : (res.gst_rate !== undefined ? Number(res.gst_rate) / 2 : current.taxSettings.cgstRate),
+                sgstRate:
+                  res.sgst_rate !== undefined && res.sgst_rate !== null
+                    ? Number(res.sgst_rate)
+                    : (res.gst_rate !== undefined ? Number(res.gst_rate) / 2 : current.taxSettings.sgstRate),
               },
             };
             this.restaurant.set(merged);

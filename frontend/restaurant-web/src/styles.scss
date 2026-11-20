@@ -51,7 +51,7 @@
   .syncing-global-banner,
   .action-bar,
   .no-print,
-  .modal-overlay,
+  .modal-overlay:not(.qr-modal-overlay),
   nav {
     display: none !important;
   }
@@ -68,5 +68,16 @@
     border: none !important;
     box-shadow: none !important;
     overflow: visible !important;
+  }
+
+  /* Clean QR Standee Print Isolation: suppress all background tables-page content */
+  body.is-printing-qr-standee,
+  body:has(.qr-modal-overlay) {
+    background: #ffffff !important;
+    color: #14161b !important;
+
+    .tables-page > *:not(.qr-modal-overlay) {
+      display: none !important;
+    }
   }
 }

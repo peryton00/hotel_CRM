@@ -1818,9 +1818,7 @@
   .admin-content,
   .invoice-page,
   .invoice-paper,
-  #invoicePaper,
-  .qr-standee,
-  .qr-modal-overlay {
+  #invoicePaper {
     --color-background: #ffffff !important;
     --color-surface: #ffffff !important;
     --color-text-primary: #000000 !important;
@@ -1832,6 +1830,42 @@
     background-color: #ffffff !important;
     color: #000000 !important;
     box-shadow: none !important;
+  }
+
+  /* Keep QR Standee in pristine Light Mode with brand gold/crimson integrity */
+  .qr-standee {
+    background: #faf8f5 !important;
+    color: #14161b !important;
+    box-shadow: none !important;
+    color-scheme: light !important;
+
+    .standee-inner-frame {
+      background: #ffffff !important;
+      border-color: #b8860b !important;
+    }
+
+    .standee-brand {
+      color: #c21807 !important;
+    }
+
+    .standee-table-badge {
+      background: #c21807 !important;
+      color: #ffffff !important;
+    }
+
+    .scan-pill {
+      background: #14161b !important;
+      color: #ffffff !important;
+    }
+
+    .step-num {
+      background: #d4af37 !important;
+      color: #121212 !important;
+    }
+
+    .meta-dot {
+      background: #10b981 !important;
+    }
   }
 
   .admin-shell[data-theme='dark'] .invoice-paper,

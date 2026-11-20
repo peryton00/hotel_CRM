@@ -1,30 +1,13 @@
 import { Routes, CanDeactivateFn } from '@angular/router';
 import { AdminLayoutComponent } from './layouts/admin-layout/admin-layout.component';
-import { CustomerLayoutComponent } from './layouts/customer-layout/customer-layout.component';
 import { adminGuard } from './core/guards/admin.guard';
-import { environment } from '../environments/environment';
 
 export function resolveDefaultEntry(): string {
-  if (environment.isDesktop || environment.appMode === 'admin') {
-    return 'admin';
-  }
-  if (environment.appMode === 'customer') {
-    return 'menu/gurukripa-dhaba';
-  }
-  if (typeof window !== 'undefined' && window.location) {
-    const host = window.location.hostname.toLowerCase();
-    if (host.startsWith('order') || host.startsWith('menu') || host.includes('customer')) {
-      return 'menu/gurukripa-dhaba';
-    }
-  }
   return 'admin';
 }
 
 export function resolveFallbackEntry(): string {
-  if (environment.isDesktop || environment.appMode === 'admin') {
-    return 'admin';
-  }
-  return 'menu/gurukripa-dhaba';
+  return 'admin';
 }
 
 export const canDeactivateSettings: CanDeactivateFn<any> = (component) => {
@@ -173,67 +156,14 @@ export const routes: Routes = [
     ],
   },
 
-  // Customer-Facing Digital Restaurant Web App Route Group
+  // Legacy customer routes redirect to admin (Customer menu is now on standalone Next.js site)
   {
     path: 'menu/:restaurantSlug',
-    component: CustomerLayoutComponent,
-    children: [
-      {
-        path: '',
-        pathMatch: 'full',
-        loadComponent: () =>
-          import('./features/customer/restaurant-home/restaurant-home.component').then(
-            (m) => m.RestaurantHomeComponent,
-          ),
-      },
-      {
-        path: 'table/:tableToken',
-        loadComponent: () =>
-          import('./features/customer/menu/menu-catalog.component').then(
-            (m) => m.MenuCatalogComponent,
-          ),
-      },
-      {
-        path: 'cart',
-        loadComponent: () =>
-          import('./features/customer/cart/cart-view.component').then((m) => m.CartViewComponent),
-      },
-      {
-        path: 'coupons',
-        loadComponent: () =>
-          import('./features/customer/coupons/customer-coupons.component').then(
-            (m) => m.CustomerCouponsComponent,
-          ),
-      },
-      {
-        path: 'checkout',
-        loadComponent: () =>
-          import('./features/customer/checkout/checkout.component').then(
-            (m) => m.CheckoutComponent,
-          ),
-      },
-      {
-        path: 'order/:orderId',
-        loadComponent: () =>
-          import('./features/customer/order-confirmation/order-confirmation.component').then(
-            (m) => m.OrderConfirmationComponent,
-          ),
-      },
-      {
-        path: 'order/:orderId/tracking',
-        loadComponent: () =>
-          import('./features/customer/order-tracking/order-tracking.component').then(
-            (m) => m.OrderTrackingComponent,
-          ),
-      },
-      {
-        path: 'feedback/:orderId',
-        loadComponent: () =>
-          import('./features/customer/feedback/customer-feedback.component').then(
-            (m) => m.CustomerFeedbackComponent,
-          ),
-      },
-    ],
+    redirectTo: 'admin',
+  },
+  {
+    path: 'menu/:restaurantSlug/**',
+    redirectTo: 'admin',
   },
 
   // Catch-all Fallback
