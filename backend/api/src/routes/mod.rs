@@ -205,6 +205,7 @@ pub struct OpenExternalRequest {
 }
 
 pub async fn system_open_external(
+    _user: crate::auth::middleware::AuthenticatedUser,
     axum::Json(payload): axum::Json<OpenExternalRequest>,
 ) -> Result<axum::Json<serde_json::Value>, (axum::http::StatusCode, axum::Json<serde_json::Value>)>
 {
@@ -221,16 +222,19 @@ pub async fn system_open_external(
         ));
     }
 
+    // Ban shell metacharacters and control characters to prevent command execution
+    if url.chars().any(|c| c.is_control() || matches!(c, '&' | '|' | ';' | '`' | '$' | '"' | '<' | '>')) {
+        return Err((
+            axum::http::StatusCode::BAD_REQUEST,
+            axum::Json(serde_json::json!({ "error": "URL contains invalid characters." })),
+        ));
+    }
+
     #[cfg(target_os = "windows")]
     {
-        let escaped = url.replace('\'', "''");
-        let _ = std::process::Command::new("powershell")
-            .args([
-                "-NoProfile",
-                "-NonInteractive",
-                "-Command",
-                &format!("Start-Process '{}'", escaped),
-            ])
+        // Use rundll32 FileProtocolHandler directly - avoids invoking any shell interpreter (powershell/cmd)
+        let _ = std::process::Command::new("rundll32")
+            .args(["url.dll,FileProtocolHandler", &url])
             .spawn();
     }
     #[cfg(target_os = "macos")]

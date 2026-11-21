@@ -149,6 +149,8 @@ pub async fn create_staff_member(
         .filter(|s| !s.trim().is_empty())
         .unwrap_or_else(|| "Main Dining Floor".to_string());
     let secret_password = payload.password.trim().to_string();
+    let hashed_pin = crate::routes::auth_routes::hash_password(&secret_password)
+        .unwrap_or_else(|_| secret_password.clone());
     let monthly_salary = payload.monthly_salary_paise.unwrap_or(1500000);
     let cycle_start_day = payload.payroll_cycle_start_day.unwrap_or(1).clamp(1, 28);
     let perms_val = if role.to_uppercase() == "ADMIN" {
@@ -177,7 +179,7 @@ pub async fn create_staff_member(
     .bind(&payload.email)
     .bind(&phone)
     .bind(&phone_e164)
-    .bind(&secret_password)
+    .bind(&hashed_pin)
     .bind(&shift)
     .bind(&assigned_section)
     .bind(&login_id)
@@ -277,6 +279,22 @@ pub async fn update_staff_member(
         .bind(tenant.restaurant_id)
         .execute(&pool)
         .await?;
+    }
+
+    if let Some(ref new_pwd) = payload.password {
+        let trimmed = new_pwd.trim();
+        if !trimmed.is_empty() {
+            let hashed_pin = crate::routes::auth_routes::hash_password(trimmed)
+                .unwrap_or_else(|_| trimmed.to_string());
+            sqlx::query(
+                "UPDATE staff_members SET pin_hash = $1, updated_at = NOW() WHERE id = $2 AND restaurant_id = $3",
+            )
+            .bind(hashed_pin)
+            .bind(id)
+            .bind(tenant.restaurant_id)
+            .execute(&pool)
+            .await?;
+        }
     }
 
     let staff = RestaurantRepository::get_staff_by_id(&pool, id, tenant.restaurant_id).await?;

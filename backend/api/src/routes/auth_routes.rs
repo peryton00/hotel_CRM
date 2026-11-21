@@ -42,15 +42,23 @@ struct StaffAuthRow {
     pub login_id: Option<String>,
 }
 
+pub fn hash_password(password: &str) -> Result<String, String> {
+    use argon2::password_hash::rand_core::OsRng;
+    use argon2::password_hash::SaltString;
+    use argon2::PasswordHasher;
+
+    let salt = SaltString::generate(&mut OsRng);
+    argon2::Argon2::default()
+        .hash_password(password.as_bytes(), &salt)
+        .map(|h| h.to_string())
+        .map_err(|e| e.to_string())
+}
+
 pub fn verify_password(stored: &str, entered: &str) -> bool {
     let stored = stored.trim();
     let entered = entered.trim();
     if stored.is_empty() || entered.is_empty() {
         return false;
-    }
-    // Direct match (password set in Supabase)
-    if stored == entered {
-        return true;
     }
     // Argon2 match if stored as Argon2 hash
     if stored.starts_with("$argon2") {
@@ -59,6 +67,10 @@ pub fn verify_password(stored: &str, entered: &str) -> bool {
                 .verify_password(entered.as_bytes(), &parsed_hash)
                 .is_ok();
         }
+    }
+    // Backward compatibility match for legacy unhashed entries
+    if stored == entered {
+        return true;
     }
     false
 }

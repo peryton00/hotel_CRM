@@ -68,7 +68,7 @@ impl AppConfig {
 
         let allow_dev_auth = env::var("ALLOW_DEV_AUTH")
             .map(|v| v.to_lowercase() == "true" || v == "1")
-            .unwrap_or(true);
+            .unwrap_or(false);
 
         Self {
             port,

@@ -42,31 +42,33 @@ where
 
         if let Some(header) = auth_header {
             if let Some(token) = header.strip_prefix("Bearer ") {
-                // Support POS desktop session tokens formatted as sb_jwt_<uuid>_<role>_<timestamp> or sb_jwt_<uuid>_<timestamp>
-                if let Some(rest) = token.strip_prefix("sb_jwt_") {
-                    let parts_vec: Vec<&str> = rest.split('_').collect();
-                    if let Ok(uid) = Uuid::parse_str(parts_vec[0]) {
-                        let role = if parts_vec.len() > 1 && !parts_vec[1].chars().all(|c| c.is_ascii_digit()) {
-                            parts_vec[1].to_string()
-                        } else {
-                            "admin".to_string()
-                        };
-                        return Ok(AuthenticatedUser {
-                            user_id: uid,
-                            email: Some("staff@gurukripa.local".to_string()),
-                            role: role.clone(),
-                            claims: SupabaseClaims {
-                                sub: uid.to_string(),
+                // Support POS desktop session tokens formatted as sb_jwt_<uuid>_<role>_<timestamp> strictly in local/offline or dev mode
+                if (config.is_offline_first || config.allow_dev_auth) && token.starts_with("sb_jwt_") {
+                    if let Some(rest) = token.strip_prefix("sb_jwt_") {
+                        let parts_vec: Vec<&str> = rest.split('_').collect();
+                        if let Ok(uid) = Uuid::parse_str(parts_vec[0]) {
+                            let role = if parts_vec.len() > 1 && !parts_vec[1].chars().all(|c| c.is_ascii_digit()) {
+                                parts_vec[1].to_string()
+                            } else {
+                                "admin".to_string()
+                            };
+                            return Ok(AuthenticatedUser {
+                                user_id: uid,
                                 email: Some("staff@gurukripa.local".to_string()),
-                                role: Some(role),
-                                aud: Some("authenticated".to_string()),
-                                exp: i64::MAX / 2,
-                                iat: Some(0),
-                                iss: None,
-                                app_metadata: None,
-                                user_metadata: None,
-                            },
-                        });
+                                role: role.clone(),
+                                claims: SupabaseClaims {
+                                    sub: uid.to_string(),
+                                    email: Some("staff@gurukripa.local".to_string()),
+                                    role: Some(role),
+                                    aud: Some("authenticated".to_string()),
+                                    exp: i64::MAX / 2,
+                                    iat: Some(0),
+                                    iss: None,
+                                    app_metadata: None,
+                                    user_metadata: None,
+                                },
+                            });
+                        }
                     }
                 }
 

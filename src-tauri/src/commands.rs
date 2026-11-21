@@ -112,11 +112,14 @@ pub async fn open_external_url(url: String) -> Result<bool, String> {
         return Err("Invalid URL protocol".to_string());
     }
 
+    if trimmed.chars().any(|c| c.is_control() || matches!(c, '&' | '|' | ';' | '`' | '$' | '"' | '<' | '>')) {
+        return Err("URL contains invalid characters".to_string());
+    }
+
     #[cfg(target_os = "windows")]
     {
-        let escaped = trimmed.replace('\'', "''");
-        let _ = std::process::Command::new("powershell")
-            .args(["-NoProfile", "-NonInteractive", "-Command", &format!("Start-Process '{}'", escaped)])
+        let _ = std::process::Command::new("rundll32")
+            .args(["url.dll,FileProtocolHandler", trimmed])
             .spawn();
     }
     #[cfg(target_os = "macos")]
