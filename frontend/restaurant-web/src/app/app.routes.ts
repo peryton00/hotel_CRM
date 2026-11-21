@@ -29,13 +29,6 @@ export const routes: Routes = [
       import('./features/admin/login/admin-login.component').then((m) => m.AdminLoginComponent),
   },
 
-  // Public Modern Software Download Portal (like VS Code / modern apps)
-  {
-    path: 'download',
-    loadComponent: () =>
-      import('./features/download/download.component').then((m) => m.DownloadComponent),
-  },
-
   // Protected Admin CRM Route Group (Customers cannot enter)
   {
     path: 'admin',

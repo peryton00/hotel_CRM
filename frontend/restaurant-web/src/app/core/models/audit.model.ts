@@ -10,6 +10,11 @@ export type AuditAction =
   | 'ORDER_STATUS_CHANGED'
   | 'ORDER_CANCELLED'
   | 'INVOICE_GENERATED'
+  | 'RECEIPT_GENERATED'
+  | 'RECEIPT_PRINTED'
+  | 'KOT_PRINTED'
+  | 'USER_LOGIN'
+  | 'USER_LOGOUT'
   | 'PHONE_VERIFIED';
 
 /**
@@ -23,7 +28,15 @@ export interface AuditLogEntry {
   actorLabel?: string; // Display descriptor (e.g. "Ranveer B. (General Manager)")
   action: AuditAction;
   entityType:
-    'COUPON' | 'COUPON_ASSIGNMENT' | 'COUPON_REDEMPTION' | 'ORDER' | 'CUSTOMER' | 'INVOICE';
+    | 'COUPON'
+    | 'COUPON_ASSIGNMENT'
+    | 'COUPON_REDEMPTION'
+    | 'ORDER'
+    | 'CUSTOMER'
+    | 'INVOICE'
+    | 'RECEIPT'
+    | 'SESSION'
+    | 'SYSTEM';
   entityId: string;
   payloadBefore?: Record<string, any>;
   payloadAfter?: Record<string, any>;

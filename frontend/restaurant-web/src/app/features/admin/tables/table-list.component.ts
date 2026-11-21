@@ -1203,6 +1203,20 @@ import { environment } from '../../../../environments/environment';
                     <span>Cut along outer border for acrylic stand or table tent</span>
                   </div>
                 </div>
+
+                <!-- Live Hosted Mobile Link Preview -->
+                <div class="standee-url-preview no-print">
+                  <span class="url-preview-label"><i class="ph ph-globe"></i> Customer Menu Mobile Link</span>
+                  <div class="url-preview-pill">
+                    <a [href]="activeQrFullUrl()" target="_blank" rel="noopener" class="url-preview-link" title="Open and test customer menu in browser">
+                      <code>{{ activeQrFullUrl() }}</code>
+                      <i class="ph ph-arrow-square-out"></i>
+                    </a>
+                    <button type="button" class="btn-copy-url" (click)="copyQrUrl()" title="Copy link to clipboard">
+                      <i class="ph ph-copy"></i>
+                    </button>
+                  </div>
+                </div>
               </div>
             </div>
 
@@ -3587,6 +3601,71 @@ import { environment } from '../../../../environments/environment';
           print-color-adjust: exact !important;
         }
       }
+
+      .standee-url-preview {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        margin-top: 14px;
+        padding: 10px 14px;
+        background: #f8f6f2;
+        border: 1px solid #e7e0d5;
+        border-radius: 8px;
+        text-align: left;
+      }
+
+      .url-preview-label {
+        font-size: 0.6875rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: #78716c;
+        display: flex;
+        align-items: center;
+        gap: 5px;
+      }
+
+      .url-preview-pill {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        background: #ffffff;
+        border: 1px solid #dcd7ce;
+        border-radius: 6px;
+        padding: 6px 10px;
+      }
+
+      .url-preview-link {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        color: #c21807;
+        text-decoration: none;
+        font-size: 0.75rem;
+        font-family: monospace;
+        word-break: break-all;
+        flex: 1;
+      }
+
+      .url-preview-link:hover {
+        text-decoration: underline;
+      }
+
+      .btn-copy-url {
+        background: none;
+        border: none;
+        color: #78716c;
+        cursor: pointer;
+        padding: 2px 4px;
+        border-radius: 4px;
+        transition: all 0.15s ease;
+      }
+
+      .btn-copy-url:hover {
+        color: #1c1917;
+        background: #f3f0e6;
+      }
     `,
   ],
 })
@@ -4521,13 +4600,41 @@ export class TableListComponent implements OnInit {
     this.tableToDelete = null;
   }
 
+  getCustomerMenuBaseUrl(): string {
+    const hostedDefault = 'https://gurukripadhaba-menu.vercel.app';
+    let base = localStorage.getItem('hotel_crm_customer_menu_url')?.trim();
+
+    // Enforce hosted production link: If base is missing, invalid, or contains localhost/127.0.0.1/tauri, reset to hosted URL
+    if (
+      !base ||
+      base.includes('localhost') ||
+      base.includes('127.0.0.1') ||
+      base.startsWith('tauri:') ||
+      !base.startsWith('http')
+    ) {
+      base = environment.customerMenuUrl?.trim() || hostedDefault;
+      if (base.includes('localhost') || base.includes('127.0.0.1') || !base.startsWith('http')) {
+        base = hostedDefault;
+      }
+      localStorage.setItem('hotel_crm_customer_menu_url', base);
+    }
+    return base.replace(/\/+$/, '');
+  }
+
+  copyQrUrl(): void {
+    const url = this.activeQrFullUrl();
+    if (!url) return;
+    if (navigator?.clipboard) {
+      navigator.clipboard.writeText(url).then(() => {
+        this.toastService.success('Customer menu link copied to clipboard');
+      });
+    }
+  }
+
   async openQrModal(table: Table): Promise<void> {
     this.activeQrTable = table;
     this.qrDataUrl = null;
-    const base =
-      localStorage.getItem('hotel_crm_customer_menu_url') ||
-      environment.customerMenuUrl ||
-      window.location.origin;
+    const base = this.getCustomerMenuBaseUrl();
     const token = table.qrToken || table.number;
     const fullUrl = `${base}/table/${encodeURIComponent(token)}`;
     this.activeQrFullUrl.set(fullUrl);
@@ -4556,7 +4663,8 @@ export class TableListComponent implements OnInit {
     const section = (table.section || 'Main Dining Floor').toUpperCase();
     const tableNum = `TABLE ${table.number}`.toUpperCase();
     const scanUrl =
-      this.activeQrFullUrl() || `${window.location.origin}/table/${table.qrToken || table.number}`;
+      this.activeQrFullUrl() ||
+      `${this.getCustomerMenuBaseUrl()}/table/${encodeURIComponent(table.qrToken || table.number)}`;
 
     try {
       // 1. Create high-resolution 300 DPI Standee canvas (800 x 1160 px)
@@ -4689,8 +4797,8 @@ export class TableListComponent implements OnInit {
 
       // Footer note
       ctx.fillStyle = '#9ca3af';
-      ctx.font = '500 14px "Source Sans 3", sans-serif';
-      ctx.fillText('Free Guest Wi-Fi Available  •  GuruKripa Dhaba Management', 400, 1035);
+      ctx.font = '500 13px "Source Sans 3", sans-serif';
+      ctx.fillText(`Customer Web: ${this.getCustomerMenuBaseUrl()}  •  GuruKripa Dhaba Management`, 400, 1035);
 
       // Download triggered via dataURL
       const standeePng = canvas.toDataURL('image/png');

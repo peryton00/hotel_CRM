@@ -1,7 +1,7 @@
 import { Injectable, signal, computed, inject } from '@angular/core';
 import { Router } from '@angular/router';
 import { HttpClient, HttpHeaders } from '@angular/common/http';
-import { Observable, of, catchError, map, tap } from 'rxjs';
+import { Observable, of, catchError, map, tap, Subject } from 'rxjs';
 import { environment } from '../../../environments/environment';
 import { StaffMember, StaffRole } from '../models/staff.model';
 
@@ -37,11 +37,37 @@ export class AdminAuthService {
     }
   }
 
-  readonly isAuthenticated = signal<boolean>(
-    !!(localStorage.getItem(AUTH_TOKEN_KEY) || localStorage.getItem('supabase_auth_token')),
+  private isStoredSessionValid(): boolean {
+    try {
+      if (typeof localStorage === 'undefined') return false;
+      const token =
+        localStorage.getItem(AUTH_TOKEN_KEY) || localStorage.getItem('supabase_auth_token');
+      if (!token || token === 'undefined' || token === 'null' || !token.trim()) {
+        return false;
+      }
+      const user = this.parseStoredUser();
+      if (!user || !user.id || !user.role) {
+        return false;
+      }
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  readonly isAuthenticated = signal<boolean>(this.isStoredSessionValid());
+  readonly staffRole = signal<string>(
+    this.isStoredSessionValid() ? localStorage.getItem(STAFF_ROLE_KEY) || 'STAFF' : 'STAFF',
   );
-  readonly staffRole = signal<string>(localStorage.getItem(STAFF_ROLE_KEY) || 'STAFF');
-  readonly currentUser = signal<StaffMember | null>(this.parseStoredUser());
+  readonly currentUser = signal<StaffMember | null>(
+    this.isStoredSessionValid() ? this.parseStoredUser() : null,
+  );
+
+  readonly authEvent$ = new Subject<{
+    type: 'LOGIN' | 'LOGOUT';
+    user: StaffMember | null;
+    isExpired?: boolean;
+  }>();
 
   readonly isAdmin = computed(() => this.staffRole().toUpperCase() === 'ADMIN');
   readonly isManager = computed(
@@ -79,6 +105,14 @@ export class AdminAuthService {
   }
 
   constructor() {
+    if (!this.isStoredSessionValid()) {
+      localStorage.removeItem(AUTH_TOKEN_KEY);
+      localStorage.removeItem('supabase_auth_token');
+      localStorage.removeItem(STAFF_ROLE_KEY);
+      localStorage.removeItem(STAFF_USER_KEY);
+      this.isAuthenticated.set(false);
+      this.currentUser.set(null);
+    }
     this.refreshAdminSecret();
   }
 
@@ -195,7 +229,8 @@ export class AdminAuthService {
             };
           }
 
-          const token = `sb_jwt_${staff.id}_${Date.now()}`;
+          const roleStr = (staff.role || 'ADMIN').toLowerCase();
+          const token = `sb_jwt_${staff.id}_${roleStr}_${Date.now()}`;
           const user: StaffMember = {
             id: staff.id,
             name: staff.name,
@@ -246,6 +281,7 @@ export class AdminAuthService {
     this.isAuthenticated.set(true);
     this.staffRole.set(role);
     this.currentUser.set(user);
+    this.authEvent$.next({ type: 'LOGIN', user });
   }
 
   /**
@@ -264,6 +300,7 @@ export class AdminAuthService {
     localStorage.setItem(STAFF_ROLE_KEY, r);
     this.isAuthenticated.set(true);
     this.staffRole.set(r);
+    this.authEvent$.next({ type: 'LOGIN', user: this.currentUser() });
   }
 
   /**
@@ -474,12 +511,14 @@ export class AdminAuthService {
   }
 
   logout(isExpired = false): void {
+    const priorUser = this.currentUser();
     this.isAuthenticated.set(false);
     this.currentUser.set(null);
     localStorage.removeItem(AUTH_TOKEN_KEY);
     localStorage.removeItem('supabase_auth_token');
     localStorage.removeItem(STAFF_ROLE_KEY);
     localStorage.removeItem(STAFF_USER_KEY);
+    this.authEvent$.next({ type: 'LOGOUT', user: priorUser, isExpired });
     if (isExpired) {
       this.router.navigate(['/admin/login'], { queryParams: { expired: 'true' } });
     } else {

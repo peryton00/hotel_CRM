@@ -13,6 +13,7 @@
     "build:customer": "npm --prefix customer-menu run build",
     "tauri:dev": "npx @tauri-apps/cli dev",
     "tauri:build": "npx @tauri-apps/cli build",
+    "build:installer": "powershell -ExecutionPolicy Bypass -Command \"npx @tauri-apps/cli build --no-bundle ; & 'C:\\Program Files (x86)\\Inno Setup 6\\ISCC.exe' installer.iss\"",
     "test": "npm --prefix frontend/restaurant-web test -- --watch=false",
     "lint": "npm --prefix frontend/restaurant-web run lint"
   },

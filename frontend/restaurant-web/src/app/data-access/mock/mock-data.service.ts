@@ -184,8 +184,7 @@ export class MockDataService {
       description: 'Traditional tandoori specialties, authentic recipes, and North Indian cuisine.',
       coverImage:
         'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?auto=format&fit=crop&w=1400&q=80',
-      logoUrl:
-        'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?auto=format&fit=crop&w=240&q=80',
+      logoUrl: '/logo.svg',
       cuisine: ['North Indian', 'Mughlai', 'Biryani', 'Awadhi', 'Tandoor'],
       rating: 4.85,
       reviewCount: 1420,

@@ -5,6 +5,6 @@ export const environment = {
   supabaseAnonKey: 'sb_publishable_TdK7jGjgRUVAlz5-67Cvwg_IiOD09NB',
   useMockRepositories: false,
   isDesktop: false,
-  customerMenuUrl: '',
-  wsOrdersUrl: '',
+  customerMenuUrl: 'https://gurukripadhaba-menu.vercel.app',
+  wsOrdersUrl: 'wss://hotel-crm-api-vpxu.onrender.com/ws/orders',
 };

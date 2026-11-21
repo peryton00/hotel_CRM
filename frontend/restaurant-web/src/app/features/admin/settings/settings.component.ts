@@ -1,6 +1,10 @@
-import { Component, inject, signal, OnInit, effect, HostListener } from '@angular/core';
+import { Component, inject, signal, OnInit, effect, HostListener, computed } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { HttpClient, HttpHeaders } from '@angular/common/http';
+import { timeout, catchError } from 'rxjs/operators';
+import { of } from 'rxjs';
+import { environment } from '../../../../environments/environment';
 import { RestaurantDataService } from '../../../data-access/services/restaurant-data.service';
 import { Restaurant } from '../../../core/models/restaurant.model';
 import { ConfirmModalComponent } from '../../../shared/components/confirm-modal/confirm-modal.component';
@@ -11,6 +15,7 @@ import {
   SystemPrinterInfo,
 } from '../../../core/services/thermal-printer.service';
 import { EscPosPrinterConfig } from '../../../core/utils/escpos.util';
+import { AuditLogEntry } from '../../../core/models/audit.model';
 
 type SettingsTab = 'general' | 'tax' | 'printer' | 'service' | 'maintenance' | 'security';
 
@@ -216,6 +221,22 @@ type SettingsTab = 'general' | 'tax' | 'printer' | 'service' | 'maintenance' | '
                   />
                 </div>
               </div>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label">Customer Mobile Menu Website (QR Target Hosted Link)</label>
+              <div class="input-with-icon">
+                <i class="ph ph-globe field-icon"></i>
+                <input
+                  type="url"
+                  class="form-input has-icon"
+                  [(ngModel)]="profile.customerMenuUrl"
+                  placeholder="https://gurukripadhaba-menu.vercel.app"
+                />
+              </div>
+              <span class="field-hint">
+                Public hosted URL embedded into table QR codes and standees for customer mobile ordering.
+              </span>
             </div>
 
             <div class="form-group">
@@ -696,7 +717,287 @@ type SettingsTab = 'general' | 'tax' | 'printer' | 'service' | 'maintenance' | '
 
       <!-- TAB 5: SYSTEM & STORAGE -->
       @if (activeTab === 'maintenance') {
-        <div class="settings-grid">
+        <div class="settings-grid maintenance-layout">
+          <!-- 1. Live Infrastructure & Core System Health -->
+          <div class="panel-box full-width-panel">
+            <div class="panel-header-row">
+              <div class="panel-title-group">
+                <div class="panel-icon-wrap primary-icon-wrap">
+                  <i class="ph ph-heartbeat"></i>
+                </div>
+                <div class="panel-title-text">
+                  <h2 class="heading-card">Live Infrastructure & System Health</h2>
+                  <p class="panel-subtitle">
+                    Real-time connectivity, health telemetry, and round-trip latency across POS engines.
+                  </p>
+                </div>
+              </div>
+              <div class="panel-header-actions">
+                @if (lastCheckedTime()) {
+                  <span class="last-check-text">
+                    Checked {{ lastCheckedTime() | date: 'HH:mm:ss' }}
+                  </span>
+                }
+                <button
+                  type="button"
+                  class="btn btn-secondary btn-sm refresh-diagnostics-btn"
+                  (click)="checkSystemHealth()"
+                  [disabled]="isCheckingHealth()"
+                >
+                  <i class="ph ph-arrows-clockwise" [class.ph-spin]="isCheckingHealth()"></i>
+                  <span>{{ isCheckingHealth() ? 'Pinging...' : 'Refresh Status' }}</span>
+                </button>
+              </div>
+            </div>
+
+            <!-- 3 System Status Cards Grid -->
+            <div class="system-status-cards">
+              <!-- Card 1: Local Backend -->
+              <div
+                class="system-status-card"
+                [class.status-card-online]="systemStatuses().localBackend.online"
+                [class.status-card-offline]="!systemStatuses().localBackend.online"
+              >
+                <div class="system-status-card-header">
+                  <div class="system-target-info">
+                    <span class="system-type-tag">Local Engine</span>
+                    <h3 class="system-target-name">Local POS Backend</h3>
+                  </div>
+                  <span
+                    class="system-status-pill"
+                    [class.pill-online]="systemStatuses().localBackend.online"
+                    [class.pill-offline]="!systemStatuses().localBackend.online"
+                  >
+                    <span
+                      class="status-pulse-dot"
+                      [class.dot-online]="systemStatuses().localBackend.online"
+                      [class.dot-offline]="!systemStatuses().localBackend.online"
+                    ></span>
+                    {{ systemStatuses().localBackend.statusText }}
+                  </span>
+                </div>
+                <div class="system-status-card-body">
+                  <div class="system-endpoint-row">
+                    <i class="ph ph-desktop"></i>
+                    <code>{{ systemStatuses().localBackend.url }}</code>
+                  </div>
+                  <p class="system-status-desc">{{ systemStatuses().localBackend.details }}</p>
+                </div>
+                <div class="system-status-card-footer">
+                  <span class="system-latency-label">Response Latency</span>
+                  <span
+                    class="system-latency-val"
+                    [class.latency-good]="systemStatuses().localBackend.latencyMs > 0 && systemStatuses().localBackend.latencyMs < 100"
+                  >
+                    {{ systemStatuses().localBackend.latencyMs ? systemStatuses().localBackend.latencyMs + ' ms' : 'N/A' }}
+                  </span>
+                </div>
+              </div>
+
+              <!-- Card 2: Live Backend -->
+              <div
+                class="system-status-card"
+                [class.status-card-online]="systemStatuses().liveBackend.online"
+                [class.status-card-offline]="!systemStatuses().liveBackend.online"
+              >
+                <div class="system-status-card-header">
+                  <div class="system-target-info">
+                    <span class="system-type-tag">Cloud Gateway</span>
+                    <h3 class="system-target-name">Live Cloud Backend</h3>
+                  </div>
+                  <span
+                    class="system-status-pill"
+                    [class.pill-online]="systemStatuses().liveBackend.online"
+                    [class.pill-offline]="!systemStatuses().liveBackend.online"
+                  >
+                    <span
+                      class="status-pulse-dot"
+                      [class.dot-online]="systemStatuses().liveBackend.online"
+                      [class.dot-offline]="!systemStatuses().liveBackend.online"
+                    ></span>
+                    {{ systemStatuses().liveBackend.statusText }}
+                  </span>
+                </div>
+                <div class="system-status-card-body">
+                  <div class="system-endpoint-row">
+                    <i class="ph ph-cloud"></i>
+                    <code>{{ systemStatuses().liveBackend.url }}</code>
+                  </div>
+                  <p class="system-status-desc">{{ systemStatuses().liveBackend.details }}</p>
+                </div>
+                <div class="system-status-card-footer">
+                  <span class="system-latency-label">Response Latency</span>
+                  <span
+                    class="system-latency-val"
+                    [class.latency-good]="systemStatuses().liveBackend.latencyMs > 0 && systemStatuses().liveBackend.latencyMs < 500"
+                  >
+                    {{ systemStatuses().liveBackend.latencyMs ? systemStatuses().liveBackend.latencyMs + ' ms' : 'N/A' }}
+                  </span>
+                </div>
+              </div>
+
+              <!-- Card 3: Database -->
+              <div
+                class="system-status-card"
+                [class.status-card-online]="systemStatuses().database.online"
+                [class.status-card-offline]="!systemStatuses().database.online"
+              >
+                <div class="system-status-card-header">
+                  <div class="system-target-info">
+                    <span class="system-type-tag">PostgreSQL Relational DB</span>
+                    <h3 class="system-target-name">Supabase Database</h3>
+                  </div>
+                  <span
+                    class="system-status-pill"
+                    [class.pill-online]="systemStatuses().database.online"
+                    [class.pill-offline]="!systemStatuses().database.online"
+                  >
+                    <span
+                      class="status-pulse-dot"
+                      [class.dot-online]="systemStatuses().database.online"
+                      [class.dot-offline]="!systemStatuses().database.online"
+                    ></span>
+                    {{ systemStatuses().database.statusText }}
+                  </span>
+                </div>
+                <div class="system-status-card-body">
+                  <div class="system-endpoint-row">
+                    <i class="ph ph-database"></i>
+                    <code>{{ systemStatuses().database.url }}</code>
+                  </div>
+                  <p class="system-status-desc">{{ systemStatuses().database.details }}</p>
+                </div>
+                <div class="system-status-card-footer">
+                  <span class="system-latency-label">Response Latency</span>
+                  <span
+                    class="system-latency-val"
+                    [class.latency-good]="systemStatuses().database.latencyMs > 0 && systemStatuses().database.latencyMs < 300"
+                  >
+                    {{ systemStatuses().database.latencyMs ? systemStatuses().database.latencyMs + ' ms' : 'N/A' }}
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 2. System & Transaction Audit Logs -->
+          <div class="panel-box full-width-panel">
+            <div class="panel-header-row">
+              <div class="panel-title-group">
+                <div class="panel-icon-wrap primary-icon-wrap">
+                  <i class="ph ph-clipboard-text"></i>
+                </div>
+                <div class="panel-title-text">
+                  <h2 class="heading-card">System & Transaction Audit Logs</h2>
+                  <p class="panel-subtitle">
+                    Immutable event ledger tracking administrative overrides, orders, bill settlements, and operational states.
+                  </p>
+                </div>
+              </div>
+              <div class="audit-toolbar-actions">
+                <button
+                  type="button"
+                  class="btn btn-secondary btn-sm"
+                  (click)="exportAuditLogs()"
+                  title="Export audit log report as JSON"
+                >
+                  <i class="ph ph-download-simple"></i>
+                  <span>Export Logs</span>
+                </button>
+              </div>
+            </div>
+
+            <!-- Audit Filtering & Search Controls -->
+            <div class="audit-filter-controls">
+              <div class="audit-filter-chips">
+                @for (cat of ['ALL', 'AUTH', 'ORDER', 'RECEIPT', 'INVOICE', 'COUPON', 'SYSTEM']; track cat) {
+                  <button
+                    type="button"
+                    class="audit-chip"
+                    [class.active]="auditCategoryFilter() === cat"
+                    (click)="setAuditCategory(cat)"
+                  >
+                    {{ cat }}
+                  </button>
+                }
+              </div>
+              <div class="audit-search-wrap">
+                <i class="ph ph-magnifying-glass input-icon"></i>
+                <input
+                  type="text"
+                  class="form-input with-icon"
+                  placeholder="Search logs by actor, action, notes, or entity ID..."
+                  [ngModel]="auditSearchText()"
+                  (ngModelChange)="onAuditSearchChange($event)"
+                />
+              </div>
+              <span class="audit-count-badge">
+                {{ filteredAuditLogs().length }} entries
+              </span>
+            </div>
+
+            <!-- Audit Feed List with Incremental Pagination (20 initial, +10 load more) -->
+            <div class="audit-feed-wrapper">
+              @if (filteredAuditLogs().length > 0) {
+                <div class="audit-feed-list">
+                  @for (entry of paginatedAuditLogs(); track entry.id) {
+                    <div class="audit-feed-row">
+                      <div class="audit-timestamp-cell">
+                        <span class="audit-time">{{ entry.timestamp | date: 'HH:mm:ss' }}</span>
+                        <span class="audit-date">{{ entry.timestamp | date: 'mediumDate' }}</span>
+                      </div>
+                      <div class="audit-action-cell">
+                        <span class="audit-action-tag" [attr.data-action]="entry.action">
+                          {{ entry.action.replaceAll('_', ' ') }}
+                        </span>
+                        <span class="audit-entity-label">
+                          {{ entry.entityType }}: <code>{{ entry.entityId.slice(0, 14) }}</code>
+                        </span>
+                      </div>
+                      <div class="audit-notes-cell">
+                        <p class="audit-notes-text">{{ entry.notes || 'Routine operation event recorded.' }}</p>
+                      </div>
+                      <div class="audit-actor-cell">
+                        <span class="actor-role-pill" [attr.data-role]="entry.actorRole">
+                          {{ entry.actorRole }}
+                        </span>
+                        <span class="actor-name-text">{{ entry.actorLabel || 'Authorized User' }}</span>
+                      </div>
+                    </div>
+                  }
+
+                  <!-- Pagination Control (Load 10 by 10) -->
+                  <div class="audit-pagination-bar" [class.all-loaded]="!hasMoreAuditLogs()">
+                    <span class="pagination-info">
+                      Showing <strong>{{ paginatedAuditLogs().length }}</strong> of <strong>{{ filteredAuditLogs().length }}</strong> records
+                    </span>
+                    @if (hasMoreAuditLogs()) {
+                      <button
+                        type="button"
+                        class="btn btn-secondary btn-sm load-more-btn"
+                        (click)="loadMoreAuditLogs()"
+                      >
+                        <i class="ph ph-arrow-down"></i>
+                        <span>Load 10 More</span>
+                      </button>
+                    } @else if (filteredAuditLogs().length > 20) {
+                      <span class="all-loaded-tag">
+                        <i class="ph ph-check-circle"></i>
+                        All {{ filteredAuditLogs().length }} entries loaded
+                      </span>
+                    }
+                  </div>
+                </div>
+              } @else {
+                <div class="empty-audit-state">
+                  <i class="ph ph-clock-counter-clockwise"></i>
+                  <p>No audit events match the selected filter criteria.</p>
+                </div>
+              }
+            </div>
+          </div>
+
+          <!-- 3. Local Storage Diagnostics -->
           <div class="panel-box">
             <div class="panel-header-row">
               <div class="panel-title-group">
@@ -733,6 +1034,7 @@ type SettingsTab = 'general' | 'tax' | 'printer' | 'service' | 'maintenance' | '
             </div>
           </div>
 
+          <!-- 4. Reset Demo State -->
           <div class="panel-box danger-box">
             <div class="panel-header-row">
               <div class="panel-title-group">
@@ -1635,6 +1937,525 @@ type SettingsTab = 'general' | 'tax' | 'printer' | 'service' | 'maintenance' | '
         gap: 8px;
         flex-wrap: wrap;
       }
+
+      /* Maintenance & System Storage Tab Styles */
+      .maintenance-layout {
+        display: flex;
+        flex-direction: column;
+        gap: 24px;
+      }
+
+      .full-width-panel {
+        width: 100%;
+      }
+
+      .primary-icon-wrap {
+        background: rgba(234, 88, 12, 0.1);
+        color: var(--color-primary);
+      }
+
+      .panel-header-actions {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+      }
+
+      .last-check-text {
+        font-size: 0.75rem;
+        color: var(--color-text-secondary);
+        font-weight: 500;
+      }
+
+      .refresh-diagnostics-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+      }
+
+      /* 3-card System Status Grid */
+      .system-status-cards {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 16px;
+        margin-top: 16px;
+      }
+
+      @media (max-width: 900px) {
+        .system-status-cards {
+          grid-template-columns: 1fr;
+        }
+      }
+
+      .system-status-card {
+        background: var(--color-surface);
+        border: 1px solid var(--color-border);
+        border-radius: var(--radius-md);
+        padding: 16px 18px;
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+        gap: 14px;
+        transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
+      }
+
+      .system-status-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+      }
+
+      .status-card-online {
+        border-left: 4px solid #16a34a;
+      }
+
+      .status-card-offline {
+        border-left: 4px solid #ea580c;
+      }
+
+      .system-status-card-header {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 10px;
+      }
+
+      .system-target-info {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+      }
+
+      .system-type-tag {
+        font-size: 0.6875rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: var(--color-text-tertiary, #9ca3af);
+      }
+
+      .system-target-name {
+        font-size: 0.9375rem;
+        font-weight: 700;
+        color: var(--color-text-primary);
+        margin: 0;
+      }
+
+      .system-status-pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 0.75rem;
+        font-weight: 600;
+        padding: 3px 10px;
+        border-radius: 9999px;
+      }
+
+      .pill-online {
+        background: #f0fdf4;
+        color: #166534;
+        border: 1px solid #bbf7d0;
+      }
+
+      .pill-offline {
+        background: #fff7ed;
+        color: #9a3412;
+        border: 1px solid #fed7aa;
+      }
+
+      .status-pulse-dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        display: inline-block;
+      }
+
+      .dot-online {
+        background-color: #16a34a;
+        box-shadow: 0 0 0 0 rgba(22, 163, 74, 0.7);
+        animation: status-pulse-online 2s infinite cubic-bezier(0.66, 0, 0, 1);
+      }
+
+      .dot-offline {
+        background-color: #ea580c;
+        box-shadow: 0 0 0 0 rgba(234, 88, 12, 0.7);
+        animation: status-pulse-offline 2s infinite cubic-bezier(0.66, 0, 0, 1);
+      }
+
+      @keyframes status-pulse-online {
+        0% {
+          transform: scale(0.95);
+          box-shadow: 0 0 0 0 rgba(22, 163, 74, 0.7);
+        }
+        70% {
+          transform: scale(1);
+          box-shadow: 0 0 0 6px rgba(22, 163, 74, 0);
+        }
+        100% {
+          transform: scale(0.95);
+          box-shadow: 0 0 0 0 rgba(22, 163, 74, 0);
+        }
+      }
+
+      @keyframes status-pulse-offline {
+        0% {
+          transform: scale(0.95);
+          box-shadow: 0 0 0 0 rgba(234, 88, 12, 0.7);
+        }
+        70% {
+          transform: scale(1);
+          box-shadow: 0 0 0 6px rgba(234, 88, 12, 0);
+        }
+        100% {
+          transform: scale(0.95);
+          box-shadow: 0 0 0 0 rgba(234, 88, 12, 0);
+        }
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        .dot-online,
+        .dot-offline {
+          animation: none !important;
+        }
+      }
+
+      .system-status-card-body {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+      }
+
+      .system-endpoint-row {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 0.8125rem;
+        color: var(--color-text-secondary);
+      }
+
+      .system-endpoint-row code {
+        font-family: monospace;
+        font-size: 0.75rem;
+        background: var(--color-bg, #f3f4f6);
+        padding: 2px 6px;
+        border-radius: 4px;
+        word-break: break-all;
+      }
+
+      .system-status-desc {
+        font-size: 0.8125rem;
+        color: var(--color-text-secondary);
+        margin: 0;
+        line-height: 1.4;
+      }
+
+      .system-status-card-footer {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        border-top: 1px dashed var(--color-border);
+        padding-top: 10px;
+        font-size: 0.75rem;
+      }
+
+      .system-latency-label {
+        color: var(--color-text-secondary);
+      }
+
+      .system-latency-val {
+        font-weight: 700;
+        color: var(--color-text-primary);
+        font-family: monospace;
+      }
+
+      .system-latency-val.latency-good {
+        color: #16a34a;
+      }
+
+      /* Audit Logs Toolbar & Feed */
+      .audit-toolbar-actions {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+
+      .audit-filter-controls {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        flex-wrap: wrap;
+        margin-top: 16px;
+        margin-bottom: 12px;
+      }
+
+      .audit-filter-chips {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+      }
+
+      .audit-chip {
+        border: 1px solid var(--color-border);
+        background: var(--color-surface);
+        color: var(--color-text-secondary);
+        font-size: 0.75rem;
+        font-weight: 600;
+        padding: 4px 10px;
+        border-radius: 6px;
+        cursor: pointer;
+        transition: all 0.15s ease;
+      }
+
+      .audit-chip:hover {
+        background: var(--color-bg, #f3f4f6);
+        color: var(--color-text-primary);
+      }
+
+      .audit-chip.active {
+        background: var(--color-primary);
+        color: #ffffff;
+        border-color: var(--color-primary);
+      }
+
+      .audit-search-wrap {
+        position: relative;
+        flex: 1;
+        max-width: 400px;
+      }
+
+      .audit-search-wrap .input-icon {
+        position: absolute;
+        left: 10px;
+        top: 50%;
+        transform: translateY(-50%);
+        color: var(--color-text-secondary);
+        font-size: 0.875rem;
+      }
+
+      .audit-search-wrap .form-input.with-icon {
+        padding-left: 32px;
+        font-size: 0.8125rem;
+        height: 32px;
+      }
+
+      .audit-count-badge {
+        font-size: 0.75rem;
+        color: var(--color-text-secondary);
+        font-weight: 500;
+      }
+
+      /* Audit Feed */
+      .audit-feed-wrapper {
+        border: 1px solid var(--color-border);
+        border-radius: var(--radius-md);
+        background: var(--color-surface);
+        max-height: 420px;
+        overflow-y: auto;
+      }
+
+      .audit-feed-list {
+        display: flex;
+        flex-direction: column;
+      }
+
+      .audit-feed-row {
+        display: grid;
+        grid-template-columns: 100px 170px 1fr 140px;
+        gap: 14px;
+        align-items: center;
+        padding: 10px 16px;
+        border-bottom: 1px solid var(--color-border);
+        font-size: 0.8125rem;
+        transition: background 0.12s ease;
+      }
+
+      .audit-feed-row:last-child {
+        border-bottom: none;
+      }
+
+      .audit-feed-row:hover {
+        background: var(--color-bg-hover, #f9fafb);
+      }
+
+      @media (max-width: 800px) {
+        .audit-feed-row {
+          grid-template-columns: 1fr;
+          gap: 6px;
+        }
+      }
+
+      .audit-timestamp-cell {
+        display: flex;
+        flex-direction: column;
+      }
+
+      .audit-time {
+        font-weight: 700;
+        font-family: monospace;
+        color: var(--color-text-primary);
+      }
+
+      .audit-date {
+        font-size: 0.6875rem;
+        color: var(--color-text-secondary);
+      }
+
+      .audit-action-cell {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+      }
+
+      .audit-action-tag {
+        font-weight: 600;
+        color: var(--color-primary);
+        font-size: 0.75rem;
+        letter-spacing: 0.02em;
+      }
+
+      .audit-entity-label {
+        font-size: 0.6875rem;
+        color: var(--color-text-secondary);
+      }
+
+      .audit-entity-label code {
+        font-family: monospace;
+        background: var(--color-bg, #f3f4f6);
+        padding: 1px 4px;
+        border-radius: 3px;
+      }
+
+      .audit-notes-cell {
+        color: var(--color-text-secondary);
+      }
+
+      .audit-notes-text {
+        margin: 0;
+        line-height: 1.4;
+      }
+
+      .audit-actor-cell {
+        display: flex;
+        flex-direction: column;
+        align-items: flex-end;
+        gap: 2px;
+      }
+
+      .actor-role-pill {
+        font-size: 0.6875rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        padding: 2px 6px;
+        border-radius: 4px;
+        background: #f3f4f6;
+        color: #374151;
+      }
+
+      .actor-role-pill[data-role='admin'] {
+        background: #eff6ff;
+        color: #1d4ed8;
+      }
+
+      .actor-role-pill[data-role='staff'],
+      .actor-role-pill[data-role='waiter'] {
+        background: #f0fdf4;
+        color: #15803d;
+      }
+
+      .actor-role-pill[data-role='system'] {
+        background: #fdf2f8;
+        color: #9d174d;
+      }
+
+      .actor-name-text {
+        font-size: 0.75rem;
+        color: var(--color-text-secondary);
+      }
+
+      .empty-audit-state {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        padding: 40px 16px;
+        color: var(--color-text-secondary);
+      }
+
+      .empty-audit-state i {
+        font-size: 2rem;
+      }
+
+      /* Audit Pagination Controls */
+      .audit-pagination-bar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 12px 18px;
+        background: var(--color-bg, #f9fafb);
+        border-top: 1px solid var(--color-border);
+        font-size: 0.8125rem;
+        transition: background 0.15s ease;
+      }
+
+      .audit-pagination-bar.all-loaded {
+        justify-content: center;
+        gap: 12px;
+      }
+
+      .pagination-info {
+        color: var(--color-text-secondary);
+      }
+
+      .pagination-info strong {
+        color: var(--color-text-primary);
+      }
+
+      .load-more-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: transform 0.1s ease, box-shadow 0.15s ease;
+      }
+
+      .load-more-btn:active {
+        transform: translateY(1px);
+      }
+
+      .all-loaded-tag {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 0.75rem;
+        color: #16a34a;
+        font-weight: 600;
+      }
+
+      /* Dynamic Semantic Action Colors */
+      .audit-action-tag[data-action*='LOGIN'] {
+        color: #0284c7;
+      }
+
+      .audit-action-tag[data-action*='LOGOUT'] {
+        color: #64748b;
+      }
+
+      .audit-action-tag[data-action*='RECEIPT'] {
+        color: #0d9488;
+      }
+
+      .audit-action-tag[data-action*='INVOICE'] {
+        color: #7c3aed;
+      }
+
+      .audit-action-tag[data-action*='ORDER'] {
+        color: #ea580c;
+      }
+
+      .audit-action-tag[data-action*='COUPON'] {
+        color: #db2777;
+      }
     `,
   ],
 })
@@ -1642,8 +2463,100 @@ export class SettingsComponent implements OnInit {
   private dataService = inject(RestaurantDataService);
   private mock = this.dataService;
   private toastService = inject(ToastService);
+  private http = inject(HttpClient);
   auth = inject(AdminAuthService);
   thermalPrinter = inject(ThermalPrinterService);
+
+  // Live Infrastructure Telemetry State
+  isCheckingHealth = signal<boolean>(false);
+  lastCheckedTime = signal<Date | null>(null);
+
+  systemStatuses = signal<{
+    localBackend: { online: boolean; statusText: string; url: string; details: string; latencyMs: number };
+    liveBackend: { online: boolean; statusText: string; url: string; details: string; latencyMs: number };
+    database: { online: boolean; statusText: string; url: string; details: string; latencyMs: number };
+  }>({
+    localBackend: {
+      online: false,
+      statusText: 'Standby / Checking...',
+      url: 'http://127.0.0.1:3000',
+      details: 'Querying local Axum POS engine...',
+      latencyMs: 0,
+    },
+    liveBackend: {
+      online: false,
+      statusText: 'Connecting...',
+      url: 'https://hotel-crm-api-vpxu.onrender.com',
+      details: 'Checking cloud microservice availability...',
+      latencyMs: 0,
+    },
+    database: {
+      online: false,
+      statusText: 'Connecting...',
+      url: 'https://umpwjosivlpknjskpzdl.supabase.co',
+      details: 'Verifying PostgreSQL PostgREST endpoint...',
+      latencyMs: 0,
+    },
+  });
+
+  // Audit Logs State & Incremental Pagination (20 initial, +10 load more)
+  auditCategoryFilter = signal<string>('ALL');
+  auditSearchText = signal<string>('');
+  auditDisplayLimit = signal<number>(20);
+  auditLogs = this.mock.auditLogs;
+
+  filteredAuditLogs = computed(() => {
+    const filter = this.auditCategoryFilter();
+    const query = this.auditSearchText().toLowerCase().trim();
+    const logs = this.auditLogs();
+
+    return logs.filter((log) => {
+      const matchesCategory =
+        filter === 'ALL' ||
+        (filter === 'AUTH' &&
+          (log.action === 'USER_LOGIN' || log.action === 'USER_LOGOUT' || log.entityType === 'SESSION')) ||
+        (filter === 'RECEIPT' &&
+          (log.action.includes('RECEIPT') || log.action.includes('KOT') || log.entityType === 'RECEIPT')) ||
+        (filter === 'ORDER' && (log.action.includes('ORDER') || log.entityType === 'ORDER')) ||
+        (filter === 'INVOICE' && (log.action.includes('INVOICE') || log.entityType === 'INVOICE')) ||
+        (filter === 'COUPON' && (log.action.includes('COUPON') || log.entityType.startsWith('COUPON'))) ||
+        (filter === 'SYSTEM' &&
+          (log.actorRole === 'SYSTEM' || log.entityType === 'SYSTEM' || log.action.includes('PHONE')));
+
+      if (!matchesCategory) return false;
+      if (!query) return true;
+
+      return (
+        log.actorLabel?.toLowerCase().includes(query) ||
+        log.action?.toLowerCase().includes(query) ||
+        log.notes?.toLowerCase().includes(query) ||
+        log.entityId?.toLowerCase().includes(query) ||
+        log.entityType?.toLowerCase().includes(query)
+      );
+    });
+  });
+
+  paginatedAuditLogs = computed(() => {
+    return this.filteredAuditLogs().slice(0, this.auditDisplayLimit());
+  });
+
+  hasMoreAuditLogs = computed(() => {
+    return this.auditDisplayLimit() < this.filteredAuditLogs().length;
+  });
+
+  loadMoreAuditLogs(): void {
+    this.auditDisplayLimit.update((current) => current + 10);
+  }
+
+  setAuditCategory(cat: string): void {
+    this.auditCategoryFilter.set(cat);
+    this.auditDisplayLimit.set(20);
+  }
+
+  onAuditSearchChange(text: string): void {
+    this.auditSearchText.set(text);
+    this.auditDisplayLimit.set(20);
+  }
 
   activeTab: SettingsTab = 'general';
   confirmResetOpen = false;
@@ -1733,6 +2646,7 @@ export class SettingsComponent implements OnInit {
     description: 'Traditional tandoori specialties, authentic recipes, and North Indian cuisine.',
     contactPhone: '+91 80 4912 8800',
     contactEmail: 'contact@gurukripadhaba.com',
+    customerMenuUrl: 'https://gurukripadhaba-menu.vercel.app',
     street: '14 Heritage Promenade, MG Road',
     city: 'Bengaluru',
     statePin: 'Karnataka - 560001',
@@ -1761,6 +2675,7 @@ export class SettingsComponent implements OnInit {
   ngOnInit(): void {
     this.loadCurrentSettings();
     this.loadSystemPrinters();
+    this.checkSystemHealth();
   }
 
   loadSystemPrinters(): void {
@@ -1816,6 +2731,11 @@ export class SettingsComponent implements OnInit {
             : this.profile.description,
         contactPhone: res.contact?.phone || this.profile.contactPhone,
         contactEmail: res.contact?.email || this.profile.contactEmail,
+        customerMenuUrl:
+          localStorage.getItem('hotel_crm_customer_menu_url') ||
+          res.contact?.website ||
+          environment.customerMenuUrl ||
+          'https://gurukripadhaba-menu.vercel.app',
         street: res.address?.street || this.profile.street,
         city: res.address?.city || this.profile.city,
         statePin: `${res.address?.state || 'Karnataka'} - ${res.address?.zip || '560001'}`,
@@ -1836,6 +2756,13 @@ export class SettingsComponent implements OnInit {
   }
 
   saveSettings(): void {
+    const cleanMenuUrl = (
+      this.profile.customerMenuUrl ||
+      environment.customerMenuUrl ||
+      'https://gurukripadhaba-menu.vercel.app'
+    ).trim();
+    localStorage.setItem('hotel_crm_customer_menu_url', cleanMenuUrl);
+
     const current = this.mock.restaurant();
     const parts = this.profile.statePin.split('-').map((s) => s.trim());
     const state = parts[0] || current?.address?.state || 'Karnataka';
@@ -1858,7 +2785,7 @@ export class SettingsComponent implements OnInit {
       contact: {
         phone: this.profile.contactPhone,
         email: this.profile.contactEmail,
-        website: current?.contact?.website || '',
+        website: cleanMenuUrl,
       },
       address: {
         ...current?.address,
@@ -1924,6 +2851,114 @@ export class SettingsComponent implements OnInit {
           this.toastService.error(err?.message || 'Error updating password.');
         },
       });
+  }
+
+  checkSystemHealth(): void {
+    this.isCheckingHealth.set(true);
+
+    // 1. Check Local POS Backend
+    const t0Local = performance.now();
+    this.http
+      .get<{ status: string }>('http://127.0.0.1:3000/api/v1/health')
+      .pipe(
+        timeout(2000),
+        catchError(() => of(null))
+      )
+      .subscribe((res) => {
+        const t1 = performance.now();
+        const duration = Math.round(t1 - t0Local);
+        const isOk = Boolean(res && (res as any).status === 'ok');
+
+        this.systemStatuses.update((curr) => ({
+          ...curr,
+          localBackend: {
+            online: isOk,
+            statusText: isOk ? 'Online (Axum)' : 'Standby / Client Mode',
+            url: 'http://127.0.0.1:3000/api/v1/health',
+            details: isOk
+              ? 'Local microservice engine online and processing requests.'
+              : 'Local port 3000 daemon not running. Running in standalone client mode.',
+            latencyMs: isOk ? duration : 0,
+          },
+        }));
+      });
+
+    // 2. Check Live Cloud Backend
+    const t0Cloud = performance.now();
+    this.http
+      .get<{ status: string }>('https://hotel-crm-api-vpxu.onrender.com/health')
+      .pipe(
+        timeout(5000),
+        catchError(() => of(null))
+      )
+      .subscribe((res) => {
+        const t1 = performance.now();
+        const duration = Math.round(t1 - t0Cloud);
+        const isOk = Boolean(res && (res as any).status === 'ok');
+
+        this.systemStatuses.update((curr) => ({
+          ...curr,
+          liveBackend: {
+            online: isOk,
+            statusText: isOk ? 'Healthy / Active' : 'Standby / Sleep',
+            url: 'https://hotel-crm-api-vpxu.onrender.com/health',
+            details: isOk
+              ? 'Render cloud service active & responding with zero errors.'
+              : 'Render free-tier instance sleeping or spinning up.',
+            latencyMs: isOk ? duration : 0,
+          },
+        }));
+      });
+
+    // 3. Check Supabase PostgreSQL Database
+    const t0Db = performance.now();
+    const headers = new HttpHeaders({
+      apikey: environment.supabaseAnonKey,
+      Authorization: `Bearer ${environment.supabaseAnonKey}`,
+    });
+
+    this.http
+      .get<any[]>(`${environment.supabaseUrl}/rest/v1/restaurants?select=id&limit=1`, { headers })
+      .pipe(
+        timeout(4000),
+        catchError(() => of(null))
+      )
+      .subscribe((res) => {
+        const t1 = performance.now();
+        const duration = Math.round(t1 - t0Db);
+        const isOk = Array.isArray(res);
+
+        this.systemStatuses.update((curr) => ({
+          ...curr,
+          database: {
+            online: isOk,
+            statusText: isOk ? 'Connected (PostgreSQL)' : 'Unreachable',
+            url: environment.supabaseUrl,
+            details: isOk
+              ? 'PostgreSQL cloud database connected & accepting operational queries.'
+              : 'PostgreSQL PostgREST endpoint timed out. Verify network connection.',
+            latencyMs: isOk ? duration : 0,
+          },
+        }));
+
+        this.lastCheckedTime.set(new Date());
+        this.isCheckingHealth.set(false);
+      });
+  }
+
+  exportAuditLogs(): void {
+    const logs = this.filteredAuditLogs();
+    const jsonStr = JSON.stringify(logs, null, 2);
+    const blob = new Blob([jsonStr], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `gurukripa_pos_audit_logs_${new Date().toISOString().slice(0, 10)}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    this.toastService.success(`Exported ${logs.length} audit log entries.`);
   }
 
   executeDataReset(): void {

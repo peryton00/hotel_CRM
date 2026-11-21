@@ -133,7 +133,12 @@ export class ApiClientService {
           const fallback = this.fallbackSupabasePost<T>(endpoint, body);
           if (
             fallback &&
-            (err.status === 0 || err.status === 502 || err.status === 503 || err.status === 404)
+            (err.status === 0 ||
+              err.status === 401 ||
+              err.status === 500 ||
+              err.status === 502 ||
+              err.status === 503 ||
+              err.status === 404)
           ) {
             return fallback;
           }
@@ -403,6 +408,47 @@ export class ApiClientService {
         .pipe(map((res) => res as T));
     }
 
+    if (clean === 'orders') {
+      const orderPayload: any = {
+        restaurant_id: restaurantId,
+        table_id: body.table_id || null,
+        customer_id: body.customer_id || null,
+        customer_name: body.customer_name || 'Walk-in Guest',
+        customer_phone_e164: body.customer_phone || body.customer_phone_e164 || null,
+        order_type: body.order_type || 'DINE_IN',
+        status: (body.status || 'PENDING').toUpperCase(),
+        payment_status: (body.payment_status || 'UNPAID').toUpperCase(),
+        subtotal_paise: body.subtotal_paise || 0,
+        discount_paise: body.discount_paise || 0,
+        tax_paise: body.tax_paise || 0,
+        total_amount_paise: body.total_amount_paise || 0,
+        notes: body.notes || '',
+      };
+      if (body.server_staff_id) orderPayload.server_staff_id = body.server_staff_id;
+
+      return this.http
+        .post<any>(`${environment.supabaseUrl}/rest/v1/orders`, orderPayload, { headers })
+        .pipe(
+          map((res) => {
+            const created = Array.isArray(res) ? res[0] : res;
+            if (created && created.id && Array.isArray(body.items) && body.items.length > 0) {
+              const itemRows = body.items.map((it: any) => ({
+                order_id: created.id,
+                menu_item_id: it.menu_item_id || null,
+                quantity: it.quantity || 1,
+                unit_price_paise: it.unit_price_paise || 0,
+                total_price_paise: (it.unit_price_paise || 0) * (it.quantity || 1),
+                notes: it.notes || '',
+              }));
+              this.http
+                .post(`${environment.supabaseUrl}/rest/v1/order_items`, itemRows, { headers })
+                .subscribe({ error: () => {} });
+            }
+            return (created || body) as T;
+          }),
+        );
+    }
+
     return null;
   }
 
@@ -511,7 +557,19 @@ export class ApiClientService {
     console.error('API Client Error:', errorMsg, error);
 
     if (error?.status === 401) {
-      this.handleSessionExpired();
+      const currentRoute = this.router?.url || '';
+      const currentUser = localStorage.getItem('staff_user');
+      const token = localStorage.getItem('sb-access-token') || '';
+      const isPosStaffSession =
+        !!currentUser && (token.startsWith('sb_jwt_') || environment.isDesktop);
+
+      if (!currentRoute.includes('/admin/login') && !isPosStaffSession) {
+        this.handleSessionExpired();
+      } else if (isPosStaffSession) {
+        console.warn(
+          '[ApiClient] 401 received while POS staff session is active. Preserving local terminal state.',
+        );
+      }
     }
 
     const errObj: any = new Error(errorMsg);

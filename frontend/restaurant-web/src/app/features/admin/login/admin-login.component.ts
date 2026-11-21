@@ -101,13 +101,6 @@ import { ToastService } from '../../../core/services/toast.service';
             }
           </button>
         </form>
-
-        <div class="card-footer">
-          <a routerLink="/download" class="download-app-link">
-            <i class="ph ph-download-simple"></i>
-            <span>Download Desktop POS Installer</span>
-          </a>
-        </div>
       </div>
     </div>
   `,
@@ -288,30 +281,6 @@ import { ToastService } from '../../../core/services/toast.service';
         align-items: center;
         justify-content: center;
         gap: 8px;
-      }
-
-      .card-footer {
-        margin-top: 24px;
-        padding-top: 16px;
-        border-top: 1px solid var(--color-border-subtle);
-      }
-
-      .download-app-link {
-        display: inline-flex;
-        align-items: center;
-        gap: 8px;
-        font-size: 0.8125rem;
-        color: var(--color-gold, #d4af37);
-        text-decoration: none;
-        font-weight: 600;
-        transition: opacity 0.2s;
-        &:hover {
-          opacity: 0.85;
-          text-decoration: underline;
-        }
-        i {
-          font-size: 1.1rem;
-        }
       }
     `,
   ],

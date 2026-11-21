@@ -19,7 +19,7 @@ services:
       - key: SUPABASE_URL
         sync: false # Set to your Supabase Project URL
       - key: ALLOWED_ORIGINS
-        value: "https://*.onrender.com,http://localhost:4200"
+        value: "https://hotel-crm-api-vpxu.onrender.com,http://localhost:4200"
       - key: ALLOW_DEV_AUTH
         value: "false"
 

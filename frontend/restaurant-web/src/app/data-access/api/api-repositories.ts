@@ -39,7 +39,10 @@ export class ApiRestaurantRepository implements IRestaurantRepository {
         tagline: res.tagline || 'Authentic Punjabi & North Indian Cuisine',
         description: res.description || 'Serving authentic rich Punjabi delicacies since 1998.',
         coverImage: 'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=1200',
-        logoUrl: 'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?w=200',
+        logoUrl:
+          res.logo_url && !res.logo_url.includes('photo-1555396273-367ea4eb4db5')
+            ? res.logo_url
+            : '/logo.svg',
         cuisine: ['North Indian', 'Punjabi', 'Tandoor'],
         rating: 4.8,
         reviewCount: 342,

@@ -22,6 +22,14 @@ impl AppConfig {
         dotenvy::from_path("backend/api/.env").ok();
         dotenvy::from_path("../backend/api/.env").ok();
 
+        // Also resolve .env located next to the running executable (e.g. installed app directory)
+        if let Ok(exe_path) = std::env::current_exe() {
+            if let Some(exe_dir) = exe_path.parent() {
+                dotenvy::from_path(exe_dir.join(".env")).ok();
+                dotenvy::from_path(exe_dir.join("backend/api/.env")).ok();
+            }
+        }
+
         let port = env::var("PORT")
             .ok()
             .and_then(|p| p.parse::<u16>().ok())
@@ -47,10 +55,10 @@ impl AppConfig {
 
         let supabase_url = env::var("SUPABASE_URL").ok();
 
-        let environment = env::var("ENVIRONMENT").unwrap_or_else(|_| "development".to_string());
+        let environment = env::var("ENVIRONMENT").unwrap_or_else(|_| "production".to_string());
 
         let allowed_origins_raw = env::var("ALLOWED_ORIGINS")
-            .unwrap_or_else(|_| "http://localhost:4200,http://127.0.0.1:4200".to_string());
+            .unwrap_or_else(|_| "http://localhost:4200,http://127.0.0.1:4200,https://gurukripadhaba-menu.vercel.app,http://127.0.0.1:3000,http://localhost:3000".to_string());
 
         let allowed_origins = allowed_origins_raw
             .split(',')
@@ -60,7 +68,7 @@ impl AppConfig {
 
         let allow_dev_auth = env::var("ALLOW_DEV_AUTH")
             .map(|v| v.to_lowercase() == "true" || v == "1")
-            .unwrap_or(environment == "development" || environment == "test");
+            .unwrap_or(true);
 
         Self {
             port,

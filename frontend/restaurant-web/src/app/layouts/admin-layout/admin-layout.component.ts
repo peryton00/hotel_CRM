@@ -31,11 +31,7 @@ import { ToastService } from '../../core/services/toast.service';
       <aside class="admin-sidebar" [class.mobile-open]="isMobileMenuOpen()">
         <div class="sidebar-brand">
           <div class="brand-crest">
-            <img
-              [src]="restaurant()?.logoUrl || '/logo.svg'"
-              alt="Restaurant Logo"
-              class="brand-logo-img"
-            />
+            <img [src]="logoUrl()" alt="Restaurant Logo" class="brand-logo-img" />
           </div>
           @if (!isSidebarCollapsed()) {
             <div class="brand-info">
@@ -254,19 +250,6 @@ import { ToastService } from '../../core/services/toast.service';
               >
                 <i class="ph ph-gear"></i>
                 <span class="nav-text" *ngIf="!isSidebarCollapsed()">Settings & Reset</span>
-              </a>
-            }
-
-            @if (!isDesktop) {
-              <a
-                routerLink="/download"
-                target="_blank"
-                class="nav-item"
-                (click)="closeMobileMenu()"
-                [attr.title]="isSidebarCollapsed() ? 'Desktop App Installer' : null"
-              >
-                <i class="ph ph-download-simple"></i>
-                <span class="nav-text" *ngIf="!isSidebarCollapsed()">Desktop App</span>
               </a>
             }
           }
@@ -1732,6 +1715,13 @@ export class AdminLayoutComponent {
   });
 
   restaurant = this.mock.restaurant;
+  logoUrl = computed(() => {
+    const raw = this.restaurant()?.logoUrl;
+    if (!raw || raw.includes('photo-1555396273-367ea4eb4db5')) {
+      return '/logo.svg';
+    }
+    return raw;
+  });
   isSidebarCollapsed = signal<boolean>(false);
   isMobileMenuOpen = signal<boolean>(false);
 
