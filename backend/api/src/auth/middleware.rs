@@ -43,11 +43,15 @@ where
         if let Some(header) = auth_header {
             if let Some(token) = header.strip_prefix("Bearer ") {
                 // Support POS desktop session tokens formatted as sb_jwt_<uuid>_<role>_<timestamp> strictly in local/offline or dev mode
-                if (config.is_offline_first || config.allow_dev_auth) && token.starts_with("sb_jwt_") {
+                if (config.is_offline_first || config.allow_dev_auth)
+                    && token.starts_with("sb_jwt_")
+                {
                     if let Some(rest) = token.strip_prefix("sb_jwt_") {
                         let parts_vec: Vec<&str> = rest.split('_').collect();
                         if let Ok(uid) = Uuid::parse_str(parts_vec[0]) {
-                            let role = if parts_vec.len() > 1 && !parts_vec[1].chars().all(|c| c.is_ascii_digit()) {
+                            let role = if parts_vec.len() > 1
+                                && !parts_vec[1].chars().all(|c| c.is_ascii_digit())
+                            {
                                 parts_vec[1].to_string()
                             } else {
                                 "admin".to_string()
@@ -116,10 +120,16 @@ where
                     }
                     Err(err) => {
                         if config.allow_dev_auth {
-                            tracing::warn!("Session JWT decode notice ({:?}); allowing dev/local auth", err);
+                            tracing::warn!(
+                                "Session JWT decode notice ({:?}); allowing dev/local auth",
+                                err
+                            );
                         } else {
                             tracing::warn!("Session expired or invalid JWT: {:?}", err);
-                            return Err(AppError::Unauthorized(format!("Session expired: {}", err)));
+                            return Err(AppError::Unauthorized(format!(
+                                "Session expired: {}",
+                                err
+                            )));
                         }
                     }
                 }

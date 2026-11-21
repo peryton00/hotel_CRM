@@ -25,7 +25,11 @@ pub async fn check_system_status() -> Result<SystemStatus, String> {
         Err(e) => return Err(e.to_string()),
     };
 
-    match client.get("http://127.0.0.1:3000/api/v1/health").send().await {
+    match client
+        .get("http://127.0.0.1:3000/api/v1/health")
+        .send()
+        .await
+    {
         Ok(res) if res.status().is_success() => {
             let latency = start.elapsed().as_millis() as u64;
             Ok(SystemStatus {
@@ -58,7 +62,10 @@ pub async fn print_receipt(
     receipt_text: String,
     printer_name: Option<String>,
 ) -> Result<PrintResult, String> {
-    log::info!("ESC/POS Print Request received (len: {})", receipt_text.len());
+    log::info!(
+        "ESC/POS Print Request received (len: {})",
+        receipt_text.len()
+    );
     let bytes = receipt_text.into_bytes();
     let name = printer_name.unwrap_or_else(|| "POS-80".to_string());
     match hotel_crm_api::printer::print_raw_windows(&name, &bytes) {
@@ -67,7 +74,10 @@ pub async fn print_receipt(
             message: format!("Printed {} bytes to {}", written, name),
         }),
         Err(e) => {
-            log::warn!("Windows print error: {}. Falling back to success acknowledgment.", e);
+            log::warn!(
+                "Windows print error: {}. Falling back to success acknowledgment.",
+                e
+            );
             Ok(PrintResult {
                 success: false,
                 message: e,
@@ -83,7 +93,9 @@ pub async fn print_escpos_raw(
     network_address: Option<String>,
     raw_bytes: Vec<u8>,
 ) -> Result<PrintResult, String> {
-    let mode = target.unwrap_or_else(|| "WINDOWS".to_string()).to_uppercase();
+    let mode = target
+        .unwrap_or_else(|| "WINDOWS".to_string())
+        .to_uppercase();
     if mode == "NETWORK" {
         let addr = network_address.unwrap_or_else(|| "127.0.0.1:9100".to_string());
         match hotel_crm_api::printer::print_raw_network(&addr, &raw_bytes) {
@@ -108,11 +120,17 @@ pub async fn print_escpos_raw(
 #[tauri::command]
 pub async fn open_external_url(url: String) -> Result<bool, String> {
     let trimmed = url.trim();
-    if !trimmed.starts_with("https://") && !trimmed.starts_with("http://") && !trimmed.starts_with("whatsapp://") {
+    if !trimmed.starts_with("https://")
+        && !trimmed.starts_with("http://")
+        && !trimmed.starts_with("whatsapp://")
+    {
         return Err("Invalid URL protocol".to_string());
     }
 
-    if trimmed.chars().any(|c| c.is_control() || matches!(c, '&' | '|' | ';' | '`' | '$' | '"' | '<' | '>')) {
+    if trimmed
+        .chars()
+        .any(|c| c.is_control() || matches!(c, '&' | '|' | ';' | '`' | '$' | '"' | '<' | '>'))
+    {
         return Err("URL contains invalid characters".to_string());
     }
 

@@ -3242,7 +3242,9 @@ export class RestaurantDataService {
       const currentUser = this.adminAuth.currentUser();
       this.recordAuditLog({
         actorRole: (currentUser?.role as any) || (isAdmin ? 'ADMIN' : 'STAFF'),
-        actorLabel: currentUser ? `${currentUser.name} (${currentUser.role})` : role || 'Terminal Staff',
+        actorLabel: currentUser
+          ? `${currentUser.name} (${currentUser.role})`
+          : role || 'Terminal Staff',
         action: count > 1 ? 'RECEIPT_PRINTED' : 'RECEIPT_GENERATED',
         entityType: 'RECEIPT',
         entityId: order.orderNumber || order.id,

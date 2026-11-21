@@ -1206,13 +1206,26 @@ import { environment } from '../../../../environments/environment';
 
                 <!-- Live Hosted Mobile Link Preview -->
                 <div class="standee-url-preview no-print">
-                  <span class="url-preview-label"><i class="ph ph-globe"></i> Customer Menu Mobile Link</span>
+                  <span class="url-preview-label"
+                    ><i class="ph ph-globe"></i> Customer Menu Mobile Link</span
+                  >
                   <div class="url-preview-pill">
-                    <a [href]="activeQrFullUrl()" target="_blank" rel="noopener" class="url-preview-link" title="Open and test customer menu in browser">
+                    <a
+                      [href]="activeQrFullUrl()"
+                      target="_blank"
+                      rel="noopener"
+                      class="url-preview-link"
+                      title="Open and test customer menu in browser"
+                    >
                       <code>{{ activeQrFullUrl() }}</code>
                       <i class="ph ph-arrow-square-out"></i>
                     </a>
-                    <button type="button" class="btn-copy-url" (click)="copyQrUrl()" title="Copy link to clipboard">
+                    <button
+                      type="button"
+                      class="btn-copy-url"
+                      (click)="copyQrUrl()"
+                      title="Copy link to clipboard"
+                    >
                       <i class="ph ph-copy"></i>
                     </button>
                   </div>
@@ -4798,7 +4811,11 @@ export class TableListComponent implements OnInit {
       // Footer note
       ctx.fillStyle = '#9ca3af';
       ctx.font = '500 13px "Source Sans 3", sans-serif';
-      ctx.fillText(`Customer Web: ${this.getCustomerMenuBaseUrl()}  •  GuruKripa Dhaba Management`, 400, 1035);
+      ctx.fillText(
+        `Customer Web: ${this.getCustomerMenuBaseUrl()}  •  GuruKripa Dhaba Management`,
+        400,
+        1035,
+      );
 
       // Download triggered via dataURL
       const standeePng = canvas.toDataURL('image/png');

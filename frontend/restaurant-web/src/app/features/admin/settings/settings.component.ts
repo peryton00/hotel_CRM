@@ -235,7 +235,8 @@ type SettingsTab = 'general' | 'tax' | 'printer' | 'service' | 'maintenance' | '
                 />
               </div>
               <span class="field-hint">
-                Public hosted URL embedded into table QR codes and standees for customer mobile ordering.
+                Public hosted URL embedded into table QR codes and standees for customer mobile
+                ordering.
               </span>
             </div>
 
@@ -728,7 +729,8 @@ type SettingsTab = 'general' | 'tax' | 'printer' | 'service' | 'maintenance' | '
                 <div class="panel-title-text">
                   <h2 class="heading-card">Live Infrastructure & System Health</h2>
                   <p class="panel-subtitle">
-                    Real-time connectivity, health telemetry, and round-trip latency across POS engines.
+                    Real-time connectivity, health telemetry, and round-trip latency across POS
+                    engines.
                   </p>
                 </div>
               </div>
@@ -787,9 +789,16 @@ type SettingsTab = 'general' | 'tax' | 'printer' | 'service' | 'maintenance' | '
                   <span class="system-latency-label">Response Latency</span>
                   <span
                     class="system-latency-val"
-                    [class.latency-good]="systemStatuses().localBackend.latencyMs > 0 && systemStatuses().localBackend.latencyMs < 100"
+                    [class.latency-good]="
+                      systemStatuses().localBackend.latencyMs > 0 &&
+                      systemStatuses().localBackend.latencyMs < 100
+                    "
                   >
-                    {{ systemStatuses().localBackend.latencyMs ? systemStatuses().localBackend.latencyMs + ' ms' : 'N/A' }}
+                    {{
+                      systemStatuses().localBackend.latencyMs
+                        ? systemStatuses().localBackend.latencyMs + ' ms'
+                        : 'N/A'
+                    }}
                   </span>
                 </div>
               </div>
@@ -829,9 +838,16 @@ type SettingsTab = 'general' | 'tax' | 'printer' | 'service' | 'maintenance' | '
                   <span class="system-latency-label">Response Latency</span>
                   <span
                     class="system-latency-val"
-                    [class.latency-good]="systemStatuses().liveBackend.latencyMs > 0 && systemStatuses().liveBackend.latencyMs < 500"
+                    [class.latency-good]="
+                      systemStatuses().liveBackend.latencyMs > 0 &&
+                      systemStatuses().liveBackend.latencyMs < 500
+                    "
                   >
-                    {{ systemStatuses().liveBackend.latencyMs ? systemStatuses().liveBackend.latencyMs + ' ms' : 'N/A' }}
+                    {{
+                      systemStatuses().liveBackend.latencyMs
+                        ? systemStatuses().liveBackend.latencyMs + ' ms'
+                        : 'N/A'
+                    }}
                   </span>
                 </div>
               </div>
@@ -871,9 +887,16 @@ type SettingsTab = 'general' | 'tax' | 'printer' | 'service' | 'maintenance' | '
                   <span class="system-latency-label">Response Latency</span>
                   <span
                     class="system-latency-val"
-                    [class.latency-good]="systemStatuses().database.latencyMs > 0 && systemStatuses().database.latencyMs < 300"
+                    [class.latency-good]="
+                      systemStatuses().database.latencyMs > 0 &&
+                      systemStatuses().database.latencyMs < 300
+                    "
                   >
-                    {{ systemStatuses().database.latencyMs ? systemStatuses().database.latencyMs + ' ms' : 'N/A' }}
+                    {{
+                      systemStatuses().database.latencyMs
+                        ? systemStatuses().database.latencyMs + ' ms'
+                        : 'N/A'
+                    }}
                   </span>
                 </div>
               </div>
@@ -890,7 +913,8 @@ type SettingsTab = 'general' | 'tax' | 'printer' | 'service' | 'maintenance' | '
                 <div class="panel-title-text">
                   <h2 class="heading-card">System & Transaction Audit Logs</h2>
                   <p class="panel-subtitle">
-                    Immutable event ledger tracking administrative overrides, orders, bill settlements, and operational states.
+                    Immutable event ledger tracking administrative overrides, orders, bill
+                    settlements, and operational states.
                   </p>
                 </div>
               </div>
@@ -910,7 +934,10 @@ type SettingsTab = 'general' | 'tax' | 'printer' | 'service' | 'maintenance' | '
             <!-- Audit Filtering & Search Controls -->
             <div class="audit-filter-controls">
               <div class="audit-filter-chips">
-                @for (cat of ['ALL', 'AUTH', 'ORDER', 'RECEIPT', 'INVOICE', 'COUPON', 'SYSTEM']; track cat) {
+                @for (
+                  cat of ['ALL', 'AUTH', 'ORDER', 'RECEIPT', 'INVOICE', 'COUPON', 'SYSTEM'];
+                  track cat
+                ) {
                   <button
                     type="button"
                     class="audit-chip"
@@ -931,9 +958,7 @@ type SettingsTab = 'general' | 'tax' | 'printer' | 'service' | 'maintenance' | '
                   (ngModelChange)="onAuditSearchChange($event)"
                 />
               </div>
-              <span class="audit-count-badge">
-                {{ filteredAuditLogs().length }} entries
-              </span>
+              <span class="audit-count-badge"> {{ filteredAuditLogs().length }} entries </span>
             </div>
 
             <!-- Audit Feed List with Incremental Pagination (20 initial, +10 load more) -->
@@ -955,13 +980,17 @@ type SettingsTab = 'general' | 'tax' | 'printer' | 'service' | 'maintenance' | '
                         </span>
                       </div>
                       <div class="audit-notes-cell">
-                        <p class="audit-notes-text">{{ entry.notes || 'Routine operation event recorded.' }}</p>
+                        <p class="audit-notes-text">
+                          {{ entry.notes || 'Routine operation event recorded.' }}
+                        </p>
                       </div>
                       <div class="audit-actor-cell">
                         <span class="actor-role-pill" [attr.data-role]="entry.actorRole">
                           {{ entry.actorRole }}
                         </span>
-                        <span class="actor-name-text">{{ entry.actorLabel || 'Authorized User' }}</span>
+                        <span class="actor-name-text">{{
+                          entry.actorLabel || 'Authorized User'
+                        }}</span>
                       </div>
                     </div>
                   }
@@ -969,7 +998,8 @@ type SettingsTab = 'general' | 'tax' | 'printer' | 'service' | 'maintenance' | '
                   <!-- Pagination Control (Load 10 by 10) -->
                   <div class="audit-pagination-bar" [class.all-loaded]="!hasMoreAuditLogs()">
                     <span class="pagination-info">
-                      Showing <strong>{{ paginatedAuditLogs().length }}</strong> of <strong>{{ filteredAuditLogs().length }}</strong> records
+                      Showing <strong>{{ paginatedAuditLogs().length }}</strong> of
+                      <strong>{{ filteredAuditLogs().length }}</strong> records
                     </span>
                     @if (hasMoreAuditLogs()) {
                       <button
@@ -1995,7 +2025,10 @@ type SettingsTab = 'general' | 'tax' | 'printer' | 'service' | 'maintenance' | '
         flex-direction: column;
         justify-content: space-between;
         gap: 14px;
-        transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
+        transition:
+          transform 0.15s ease,
+          box-shadow 0.15s ease,
+          border-color 0.15s ease;
       }
 
       .system-status-card:hover {
@@ -2416,7 +2449,9 @@ type SettingsTab = 'general' | 'tax' | 'printer' | 'service' | 'maintenance' | '
         gap: 6px;
         font-weight: 600;
         cursor: pointer;
-        transition: transform 0.1s ease, box-shadow 0.15s ease;
+        transition:
+          transform 0.1s ease,
+          box-shadow 0.15s ease;
       }
 
       .load-more-btn:active {
@@ -2472,9 +2507,27 @@ export class SettingsComponent implements OnInit {
   lastCheckedTime = signal<Date | null>(null);
 
   systemStatuses = signal<{
-    localBackend: { online: boolean; statusText: string; url: string; details: string; latencyMs: number };
-    liveBackend: { online: boolean; statusText: string; url: string; details: string; latencyMs: number };
-    database: { online: boolean; statusText: string; url: string; details: string; latencyMs: number };
+    localBackend: {
+      online: boolean;
+      statusText: string;
+      url: string;
+      details: string;
+      latencyMs: number;
+    };
+    liveBackend: {
+      online: boolean;
+      statusText: string;
+      url: string;
+      details: string;
+      latencyMs: number;
+    };
+    database: {
+      online: boolean;
+      statusText: string;
+      url: string;
+      details: string;
+      latencyMs: number;
+    };
   }>({
     localBackend: {
       online: false,
@@ -2514,14 +2567,22 @@ export class SettingsComponent implements OnInit {
       const matchesCategory =
         filter === 'ALL' ||
         (filter === 'AUTH' &&
-          (log.action === 'USER_LOGIN' || log.action === 'USER_LOGOUT' || log.entityType === 'SESSION')) ||
+          (log.action === 'USER_LOGIN' ||
+            log.action === 'USER_LOGOUT' ||
+            log.entityType === 'SESSION')) ||
         (filter === 'RECEIPT' &&
-          (log.action.includes('RECEIPT') || log.action.includes('KOT') || log.entityType === 'RECEIPT')) ||
+          (log.action.includes('RECEIPT') ||
+            log.action.includes('KOT') ||
+            log.entityType === 'RECEIPT')) ||
         (filter === 'ORDER' && (log.action.includes('ORDER') || log.entityType === 'ORDER')) ||
-        (filter === 'INVOICE' && (log.action.includes('INVOICE') || log.entityType === 'INVOICE')) ||
-        (filter === 'COUPON' && (log.action.includes('COUPON') || log.entityType.startsWith('COUPON'))) ||
+        (filter === 'INVOICE' &&
+          (log.action.includes('INVOICE') || log.entityType === 'INVOICE')) ||
+        (filter === 'COUPON' &&
+          (log.action.includes('COUPON') || log.entityType.startsWith('COUPON'))) ||
         (filter === 'SYSTEM' &&
-          (log.actorRole === 'SYSTEM' || log.entityType === 'SYSTEM' || log.action.includes('PHONE')));
+          (log.actorRole === 'SYSTEM' ||
+            log.entityType === 'SYSTEM' ||
+            log.action.includes('PHONE')));
 
       if (!matchesCategory) return false;
       if (!query) return true;
@@ -2862,7 +2923,7 @@ export class SettingsComponent implements OnInit {
       .get<{ status: string }>('http://127.0.0.1:3000/api/v1/health')
       .pipe(
         timeout(2000),
-        catchError(() => of(null))
+        catchError(() => of(null)),
       )
       .subscribe((res) => {
         const t1 = performance.now();
@@ -2889,7 +2950,7 @@ export class SettingsComponent implements OnInit {
       .get<{ status: string }>('https://hotel-crm-api-vpxu.onrender.com/health')
       .pipe(
         timeout(5000),
-        catchError(() => of(null))
+        catchError(() => of(null)),
       )
       .subscribe((res) => {
         const t1 = performance.now();
@@ -2921,7 +2982,7 @@ export class SettingsComponent implements OnInit {
       .get<any[]>(`${environment.supabaseUrl}/rest/v1/restaurants?select=id&limit=1`, { headers })
       .pipe(
         timeout(4000),
-        catchError(() => of(null))
+        catchError(() => of(null)),
       )
       .subscribe((res) => {
         const t1 = performance.now();

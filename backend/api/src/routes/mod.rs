@@ -223,7 +223,10 @@ pub async fn system_open_external(
     }
 
     // Ban shell metacharacters and control characters to prevent command execution
-    if url.chars().any(|c| c.is_control() || matches!(c, '&' | '|' | ';' | '`' | '$' | '"' | '<' | '>')) {
+    if url
+        .chars()
+        .any(|c| c.is_control() || matches!(c, '&' | '|' | ';' | '`' | '$' | '"' | '<' | '>'))
+    {
         return Err((
             axum::http::StatusCode::BAD_REQUEST,
             axum::Json(serde_json::json!({ "error": "URL contains invalid characters." })),

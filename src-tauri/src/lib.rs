@@ -22,7 +22,9 @@ pub fn run() {
             commands::open_external_url
         ])
         .setup(|app| {
-            log::info!("HOTEL CRM Tauri 2 desktop shell initializing with embedded backend engine...");
+            log::info!(
+                "HOTEL CRM Tauri 2 desktop shell initializing with embedded backend engine..."
+            );
 
             let (shutdown_tx, shutdown_rx) = tokio::sync::oneshot::channel::<()>();
             app.manage(AppShutdownState {
@@ -33,7 +35,8 @@ pub fn run() {
             tauri::async_runtime::spawn(async move {
                 log::info!("Initializing embedded Axum API engine...");
                 let config = hotel_crm_api::config::AppConfig::from_env();
-                if let Err(e) = hotel_crm_api::server::start_server(config, Some(shutdown_rx)).await {
+                if let Err(e) = hotel_crm_api::server::start_server(config, Some(shutdown_rx)).await
+                {
                     log::warn!("Embedded API engine notice: {}", e);
                 }
             });
