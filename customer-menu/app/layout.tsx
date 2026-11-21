@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import './globals.css';
 import { CartProvider } from '@/lib/cart-context';
 import { Analytics } from '@vercel/analytics/next';
+import { SpeedInsights } from '@vercel/speed-insights/next';
 
 export const metadata: Metadata = {
   title: 'Restaurant Menu & Dining Orders',
@@ -46,6 +47,7 @@ export default function RootLayout({
       <body className="bg-[#f8f6f2] dark:bg-[#0c0e12] text-neutral-900 dark:text-neutral-100 antialiased min-h-screen transition-colors duration-200">
         <CartProvider>{children}</CartProvider>
         <Analytics />
+        <SpeedInsights />
       </body>
     </html>
   );
