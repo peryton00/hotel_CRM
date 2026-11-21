@@ -130,17 +130,34 @@ export class ApiClientService {
       .pipe(
         map((res) => res.data),
         catchError((err) => {
-          const fallback = this.fallbackSupabasePost<T>(endpoint, body);
-          if (
-            fallback &&
-            (err.status === 0 ||
-              err.status === 401 ||
-              err.status === 500 ||
-              err.status === 502 ||
-              err.status === 503 ||
-              err.status === 404)
-          ) {
-            return fallback;
+          const errMsg = (
+            (err?.message || '') +
+            ' ' +
+            (typeof err === 'string' ? err : '') +
+            ' ' +
+            (typeof err?.error === 'string' ? err.error : '') +
+            ' ' +
+            (err?.error?.message || '')
+          ).toLowerCase();
+
+          const isConnErr =
+            errMsg.includes('os error 11001') ||
+            errMsg.includes('no such host is known') ||
+            errMsg.includes('error communicating with database');
+
+          if (!isConnErr) {
+            const fallback = this.fallbackSupabasePost<T>(endpoint, body);
+            if (
+              fallback &&
+              (err.status === 0 ||
+                err.status === 401 ||
+                err.status === 500 ||
+                err.status === 502 ||
+                err.status === 503 ||
+                err.status === 404)
+            ) {
+              return fallback;
+            }
           }
           return this.handleError(err);
         }),

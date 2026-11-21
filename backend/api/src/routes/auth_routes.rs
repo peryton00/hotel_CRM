@@ -69,10 +69,7 @@ pub fn verify_password(stored: &str, entered: &str) -> bool {
         }
     }
     // Backward compatibility match for legacy unhashed entries
-    if stored == entered {
-        return true;
-    }
-    false
+    stored == entered
 }
 
 pub async fn get_me(user: AuthenticatedUser) -> impl IntoResponse {
