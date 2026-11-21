@@ -4524,7 +4524,10 @@ export class TableListComponent implements OnInit {
   async openQrModal(table: Table): Promise<void> {
     this.activeQrTable = table;
     this.qrDataUrl = null;
-    const base = environment.customerMenuUrl || window.location.origin;
+    const base =
+      localStorage.getItem('hotel_crm_customer_menu_url') ||
+      environment.customerMenuUrl ||
+      window.location.origin;
     const token = table.qrToken || table.number;
     const fullUrl = `${base}/table/${encodeURIComponent(token)}`;
     this.activeQrFullUrl.set(fullUrl);
@@ -4589,17 +4592,33 @@ export class TableListComponent implements OnInit {
       ctx.fillRect(canvas.width - 40 - corner, canvas.height - 44, corner, 4);
       ctx.fillRect(canvas.width - 44, canvas.height - 40 - corner, 4, corner);
 
-      // Crest Icon Badge
-      ctx.beginPath();
-      ctx.arc(400, 110, 32, 0, Math.PI * 2);
-      ctx.fillStyle = '#d4af37';
-      ctx.fill();
+      // Crest Icon Badge with Restaurant Logo
+      const logoImg = new Image();
+      logoImg.crossOrigin = 'anonymous';
+      await new Promise<void>((resolve) => {
+        logoImg.onload = () => resolve();
+        logoImg.onerror = () => resolve();
+        logoImg.src = '/logo.svg';
+      });
 
-      ctx.fillStyle = '#14161b';
-      ctx.font = 'bold 28px serif';
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.fillText('👑', 400, 110);
+      if (logoImg.complete && logoImg.naturalWidth > 0) {
+        ctx.save();
+        ctx.beginPath();
+        ctx.arc(400, 110, 32, 0, Math.PI * 2);
+        ctx.clip();
+        ctx.drawImage(logoImg, 400 - 32, 110 - 32, 64, 64);
+        ctx.restore();
+      } else {
+        ctx.beginPath();
+        ctx.arc(400, 110, 32, 0, Math.PI * 2);
+        ctx.fillStyle = '#d4af37';
+        ctx.fill();
+        ctx.fillStyle = '#14161b';
+        ctx.font = 'bold 28px serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('👑', 400, 110);
+      }
 
       // Restaurant Brand Header
       ctx.font = 'bold 36px "Crimson Text", Georgia, serif';

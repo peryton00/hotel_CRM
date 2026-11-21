@@ -13,7 +13,7 @@ import { ToastService } from '../../../core/services/toast.service';
     <div class="login-page">
       <div class="login-card">
         <div class="brand-crest">
-          <i class="ph ph-crown"></i>
+          <img src="/logo.svg" alt="Restaurant Logo" class="brand-logo-img" />
         </div>
 
         <h1 class="brand-title">GuruKripa Dhaba</h1>
@@ -103,9 +103,9 @@ import { ToastService } from '../../../core/services/toast.service';
         </form>
 
         <div class="card-footer">
-          <a routerLink="/menu/gurukripa-dhaba" class="back-home-link">
-            <i class="ph ph-arrow-left"></i>
-            <span>Back to Public Storefront</span>
+          <a routerLink="/download" class="download-app-link">
+            <i class="ph ph-download-simple"></i>
+            <span>Download Desktop POS Installer</span>
           </a>
         </div>
       </div>
@@ -145,17 +145,22 @@ import { ToastService } from '../../../core/services/toast.service';
       }
 
       .brand-crest {
-        width: 56px;
-        height: 56px;
+        width: 64px;
+        height: 64px;
         border-radius: 50%;
-        background: var(--color-onyx);
-        color: var(--color-gold);
+        background: transparent;
         display: flex;
         align-items: center;
         justify-content: center;
-        font-size: 1.75rem;
         margin: 0 auto 16px;
-        box-shadow: 0 4px 12px rgba(212, 175, 55, 0.3);
+        overflow: hidden;
+      }
+
+      .brand-logo-img {
+        width: 100%;
+        height: 100%;
+        object-fit: contain;
+        display: block;
       }
 
       .brand-title {
@@ -291,14 +296,21 @@ import { ToastService } from '../../../core/services/toast.service';
         border-top: 1px solid var(--color-border-subtle);
       }
 
-      .back-home-link {
+      .download-app-link {
         display: inline-flex;
         align-items: center;
-        gap: 6px;
+        gap: 8px;
         font-size: 0.8125rem;
-        color: var(--color-text-muted);
+        color: var(--color-gold, #d4af37);
+        text-decoration: none;
+        font-weight: 600;
+        transition: opacity 0.2s;
         &:hover {
-          color: var(--color-text-primary);
+          opacity: 0.85;
+          text-decoration: underline;
+        }
+        i {
+          font-size: 1.1rem;
         }
       }
     `,

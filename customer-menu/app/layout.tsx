@@ -5,6 +5,13 @@ import { CartProvider } from '@/lib/cart-context';
 export const metadata: Metadata = {
   title: 'Restaurant Menu & Dining Orders',
   description: 'View fresh dishes, customize options, and order directly from your table.',
+  icons: {
+    icon: [
+      { url: '/logo.svg', type: 'image/svg+xml' },
+      { url: '/favicon.ico' },
+    ],
+    apple: '/logo.svg',
+  },
 };
 
 export default function RootLayout({

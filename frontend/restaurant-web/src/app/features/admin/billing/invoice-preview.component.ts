@@ -120,16 +120,16 @@ import {
             <header class="invoice-header">
               <div class="brand-top-row">
                 <div class="brand-identity-visual">
-                  @if (restaurant()?.logoUrl && !logoFailed()) {
+                  @if (!logoFailed()) {
                     <img
-                      [src]="restaurant()?.logoUrl"
+                      [src]="restaurant()?.logoUrl || '/logo.svg'"
                       [alt]="restaurant()?.name || 'Restaurant Logo'"
                       class="restaurant-logo-img"
                       (error)="logoFailed.set(true)"
                     />
                   } @else {
                     <div class="brand-crest-fallback">
-                      <i class="ph ph-crown"></i>
+                      <i class="ph ph-receipt"></i>
                     </div>
                   }
                 </div>
@@ -399,16 +399,16 @@ import {
             <header class="invoice-header">
               <div class="brand-top-row">
                 <div class="brand-identity-visual">
-                  @if (restaurant()?.logoUrl && !logoFailed()) {
+                  @if (!logoFailed()) {
                     <img
-                      [src]="restaurant()?.logoUrl"
+                      [src]="restaurant()?.logoUrl || '/logo.svg'"
                       [alt]="restaurant()?.name || 'Restaurant Logo'"
                       class="restaurant-logo-img"
                       (error)="logoFailed.set(true)"
                     />
                   } @else {
                     <div class="brand-crest-fallback">
-                      <i class="ph ph-crown"></i>
+                      <i class="ph ph-receipt"></i>
                     </div>
                   }
                 </div>

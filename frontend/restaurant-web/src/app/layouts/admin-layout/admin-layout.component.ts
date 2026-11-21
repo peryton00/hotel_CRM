@@ -2,6 +2,7 @@ import { Component, inject, signal, computed, effect } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { RouterModule, Router } from '@angular/router';
 import { FormsModule } from '@angular/forms';
+import { environment } from '../../../environments/environment';
 import { ToastContainerComponent } from '../../shared/components/toast-container/toast-container.component';
 import { RestaurantDataService } from '../../data-access/services/restaurant-data.service';
 import { AdminAuthService } from '../../core/services/admin-auth.service';
@@ -30,7 +31,11 @@ import { ToastService } from '../../core/services/toast.service';
       <aside class="admin-sidebar" [class.mobile-open]="isMobileMenuOpen()">
         <div class="sidebar-brand">
           <div class="brand-crest">
-            <i class="ph-fill ph-crown"></i>
+            <img
+              [src]="restaurant()?.logoUrl || '/logo.svg'"
+              alt="Restaurant Logo"
+              class="brand-logo-img"
+            />
           </div>
           @if (!isSidebarCollapsed()) {
             <div class="brand-info">
@@ -249,6 +254,19 @@ import { ToastService } from '../../core/services/toast.service';
               >
                 <i class="ph ph-gear"></i>
                 <span class="nav-text" *ngIf="!isSidebarCollapsed()">Settings & Reset</span>
+              </a>
+            }
+
+            @if (!isDesktop) {
+              <a
+                routerLink="/download"
+                target="_blank"
+                class="nav-item"
+                (click)="closeMobileMenu()"
+                [attr.title]="isSidebarCollapsed() ? 'Desktop App Installer' : null"
+              >
+                <i class="ph ph-download-simple"></i>
+                <span class="nav-text" *ngIf="!isSidebarCollapsed()">Desktop App</span>
               </a>
             }
           }
@@ -680,14 +698,19 @@ import { ToastService } from '../../core/services/toast.service';
         width: 36px;
         height: 36px;
         border-radius: 10px;
-        background: linear-gradient(135deg, #f59e0b 0%, #b45309 100%);
+        background: transparent;
         display: flex;
         align-items: center;
         justify-content: center;
-        color: #0f1115;
-        font-size: 1.15rem;
         flex-shrink: 0;
-        box-shadow: 0 2px 8px rgba(245, 158, 11, 0.25);
+        overflow: hidden;
+      }
+
+      .brand-logo-img {
+        width: 100%;
+        height: 100%;
+        object-fit: contain;
+        display: block;
       }
 
       .brand-info {
@@ -1652,6 +1675,7 @@ import { ToastService } from '../../core/services/toast.service';
   ],
 })
 export class AdminLayoutComponent {
+  isDesktop = environment.isDesktop;
   auth = inject(AdminAuthService);
   themeService = inject(AdminThemeService);
   network = inject(NetworkStatusService);

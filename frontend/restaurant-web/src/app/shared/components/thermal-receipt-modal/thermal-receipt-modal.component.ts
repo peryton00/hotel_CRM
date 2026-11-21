@@ -395,11 +395,11 @@ import { renderEscPosPreviewText, EscPosPrinterConfig } from '../../../core/util
                   <!-- Top Jagged Cutter Edge -->
                   <div class="paper-jagged-edge top"></div>
 
-                  <!-- Optional Restaurant Logo Header -->
-                  @if (restaurant?.logoUrl && !tapeLogoFailed()) {
+                  <!-- Restaurant Logo Header -->
+                  @if (!tapeLogoFailed()) {
                     <div class="tape-logo-header">
                       <img
-                        [src]="restaurant?.logoUrl"
+                        [src]="restaurant?.logoUrl || '/logo.svg'"
                         [alt]="restaurant?.name || 'Restaurant Logo'"
                         class="tape-logo-img"
                         (error)="tapeLogoFailed.set(true)"

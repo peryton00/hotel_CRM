@@ -126,8 +126,8 @@ export default function MenuClient({
       <header className="bg-white dark:bg-[#16181e] border-b border-neutral-200/70 dark:border-white/10 px-4 pt-3.5 pb-3 sticky top-0 z-30 shadow-xs transition-colors duration-200">
         <div className="flex items-center justify-between gap-3">
           <div className="flex items-center gap-2.5">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#c21807] to-[#ea580c] text-white flex items-center justify-center shadow-sm shrink-0">
-              <ForkKnife size={22} weight="fill" />
+            <div className="w-10 h-10 rounded-xl overflow-hidden flex items-center justify-center shrink-0">
+              <img src="/logo.svg" alt="Restaurant Logo" className="w-full h-full object-contain" />
             </div>
             <div>
               <div className="flex items-center gap-1.5">
