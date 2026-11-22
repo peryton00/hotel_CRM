@@ -3166,8 +3166,15 @@ import { environment } from '../../../../environments/environment';
       }
 
       @keyframes pulseSeatedDot {
-        0%, 100% { opacity: 1; transform: scale(1); }
-        50% { opacity: 0.4; transform: scale(1.2); }
+        0%,
+        100% {
+          opacity: 1;
+          transform: scale(1);
+        }
+        50% {
+          opacity: 0.4;
+          transform: scale(1.2);
+        }
       }
 
       .status-select-wrap {
@@ -4573,9 +4580,13 @@ export class TableListComponent implements OnInit {
     const targetTable = this.mock.tables().find((t) => t.id === tableId);
     const tableNum = targetTable ? targetTable.number : 'Table';
     if (status === 'OCCUPIED') {
-      this.toastService.success(`Table ${tableNum} opened! QR digital ordering is now ACTIVE for seated guests.`);
+      this.toastService.success(
+        `Table ${tableNum} opened! QR digital ordering is now ACTIVE for seated guests.`,
+      );
     } else if (status === 'AVAILABLE') {
-      this.toastService.info(`Table ${tableNum} marked Available. QR ordering is LOCKED to read-only browsing.`);
+      this.toastService.info(
+        `Table ${tableNum} marked Available. QR ordering is LOCKED to read-only browsing.`,
+      );
     } else if (status === 'DIRTY') {
       this.toastService.warning(`Table ${tableNum} set to Cleaning. QR ordering is locked.`);
     } else {
