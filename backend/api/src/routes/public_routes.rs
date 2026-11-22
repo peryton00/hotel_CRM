@@ -808,8 +808,15 @@ pub async fn get_public_customer_loyalty(
 ) -> Result<Json<ApiResponse<PublicCustomerLoyaltyResponse>>, AppError> {
     let clean_phone: String = q.phone.chars().filter(|c| c.is_ascii_digit()).collect();
 
+    #[derive(sqlx::FromRow)]
+    struct CustomerLoyaltyRow {
+        name: Option<String>,
+        visit_count: Option<i32>,
+        loyalty_tier: Option<String>,
+    }
+
     // Query customer from database by phone or phone_e164
-    let row = sqlx::query!(
+    let row = sqlx::query_as::<_, CustomerLoyaltyRow>(
         r#"
         SELECT name,
                COALESCE(total_orders, visit_count, 0) AS visit_count,
@@ -826,21 +833,17 @@ pub async fn get_public_customer_loyalty(
         ORDER BY updated_at DESC
         LIMIT 1
         "#,
-        q.rid,
-        clean_phone,
-        format!("+91{}", clean_phone.trim_start_matches("91"))
     )
+    .bind(q.rid)
+    .bind(&clean_phone)
+    .bind(format!("+91{}", clean_phone.trim_start_matches("91")))
     .fetch_optional(&pool)
     .await?;
 
     let target_visits = 7;
     let (mut name, mut visits, tier) = match row {
         Some(r) => (
-            if r.name.trim().is_empty() {
-                None
-            } else {
-                Some(r.name)
-            },
+            r.name.filter(|n| !n.trim().is_empty()),
             r.visit_count.unwrap_or(0),
             r.loyalty_tier.unwrap_or_else(|| "BRONZE".to_string()),
         ),
@@ -849,7 +852,7 @@ pub async fn get_public_customer_loyalty(
 
     // Fallback: If customer record did not have a name, look for recent order under this phone
     if name.is_none() {
-        if let Ok(Some(order_name)) = sqlx::query_scalar!(
+        if let Ok(Some(order_name)) = sqlx::query_scalar::<_, String>(
             r#"
             SELECT customer_name
             FROM orders
@@ -864,19 +867,19 @@ pub async fn get_public_customer_loyalty(
             ORDER BY created_at DESC
             LIMIT 1
             "#,
-            q.rid,
-            clean_phone
         )
+        .bind(q.rid)
+        .bind(&clean_phone)
         .fetch_optional(&pool)
         .await
         {
-            name = order_name;
+            name = Some(order_name);
         }
     }
 
     // Fallback: If visit_count is 0, count orders from orders table
     if visits == 0 {
-        if let Ok(Some(Some(cnt))) = sqlx::query_scalar!(
+        if let Ok(Some(cnt)) = sqlx::query_scalar::<_, i32>(
             r#"
             SELECT COUNT(*)::int
             FROM orders
@@ -887,9 +890,9 @@ pub async fn get_public_customer_loyalty(
                 OR RIGHT(customer_phone, 10) = RIGHT($2, 10)
               )
             "#,
-            q.rid,
-            clean_phone
         )
+        .bind(q.rid)
+        .bind(&clean_phone)
         .fetch_optional(&pool)
         .await
         {
@@ -950,7 +953,7 @@ pub async fn update_public_customer_profile(
     };
 
     // Upsert customer name
-    sqlx::query!(
+    sqlx::query(
         r#"
         INSERT INTO customers (restaurant_id, name, phone, phone_e164, updated_at)
         VALUES ($1, $2, $3, $4, NOW())
@@ -959,16 +962,16 @@ pub async fn update_public_customer_profile(
             phone_e164 = COALESCE(EXCLUDED.phone_e164, customers.phone_e164),
             updated_at = NOW()
         "#,
-        req.restaurant_id,
-        trimmed_name,
-        clean_phone,
-        e164
     )
+    .bind(req.restaurant_id)
+    .bind(&trimmed_name)
+    .bind(&clean_phone)
+    .bind(&e164)
     .execute(&pool)
     .await?;
 
     // Also update any orders under this phone that had no name or older name
-    let _ = sqlx::query!(
+    let _ = sqlx::query(
         r#"
         UPDATE orders
         SET customer_name = $1
@@ -976,10 +979,10 @@ pub async fn update_public_customer_profile(
           AND (customer_phone = $3 OR customer_phone_e164 = $3 OR RIGHT(customer_phone, 10) = RIGHT($3, 10))
           AND (customer_name IS NULL OR customer_name = '' OR customer_name = 'Guest')
         "#,
-        trimmed_name,
-        req.restaurant_id,
-        clean_phone
     )
+    .bind(&trimmed_name)
+    .bind(req.restaurant_id)
+    .bind(&clean_phone)
     .execute(&pool)
     .await;
 
