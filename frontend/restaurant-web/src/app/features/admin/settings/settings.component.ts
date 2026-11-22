@@ -3502,9 +3502,9 @@ export class SettingsComponent implements OnInit {
         const duration = Math.round(t1 - t0Local);
         const isOk = Boolean(
           res &&
-            ((res as any).status === 'ok' ||
-              (res as any).status === 'alive' ||
-              (res as any).status === 'ready'),
+          ((res as any).status === 'ok' ||
+            (res as any).status === 'alive' ||
+            (res as any).status === 'ready'),
         );
 
         this.systemStatuses.update((curr) => ({
@@ -3539,9 +3539,9 @@ export class SettingsComponent implements OnInit {
         const duration = Math.round(t1 - t0Cloud);
         const isOk = Boolean(
           res &&
-            ((res as any).status === 'ok' ||
-              (res as any).status === 'alive' ||
-              (res as any).status === 'ready'),
+          ((res as any).status === 'ok' ||
+            (res as any).status === 'alive' ||
+            (res as any).status === 'ready'),
         );
 
         this.systemStatuses.update((curr) => ({

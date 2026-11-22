@@ -76,6 +76,7 @@ export const DEFAULT_MILESTONE_REWARD: LoyaltyMilestoneRewardConfig = {
   minBillPaise: 0,
   couponCode: 'VISIT7FREE',
   title: '7th Visit Celebration Reward',
-  description: 'Enjoy 50% OFF your bill (up to ₹500) as a special thank-you on your 7th dining visit.',
+  description:
+    'Enjoy 50% OFF your bill (up to ₹500) as a special thank-you on your 7th dining visit.',
   isActive: true,
 };

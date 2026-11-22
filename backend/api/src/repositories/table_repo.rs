@@ -86,7 +86,9 @@ impl TableRepository {
 
         // PentAGI Session Pinning: Ephemeral session generated when table is seated, wiped when freed
         let new_session_id: Option<Uuid> = if normalized_status == "OCCUPIED" {
-            if existing.status.to_uppercase() != "OCCUPIED" || existing.current_seating_session_id.is_none() {
+            if existing.status.to_uppercase() != "OCCUPIED"
+                || existing.current_seating_session_id.is_none()
+            {
                 Some(Uuid::new_v4())
             } else {
                 existing.current_seating_session_id

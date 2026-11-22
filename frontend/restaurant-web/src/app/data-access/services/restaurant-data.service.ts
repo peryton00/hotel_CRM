@@ -559,7 +559,10 @@ export class RestaurantDataService {
     ? this.testMock.loyaltyTiers
     : signal<LoyaltyTierConfig[]>(DEFAULT_LOYALTY_TIERS);
   readonly milestoneRewardConfig = signal<LoyaltyMilestoneRewardConfig>(
-    this.readLocal<LoyaltyMilestoneRewardConfig>('loyaltyMilestoneConfig', DEFAULT_MILESTONE_REWARD),
+    this.readLocal<LoyaltyMilestoneRewardConfig>(
+      'loyaltyMilestoneConfig',
+      DEFAULT_MILESTONE_REWARD,
+    ),
   );
   readonly loyaltyTransactions = this.testMock
     ? this.testMock.loyaltyTransactions
@@ -2224,7 +2227,10 @@ export class RestaurantDataService {
     }
   }
 
-  updateMilestoneRewardConfig(config: LoyaltyMilestoneRewardConfig): { success: boolean; error?: string } {
+  updateMilestoneRewardConfig(config: LoyaltyMilestoneRewardConfig): {
+    success: boolean;
+    error?: string;
+  } {
     this.milestoneRewardConfig.set(config);
     this.saveLocal('loyaltyMilestoneConfig', config);
 
@@ -2233,9 +2239,10 @@ export class RestaurantDataService {
       const code = config.couponCode.toUpperCase().trim();
       const existing = this.coupons().find((c) => c.code.toUpperCase() === code);
       const discountType = config.rewardType === 'FLAT_DISCOUNT' ? 'FLAT' : 'PERCENT';
-      const discountValue = config.rewardType === 'FLAT_DISCOUNT'
-        ? Math.round((config.flatDiscountPaise || 30000) / 100)
-        : (config.discountPercent || 50);
+      const discountValue =
+        config.rewardType === 'FLAT_DISCOUNT'
+          ? Math.round((config.flatDiscountPaise || 30000) / 100)
+          : config.discountPercent || 50;
 
       if (!existing) {
         this.createCoupon({
@@ -2245,7 +2252,9 @@ export class RestaurantDataService {
           discount_type: discountType,
           discount_value: discountValue,
           min_order_amount: Math.round((config.minBillPaise || 0) / 100),
-          max_discount_amount: config.maxDiscountPaise ? Math.round(config.maxDiscountPaise / 100) : 500,
+          max_discount_amount: config.maxDiscountPaise
+            ? Math.round(config.maxDiscountPaise / 100)
+            : 500,
           is_active: true,
           valid_from: new Date().toISOString(),
           valid_until: new Date(Date.now() + 365 * 24 * 3600 * 1000).toISOString(),

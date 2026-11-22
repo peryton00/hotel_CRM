@@ -287,8 +287,12 @@ pub async fn create_public_order(
         .await?;
 
         if let Some(oid) = recent_order_id {
-            if let Some(existing_order) = OrderRepository::get_order(&pool, req.restaurant_id, oid).await? {
-                tracing::warn!("PentAGI: Blocked duplicate order submission within 4s window for order {oid}");
+            if let Some(existing_order) =
+                OrderRepository::get_order(&pool, req.restaurant_id, oid).await?
+            {
+                tracing::warn!(
+                    "PentAGI: Blocked duplicate order submission within 4s window for order {oid}"
+                );
                 return Ok(Json(ApiResponse::success(existing_order)));
             }
         }
@@ -316,7 +320,9 @@ pub async fn create_public_order(
                         "TABLE_UNSEATED: Table is currently unseated. Please ask restaurant staff to seat this table before ordering.".to_string(),
                     ));
                 }
-                if let (Some(tbl_session), Some(req_session)) = (current_session, req.seating_session_id) {
+                if let (Some(tbl_session), Some(req_session)) =
+                    (current_session, req.seating_session_id)
+                {
                     if tbl_session != req_session {
                         return Err(AppError::Forbidden(
                             "EXPIRED_SEATING_SESSION: Dining session has concluded or is invalid. Please refresh the menu.".to_string(),
@@ -325,7 +331,9 @@ pub async fn create_public_order(
                 }
             }
             None => {
-                return Err(AppError::NotFound("Table not found for this restaurant".to_string()));
+                return Err(AppError::NotFound(
+                    "Table not found for this restaurant".to_string(),
+                ));
             }
         }
     } else if let Some(ref num) = req.table_number {
@@ -349,7 +357,9 @@ pub async fn create_public_order(
                         "TABLE_UNSEATED: Table is currently unseated. Please ask restaurant staff to seat this table before ordering.".to_string(),
                     ));
                 }
-                if let (Some(tbl_session), Some(req_session)) = (current_session, req.seating_session_id) {
+                if let (Some(tbl_session), Some(req_session)) =
+                    (current_session, req.seating_session_id)
+                {
                     if tbl_session != req_session {
                         return Err(AppError::Forbidden(
                             "EXPIRED_SEATING_SESSION: Dining session has concluded or is invalid. Please refresh the menu.".to_string(),
@@ -358,7 +368,9 @@ pub async fn create_public_order(
                 }
             }
             None => {
-                return Err(AppError::NotFound("Table not found for this restaurant".to_string()));
+                return Err(AppError::NotFound(
+                    "Table not found for this restaurant".to_string(),
+                ));
             }
         }
     }
@@ -453,12 +465,21 @@ pub async fn create_public_reservation(
     Json(req): Json<PublicReservationRequest>,
 ) -> Result<Json<ApiResponse<crate::models::customer::Reservation>>, AppError> {
     // PentAGI Honeypot anti-bot check
-    if req.honeypot.as_ref().map(|s| !s.trim().is_empty()).unwrap_or(false) {
-        return Err(AppError::BadRequest("Invalid submission request".to_string()));
+    if req
+        .honeypot
+        .as_ref()
+        .map(|s| !s.trim().is_empty())
+        .unwrap_or(false)
+    {
+        return Err(AppError::BadRequest(
+            "Invalid submission request".to_string(),
+        ));
     }
 
     if req.customer_name.trim().len() < 2 {
-        return Err(AppError::BadRequest("Name must be at least 2 characters".to_string()));
+        return Err(AppError::BadRequest(
+            "Name must be at least 2 characters".to_string(),
+        ));
     }
     let clean_phone = req
         .customer_phone
@@ -466,16 +487,22 @@ pub async fn create_public_reservation(
         .filter(|c| c.is_ascii_digit())
         .collect::<String>();
     if clean_phone.len() < 10 {
-        return Err(AppError::BadRequest("Please provide a valid 10-digit mobile number".to_string()));
+        return Err(AppError::BadRequest(
+            "Please provide a valid 10-digit mobile number".to_string(),
+        ));
     }
     if req.guest_count < 1 || req.guest_count > 30 {
-        return Err(AppError::BadRequest("Party size must be between 1 and 30 guests".to_string()));
+        return Err(AppError::BadRequest(
+            "Party size must be between 1 and 30 guests".to_string(),
+        ));
     }
 
     // PentAGI & Gravitas trust boundary: prevent booking a date before today or in the past
     let now = chrono::Utc::now();
     if req.reservation_time < now - chrono::Duration::minutes(15) {
-        return Err(AppError::BadRequest("Reservation date cannot be before today".to_string()));
+        return Err(AppError::BadRequest(
+            "Reservation date cannot be before today".to_string(),
+        ));
     }
 
     // PentAGI Rapid Double-Click Defense:
@@ -499,7 +526,10 @@ pub async fn create_public_reservation(
     .await?;
 
     if let Some(existing) = recent_reservation {
-        tracing::warn!("PentAGI: Blocked duplicate reservation submission within 5s window for reservation {}", existing.id);
+        tracing::warn!(
+            "PentAGI: Blocked duplicate reservation submission within 5s window for reservation {}",
+            existing.id
+        );
         return Ok(Json(ApiResponse::success(existing)));
     }
 
@@ -513,7 +543,8 @@ pub async fn create_public_reservation(
         special_requests: req.special_requests.map(|s| s.trim().to_string()),
     };
 
-    let reservation = CustomerRepository::create_reservation(&pool, req.restaurant_id, create_req).await?;
+    let reservation =
+        CustomerRepository::create_reservation(&pool, req.restaurant_id, create_req).await?;
 
     crate::ws::broadcast_new_reservation(&reservation);
 
@@ -537,12 +568,21 @@ pub async fn create_public_feedback(
     Json(req): Json<PublicFeedbackRequest>,
 ) -> Result<Json<ApiResponse<crate::models::feedback::CustomerFeedback>>, AppError> {
     // PentAGI Honeypot anti-bot check
-    if req.honeypot.as_ref().map(|s| !s.trim().is_empty()).unwrap_or(false) {
-        return Err(AppError::BadRequest("Invalid submission request".to_string()));
+    if req
+        .honeypot
+        .as_ref()
+        .map(|s| !s.trim().is_empty())
+        .unwrap_or(false)
+    {
+        return Err(AppError::BadRequest(
+            "Invalid submission request".to_string(),
+        ));
     }
 
     if req.rating < 1 || req.rating > 5 {
-        return Err(AppError::BadRequest("Rating must be between 1 and 5 stars".to_string()));
+        return Err(AppError::BadRequest(
+            "Rating must be between 1 and 5 stars".to_string(),
+        ));
     }
 
     let clean_phone = req
@@ -571,7 +611,10 @@ pub async fn create_public_feedback(
         .await?;
 
         if let Some(existing) = recent_feedback {
-            tracing::warn!("PentAGI: Blocked duplicate feedback submission within 5s window for feedback {}", existing.id);
+            tracing::warn!(
+                "PentAGI: Blocked duplicate feedback submission within 5s window for feedback {}",
+                existing.id
+            );
             return Ok(Json(ApiResponse::success(existing)));
         }
     }
@@ -584,7 +627,8 @@ pub async fn create_public_feedback(
         comments: req.comments.map(|s| s.trim().to_string()),
     };
 
-    let feedback = FeedbackRepository::create_feedback(&pool, req.restaurant_id, create_req).await?;
+    let feedback =
+        FeedbackRepository::create_feedback(&pool, req.restaurant_id, create_req).await?;
 
     Ok(Json(ApiResponse::success(feedback)))
 }
@@ -751,7 +795,9 @@ pub async fn get_public_loyalty_config(
         flat_discount_paise: Some(30000),
         coupon_code: "VISIT7FREE".to_string(),
         title: "7th Visit Celebration Reward".to_string(),
-        description: "Enjoy 50% OFF your bill (up to ₹500) as a special thank-you on your 7th dining visit.".to_string(),
+        description:
+            "Enjoy 50% OFF your bill (up to ₹500) as a special thank-you on your 7th dining visit."
+                .to_string(),
         is_active: true,
     })))
 }
@@ -790,7 +836,11 @@ pub async fn get_public_customer_loyalty(
     let target_visits = 7;
     let (mut name, mut visits, tier) = match row {
         Some(r) => (
-            if r.name.trim().is_empty() { None } else { Some(r.name) },
+            if r.name.trim().is_empty() {
+                None
+            } else {
+                Some(r.name)
+            },
             r.visit_count.unwrap_or(0),
             r.loyalty_tier.unwrap_or_else(|| "BRONZE".to_string()),
         ),
@@ -826,7 +876,7 @@ pub async fn get_public_customer_loyalty(
 
     // Fallback: If visit_count is 0, count orders from orders table
     if visits == 0 {
-        if let Ok(Some(order_count)) = sqlx::query_scalar!(
+        if let Ok(Some(Some(cnt))) = sqlx::query_scalar!(
             r#"
             SELECT COUNT(*)::int
             FROM orders
@@ -843,10 +893,8 @@ pub async fn get_public_customer_loyalty(
         .fetch_optional(&pool)
         .await
         {
-            if let Some(cnt) = order_count {
-                if cnt > 0 {
-                    visits = cnt;
-                }
+            if cnt > 0 {
+                visits = cnt;
             }
         }
     }
@@ -862,7 +910,9 @@ pub async fn get_public_customer_loyalty(
         milestone_unlocked,
         eligible_coupon_code: "VISIT7FREE".to_string(),
         reward_title: "7th Visit Celebration Reward".to_string(),
-        reward_description: "Enjoy 50% OFF your bill (up to ₹500) as a special thank-you on your 7th dining visit.".to_string(),
+        reward_description:
+            "Enjoy 50% OFF your bill (up to ₹500) as a special thank-you on your 7th dining visit."
+                .to_string(),
         discount_percent: Some(50.0),
         max_discount_paise: Some(50000),
     })))
@@ -885,7 +935,9 @@ pub async fn update_public_customer_profile(
     let trimmed_name = req.name.trim().to_string();
 
     if clean_phone.len() < 10 {
-        return Err(AppError::BadRequest("Valid 10-digit mobile number required".to_string()));
+        return Err(AppError::BadRequest(
+            "Valid 10-digit mobile number required".to_string(),
+        ));
     }
     if trimmed_name.is_empty() {
         return Err(AppError::BadRequest("Name cannot be empty".to_string()));

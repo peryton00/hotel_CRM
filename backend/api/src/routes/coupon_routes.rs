@@ -12,8 +12,8 @@ use crate::{
     models::{
         common::ApiResponse,
         coupon::{
-            CreateCouponRequest, RedeemCouponRequest, UpdateCouponRequest, UpdateCouponStatusRequest,
-            ValidateCouponRequest,
+            CreateCouponRequest, RedeemCouponRequest, UpdateCouponRequest,
+            UpdateCouponStatusRequest, ValidateCouponRequest,
         },
     },
     repositories::CouponRepository,

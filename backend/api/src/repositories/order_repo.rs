@@ -103,7 +103,10 @@ impl OrderRepository {
             .map(|s| s.trim())
             .filter(|s| s.len() >= 10 && *s != "+919999999999")
         {
-            let clean_phone = phone.chars().filter(|c| c.is_ascii_digit()).collect::<String>();
+            let clean_phone = phone
+                .chars()
+                .filter(|c| c.is_ascii_digit())
+                .collect::<String>();
             let phone_to_match = if clean_phone.len() >= 10 {
                 &clean_phone[clean_phone.len() - 10..]
             } else {
@@ -160,7 +163,8 @@ impl OrderRepository {
         };
 
         // 3. Insert order
-        let generated_order_number = format!("ORD-{}", &Uuid::new_v4().to_string()[..8].to_uppercase());
+        let generated_order_number =
+            format!("ORD-{}", Uuid::new_v4().to_string()[..8].to_uppercase());
         let order = sqlx::query_as::<_, Order>(
             r#"
             INSERT INTO orders (
@@ -426,7 +430,8 @@ impl OrderRepository {
         .fetch_all(pool)
         .await?;
 
-        let mut items_map: std::collections::HashMap<Uuid, Vec<OrderItem>> = std::collections::HashMap::new();
+        let mut items_map: std::collections::HashMap<Uuid, Vec<OrderItem>> =
+            std::collections::HashMap::new();
         for item in all_items {
             items_map.entry(item.order_id).or_default().push(item);
         }
@@ -688,13 +693,7 @@ impl OrderRepository {
         tx.commit().await?;
 
         if let Some((tbl_id, tbl_num)) = released_table_info {
-            crate::ws::broadcast_table_status(
-                tbl_id,
-                &tbl_num,
-                "AVAILABLE",
-                true,
-                None,
-            );
+            crate::ws::broadcast_table_status(tbl_id, &tbl_num, "AVAILABLE", true, None);
         }
 
         Ok(OrderWithItems {

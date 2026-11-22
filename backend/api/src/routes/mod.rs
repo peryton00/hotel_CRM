@@ -212,10 +212,22 @@ pub fn create_router(state: AppState) -> Router {
             get(public_routes::get_public_restaurant_info),
         )
         .route("/public/tables", get(public_routes::list_public_tables))
-        .route("/public/loyalty-config", get(public_routes::get_public_loyalty_config))
-        .route("/public/customer/loyalty", get(public_routes::get_public_customer_loyalty))
-        .route("/public/customer-lookup", get(public_routes::get_public_customer_loyalty))
-        .route("/public/customer/profile", post(public_routes::update_public_customer_profile))
+        .route(
+            "/public/loyalty-config",
+            get(public_routes::get_public_loyalty_config),
+        )
+        .route(
+            "/public/customer/loyalty",
+            get(public_routes::get_public_customer_loyalty),
+        )
+        .route(
+            "/public/customer-lookup",
+            get(public_routes::get_public_customer_loyalty),
+        )
+        .route(
+            "/public/customer/profile",
+            post(public_routes::update_public_customer_profile),
+        )
         // WebSocket & SSE Real-time streams
         .route("/ws/orders", get(ws_routes::ws_handler))
         .route("/events", get(crate::ws::sse_handler))

@@ -651,10 +651,7 @@ import { EmptyStateComponent } from '../../../shared/components/empty-state/empt
 
               <div class="form-group">
                 <label class="checkbox-inline">
-                  <input
-                    type="checkbox"
-                    [(ngModel)]="editingMilestoneConfig.isActive"
-                  />
+                  <input type="checkbox" [(ngModel)]="editingMilestoneConfig.isActive" />
                   <span>Active &amp; Visible to Eligible Diners on Customer Web</span>
                 </label>
               </div>
@@ -761,7 +758,9 @@ import { EmptyStateComponent } from '../../../shared/components/empty-state/empt
 
       /* Milestone Policy Highlight Card */
       .milestone-policy-card {
-        background: linear-gradient(135deg, rgba(234, 179, 8, 0.08) 0%, rgba(249, 115, 22, 0.05) 100%), var(--color-surface);
+        background:
+          linear-gradient(135deg, rgba(234, 179, 8, 0.08) 0%, rgba(249, 115, 22, 0.05) 100%),
+          var(--color-surface);
         border: 1px solid rgba(234, 179, 8, 0.35);
         border-radius: var(--radius-lg);
         padding: 22px;
@@ -1293,7 +1292,9 @@ export class LoyaltyManagementComponent {
       this.toastService.warning('Please provide a valid coupon code for the milestone reward.');
       return;
     }
-    this.editingMilestoneConfig.couponCode = this.editingMilestoneConfig.couponCode.toUpperCase().trim();
+    this.editingMilestoneConfig.couponCode = this.editingMilestoneConfig.couponCode
+      .toUpperCase()
+      .trim();
     this.dataService.updateMilestoneRewardConfig(this.editingMilestoneConfig);
     this.toastService.success(
       `Milestone policy updated: ${this.editingMilestoneConfig.targetVisits} visits reward set (${this.editingMilestoneConfig.couponCode})`,
