@@ -3,7 +3,6 @@ import { CommonModule } from '@angular/common';
 import { RouterModule, Router } from '@angular/router';
 import { FormsModule } from '@angular/forms';
 import { environment } from '../../../environments/environment';
-import { ToastContainerComponent } from '../../shared/components/toast-container/toast-container.component';
 import { RestaurantDataService } from '../../data-access/services/restaurant-data.service';
 import { AdminAuthService } from '../../core/services/admin-auth.service';
 import { AdminThemeService } from '../../core/services/admin-theme.service';
@@ -14,7 +13,7 @@ import { ToastService } from '../../core/services/toast.service';
 @Component({
   selector: 'app-admin-layout',
   standalone: true,
-  imports: [CommonModule, RouterModule, FormsModule, ToastContainerComponent],
+  imports: [CommonModule, RouterModule, FormsModule],
   template: `
     <div
       class="admin-shell"
@@ -573,9 +572,6 @@ import { ToastService } from '../../core/services/toast.service';
           </div>
         </div>
       }
-
-      <!-- Global Toast Alerts -->
-      <app-toast-container></app-toast-container>
     </div>
   `,
   styles: [

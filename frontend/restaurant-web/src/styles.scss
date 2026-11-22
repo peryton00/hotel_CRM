@@ -8,6 +8,13 @@
 @use './styles/mixins';
 @use './styles/utilities';
 @use './styles/admin-dark';
+@use 'dynaura/styles.css';
+
+// Dynaura Dynamic Island Brand Enhancements
+.dynaura-root {
+  --dynaura-offset: 16px;
+  z-index: 99999;
+}
 
 // =============================================================================
 // Global Print Optimization

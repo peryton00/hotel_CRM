@@ -6,6 +6,7 @@ import { useCart } from '@/lib/cart-context';
 import { placeOrder, getCustomerOrders, getTable } from '@/lib/api';
 import type { CustomerPastOrder, TableInfo } from '@/lib/types';
 import { ThemeToggle } from '@/components/ThemeToggle';
+import { dynaura } from 'dynaura';
 import {
   ShoppingCart,
   ArrowLeft,
@@ -22,6 +23,7 @@ import {
   User,
   X,
   Flame,
+  Lock,
 } from '@phosphor-icons/react';
 
 const fmt = (paise: number) => `₹${(paise / 100).toFixed(2)}`;
@@ -141,6 +143,7 @@ function CheckoutContent() {
   }, [sortedPastOrders]);
 
   // Tax rates dynamically loaded from database (configured by admin)
+  const isTableSeated = tableInfo?.status === 'OCCUPIED' && tableInfo?.ordering_enabled !== false;
   const gstRate = typeof tableInfo?.gst_rate === 'number' ? tableInfo.gst_rate : 5.0;
   const cgstRate = typeof tableInfo?.cgst_rate === 'number' ? tableInfo.cgst_rate : gstRate / 2;
   const sgstRate = typeof tableInfo?.sgst_rate === 'number' ? tableInfo.sgst_rate : gstRate / 2;
@@ -169,6 +172,15 @@ function CheckoutContent() {
 
     if (items.length === 0) {
       setError('Your cart is empty. Add dishes from the menu.');
+      return;
+    }
+
+    if (!isTableSeated) {
+      setError(`Table ${tableInfo.table_number || ''} is unseated. Please ask floor staff to seat you before placing your order.`);
+      dynaura.warning({
+        title: `Table ${tableInfo.table_number || ''} Unseated`,
+        description: 'Please ask floor captain to open your table before placing an order.',
+      });
       return;
     }
 
@@ -343,25 +355,46 @@ function CheckoutContent() {
           </div>
         )}
 
-        {/* Table Banner Card */}
-        <div className="bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200/70 dark:border-emerald-800/40 rounded-2xl p-3 flex items-center justify-between">
-          <div className="flex items-center gap-2.5">
-            <div className="text-emerald-700 dark:text-emerald-400">
-              <Armchair size={22} weight="duotone" />
-            </div>
-            <div>
-              <div className="font-bold text-emerald-950 dark:text-emerald-200 text-xs">
-                Dine-in at Table {tableInfo.table_number || 'Dining'}
+        {/* Table Banner Card (Pattern 3: Host-Seated State Machine) */}
+        {isTableSeated ? (
+          <div className="bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200/70 dark:border-emerald-800/40 rounded-2xl p-3 flex items-center justify-between shadow-xs">
+            <div className="flex items-center gap-2.5">
+              <div className="text-emerald-700 dark:text-emerald-400">
+                <Armchair size={22} weight="duotone" />
               </div>
-              <div className="text-[10px] text-emerald-700 dark:text-emerald-400 mt-0.5">
-                Instant Kitchen Dispatch • Live Table Sync
+              <div>
+                <div className="font-bold text-emerald-950 dark:text-emerald-200 text-xs">
+                  Dine-in at Table {tableInfo.table_number || 'Dining'}
+                </div>
+                <div className="text-[10px] text-emerald-700 dark:text-emerald-400 mt-0.5">
+                  Instant Kitchen Dispatch • Live Table Sync
+                </div>
               </div>
             </div>
+            <span className="text-[10px] bg-emerald-600 text-white font-bold px-2 py-0.5 rounded-full">
+              Active
+            </span>
           </div>
-          <span className="text-[10px] bg-emerald-600 text-white font-bold px-2 py-0.5 rounded-full">
-            Active
-          </span>
-        </div>
+        ) : (
+          <div className="bg-gradient-to-r from-amber-50 to-orange-50 dark:from-amber-950/50 dark:to-orange-950/30 border border-amber-300/80 dark:border-amber-700/60 rounded-2xl p-3 flex items-center justify-between shadow-xs">
+            <div className="flex items-center gap-2.5">
+              <div className="w-8 h-8 rounded-xl bg-amber-500/20 text-amber-700 dark:text-amber-400 flex items-center justify-center shrink-0">
+                <Lock size={18} weight="bold" />
+              </div>
+              <div>
+                <div className="font-extrabold text-amber-950 dark:text-amber-200 text-xs uppercase tracking-wide">
+                  Table {tableInfo.table_number || 'Dining'} • Unseated
+                </div>
+                <div className="text-[10px] text-amber-800/90 dark:text-amber-300/80 mt-0.5">
+                  Ask floor captain to seat table to activate order placement
+                </div>
+              </div>
+            </div>
+            <span className="text-[10px] bg-amber-600 text-white font-bold px-2 py-0.5 rounded-full uppercase tracking-wider">
+              Locked
+            </span>
+          </div>
+        )}
 
         {/* Current Round (In Cart) or Empty Cart State (Hidden if phone is registered) */}
         {items.length > 0 ? (
@@ -728,7 +761,21 @@ function CheckoutContent() {
                   </div>
                 </div>
 
-                {tableInfo.is_pos_online === false ? (
+                {!isTableSeated ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      dynaura.warning({
+                        title: `Table ${tableInfo.table_number || ''} is Unseated`,
+                        description: 'Please ask restaurant staff to seat this table before ordering.',
+                      });
+                    }}
+                    className="flex-1 bg-neutral-200 dark:bg-white/10 hover:bg-neutral-300 dark:hover:bg-white/15 text-neutral-600 dark:text-neutral-300 font-extrabold text-xs py-3.5 px-4 rounded-2xl shadow-xs flex items-center justify-center gap-2 transition-all cursor-pointer active:scale-95 border border-neutral-300/80 dark:border-white/10"
+                  >
+                    <Lock size={16} weight="bold" />
+                    <span>Table Unseated • Ask Host</span>
+                  </button>
+                ) : tableInfo.is_pos_online === false ? (
                   <button
                     type="button"
                     onClick={() => setShowOfflineWaiterModal(true)}

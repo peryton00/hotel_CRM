@@ -365,17 +365,22 @@
   }
 }
 
-// Modals
+// Modals & Dialogs
 .modal-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(18, 18, 18, 0.65);
+  width: 100vw;
+  height: 100vh;
+  background: rgba(15, 23, 42, 0.72);
   backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 1000;
+  z-index: 10000;
   padding: 16px;
+  box-sizing: border-box;
+  overflow-y: auto;
 }
 
 .modal-card {
@@ -726,11 +731,18 @@
 @keyframes adminPageFade {
   from {
     opacity: 0;
-    transform: translateY(8px);
   }
   to {
     opacity: 1;
-    transform: translateY(0);
+  }
+}
+
+@keyframes modalBackdropFade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
   }
 }
 
@@ -775,7 +787,7 @@
   }
 }
 
-// Page View Entrances
+// Page View Entrances — Opacity-only animation without transform so page wrappers never become containing blocks for position: fixed modals or drawers
 .admin-content,
 .admin-main router-outlet + *,
 .dashboard-container,
@@ -786,8 +798,7 @@
 .inventory-container,
 .reports-container,
 .staff-container {
-  animation: adminPageFade 0.32s cubic-bezier(0.16, 1, 0.3, 1) both;
-  will-change: transform, opacity;
+  animation: adminPageFade 0.2s ease-out;
 }
 
 // Card Micro-interactions & Tactile Depth
@@ -841,9 +852,10 @@
 }
 
 .modal-overlay,
-.drawer-backdrop {
-  animation: adminPageFade 0.22s cubic-bezier(0.16, 1, 0.3, 1) both;
-  backdrop-blur-sm: 4px;
+.drawer-backdrop,
+.side-drawer-backdrop,
+.inspector-drawer-backdrop {
+  animation: modalBackdropFade 0.2s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 // Live Status Pulse Pips

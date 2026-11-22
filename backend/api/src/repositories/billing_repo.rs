@@ -68,6 +68,12 @@ impl BillingRepository {
         .await?
         .ok_or_else(|| AppError::NotFound("Order not found".to_string()))?;
 
+        if order.status.to_lowercase() == "cancelled" {
+            return Err(AppError::BadRequest(
+                "Cannot settle a cancelled order".to_string(),
+            ));
+        }
+
         if order.payment_status.to_lowercase() == "paid" {
             return Err(AppError::Conflict(
                 "Order has already been fully settled".to_string(),
@@ -238,6 +244,12 @@ impl BillingRepository {
         .fetch_optional(&mut *tx)
         .await?
         .ok_or_else(|| AppError::NotFound("Order not found".to_string()))?;
+
+        if order.status.to_lowercase() == "cancelled" {
+            return Err(AppError::BadRequest(
+                "Cannot split a cancelled order".to_string(),
+            ));
+        }
 
         // Cannot split an already paid order
         if order.payment_status == "paid" {

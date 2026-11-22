@@ -7504,6 +7504,9 @@ export class OrderQueueComponent {
 
     this.isCancelling.set(false);
     if (res.success) {
+      if (ord.tableId || ord.tableNumber) {
+        this.mock.recalculateTableStatus(ord.tableId || ord.tableNumber!);
+      }
       this.toastService.success(
         `Order ${ord.orderNumber} has been cancelled. Inventory & table released.`,
       );

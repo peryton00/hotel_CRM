@@ -77,17 +77,6 @@ pub async fn get_public_table(
     .await?
     .ok_or_else(|| AppError::NotFound("Table not found".to_string()))?;
 
-    if !table.ordering_enabled {
-        return Err(AppError::Forbidden(
-            "Ordering is currently disabled for this table".to_string(),
-        ));
-    }
-    if table.status == "cleaning" {
-        return Err(AppError::BadRequest(
-            "Table is being cleaned. Please wait a moment.".to_string(),
-        ));
-    }
-
     let is_online = crate::gateway::GatewayHeartbeatClient::is_restaurant_online(&pool, q.rid)
         .await
         || crate::ws::has_active_crm_clients();
@@ -243,6 +232,51 @@ pub async fn create_public_order(
         return Err(AppError::Conflict(
             "RESTAURANT_POS_OFFLINE: Restaurant kitchen system is currently offline. Please call staff to place your order directly.".to_string(),
         ));
+    }
+
+    // Pattern 3 Host-Seated Verification: Ensure table is seated (OCCUPIED) and ordering_enabled
+    if let Some(tbl_id) = req.table_id {
+        let table_record: Option<(String, bool)> = sqlx::query_as(
+            "SELECT status::text, ordering_enabled FROM tables WHERE id = $1 AND restaurant_id = $2",
+        )
+        .bind(tbl_id)
+        .bind(req.restaurant_id)
+        .fetch_optional(&pool)
+        .await?;
+
+        if let Some((status, ordering_enabled)) = table_record {
+            if !ordering_enabled {
+                return Err(AppError::Forbidden(
+                    "Ordering is currently disabled for this table.".to_string(),
+                ));
+            }
+            if status != "OCCUPIED" {
+                return Err(AppError::Forbidden(
+                    "TABLE_UNSEATED: Table is currently unseated. Please ask restaurant staff to seat this table before ordering.".to_string(),
+                ));
+            }
+        }
+    } else if let Some(ref num) = req.table_number {
+        let table_record: Option<(String, bool)> = sqlx::query_as(
+            "SELECT status::text, ordering_enabled FROM tables WHERE (number = $1 OR table_number = $1) AND restaurant_id = $2",
+        )
+        .bind(num)
+        .bind(req.restaurant_id)
+        .fetch_optional(&pool)
+        .await?;
+
+        if let Some((status, ordering_enabled)) = table_record {
+            if !ordering_enabled {
+                return Err(AppError::Forbidden(
+                    "Ordering is currently disabled for this table.".to_string(),
+                ));
+            }
+            if status != "OCCUPIED" {
+                return Err(AppError::Forbidden(
+                    "TABLE_UNSEATED: Table is currently unseated. Please ask restaurant staff to seat this table before ordering.".to_string(),
+                ));
+            }
+        }
     }
 
     let create_req = CreateOrderRequest {

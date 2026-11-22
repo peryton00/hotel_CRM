@@ -574,6 +574,34 @@ import { environment } from '../../../../environments/environment';
                   <code class="token-code">{{ tbl.qrToken }}</code>
                 </div>
 
+                <!-- Host-Seating Quick Action (Pattern 3: Toast / OpenTable Model) -->
+                @if (tbl.status === 'AVAILABLE') {
+                  <button
+                    type="button"
+                    class="btn btn-sm btn-seat-action"
+                    (click)="onStatusChange(tbl.id, 'OCCUPIED'); $event.stopPropagation()"
+                    title="Seat incoming guests and unlock digital QR ordering for this table"
+                  >
+                    <i class="ph ph-hand-pointing"></i>
+                    <span>Seat Guests (Open Table)</span>
+                  </button>
+                } @else if (tbl.status === 'DIRTY') {
+                  <button
+                    type="button"
+                    class="btn btn-sm btn-clean-action"
+                    (click)="onStatusChange(tbl.id, 'AVAILABLE'); $event.stopPropagation()"
+                    title="Mark cleaned and ready for new guests"
+                  >
+                    <i class="ph ph-broom"></i>
+                    <span>Mark Cleaned (Available)</span>
+                  </button>
+                } @else if (tbl.status === 'OCCUPIED') {
+                  <div class="seated-badge-row">
+                    <span class="seated-live-dot"></span>
+                    <span class="seated-text">Seated &bull; QR Ordering Active</span>
+                  </div>
+                }
+
                 <!-- Table Status Selector -->
                 <div class="status-select-wrap">
                   <label class="text-xs text-muted" [attr.for]="'status-' + tbl.id"
@@ -775,6 +803,28 @@ import { environment } from '../../../../environments/environment';
                     <span class="choice-dot"></span> Cleaning
                   </button>
                 </div>
+
+                @if (insTbl.status === 'AVAILABLE') {
+                  <button
+                    type="button"
+                    class="btn btn-seat-action"
+                    style="margin-top: 10px; width: 100%; justify-content: center;"
+                    (click)="onStatusChange(insTbl.id, 'OCCUPIED')"
+                  >
+                    <i class="ph ph-hand-pointing"></i>
+                    <span>Seat Guests (Activate QR Ordering)</span>
+                  </button>
+                } @else if (insTbl.status === 'DIRTY') {
+                  <button
+                    type="button"
+                    class="btn btn-clean-action"
+                    style="margin-top: 10px; width: 100%; justify-content: center;"
+                    (click)="onStatusChange(insTbl.id, 'AVAILABLE')"
+                  >
+                    <i class="ph ph-broom"></i>
+                    <span>Mark Cleaned (Available)</span>
+                  </button>
+                }
               </div>
 
               <!-- Active Dining Order Info -->
@@ -3050,6 +3100,76 @@ import { environment } from '../../../../environments/environment';
         font-weight: 600;
       }
 
+      .btn-seat-action {
+        background: linear-gradient(135deg, #059669 0%, #10b981 100%);
+        color: #ffffff;
+        border: none;
+        font-weight: 700;
+        font-size: 0.8125rem;
+        padding: 7px 12px;
+        border-radius: var(--radius-md);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+        box-shadow: 0 2px 6px rgba(16, 185, 129, 0.25);
+        cursor: pointer;
+        transition: all 0.2s ease;
+        &:hover {
+          filter: brightness(1.08);
+          transform: translateY(-1px);
+        }
+        &:active {
+          transform: translateY(0);
+        }
+      }
+
+      .btn-clean-action {
+        background: linear-gradient(135deg, #d97706 0%, #f59e0b 100%);
+        color: #ffffff;
+        border: none;
+        font-weight: 700;
+        font-size: 0.8125rem;
+        padding: 7px 12px;
+        border-radius: var(--radius-md);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+        box-shadow: 0 2px 6px rgba(245, 158, 11, 0.25);
+        cursor: pointer;
+        transition: all 0.2s ease;
+        &:hover {
+          filter: brightness(1.08);
+        }
+      }
+
+      .seated-badge-row {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        padding: 5px 9px;
+        border-radius: var(--radius-sm);
+        background: rgba(16, 185, 129, 0.1);
+        border: 1px solid rgba(16, 185, 129, 0.25);
+        font-size: 0.75rem;
+        font-weight: 700;
+        color: #059669;
+      }
+
+      .seated-live-dot {
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+        background: #10b981;
+        animation: pulseSeatedDot 2s infinite;
+      }
+
+      @keyframes pulseSeatedDot {
+        0%, 100% { opacity: 1; transform: scale(1); }
+        50% { opacity: 0.4; transform: scale(1.2); }
+      }
+
       .status-select-wrap {
         display: flex;
         flex-direction: column;
@@ -4450,7 +4570,17 @@ export class TableListComponent implements OnInit {
     if (currentIns && currentIns.id === tableId) {
       this.selectedTableForInspector.set({ ...currentIns, status });
     }
-    this.toastService.success(`Table status updated to ${status}`);
+    const targetTable = this.mock.tables().find((t) => t.id === tableId);
+    const tableNum = targetTable ? targetTable.number : 'Table';
+    if (status === 'OCCUPIED') {
+      this.toastService.success(`Table ${tableNum} opened! QR digital ordering is now ACTIVE for seated guests.`);
+    } else if (status === 'AVAILABLE') {
+      this.toastService.info(`Table ${tableNum} marked Available. QR ordering is LOCKED to read-only browsing.`);
+    } else if (status === 'DIRTY') {
+      this.toastService.warning(`Table ${tableNum} set to Cleaning. QR ordering is locked.`);
+    } else {
+      this.toastService.success(`Table ${tableNum} status updated to ${status}`);
+    }
   }
 
   onStaffAssign(tableId: string, staffIdStr: string): void {

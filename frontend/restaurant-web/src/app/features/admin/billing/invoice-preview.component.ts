@@ -390,6 +390,13 @@ import {
               <div class="invoice-banner-ribbon duplicate">
                 *** DUPLICATE TAX INVOICE — REPRINT (COPY #{{ ord.printCount }}) ***
               </div>
+            } @else if (ord.status === 'CANCELLED') {
+              <div
+                class="invoice-banner-ribbon cancelled"
+                style="background: rgba(239, 68, 68, 0.12); color: #dc2626; border-color: rgba(239, 68, 68, 0.3);"
+              >
+                *** CANCELLED / VOID ORDER — NOT PAYABLE ***
+              </div>
             } @else if (ord.paymentStatus !== 'PAID') {
               <div class="invoice-banner-ribbon proforma">
                 *** PRO-FORMA INVOICE • PENDING PAYMENT SETTLEMENT ***
@@ -585,12 +592,24 @@ import {
                       {{ ord.settledAt || ord.createdAt | date: 'shortTime' }}</span
                     >
                   </div>
-                  <div class="settlement-badge" [class.paid]="ord.paymentStatus === 'PAID'">
-                    <i class="ph ph-seal-check"></i>
+                  <div
+                    class="settlement-badge"
+                    [class.paid]="ord.paymentStatus === 'PAID'"
+                    [class.cancelled]="ord.status === 'CANCELLED'"
+                  >
+                    <i
+                      [class]="
+                        ord.status === 'CANCELLED'
+                          ? 'ph ph-x-circle text-crimson'
+                          : 'ph ph-seal-check'
+                      "
+                    ></i>
                     <span>{{
-                      ord.paymentStatus === 'PAID'
-                        ? 'TRANSACTION SETTLED & VERIFIED'
-                        : 'PAYMENT PENDING SETTLEMENT'
+                      ord.status === 'CANCELLED'
+                        ? 'ORDER CANCELLED (VOID)'
+                        : ord.paymentStatus === 'PAID'
+                          ? 'TRANSACTION SETTLED & VERIFIED'
+                          : 'PAYMENT PENDING SETTLEMENT'
                     }}</span>
                   </div>
                 </div>

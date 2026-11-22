@@ -222,10 +222,10 @@ pub async fn system_open_external(
         ));
     }
 
-    // Ban shell metacharacters and control characters to prevent command execution
+    // Ban control characters, quotes, and whitespace to prevent command execution
     if url
         .chars()
-        .any(|c| c.is_control() || matches!(c, '&' | '|' | ';' | '`' | '$' | '"' | '<' | '>'))
+        .any(|c| c.is_control() || matches!(c, '`' | '"' | '<' | '>' | ' '))
     {
         return Err((
             axum::http::StatusCode::BAD_REQUEST,

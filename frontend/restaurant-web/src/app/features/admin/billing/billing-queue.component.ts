@@ -170,7 +170,16 @@ import {
                     </span>
                   </td>
                   <td>
-                    <app-status-badge [status]="ord.paymentStatus"></app-status-badge>
+                    @if (ord.status === 'CANCELLED') {
+                      <span
+                        class="badge badge-cancelled"
+                        style="display: inline-flex; align-items: center; gap: 4px; padding: 4px 8px; border-radius: 6px; font-size: 0.75rem; font-weight: 700; background: rgba(239, 68, 68, 0.12); color: #dc2626; border: 1px solid rgba(239, 68, 68, 0.25);"
+                      >
+                        <i class="ph ph-x-circle"></i> CANCELLED
+                      </span>
+                    } @else {
+                      <app-status-badge [status]="ord.paymentStatus"></app-status-badge>
+                    }
                   </td>
                   <td>
                     <div class="billing-actions">
@@ -197,7 +206,9 @@ import {
                         <span>WhatsApp</span>
                       </button>
 
-                      @if (!ord.isSplit && ord.paymentStatus === 'UNPAID') {
+                      @if (
+                        !ord.isSplit && ord.paymentStatus === 'UNPAID' && ord.status !== 'CANCELLED'
+                      ) {
                         <button
                           class="btn btn-secondary btn-sm"
                           (click)="openSplitModal(ord)"
@@ -312,7 +323,10 @@ import {
                                         <i class="ph ph-whatsapp-logo"></i>
                                         <span>WhatsApp</span>
                                       </button>
-                                      @if (split.paymentStatus === 'UNPAID') {
+                                      @if (
+                                        split.paymentStatus === 'UNPAID' &&
+                                        ord.status !== 'CANCELLED'
+                                      ) {
                                         <button
                                           class="btn btn-primary btn-xs"
                                           (click)="openSettleSplitModal(ord, split)"
@@ -2120,7 +2134,7 @@ export class BillingQueueComponent {
   });
 
   unbilledOrders = computed(() => {
-    return this.orders().filter((o) => o.paymentStatus === 'UNPAID');
+    return this.orders().filter((o) => o.paymentStatus === 'UNPAID' && o.status !== 'CANCELLED');
   });
 
   equalSplitPreview = computed(() => {
@@ -2165,6 +2179,10 @@ export class BillingQueueComponent {
   });
 
   countPaymentStatus(status: string): number {
+    if (status === 'UNPAID') {
+      return this.orders().filter((o) => o.paymentStatus === 'UNPAID' && o.status !== 'CANCELLED')
+        .length;
+    }
     return this.orders().filter((o) => o.paymentStatus === status).length;
   }
 
@@ -2182,7 +2200,7 @@ export class BillingQueueComponent {
   filteredOrders = computed(() => {
     let list = this.orders();
     if (this.selectedTab() === 'UNPAID') {
-      list = list.filter((o) => o.paymentStatus === 'UNPAID');
+      list = list.filter((o) => o.paymentStatus === 'UNPAID' && o.status !== 'CANCELLED');
     } else if (this.selectedTab() === 'PAID') {
       list = list.filter((o) => o.paymentStatus === 'PAID');
     }
@@ -2203,6 +2221,10 @@ export class BillingQueueComponent {
 
   // --- Full Order Settlement Actions ---
   openSettleModal(order: Order): void {
+    if (order.status === 'CANCELLED') {
+      this.toastService.warning(`Order ${order.orderNumber} is cancelled and cannot be settled.`);
+      return;
+    }
     if (order.paymentStatus === 'PAID') {
       this.toastService.warning(`Order ${order.orderNumber} is already settled.`);
       return;
@@ -2328,6 +2350,10 @@ export class BillingQueueComponent {
 
   // --- Split Bill Settle Actions ---
   openSettleSplitModal(order: Order, split: SplitBill): void {
+    if (order.status === 'CANCELLED') {
+      this.toastService.warning('Cannot settle a cancelled order.');
+      return;
+    }
     if (split.paymentStatus === 'PAID') {
       this.toastService.warning(`Split bill #${split.splitIndex} is already settled.`);
       return;
@@ -2372,6 +2398,10 @@ export class BillingQueueComponent {
 
   // --- Bill Splitting Actions ---
   openSplitModal(order: Order): void {
+    if (order.status === 'CANCELLED') {
+      this.toastService.warning(`Order ${order.orderNumber} is cancelled and cannot be split.`);
+      return;
+    }
     if (order.paymentStatus === 'PAID') {
       this.toastService.warning('Cannot split an already settled bill.');
       return;

@@ -1437,6 +1437,58 @@ export class RestaurantDataService {
     return { success: true, status: newStatus, table };
   }
 
+  /**
+   * Recalculates and updates table occupancy status based on active orders and reservations.
+   * Ensures that completed or cancelled orders cleanly release tables to AVAILABLE.
+   */
+  recalculateTableStatus(tableIdOrNumber: string): TableStatus {
+    if (this.testMock) return this.testMock.recalculateTableStatus(tableIdOrNumber);
+    const table = this.tables().find(
+      (t) => t.id === tableIdOrNumber || t.number === tableIdOrNumber,
+    );
+    if (!table) return 'AVAILABLE';
+
+    if (table.status === 'DIRTY') {
+      return 'DIRTY';
+    }
+
+    const ACTIVE_ORDER_STATUSES: OrderStatus[] = [
+      'PENDING',
+      'ACCEPTED',
+      'PREPARING',
+      'READY',
+      'DISPATCHED',
+      'SERVED',
+    ];
+    const activeOrders = this.orders().filter(
+      (o) =>
+        o.orderType !== 'TAKEAWAY' &&
+        (o.tableId === table.id || o.tableNumber === table.number) &&
+        ACTIVE_ORDER_STATUSES.includes(o.status),
+    );
+
+    const seatedRes = this.reservations().filter(
+      (r) => (r.tableId === table.id || r.tableNumber === table.number) && r.status === 'SEATED',
+    );
+
+    const confirmedRes = this.reservations().filter(
+      (r) => (r.tableId === table.id || r.tableNumber === table.number) && r.status === 'CONFIRMED',
+    );
+
+    let nextStatus: TableStatus = 'AVAILABLE';
+    if (activeOrders.length > 0 || seatedRes.length > 0) {
+      nextStatus = 'OCCUPIED';
+    } else if (confirmedRes.length > 0) {
+      nextStatus = 'RESERVED';
+    }
+
+    if (table.status !== nextStatus) {
+      this.updateTableStatus(table.id, nextStatus);
+    }
+
+    return nextStatus;
+  }
+
   // --- Tables Mutations ---
   createTable(dto: {
     number: string;
@@ -2156,6 +2208,35 @@ export class RestaurantDataService {
     this.orders.set(updated);
     this.saveLocal('orders', updated);
 
+    // Cancel active table reservations and release table occupancy when order is cancelled or completed
+    const tableIdOrNumber = order.tableId || order.tableNumber;
+    if (nextStatus === 'CANCELLED' && order.orderType !== 'TAKEAWAY' && tableIdOrNumber) {
+      const matchingTable = this.tables().find(
+        (t) => t.id === tableIdOrNumber || t.number === tableIdOrNumber,
+      );
+      if (matchingTable) {
+        const updatedReservations = this.reservations().map((r) => {
+          if (
+            (r.tableId === matchingTable.id || r.tableNumber === matchingTable.number) &&
+            (r.status === 'CONFIRMED' || r.status === 'SEATED')
+          ) {
+            return { ...r, status: 'CANCELLED' as const };
+          }
+          return r;
+        });
+        this.reservations.set(updatedReservations);
+        this.saveLocal('reservations', updatedReservations);
+      }
+    }
+
+    if (
+      (nextStatus === 'COMPLETED' || nextStatus === 'CANCELLED') &&
+      order.orderType !== 'TAKEAWAY' &&
+      tableIdOrNumber
+    ) {
+      this.recalculateTableStatus(tableIdOrNumber);
+    }
+
     // Broadcast across tabs
     const updatedOrder = { ...order, status: nextStatus };
     this.broadcastRealtimeOrderEvent({ type: 'ORDER_UPDATED', order: updatedOrder });
@@ -2574,6 +2655,10 @@ export class RestaurantDataService {
     const order = this.orders().find((o) => o.id === req.orderId);
     if (!order) return { success: false, error: 'Order not found' };
 
+    if (order.status === 'CANCELLED') {
+      return { success: false, error: 'Cannot settle a cancelled order' };
+    }
+
     // 1. Optimistic / Instant update in memory & local storage so UI reflects PAID immediately
     const isPrinted = (order.printCount || 0) > 0;
     const targetStatus = isPrinted ? 'COMPLETED' : order.status;
@@ -2671,6 +2756,10 @@ export class RestaurantDataService {
         orderId: req.orderId,
         splitCount: req.splitCount ?? req.sharesCount ?? 2,
       });
+    }
+    const order = this.orders().find((o) => o.id === req.orderId);
+    if (order && order.status === 'CANCELLED') {
+      return { success: false, error: 'Cannot split a cancelled order' };
     }
     const count = req.splitCount ?? req.sharesCount ?? 2;
     this.api
@@ -3279,6 +3368,10 @@ export class RestaurantDataService {
 
   splitOrderItemBased(dto: any): { success: boolean; error?: string; splitBills?: SplitBill[] } {
     if (this.testMock) return this.testMock.splitOrderItemBased(dto);
+    const order = this.orders().find((o) => o.id === dto?.orderId);
+    if (order && order.status === 'CANCELLED') {
+      return { success: false, error: 'Cannot split a cancelled order' };
+    }
     return { success: true };
   }
 

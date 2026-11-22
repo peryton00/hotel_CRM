@@ -1203,6 +1203,10 @@ export class MockDataService {
     const order = this.orders().find((o) => o.id === req.orderId || o.orderNumber === req.orderId);
     if (!order) return { success: false, error: 'Order not found' };
 
+    if (order.status === 'CANCELLED') {
+      return { success: false, error: 'Cannot split a cancelled order' };
+    }
+
     if (order.paymentStatus === 'PAID') {
       return { success: false, error: 'Cannot split an already settled bill' };
     }
@@ -1328,6 +1332,10 @@ export class MockDataService {
   }): { success: boolean; error?: string; splitBills?: SplitBill[] } {
     const order = this.orders().find((o) => o.id === req.orderId || o.orderNumber === req.orderId);
     if (!order) return { success: false, error: 'Order not found' };
+
+    if (order.status === 'CANCELLED') {
+      return { success: false, error: 'Cannot split a cancelled order' };
+    }
 
     if (order.paymentStatus === 'PAID') {
       return { success: false, error: 'Cannot split an already settled bill' };
@@ -1600,6 +1608,10 @@ export class MockDataService {
   } {
     const order = this.orders().find((o) => o.id === req.orderId || o.orderNumber === req.orderId);
     if (!order) return { success: false, error: 'Order not found' };
+
+    if (order.status === 'CANCELLED') {
+      return { success: false, error: 'Cannot split a cancelled order' };
+    }
 
     if (order.paymentStatus === 'PAID') {
       return { success: false, error: `Order ${order.orderNumber} is already settled` };
@@ -3439,6 +3451,27 @@ export class MockDataService {
         this.releaseStockReservation(order.id);
       }
       // If wasConsumed, physically consumed stock is NOT silently restored
+
+      // Release any table reservations associated with this cancelled dining order
+      const tableIdOrNumber = order.tableId || order.tableNumber;
+      if (tableIdOrNumber && order.orderType !== 'TAKEAWAY') {
+        const matchingTable = this.tables().find(
+          (t) => t.id === tableIdOrNumber || t.number === tableIdOrNumber,
+        );
+        if (matchingTable) {
+          const updatedReservations = this.reservations().map((r) => {
+            if (
+              (r.tableId === matchingTable.id || r.tableNumber === matchingTable.number) &&
+              (r.status === 'CONFIRMED' || r.status === 'SEATED')
+            ) {
+              return { ...r, status: 'CANCELLED' as const };
+            }
+            return r;
+          });
+          this.reservations.set(updatedReservations);
+          this.saveLocal('reservations', updatedReservations);
+        }
+      }
     }
 
     // 3. Transition to DISPATCHED, SERVED or COMPLETED: consume stock atomically

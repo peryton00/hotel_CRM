@@ -110,43 +110,32 @@ export function launchExternalUrl(url: string): void {
     const tauriInvoke =
       w.__TAURI__?.core?.invoke || w.__TAURI__?.invoke || w.__TAURI_INTERNALS__?.invoke;
     if (typeof tauriInvoke === 'function') {
-      tauriInvoke('open_external_url', { url }).catch(() => {});
+      tauriInvoke('open_external_url', { url }).catch(() => {
+        // Fallback to window.open if Tauri command fails
+        window.open(url, '_blank', 'noopener,noreferrer');
+      });
+      return;
     }
   } catch {}
 
-  // 2. Try Backend API OS spawn endpoint (runs on user's machine via PowerShell Start-Process)
+  // 2. Standard browser-level link navigation fallback
   try {
-    const postBody = JSON.stringify({ url });
-    fetch('/api/v1/system/open-external', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: postBody,
-    }).catch(() => {
-      fetch('http://127.0.0.1:3000/api/v1/system/open-external', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: postBody,
-      }).catch(() => {});
-    });
-  } catch {}
-
-  // 3. Browser-level standard link navigation fallback
-  try {
-    const a = document.createElement('a');
-    a.href = url;
-    a.target = '_blank';
-    a.rel = 'noopener noreferrer';
-    document.body.appendChild(a);
-    a.click();
-    setTimeout(() => {
-      if (document.body.contains(a)) {
-        document.body.removeChild(a);
-      }
-    }, 100);
+    const newWindow = window.open(url, '_blank', 'noopener,noreferrer');
+    if (!newWindow || newWindow.closed || typeof newWindow.closed === 'undefined') {
+      const a = document.createElement('a');
+      a.href = url;
+      a.target = '_blank';
+      a.rel = 'noopener noreferrer';
+      document.body.appendChild(a);
+      a.click();
+      setTimeout(() => {
+        if (document.body.contains(a)) {
+          document.body.removeChild(a);
+        }
+      }, 100);
+    }
   } catch {
-    try {
-      window.open(url, '_blank', 'noopener,noreferrer');
-    } catch {}
+    window.location.href = url;
   }
 }
 

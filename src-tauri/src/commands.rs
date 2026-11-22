@@ -129,7 +129,7 @@ pub async fn open_external_url(url: String) -> Result<bool, String> {
 
     if trimmed
         .chars()
-        .any(|c| c.is_control() || matches!(c, '&' | '|' | ';' | '`' | '$' | '"' | '<' | '>'))
+        .any(|c| c.is_control() || matches!(c, '`' | '"' | '<' | '>' | ' '))
     {
         return Err("URL contains invalid characters".to_string());
     }
