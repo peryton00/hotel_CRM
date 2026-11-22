@@ -10,5 +10,6 @@ export interface Feedback {
   comment: string;
   createdAt: string;
   status: 'PENDING' | 'PUBLISHED' | 'ARCHIVED';
+  isPublic?: boolean;
   adminResponse?: string;
 }

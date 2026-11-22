@@ -124,7 +124,12 @@ pub fn create_router(state: AppState) -> Router {
             "/coupons",
             get(coupon_routes::list_coupons).post(coupon_routes::create_coupon),
         )
-        .route("/coupons/:id", delete(coupon_routes::delete_coupon))
+        .route(
+            "/coupons/:id",
+            put(coupon_routes::update_coupon)
+                .patch(coupon_routes::update_coupon)
+                .delete(coupon_routes::delete_coupon),
+        )
         .route(
             "/coupons/:id/status",
             put(coupon_routes::update_coupon_status),
@@ -151,6 +156,10 @@ pub fn create_router(state: AppState) -> Router {
             get(feedback_routes::list_feedback).post(feedback_routes::create_feedback),
         )
         .route("/feedback/:id/reply", put(feedback_routes::reply_feedback))
+        .route(
+            "/feedback/:id/visibility",
+            put(feedback_routes::toggle_feedback_visibility),
+        )
         // Reports & Dashboard
         .route("/reports/period", get(reports_routes::get_period_report))
         .route(
@@ -165,8 +174,10 @@ pub fn create_router(state: AppState) -> Router {
 
     Router::new()
         // Health check routes
+        .route("/health", get(health::health_check))
         .route("/health/live", get(health::liveness))
         .route("/health/ready", get(health::readiness))
+        .route("/api/v1/health", get(health::health_check))
         .route("/api/v1/health/live", get(health::liveness))
         .route("/api/v1/health/ready", get(health::readiness))
         .route(
@@ -187,8 +198,29 @@ pub fn create_router(state: AppState) -> Router {
             "/public/orders",
             post(public_routes::create_public_order).get(public_routes::get_customer_orders),
         )
-        // WebSocket
+        .route("/public/coupons", get(public_routes::get_public_coupons))
+        .route(
+            "/public/reservations",
+            post(public_routes::create_public_reservation),
+        )
+        .route(
+            "/public/feedback",
+            get(public_routes::get_public_feedback).post(public_routes::create_public_feedback),
+        )
+        .route(
+            "/public/restaurant-info",
+            get(public_routes::get_public_restaurant_info),
+        )
+        .route("/public/tables", get(public_routes::list_public_tables))
+        .route("/public/loyalty-config", get(public_routes::get_public_loyalty_config))
+        .route("/public/customer/loyalty", get(public_routes::get_public_customer_loyalty))
+        .route("/public/customer-lookup", get(public_routes::get_public_customer_loyalty))
+        .route("/public/customer/profile", post(public_routes::update_public_customer_profile))
+        // WebSocket & SSE Real-time streams
         .route("/ws/orders", get(ws_routes::ws_handler))
+        .route("/events", get(crate::ws::sse_handler))
+        .route("/sse", get(crate::ws::sse_handler))
+        .route("/api/v1/events", get(crate::ws::sse_handler))
         // API v1 prefix
         .nest("/api/v1", api_v1)
         .route(

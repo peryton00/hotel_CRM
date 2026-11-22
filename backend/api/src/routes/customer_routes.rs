@@ -79,6 +79,7 @@ pub async fn create_reservation(
 ) -> Result<impl IntoResponse, AppError> {
     let reservation =
         CustomerRepository::create_reservation(&pool, tenant.restaurant_id, req).await?;
+    crate::ws::broadcast_new_reservation(&reservation);
     Ok(Json(ApiResponse::success(reservation)))
 }
 

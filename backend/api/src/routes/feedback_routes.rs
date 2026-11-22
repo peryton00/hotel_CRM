@@ -11,7 +11,7 @@ use crate::{
     error::AppError,
     models::{
         common::ApiResponse,
-        feedback::{CreateFeedbackRequest, ReplyFeedbackRequest},
+        feedback::{CreateFeedbackRequest, ReplyFeedbackRequest, ToggleFeedbackVisibilityRequest},
     },
     repositories::FeedbackRepository,
 };
@@ -44,6 +44,22 @@ pub async fn reply_feedback(
         tenant.restaurant_id,
         feedback_id,
         req.resolution_note,
+    )
+    .await?;
+    Ok(Json(ApiResponse::success(feedback)))
+}
+
+pub async fn toggle_feedback_visibility(
+    State(pool): State<PgPool>,
+    tenant: TenantContext,
+    Path(feedback_id): Path<Uuid>,
+    Json(req): Json<ToggleFeedbackVisibilityRequest>,
+) -> Result<impl IntoResponse, AppError> {
+    let feedback = FeedbackRepository::toggle_visibility(
+        &pool,
+        tenant.restaurant_id,
+        feedback_id,
+        req.is_public,
     )
     .await?;
     Ok(Json(ApiResponse::success(feedback)))

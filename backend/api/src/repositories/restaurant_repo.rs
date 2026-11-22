@@ -18,6 +18,7 @@ impl RestaurantRepository {
                    COALESCE(cgst_rate, gst_rate / 2.0, 2.5)::float8 AS cgst_rate,
                    COALESCE(sgst_rate, gst_rate / 2.0, 2.5)::float8 AS sgst_rate,
                    COALESCE(service_charge_rate, 0.0)::float8 AS service_charge_rate,
+                   google_review_url,
                    created_at, updated_at
             FROM restaurants
             WHERE id = $1
@@ -61,14 +62,16 @@ impl RestaurantRepository {
                 cgst_rate = COALESCE($13, cgst_rate),
                 sgst_rate = COALESCE($14, sgst_rate),
                 service_charge_rate = COALESCE($15, service_charge_rate),
+                google_review_url = COALESCE($16, google_review_url),
                 updated_at = NOW()
-            WHERE id = $16
+            WHERE id = $17
             RETURNING id, name, slug, tagline, description, phone, email, address, city, state, postal_code,
                       gstin, fssai_license, currency, timezone, is_active,
                       COALESCE(gst_rate, 5.0)::float8 AS gst_rate,
                       COALESCE(cgst_rate, gst_rate / 2.0, 2.5)::float8 AS cgst_rate,
                       COALESCE(sgst_rate, gst_rate / 2.0, 2.5)::float8 AS sgst_rate,
                       COALESCE(service_charge_rate, 0.0)::float8 AS service_charge_rate,
+                      google_review_url,
                       created_at, updated_at
             "#,
         )
@@ -87,6 +90,7 @@ impl RestaurantRepository {
         .bind(payload.cgst_rate)
         .bind(payload.sgst_rate)
         .bind(payload.service_charge_rate)
+        .bind(&payload.google_review_url)
         .bind(id)
         .fetch_optional(pool)
         .await?;

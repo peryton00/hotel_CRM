@@ -4,6 +4,7 @@ import { useState, useEffect, Suspense } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { Check, ForkKnife, Printer, Receipt, CheckCircle, ArrowLeft, X } from '@phosphor-icons/react';
 import { ThemeToggle } from '@/components/ThemeToggle';
+import { CustomerAccountDrawer, AccountButton } from '@/components/CustomerAccountDrawer';
 import { getCustomerOrders } from '@/lib/api';
 import type { CustomerPastOrder, TableInfo } from '@/lib/types';
 
@@ -24,6 +25,8 @@ interface StoredOrder {
     notes?: string;
   }[];
   subtotal_paise: number;
+  discount_paise?: number;
+  applied_coupon_code?: string;
   cgst_paise: number;
   sgst_paise: number;
   cgst_rate?: number;
@@ -41,6 +44,7 @@ function ConfirmationContent() {
   const [pastOrders, setPastOrders] = useState<CustomerPastOrder[]>([]);
   const [selectedOrderForBill, setSelectedOrderForBill] = useState<CustomerPastOrder | null>(null);
   const [tableInfo, setTableInfo] = useState<TableInfo | null>(null);
+  const [accountOpen, setAccountOpen] = useState(false);
 
   useEffect(() => {
     try {
@@ -78,7 +82,7 @@ function ConfirmationContent() {
         const parsed: StoredOrder = JSON.parse(stored);
         setOrder(parsed);
         if (parsed.customer_phone) {
-          getCustomerOrders(parsed.customer_phone)
+          getCustomerOrders(parsed.customer_phone, tableInfo?.id)
             .then((res) => {
               if (res && Array.isArray(res.data)) {
                 // Keep only previous orders (different id from current one)
@@ -118,7 +122,10 @@ function ConfirmationContent() {
             <ArrowLeft size={14} weight="bold" />
             <span>Table Menu</span>
           </button>
-          <ThemeToggle />
+          <div className="flex items-center gap-2">
+            <AccountButton onClick={() => setAccountOpen(true)} />
+            <ThemeToggle />
+          </div>
         </div>
 
         {/* Success Banner */}
@@ -207,6 +214,12 @@ function ConfirmationContent() {
               <span>Item Total</span>
               <span className="font-semibold text-neutral-800 dark:text-neutral-200 tabular-nums">{fmt(order.subtotal_paise)}</span>
             </div>
+            {order.discount_paise && order.discount_paise > 0 ? (
+              <div className="flex justify-between text-emerald-700 dark:text-emerald-400 font-semibold">
+                <span>Coupon ({order.applied_coupon_code || 'PROMO'})</span>
+                <span className="tabular-nums">-{fmt(order.discount_paise)}</span>
+              </div>
+            ) : null}
             <div className="flex justify-between text-neutral-500 dark:text-neutral-400">
               <span>CGST ({currentOrderCgstRate}%)</span>
               <span className="font-semibold text-neutral-800 dark:text-neutral-200 tabular-nums">{fmt(order.cgst_paise)}</span>
@@ -434,6 +447,14 @@ function ConfirmationContent() {
           <span>Save / Print Bill</span>
         </button>
       </div>
+
+      <CustomerAccountDrawer
+        isOpen={accountOpen}
+        onClose={() => setAccountOpen(false)}
+        tableToken={token}
+        tableId={tableInfo?.id}
+        tableNumber={tableInfo?.table_number}
+      />
     </div>
   );
 }

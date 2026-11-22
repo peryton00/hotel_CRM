@@ -6,6 +6,7 @@ import { useCart } from "@/lib/cart-context";
 import { getTable } from "@/lib/api";
 import { dynaura } from "dynaura";
 import type { MenuCategory, MenuItem, TableInfo } from "@/lib/types";
+import { CustomerAccountDrawer, AccountButton } from "@/components/CustomerAccountDrawer";
 import {
   ForkKnife,
   MagnifyingGlass,
@@ -43,22 +44,35 @@ export default function MenuClient({
     "all",
   );
   const [isMenuDrawerOpen, setIsMenuDrawerOpen] = useState(false);
+  const [accountOpen, setAccountOpen] = useState(false);
   const [isDark, setIsDark] = useState(false);
   const [tableStatus, setTableStatus] = useState<string>(
-    table.status || "AVAILABLE",
+    (table.status || "AVAILABLE").toUpperCase(),
   );
+  const [seatingSessionId, setSeatingSessionId] = useState<string | undefined>(
+    table.current_seating_session_id,
+  );
+  const prevStatusRef = useRef((table.status || "AVAILABLE").toUpperCase());
+
+  useEffect(() => {
+    prevStatusRef.current = (tableStatus || '').toUpperCase();
+  }, [tableStatus]);
+
   const [isCheckingTable, setIsCheckingTable] = useState(false);
   const router = useRouter();
   const searchInputRef = useRef<HTMLInputElement>(null);
 
   const isTableSeated =
-    tableStatus === "OCCUPIED" && table.ordering_enabled !== false;
+    (tableStatus || '').toUpperCase() === "OCCUPIED" && table.ordering_enabled !== false;
 
   const checkStatusNow = async (silent = false) => {
     setIsCheckingTable(true);
     try {
       const res = await getTable(token);
-      const newStatus = res?.data?.status;
+      const newStatus = res?.data?.status ? res.data.status.toUpperCase() : undefined;
+      if (res?.data?.current_seating_session_id) {
+        setSeatingSessionId(res.data.current_seating_session_id);
+      }
       if (newStatus) {
         setTableStatus(newStatus);
         if (newStatus === "OCCUPIED") {
@@ -86,7 +100,105 @@ export default function MenuClient({
     }
   };
 
-  // Auto-poll table status every 7 seconds when unseated
+  // Option 1 (Live Push): Dual WebSocket & SSE event listener for table seating and settlement transitions
+  useEffect(() => {
+    let ws: WebSocket | null = null;
+    let sse: EventSource | null = null;
+    let reconnectTimeout: any = null;
+
+    const handleEventData = (rawText: string) => {
+      try {
+        const data = JSON.parse(rawText);
+        if (data.event === "TABLE_STATUS_CHANGED") {
+          const dataTableNum = String(data.table_number || '').toLowerCase();
+          const currentTableNum = String(table.table_number || '').toLowerCase();
+          const matchesTable =
+            (data.table_id && data.table_id === table.id) ||
+            (dataTableNum && (
+              dataTableNum === currentTableNum ||
+              dataTableNum.replace(/^tbl-0?/, '').replace(/^t-0?/, '') === currentTableNum.replace(/^tbl-0?/, '').replace(/^t-0?/, '')
+            ));
+
+          if (matchesTable) {
+            const newStatus = (data.status || '').toUpperCase();
+            const prevStatus = (prevStatusRef.current || '').toUpperCase();
+            prevStatusRef.current = newStatus;
+            setTableStatus(newStatus);
+
+            if (data.seating_session_id) {
+              setSeatingSessionId(data.seating_session_id);
+            } else if (newStatus !== "OCCUPIED") {
+              setSeatingSessionId(undefined);
+            }
+
+            if (newStatus === "OCCUPIED" && prevStatus !== "OCCUPIED") {
+              dynaura.success({
+                title: `Table ${table.table_number} Seated!`,
+                description:
+                  "Floor host has opened your table. Live ordering is active!",
+              });
+            } else if (
+              newStatus !== "OCCUPIED" &&
+              prevStatus === "OCCUPIED"
+            ) {
+              dynaura.info({
+                title: `Table ${table.table_number} Dining Concluded`,
+                description:
+                  "Table session settled. Digital menu set to browse-only.",
+              });
+            }
+          }
+        }
+      } catch {}
+    };
+
+    const connectLiveStream = () => {
+      const apiBase = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3000";
+      const wsProtocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+      const wsHost = apiBase.startsWith("http")
+        ? apiBase.replace(/^http/, "ws")
+        : `${wsProtocol}//${window.location.hostname}:3000`;
+
+      try {
+        ws = new WebSocket(`${wsHost}/ws/orders`);
+        ws.onmessage = (event) => handleEventData(event.data);
+        ws.onerror = () => {
+          // Fall back to SSE if WebSocket encounters transport error
+          if (!sse && typeof EventSource !== 'undefined') {
+            try {
+              sse = new EventSource(`${apiBase}/events`);
+              sse.onmessage = (e) => handleEventData(e.data);
+            } catch {}
+          }
+        };
+        ws.onclose = () => {
+          if (!sse && typeof EventSource !== 'undefined') {
+            try {
+              sse = new EventSource(`${apiBase}/events`);
+              sse.onmessage = (e) => handleEventData(e.data);
+            } catch {}
+          }
+          reconnectTimeout = setTimeout(connectLiveStream, 5000);
+        };
+      } catch {
+        if (!sse && typeof EventSource !== 'undefined') {
+          try {
+            sse = new EventSource(`${apiBase}/events`);
+            sse.onmessage = (e) => handleEventData(e.data);
+          } catch {}
+        }
+      }
+    };
+
+    connectLiveStream();
+    return () => {
+      if (reconnectTimeout) clearTimeout(reconnectTimeout);
+      if (ws) ws.close();
+      if (sse) sse.close();
+    };
+  }, [table.id, table.table_number]);
+
+  // Fallback auto-poll table status every 7 seconds when unseated
   useEffect(() => {
     if (tableStatus === "OCCUPIED") return;
     const interval = setInterval(() => {
@@ -130,6 +242,7 @@ export default function MenuClient({
           section: table.section,
           status: tableStatus,
           ordering_enabled: table.ordering_enabled,
+          current_seating_session_id: seatingSessionId,
           token,
           gst_rate: table.gst_rate ?? 5.0,
           cgst_rate: table.cgst_rate ?? (table.gst_rate ?? 5.0) / 2,
@@ -248,6 +361,9 @@ export default function MenuClient({
                 </span>
               )}
             </button>
+
+            {/* Account & Orders Drawer */}
+            <AccountButton onClick={() => setAccountOpen(true)} />
 
             {/* Theme Toggle Button */}
             <button
@@ -524,15 +640,28 @@ export default function MenuClient({
                         <div className="absolute -bottom-2.5 inset-x-2 flex justify-center">
                           {qty === 0 ? (
                             <button
-                              onClick={() => add(item)}
-                              className="w-full max-w-[100px] bg-white dark:bg-[#20242d] hover:bg-neutral-50 dark:hover:bg-[#272c37] text-emerald-700 dark:text-emerald-400 active:scale-90 border border-neutral-200/90 dark:border-white/15 font-extrabold text-xs uppercase py-1.5 rounded-xl shadow-md transition-all flex items-center justify-center gap-1 cursor-pointer touch-tactile"
+                              onClick={() => {
+                                if (!isTableSeated) {
+                                  dynaura.warning({
+                                    title: `Table ${table.table_number || token} Unseated`,
+                                    description: 'Please ask our floor captain to open your dining table before adding dishes.',
+                                  });
+                                  return;
+                                }
+                                add(item);
+                              }}
+                              className={`w-full max-w-[100px] ${
+                                !isTableSeated
+                                  ? 'bg-neutral-100 dark:bg-white/10 text-neutral-500 dark:text-neutral-400 border-neutral-300/80 dark:border-white/10 cursor-not-allowed'
+                                  : 'bg-white dark:bg-[#20242d] hover:bg-neutral-50 dark:hover:bg-[#272c37] text-emerald-700 dark:text-emerald-400 border-neutral-200/90 dark:border-white/15 cursor-pointer'
+                              } active:scale-90 border font-extrabold text-xs uppercase py-1.5 rounded-xl shadow-md transition-all flex items-center justify-center gap-1 touch-tactile`}
                               aria-label={`Add ${item.name} to cart`}
                             >
                               <span>ADD</span>
                               <Plus
                                 size={12}
                                 weight="bold"
-                                className="text-emerald-500 dark:text-emerald-400"
+                                className={!isTableSeated ? "text-neutral-400" : "text-emerald-500 dark:text-emerald-400"}
                               />
                             </button>
                           ) : (
@@ -548,7 +677,16 @@ export default function MenuClient({
                                 {qty}
                               </span>
                               <button
-                                onClick={() => add(item)}
+                                onClick={() => {
+                                  if (!isTableSeated) {
+                                    dynaura.warning({
+                                      title: `Table ${table.table_number || token} Unseated`,
+                                      description: 'Please ask our floor captain to open your dining table before adding dishes.',
+                                    });
+                                    return;
+                                  }
+                                  add(item);
+                                }}
                                 className="font-black p-1 hover:opacity-80 active:scale-80 transition-transform cursor-pointer touch-tactile"
                                 aria-label="Increase quantity"
                               >
@@ -663,6 +801,15 @@ export default function MenuClient({
           </div>
         </aside>
       )}
+
+      {/* Swiggy/Zomato style Customer Account Drawer */}
+      <CustomerAccountDrawer
+        isOpen={accountOpen}
+        onClose={() => setAccountOpen(false)}
+        tableToken={token}
+        tableId={table.id}
+        tableNumber={table.table_number}
+      />
     </div>
   );
 }

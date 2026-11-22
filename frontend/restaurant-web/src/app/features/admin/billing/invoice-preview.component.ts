@@ -38,10 +38,17 @@ import {
         <!-- Action Bar (Screen Only Command Toolbar) -->
         <nav class="action-bar no-print" aria-label="Invoice navigation and actions">
           <div class="actions-left">
-            <a routerLink="/admin/billing" class="back-link action-nav-btn">
-              <i class="ph ph-arrow-left"></i>
-              <span>Back to Billing</span>
-            </a>
+            @if (isFromCanvas()) {
+              <a routerLink="/admin/tables" class="back-link action-nav-btn">
+                <i class="ph ph-arrow-left"></i>
+                <span>Back to Floor Canvas</span>
+              </a>
+            } @else {
+              <a routerLink="/admin/billing" class="back-link action-nav-btn">
+                <i class="ph ph-arrow-left"></i>
+                <span>Back to Billing</span>
+              </a>
+            }
             @if (splitBill()) {
               <a
                 [routerLink]="['/admin/billing', ord.id]"
@@ -932,9 +939,9 @@ import {
         icon="ph-receipt"
         title="Invoice Not Found"
         message="The requested bill invoice does not exist or has been archived."
-        actionText="Return to Billing Queue"
+        [actionText]="isFromCanvas() ? 'Return to Floor Canvas' : 'Return to Billing Queue'"
         actionIcon="ph-arrow-left"
-        (actionClick)="router.navigate(['/admin/billing'])"
+        (actionClick)="router.navigate([isFromCanvas() ? '/admin/tables' : '/admin/billing'])"
       />
     }
   `,
@@ -2163,6 +2170,8 @@ export class InvoicePreviewComponent implements OnInit {
   private adminAuth = inject(AdminAuthService);
   private thermalPrinter = inject(ThermalPrinterService);
 
+  isFromCanvas = signal<boolean>(false);
+
   readonly isLoading = computed(
     () => this.dataService.isOrdersLoading() || !this.dataService.ordersLoaded(),
   );
@@ -2306,6 +2315,7 @@ export class InvoicePreviewComponent implements OnInit {
     });
     this.route.queryParamMap.subscribe((q) => {
       this.splitBillId.set(q.get('splitId') || '');
+      this.isFromCanvas.set(q.get('from') === 'canvas');
       if (q.get('reprint') === 'true') {
         setTimeout(() => this.openReprintModal(), 50);
       }

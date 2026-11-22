@@ -33,7 +33,7 @@ pub fn run() {
 
             // Spawn the embedded Axum backend engine in the background
             tauri::async_runtime::spawn(async move {
-                log::info!("Initializing embedded Axum API engine...");
+                log::info!("Initializing embedded Axum API engine (attendance timezone sync + double-click defense + google reviews)...");
                 let config = hotel_crm_api::config::AppConfig::from_env();
                 if let Err(e) = hotel_crm_api::server::start_server(config, Some(shutdown_rx)).await
                 {

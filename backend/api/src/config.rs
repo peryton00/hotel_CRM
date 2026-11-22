@@ -58,7 +58,7 @@ impl AppConfig {
         let environment = env::var("ENVIRONMENT").unwrap_or_else(|_| "production".to_string());
 
         let allowed_origins_raw = env::var("ALLOWED_ORIGINS")
-            .unwrap_or_else(|_| "http://localhost:4200,http://127.0.0.1:4200,https://gurukripadhaba-menu.vercel.app,http://127.0.0.1:3000,http://localhost:3000".to_string());
+            .unwrap_or_else(|_| "http://localhost:4200,http://127.0.0.1:4200,http://localhost:3001,http://127.0.0.1:3001,https://gurukripadhaba-menu.vercel.app,http://127.0.0.1:3000,http://localhost:3000".to_string());
 
         let allowed_origins = allowed_origins_raw
             .split(',')

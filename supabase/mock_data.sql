@@ -340,12 +340,37 @@ BEGIN
     -- --------------------------------------------------------------------------
     -- 11. CUSTOMER FEEDBACK
     -- --------------------------------------------------------------------------
-    INSERT INTO customer_feedback (id, restaurant_id, order_id, customer_id, rating, comments, created_at)
+    INSERT INTO customer_feedback (id, restaurant_id, order_id, customer_id, customer_name, rating, comments, is_public, created_at)
     VALUES
     (
-        'ffffffff-0000-0000-0000-000000000001', v_restaurant_id, v_order_completed, v_cust_1, 5,
+        'ffffffff-0000-0000-0000-000000000001', v_restaurant_id, v_order_completed, v_cust_1, 'Vikram Malhotra', 5,
         'Authentic rich taste! Dal Makhani and Garlic Naan were superb as always. Very swift service.',
-        NOW() - INTERVAL '1 hour'
+        true, NOW() - INTERVAL '14 days'
+    ),
+    (
+        'ffffffff-0000-0000-0000-000000000002', v_restaurant_id, NULL, NULL, 'Priya Sharma', 5,
+        'The Dal Makhani cooked overnight with slow simmering is unmatched. Hot tandoori rotis served with authentic white butter.',
+        true, NOW() - INTERVAL '10 days'
+    ),
+    (
+        'ffffffff-0000-0000-0000-000000000003', v_restaurant_id, NULL, v_cust_2, 'Simran Patel', 5,
+        'Quick QR scan ordering right from our table. Paneer Tikka was smoky and tender, great highway dining ambiance!',
+        true, NOW() - INTERVAL '7 days'
+    ),
+    (
+        'ffffffff-0000-0000-0000-000000000004', v_restaurant_id, NULL, NULL, 'Amitav Ray', 5,
+        'Exceptional highway pitstop! Clean family dining, super courteous staff, and the Sarson da Saag was out of this world.',
+        true, NOW() - INTERVAL '4 days'
+    ),
+    (
+        'ffffffff-0000-0000-0000-000000000005', v_restaurant_id, NULL, v_cust_3, 'Rohit Verma', 5,
+        'Warm hospitality and sizzling clay-oven starters. Crisp lachha parathas and perfectly spiced gravies.',
+        true, NOW() - INTERVAL '2 days'
+    ),
+    (
+        'ffffffff-0000-0000-0000-000000000006', v_restaurant_id, NULL, NULL, 'Neha Gupta', 5,
+        'Loved the rustic flavors and fast kitchen turnaround. Gulab jamun served piping hot was the perfect finish.',
+        true, NOW() - INTERVAL '8 hours'
     )
     ON CONFLICT (id) DO NOTHING;
 

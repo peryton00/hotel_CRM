@@ -8,6 +8,8 @@
   --color-background: #090a0d;
   --color-surface: #121418;
   --color-surface-hover: #181b21;
+  --color-surface-card: #161920;
+  --color-surface-elevated: #1e222b;
   --color-bone: #15181d;
   --color-bone-light: #191c23;
   --color-bone-dark: #0d0e11;
@@ -1486,10 +1488,102 @@
     }
   }
 
-  // Table Drawer Status Pills & Active Order Card
+  // Table Drawer Status Pills, Cockpit & Active Order Cards
+  .active-orders-cockpit {
+    background: #181c24 !important;
+    border-color: rgba(255, 255, 255, 0.08) !important;
+  }
+
   .active-order-card {
-    background: rgba(220, 38, 38, 0.12) !important;
-    border-color: rgba(220, 38, 38, 0.35) !important;
+    background: #1c212b !important;
+    border-color: rgba(255, 255, 255, 0.08) !important;
+
+    &.order-ready {
+      background: rgba(16, 185, 129, 0.1) !important;
+      border-left-color: #10b981 !important;
+    }
+
+    &.order-served {
+      background: rgba(59, 130, 246, 0.1) !important;
+      border-left-color: #3b82f6 !important;
+    }
+
+    .order-details-grid {
+      background: #14171d !important;
+      border-color: rgba(255, 255, 255, 0.05) !important;
+      color: #e2e8f0 !important;
+    }
+
+    .order-items-compact-list {
+      border-color: rgba(255, 255, 255, 0.08) !important;
+      .compact-item-row .item-name {
+        color: #f1f5f9 !important;
+      }
+      .compact-item-row .item-price {
+        color: #94a3b8 !important;
+      }
+    }
+
+    .drawer-inline-server {
+      background: #14171d !important;
+      border-color: rgba(255, 255, 255, 0.08) !important;
+      label {
+        color: #94a3b8 !important;
+      }
+      .active-server-select {
+        background: #1c212b !important;
+        color: #f1f5f9 !important;
+        border-color: rgba(255, 255, 255, 0.15) !important;
+      }
+    }
+
+    .lifecycle-control-box {
+      background: rgba(220, 38, 38, 0.08) !important;
+      border-color: rgba(239, 68, 68, 0.25) !important;
+
+      .stepper-track {
+        .step-pill {
+          background: #252b36 !important;
+          color: #94a3b8 !important;
+
+          &.active {
+            background: #ef4444 !important;
+            color: #ffffff !important;
+          }
+          &.passed {
+            background: #10b981 !important;
+            color: #ffffff !important;
+          }
+        }
+        .step-arrow {
+          color: #64748b !important;
+        }
+      }
+    }
+  }
+
+  .canvas-settle-card {
+    background: #181c24 !important;
+    border-color: rgba(255, 255, 255, 0.1) !important;
+    color: #f1f5f9 !important;
+
+    .settle-summary-box {
+      background: #14171d !important;
+      border-color: rgba(255, 255, 255, 0.08) !important;
+      color: #cbd5e1 !important;
+    }
+
+    .settle-payment-section .pay-choice-btn {
+      background: #1c212b !important;
+      border-color: rgba(255, 255, 255, 0.1) !important;
+      color: #cbd5e1 !important;
+
+      &.active {
+        background: #252b36 !important;
+        color: #f87171 !important;
+        border-color: #ef4444 !important;
+      }
+    }
   }
 
   .status-btn {
@@ -1873,6 +1967,618 @@
     .qr-image-container {
       background: #f9f9f9 !important;
       border: 1px solid #e5ded4 !important;
+    }
+  }
+
+  // =============================================================================
+  // Table Canvas & Floor Blueprint (Admin Dark Theme)
+  // =============================================================================
+  .places-toolbar {
+    background: #121418 !important;
+    border-color: rgba(255, 255, 255, 0.08) !important;
+
+    .places-nav .places-label {
+      color: #94a3b8 !important;
+    }
+
+    .tab-btn {
+      color: #94a3b8 !important;
+
+      .tab-badge {
+        background: rgba(255, 255, 255, 0.08) !important;
+        color: #94a3b8 !important;
+      }
+
+      &:hover {
+        background: rgba(255, 255, 255, 0.06) !important;
+        color: #f1f5f9 !important;
+      }
+
+      &.active {
+        background: #252b36 !important;
+        color: #f1f5f9 !important;
+
+        .tab-badge {
+          background: rgba(255, 255, 255, 0.18) !important;
+          color: #ffffff !important;
+        }
+      }
+
+      &.add-place-tab-btn {
+        border-color: rgba(255, 255, 255, 0.15) !important;
+        color: #f87171 !important;
+
+        &:hover {
+          border-color: #f87171 !important;
+          background: rgba(248, 113, 113, 0.1) !important;
+        }
+      }
+    }
+  }
+
+  .canvas-workspace-card {
+    background: #121418 !important;
+    border-color: rgba(255, 255, 255, 0.08) !important;
+
+    .canvas-toolbar {
+      background: #161920 !important;
+      border-color: rgba(255, 255, 255, 0.08) !important;
+
+      .view-mode-toggle {
+        background: #1e222b !important;
+        border-color: rgba(255, 255, 255, 0.08) !important;
+
+        .toggle-btn {
+          color: #94a3b8 !important;
+
+          &:hover {
+            color: #f1f5f9 !important;
+          }
+
+          &.active {
+            background: #252b36 !important;
+            color: #f1f5f9 !important;
+          }
+        }
+      }
+
+      .btn-fullscreen-toggle {
+        background: #1c212b !important;
+        color: #cbd5e1 !important;
+        border-color: rgba(255, 255, 255, 0.12) !important;
+
+        &:hover {
+          border-color: #f87171 !important;
+          color: #f87171 !important;
+          background: rgba(239, 68, 68, 0.12) !important;
+        }
+
+        &.btn-active-toggle {
+          background: #dc2626 !important;
+          color: #ffffff !important;
+          border-color: #dc2626 !important;
+        }
+      }
+
+      .zoom-controls {
+        background: #1c212b !important;
+        border-color: rgba(255, 255, 255, 0.12) !important;
+
+        .zoom-btn {
+          color: #cbd5e1 !important;
+
+          &:hover:not(:disabled) {
+            background: #252b36 !important;
+          }
+        }
+
+        .zoom-label {
+          color: #cbd5e1 !important;
+        }
+      }
+    }
+
+    .canvas-viewport {
+      background-color: #0b0d11 !important;
+      background-image: radial-gradient(
+        rgba(255, 255, 255, 0.08) 1.5px,
+        transparent 1.5px
+      ) !important;
+    }
+  }
+
+  .canvas-section-box {
+    background: rgba(18, 20, 24, 0.94) !important;
+    border-color: rgba(255, 255, 255, 0.12) !important;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5) !important;
+
+    &:hover {
+      border-color: rgba(255, 255, 255, 0.22) !important;
+    }
+
+    &.is-dragging {
+      border-color: #ef4444 !important;
+      box-shadow: 0 12px 36px rgba(239, 68, 68, 0.25) !important;
+    }
+
+    .section-box-header {
+      background: #161920 !important;
+      border-bottom-color: rgba(255, 255, 255, 0.08) !important;
+
+      .sec-name {
+        color: #f1f5f9 !important;
+      }
+
+      .sec-badge {
+        background: #1e222b !important;
+        border-color: rgba(255, 255, 255, 0.1) !important;
+        color: #94a3b8 !important;
+      }
+
+      .sec-header-right {
+        .sec-add-tbl-btn {
+          background: #1e222b !important;
+          border-color: rgba(239, 68, 68, 0.4) !important;
+          color: #f87171 !important;
+
+          &:hover {
+            background: rgba(239, 68, 68, 0.15) !important;
+            border-color: #f87171 !important;
+          }
+        }
+
+        .sec-drag-pill {
+          background: #1e222b !important;
+          border-color: rgba(255, 255, 255, 0.1) !important;
+          color: #94a3b8 !important;
+
+          &:hover {
+            background: #252b36 !important;
+            color: #f87171 !important;
+            border-color: #f87171 !important;
+          }
+        }
+      }
+    }
+
+    .section-fixtures-bar {
+      background: rgba(14, 16, 20, 0.8) !important;
+      border-bottom-color: rgba(255, 255, 255, 0.06) !important;
+    }
+  }
+
+  /* Architectural floor elements */
+  .floor-element {
+    background: #161920 !important;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4) !important;
+
+    &.elem-entrance {
+      border-color: #10b981 !important;
+      color: #34d399 !important;
+      background: rgba(16, 185, 129, 0.12) !important;
+    }
+    &.elem-kitchen {
+      border-color: #f97316 !important;
+      color: #fb923c !important;
+      background: rgba(249, 115, 22, 0.12) !important;
+    }
+    &.elem-bar {
+      border-color: #a855f7 !important;
+      color: #c084fc !important;
+      background: rgba(168, 85, 247, 0.12) !important;
+    }
+    &.elem-restroom {
+      border-color: #3b82f6 !important;
+      color: #60a5fa !important;
+      background: rgba(59, 130, 246, 0.12) !important;
+    }
+    &.elem-wall {
+      border-color: #64748b !important;
+      color: #94a3b8 !important;
+      background: #1c212b !important;
+    }
+  }
+
+  /* Blueprint Table on Canvas in Dark Mode */
+  .canvas-table {
+    .table-chairs .chair {
+      background: #1e222b !important;
+      border-color: rgba(255, 255, 255, 0.12) !important;
+    }
+
+    .table-surface {
+      background: #161920 !important;
+      border-color: rgba(255, 255, 255, 0.14) !important;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5) !important;
+
+      .tbl-num {
+        color: #f1f5f9 !important;
+      }
+      .tbl-capacity {
+        color: #94a3b8 !important;
+      }
+    }
+
+    &.status-available {
+      .table-surface {
+        background: #0d281e !important;
+        border-color: #10b981 !important;
+        box-shadow: 0 4px 14px rgba(16, 185, 129, 0.25) !important;
+
+        .tbl-num {
+          color: #34d399 !important;
+        }
+        .tbl-capacity {
+          color: #6ee7b7 !important;
+        }
+      }
+      .chair {
+        background: #064e3b !important;
+        border-color: #10b981 !important;
+      }
+    }
+
+    &.status-occupied {
+      .table-surface {
+        background: linear-gradient(135deg, #2a0e0e 0%, #3b1212 100%) !important;
+        border-color: #ef4444 !important;
+        box-shadow:
+          0 0 0 3px rgba(239, 68, 68, 0.25),
+          0 8px 20px rgba(239, 68, 68, 0.35) !important;
+
+        .tbl-num {
+          color: #fca5a5 !important;
+        }
+        .tbl-capacity {
+          color: #f87171 !important;
+        }
+      }
+      .chair {
+        background: #7f1d1d !important;
+        border-color: #ef4444 !important;
+      }
+    }
+
+    &.status-reserved {
+      .table-surface {
+        background: #291d08 !important;
+        border-color: #f59e0b !important;
+        box-shadow: 0 4px 14px rgba(245, 158, 11, 0.25) !important;
+
+        .tbl-num {
+          color: #fde047 !important;
+        }
+        .tbl-capacity {
+          color: #fbbf24 !important;
+        }
+      }
+      .chair {
+        background: #78350f !important;
+        border-color: #f59e0b !important;
+      }
+    }
+
+    &.status-dirty {
+      .table-surface {
+        background: #181d26 !important;
+        border-color: #64748b !important;
+
+        .tbl-num {
+          color: #94a3b8 !important;
+        }
+        .tbl-capacity {
+          color: #64748b !important;
+        }
+      }
+      .chair {
+        background: #252b36 !important;
+        border-color: #475569 !important;
+      }
+    }
+  }
+
+  // =============================================================================
+  // Table Inspector Drawer (Admin Dark Theme)
+  // =============================================================================
+  .inspector-drawer {
+    background: #121418 !important;
+    border-left: 1px solid rgba(255, 255, 255, 0.08) !important;
+    color: #f1f5f9 !important;
+    box-shadow: -8px 0 36px rgba(0, 0, 0, 0.7) !important;
+
+    .drawer-header {
+      background: #161920 !important;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.08) !important;
+
+      .drawer-title-wrap {
+        .drawer-shape-icon {
+          background: rgba(239, 68, 68, 0.16) !important;
+          color: #f87171 !important;
+        }
+
+        .drawer-table-num {
+          color: #f1f5f9 !important;
+        }
+
+        .drawer-section-pill {
+          color: #94a3b8 !important;
+        }
+      }
+
+      .close-btn {
+        background: transparent !important;
+        color: #94a3b8 !important;
+
+        &:hover {
+          background: rgba(255, 255, 255, 0.08) !important;
+          color: #f1f5f9 !important;
+        }
+      }
+    }
+
+    .drawer-body {
+      background: #121418 !important;
+      color: #f1f5f9 !important;
+    }
+
+    .drawer-label {
+      color: #94a3b8 !important;
+    }
+
+    .status-quick-grid .status-choice-btn {
+      background: #1a1e26 !important;
+      border-color: rgba(255, 255, 255, 0.1) !important;
+      color: #cbd5e1 !important;
+
+      &.available.selected {
+        background: rgba(16, 185, 129, 0.18) !important;
+        color: #34d399 !important;
+        border-color: #10b981 !important;
+      }
+      &.occupied.selected {
+        background: rgba(239, 68, 68, 0.18) !important;
+        color: #f87171 !important;
+        border-color: #ef4444 !important;
+      }
+      &.reserved.selected {
+        background: rgba(245, 158, 11, 0.18) !important;
+        color: #fbbf24 !important;
+        border-color: #f59e0b !important;
+      }
+      &.dirty.selected {
+        background: #252b36 !important;
+        color: #94a3b8 !important;
+        border-color: #64748b !important;
+      }
+    }
+
+    /* Active Orders Cockpit in Drawer */
+    .active-orders-cockpit {
+      background: #161920 !important;
+      border-color: rgba(255, 255, 255, 0.08) !important;
+
+      .active-orders-top-bar {
+        .drawer-label {
+          color: #f1f5f9 !important;
+        }
+        .order-count-chip {
+          background: rgba(239, 68, 68, 0.22) !important;
+          color: #f87171 !important;
+        }
+      }
+    }
+
+    .active-order-card {
+      background: #1c2029 !important;
+      border-color: rgba(255, 255, 255, 0.08) !important;
+      color: #f1f5f9 !important;
+
+      &.order-ready {
+        border-left-color: #10b981 !important;
+        background: rgba(16, 185, 129, 0.08) !important;
+      }
+
+      &.order-served {
+        border-left-color: #3b82f6 !important;
+        background: rgba(59, 130, 246, 0.08) !important;
+      }
+
+      .active-order-header {
+        .round-badge {
+          background: rgba(239, 68, 68, 0.2) !important;
+          color: #f87171 !important;
+        }
+        .order-id-chip {
+          color: #f1f5f9 !important;
+        }
+      }
+
+      .order-details-grid {
+        background: #14171d !important;
+        border-color: rgba(255, 255, 255, 0.06) !important;
+
+        .text-muted {
+          color: #94a3b8 !important;
+        }
+        strong {
+          color: #f1f5f9 !important;
+        }
+        .text-crimson {
+          color: #f87171 !important;
+        }
+      }
+
+      .order-items-compact-list {
+        border-top-color: rgba(255, 255, 255, 0.08) !important;
+        border-bottom-color: rgba(255, 255, 255, 0.08) !important;
+
+        .compact-item-row {
+          .item-qty {
+            color: #f87171 !important;
+          }
+          .item-name {
+            color: #e2e8f0 !important;
+          }
+          .item-price {
+            color: #cbd5e1 !important;
+          }
+        }
+      }
+
+      .drawer-inline-server {
+        background: #14171d !important;
+        border-color: rgba(255, 255, 255, 0.08) !important;
+
+        label {
+          color: #94a3b8 !important;
+        }
+
+        .active-server-select {
+          background-color: #1a1e26 !important;
+          border-color: rgba(255, 255, 255, 0.12) !important;
+          color: #f1f5f9 !important;
+        }
+
+        .locked-server-row {
+          color: #f1f5f9 !important;
+
+          .btn-unlock-server {
+            background: #1e222b !important;
+            border-color: rgba(255, 255, 255, 0.12) !important;
+            color: #f87171 !important;
+
+            &:hover {
+              background: rgba(239, 68, 68, 0.15) !important;
+              border-color: #f87171 !important;
+            }
+          }
+        }
+      }
+
+      .lifecycle-control-box {
+        background: #14171d !important;
+        border-color: rgba(239, 68, 68, 0.3) !important;
+
+        .stepper-track {
+          .step-pill {
+            background: #252b36 !important;
+            color: #94a3b8 !important;
+
+            &.active {
+              background: #dc2626 !important;
+              color: #ffffff !important;
+              box-shadow: 0 2px 10px rgba(220, 38, 38, 0.45) !important;
+            }
+
+            &.passed {
+              background: #059669 !important;
+              color: #ffffff !important;
+            }
+          }
+
+          .step-arrow {
+            color: #64748b !important;
+          }
+        }
+      }
+
+      .active-order-actions {
+        .bill-gated-badge {
+          background: rgba(245, 158, 11, 0.14) !important;
+          color: #fbbf24 !important;
+          border-color: rgba(245, 158, 11, 0.3) !important;
+        }
+      }
+    }
+
+    .no-orders-box {
+      background: #161920 !important;
+      border-color: rgba(255, 255, 255, 0.08) !important;
+      color: #94a3b8 !important;
+    }
+
+    .form-select {
+      background-color: #1a1e26 !important;
+      color: #f1f5f9 !important;
+      border-color: rgba(255, 255, 255, 0.12) !important;
+    }
+
+    .shape-toggle-group .shape-btn {
+      background: #1a1e26 !important;
+      border-color: rgba(255, 255, 255, 0.1) !important;
+      color: #cbd5e1 !important;
+
+      &.active {
+        background: #dc2626 !important;
+        color: #ffffff !important;
+        border-color: #dc2626 !important;
+      }
+    }
+
+    .drawer-footer {
+      background: #161920 !important;
+      border-top: 1px solid rgba(255, 255, 255, 0.08) !important;
+    }
+  }
+
+  /* Quick Settlement Modal */
+  .canvas-settle-card {
+    background: #161920 !important;
+    border-color: rgba(255, 255, 255, 0.1) !important;
+    color: #f1f5f9 !important;
+
+    .settle-summary-box {
+      background: #121418 !important;
+      border-color: rgba(255, 255, 255, 0.08) !important;
+      color: #cbd5e1 !important;
+
+      .settle-divider {
+        background: rgba(255, 255, 255, 0.08) !important;
+      }
+    }
+
+    .settle-payment-section .pay-choice-btn {
+      background: #1a1e26 !important;
+      border-color: rgba(255, 255, 255, 0.1) !important;
+      color: #cbd5e1 !important;
+
+      &.active {
+        background: #252b36 !important;
+        color: #f87171 !important;
+        border-color: #ef4444 !important;
+      }
+    }
+
+    .modal-footer {
+      background: #121418 !important;
+      border-top-color: rgba(255, 255, 255, 0.08) !important;
+    }
+  }
+
+  /* Add Place Modal */
+  .add-place-card {
+    background: #161920 !important;
+    border-color: rgba(255, 255, 255, 0.1) !important;
+
+    .place-suggestions .suggestion-pills .sug-pill {
+      background: #1a1e26 !important;
+      border-color: rgba(255, 255, 255, 0.1) !important;
+      color: #cbd5e1 !important;
+
+      &:hover {
+        border-color: #f87171 !important;
+        color: #f87171 !important;
+      }
+    }
+  }
+
+  /* Standee URL preview box */
+  .standee-url-preview {
+    background: #161920 !important;
+    border-color: rgba(255, 255, 255, 0.1) !important;
+
+    .standee-url-text {
+      color: #cbd5e1 !important;
     }
   }
 }

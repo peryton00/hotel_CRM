@@ -95,10 +95,31 @@ import { ToastService } from '../../core/services/toast.service';
               routerLinkActive="active"
               class="nav-item"
               (click)="closeMobileMenu()"
-              [attr.title]="isSidebarCollapsed() ? 'Tables & QR' : null"
+              [attr.title]="
+                isSidebarCollapsed()
+                  ? 'Tables & QR' +
+                    (incomingReservationsCount() > 0
+                      ? ' (' + incomingReservationsCount() + ' reservations)'
+                      : '')
+                  : null
+              "
             >
               <i class="ph ph-qr-code"></i>
               <span class="nav-text" *ngIf="!isSidebarCollapsed()">Tables & QR</span>
+              @if (incomingReservationsCount() > 0 && !isSidebarCollapsed()) {
+                <span
+                  class="live-pill"
+                  [attr.title]="incomingReservationsCount() + ' table reservations'"
+                >
+                  {{ incomingReservationsCount() }}
+                </span>
+              }
+              @if (incomingReservationsCount() > 0 && isSidebarCollapsed()) {
+                <span
+                  class="live-dot"
+                  [attr.title]="incomingReservationsCount() + ' reservations'"
+                ></span>
+              }
             </a>
           }
 
@@ -176,10 +197,31 @@ import { ToastService } from '../../core/services/toast.service';
                 routerLinkActive="active"
                 class="nav-item"
                 (click)="closeMobileMenu()"
-                [attr.title]="isSidebarCollapsed() ? 'Reservations' : null"
+                [attr.title]="
+                  isSidebarCollapsed()
+                    ? 'Reservations' +
+                      (incomingReservationsCount() > 0
+                        ? ' (' + incomingReservationsCount() + ' incoming)'
+                        : '')
+                    : null
+                "
               >
                 <i class="ph ph-calendar-check"></i>
                 <span class="nav-text" *ngIf="!isSidebarCollapsed()">Reservations</span>
+                @if (incomingReservationsCount() > 0 && !isSidebarCollapsed()) {
+                  <span
+                    class="live-pill"
+                    [attr.title]="incomingReservationsCount() + ' incoming reservations'"
+                  >
+                    {{ incomingReservationsCount() }}
+                  </span>
+                }
+                @if (incomingReservationsCount() > 0 && isSidebarCollapsed()) {
+                  <span
+                    class="live-dot"
+                    [attr.title]="incomingReservationsCount() + ' incoming reservations'"
+                  ></span>
+                }
               </a>
             }
 
@@ -1686,12 +1728,45 @@ export class AdminLayoutComponent {
             ev.order.orderType === 'TAKEAWAY' ? 'Takeaway' : `Table ${ev.order.tableNumber || '?'}`;
           this.toastService.info(
             `New order ${ev.order.orderNumber} placed for ${loc}`,
-            '🔔 Real-time Order Arrival',
+            'New Order Arrival',
           );
         }
       }
     });
+
+    // Listen globally across the CRM for incoming live table reservations
+    let lastReservationEventTimestamp = 0;
+    effect(() => {
+      const ev = this.dataService.liveReservationEvent();
+      if (!ev) return;
+      if (ev.timestamp && ev.timestamp === lastReservationEventTimestamp) return;
+      lastReservationEventTimestamp = ev.timestamp || Date.now();
+
+      if (ev.type === 'RESERVATION_CREATED' && ev.reservation) {
+        const res = ev.reservation;
+        const rawDate = res.reservationDate || res.reservationTime || new Date().toISOString();
+        const parsedDate = new Date(rawDate);
+        const resDate = parsedDate.toLocaleDateString([], {
+          month: 'short',
+          day: 'numeric',
+        });
+        const resTime = parsedDate.toLocaleTimeString([], {
+          hour: '2-digit',
+          minute: '2-digit',
+        });
+        this.toastService.info(
+          `New Table Reservation: ${res.customerName} (${res.partySize} Guests) for ${resDate} at ${resTime}`,
+          'Incoming Reservation',
+        );
+      }
+    });
   }
+
+  readonly incomingReservationsCount = computed(() => {
+    return this.dataService
+      .reservations()
+      .filter((r) => r.status === 'CONFIRMED' || (r.status as string) === 'PENDING').length;
+  });
 
   isOrderRoute = computed(() => {
     const url = this.currentUrl();
@@ -1781,7 +1856,7 @@ export class AdminLayoutComponent {
       this.auth.setRoleMode('STAFF');
       this.toastService.info(
         'Switched to Staff Mode. Access restricted to Orders, Tables, and Bill Printing.',
-        '🛡️ Staff Mode',
+        'Staff Mode',
       );
     } else {
       this.adminPinInput = '';
@@ -1809,7 +1884,7 @@ export class AdminLayoutComponent {
           this.adminPinInput = '';
           this.toastService.success(
             'Super Admin Mode unlocked. Full CRM access granted.',
-            '👑 Admin Mode',
+            'Admin Mode',
           );
         } else {
           this.pinError.set('Incorrect Admin PIN or password. Access denied.');
@@ -1823,7 +1898,7 @@ export class AdminLayoutComponent {
           this.adminPinInput = '';
           this.toastService.success(
             'Super Admin Mode unlocked. Full CRM access granted.',
-            '👑 Admin Mode',
+            'Admin Mode',
           );
         } else {
           this.pinError.set('Incorrect Admin PIN or password. Access denied.');

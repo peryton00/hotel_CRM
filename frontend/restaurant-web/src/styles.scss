@@ -16,6 +16,12 @@
   z-index: 99999;
 }
 
+// System-wide Double-Click Suppression:
+// Drops pointer events immediately on action controls locked during the 500ms cooldown
+[data-click-locked='true'] {
+  pointer-events: none !important;
+}
+
 // =============================================================================
 // Global Print Optimization
 // =============================================================================

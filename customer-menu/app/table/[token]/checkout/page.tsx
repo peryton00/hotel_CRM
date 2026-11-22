@@ -1,11 +1,12 @@
 'use client';
 
-import { useState, useEffect, useMemo, Suspense } from 'react';
+import { useState, useEffect, useMemo, useRef, Suspense } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { useCart } from '@/lib/cart-context';
-import { placeOrder, getCustomerOrders, getTable } from '@/lib/api';
+import { placeOrder, getCustomerOrders, getTable, getCustomerLoyalty, getCoupons } from '@/lib/api';
 import type { CustomerPastOrder, TableInfo } from '@/lib/types';
 import { ThemeToggle } from '@/components/ThemeToggle';
+import { CustomerAccountDrawer, AccountButton } from '@/components/CustomerAccountDrawer';
 import { dynaura } from 'dynaura';
 import {
   ShoppingCart,
@@ -24,6 +25,13 @@ import {
   X,
   Flame,
   Lock,
+  Sparkle,
+  Tag,
+  Ticket,
+  Trophy,
+  CaretLeft,
+  CaretRight,
+  PencilSimple,
 } from '@phosphor-icons/react';
 
 const fmt = (paise: number) => `₹${(paise / 100).toFixed(2)}`;
@@ -38,14 +46,50 @@ function CheckoutContent() {
   const [phone, setPhone] = useState('');
   const [phoneInput, setPhoneInput] = useState('');
   const [isEditingPhone, setIsEditingPhone] = useState(false);
+  const [accountOpen, setAccountOpen] = useState(false);
+  const [pastOrdersPage, setPastOrdersPage] = useState(1);
+  const [lookupMessage, setLookupMessage] = useState('');
+  const [isLookingUp, setIsLookingUp] = useState(false);
   const [notes, setNotes] = useState('');
   const [loading, setLoading] = useState(false);
+  const isSubmittingRef = useRef(false);
   const [error, setError] = useState('');
   const [tableInfo, setTableInfo] = useState<TableInfo | any>({});
   const [pastOrders, setPastOrders] = useState<CustomerPastOrder[]>([]);
   const [loadingPastOrders, setLoadingPastOrders] = useState(false);
   const [selectedOrderForBill, setSelectedOrderForBill] = useState<CustomerPastOrder | null>(null);
   const [showOfflineWaiterModal, setShowOfflineWaiterModal] = useState(false);
+
+  // Loyalty & Coupon State
+  const [loyaltyData, setLoyaltyData] = useState<{
+    visit_count: number;
+    target_visits: number;
+    milestone_unlocked: boolean;
+    eligible_coupon_code: string;
+    reward_title: string;
+    reward_description: string;
+    discount_percent?: number;
+    max_discount_paise?: number;
+    loyalty_tier?: string;
+  } | null>(null);
+  const [loadingLoyalty, setLoadingLoyalty] = useState(false);
+  const [couponCodeInput, setCouponCodeInput] = useState('');
+  const [appliedCoupon, setAppliedCoupon] = useState<{
+    code: string;
+    title?: string;
+    discountPaise: number;
+    message?: string;
+  } | null>(null);
+  const [couponError, setCouponError] = useState('');
+  const [availableCoupons, setAvailableCoupons] = useState<any[]>([]);
+
+  const isTableSeated =
+    (tableInfo?.status || '').toUpperCase() === 'OCCUPIED' && tableInfo?.ordering_enabled !== false;
+  const prevTableStatusRef = useRef<string>('');
+
+  useEffect(() => {
+    prevTableStatusRef.current = (tableInfo?.status || '').toUpperCase();
+  }, [tableInfo?.status]);
 
   useEffect(() => {
     try {
@@ -78,42 +122,224 @@ function CheckoutContent() {
             try {
               sessionStorage.setItem('tableInfo', JSON.stringify({ ...res.data, token }));
             } catch {}
+            const savedPhone = localStorage.getItem('customer_phone') || phone;
+            loadPast(savedPhone, res.data.id);
           }
         })
         .catch(() => {});
     }
   }, [token]);
 
-  const loadPast = async (ph: string, tId?: string) => {
-    const clean = ph.replace(/\D/g, '');
-    if (clean.length < 10) {
+  // Real-time table seating & status synchronization via WebSocket & SSE
+  useEffect(() => {
+    let ws: WebSocket | null = null;
+    let sse: EventSource | null = null;
+    let reconnectTimeout: any = null;
+
+    const handleEventData = (rawText: string) => {
+      try {
+        const data = JSON.parse(rawText);
+        if (data.event === 'TABLE_STATUS_CHANGED') {
+          const dataTableNum = String(data.table_number || '').toLowerCase();
+          const currentTableNum = String(tableInfo?.table_number || '').toLowerCase();
+          const matchesTable =
+            (data.table_id && data.table_id === tableInfo?.id) ||
+            (dataTableNum && (
+              dataTableNum === currentTableNum ||
+              dataTableNum.replace(/^tbl-0?/, '').replace(/^t-0?/, '') === currentTableNum.replace(/^tbl-0?/, '').replace(/^t-0?/, '')
+            ));
+
+          if (matchesTable) {
+            const newStatus = (data.status || '').toUpperCase();
+            const prevStatus = (prevTableStatusRef.current || '').toUpperCase();
+            prevTableStatusRef.current = newStatus;
+
+            setTableInfo((prev: any) => {
+              const updated = {
+                ...prev,
+                status: newStatus,
+                ordering_enabled: data.ordering_enabled ?? prev.ordering_enabled,
+                current_seating_session_id:
+                  data.seating_session_id ?? prev.current_seating_session_id,
+              };
+              try {
+                sessionStorage.setItem('tableInfo', JSON.stringify(updated));
+              } catch {}
+              return updated;
+            });
+
+            if (newStatus === 'OCCUPIED' && prevStatus !== 'OCCUPIED') {
+              setError('');
+              dynaura.success({
+                title: `Table ${tableInfo?.table_number || ''} Seated!`,
+                description: 'Floor host has opened your table. Live ordering is active!',
+              });
+            } else if (newStatus !== 'OCCUPIED' && prevStatus === 'OCCUPIED') {
+              dynaura.info({
+                title: `Table ${tableInfo?.table_number || ''} Dining Concluded`,
+                description: 'Table session settled. Digital menu set to browse-only.',
+              });
+            }
+          }
+        }
+      } catch {}
+    };
+
+    const connectLiveStream = () => {
+      const apiBase = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000';
+      const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+      const wsHost = apiBase.startsWith('http')
+        ? apiBase.replace(/^http/, 'ws')
+        : `${wsProtocol}//${window.location.hostname}:3000`;
+
+      try {
+        ws = new WebSocket(`${wsHost}/ws/orders`);
+        ws.onmessage = (event) => handleEventData(event.data);
+        ws.onerror = () => {
+          if (!sse && typeof EventSource !== 'undefined') {
+            try {
+              sse = new EventSource(`${apiBase}/events`);
+              sse.onmessage = (e) => handleEventData(e.data);
+            } catch {}
+          }
+        };
+        ws.onclose = () => {
+          if (!sse && typeof EventSource !== 'undefined') {
+            try {
+              sse = new EventSource(`${apiBase}/events`);
+              sse.onmessage = (e) => handleEventData(e.data);
+            } catch {}
+          }
+          reconnectTimeout = setTimeout(connectLiveStream, 5000);
+        };
+      } catch {
+        if (!sse && typeof EventSource !== 'undefined') {
+          try {
+            sse = new EventSource(`${apiBase}/events`);
+            sse.onmessage = (e) => handleEventData(e.data);
+          } catch {}
+        }
+      }
+    };
+
+    connectLiveStream();
+    return () => {
+      if (reconnectTimeout) clearTimeout(reconnectTimeout);
+      if (ws) ws.close();
+      if (sse) sse.close();
+    };
+  }, [tableInfo?.id, tableInfo?.table_number]);
+
+  // Fallback auto-poll table status every 5 seconds when unseated
+  useEffect(() => {
+    if (isTableSeated || !token) return;
+    const interval = setInterval(() => {
+      getTable(token)
+        .then((res) => {
+          if (res?.data) {
+            setTableInfo((prev: any) => {
+              if (prev.status !== res.data.status && res.data.status === 'OCCUPIED') {
+                setError('');
+                dynaura.success({
+                  title: `Table ${res.data.table_number || ''} Seated!`,
+                  description: 'Floor host has opened your table. Live ordering is active!',
+                });
+              }
+              return { ...prev, ...res.data, token };
+            });
+            try {
+              sessionStorage.setItem('tableInfo', JSON.stringify({ ...res.data, token }));
+            } catch {}
+          }
+        })
+        .catch(() => {});
+    }, 5000);
+    return () => clearInterval(interval);
+  }, [isTableSeated, token]);
+
+  const loadPast = async (ph?: string, tId?: string) => {
+    const clean = (ph || '').replace(/\D/g, '');
+    const activeTableId = tId || tableInfo?.id;
+    if (clean.length < 10 && !activeTableId) {
       setPastOrders([]);
       return;
     }
     setLoadingPastOrders(true);
+    if (clean.length >= 10) {
+      setLoadingLoyalty(true);
+    }
     try {
-      const res = await getCustomerOrders(clean, tId);
+      const [res, loyaltyRes, couponsRes] = await Promise.all([
+        getCustomerOrders(clean, activeTableId),
+        clean.length >= 10 ? getCustomerLoyalty(clean) : Promise.resolve(null),
+        getCoupons(),
+      ]);
+
       if (res && Array.isArray(res.data)) {
         setPastOrders(res.data);
       } else {
         setPastOrders([]);
       }
+
+      if (loyaltyRes) {
+        setLoyaltyData(loyaltyRes);
+        if (loyaltyRes.name && !name) {
+          setName(loyaltyRes.name);
+          try {
+            localStorage.setItem('customer_name', loyaltyRes.name);
+          } catch {}
+        }
+      }
+
+      if (couponsRes && Array.isArray(couponsRes.data)) {
+        setAvailableCoupons(couponsRes.data);
+      }
     } catch {
       setPastOrders([]);
     } finally {
       setLoadingPastOrders(false);
+      setLoadingLoyalty(false);
+    }
+  };
+
+  const handlePhoneInputChange = async (val: string) => {
+    const clean = val.replace(/\D/g, '');
+    setPhoneInput(clean);
+    setLookupMessage('');
+    if (clean.length === 10) {
+      setIsLookingUp(true);
+      try {
+        const info = await getCustomerLoyalty(clean);
+        if (info?.name) {
+          setName(info.name);
+          try {
+            localStorage.setItem('customer_name', info.name);
+          } catch {}
+          setLookupMessage(`Found registered diner: ${info.name} 🎉`);
+        } else {
+          setLookupMessage('Welcome! Enter your name to register your table.');
+        }
+      } catch {
+        setLookupMessage('');
+      } finally {
+        setIsLookingUp(false);
+      }
     }
   };
 
   const handleSavePhone = () => {
     const clean = phoneInput.replace(/\D/g, '');
+    const trimmedName = name.trim();
     if (clean.length >= 10) {
       setPhone(clean);
       setIsEditingPhone(false);
       try {
         localStorage.setItem('customer_phone', clean);
+        if (trimmedName) {
+          localStorage.setItem('customer_name', trimmedName);
+        }
       } catch {}
-      loadPast(clean, tableInfo.id);
+      loadPast(clean, tableInfo?.id);
     }
   };
 
@@ -143,18 +369,136 @@ function CheckoutContent() {
   }, [sortedPastOrders]);
 
   // Tax rates dynamically loaded from database (configured by admin)
-  const isTableSeated = tableInfo?.status === 'OCCUPIED' && tableInfo?.ordering_enabled !== false;
   const gstRate = typeof tableInfo?.gst_rate === 'number' ? tableInfo.gst_rate : 5.0;
   const cgstRate = typeof tableInfo?.cgst_rate === 'number' ? tableInfo.cgst_rate : gstRate / 2;
   const sgstRate = typeof tableInfo?.sgst_rate === 'number' ? tableInfo.sgst_rate : gstRate / 2;
-  const cgst = Math.round(total * (cgstRate / 100));
-  const sgst = Math.round(total * (sgstRate / 100));
-  const grandTotal = total + cgst + sgst;
+
+  // Coupon & Bill Discount Logic
+  const discountPaise = appliedCoupon ? appliedCoupon.discountPaise : 0;
+  const discountedSubtotal = Math.max(0, total - discountPaise);
+  const cgst = Math.round(discountedSubtotal * (cgstRate / 100));
+  const sgst = Math.round(discountedSubtotal * (sgstRate / 100));
+  const grandTotal = discountedSubtotal + cgst + sgst;
+
+  const applyCouponCode = (rawCode?: string) => {
+    const code = (rawCode || couponCodeInput).trim().toUpperCase();
+    setCouponError('');
+    if (!code) {
+      setCouponError('Please enter a coupon code.');
+      return;
+    }
+
+    if (total <= 0) {
+      setCouponError('Please add items to your cart before applying a coupon.');
+      return;
+    }
+
+    // 1. Check if it is the 7th Visit Milestone Coupon (e.g. VISIT7FREE or matching loyaltyData)
+    const isMilestoneCode =
+      code === (loyaltyData?.eligible_coupon_code || 'VISIT7FREE').toUpperCase() ||
+      code === 'VISIT7FREE' ||
+      code === 'LUCKY7';
+
+    if (isMilestoneCode) {
+      const visits = loyaltyData?.visit_count || 0;
+      const target = loyaltyData?.target_visits || 7;
+      if (visits < target) {
+        setCouponError(`This reward unlocks on your ${target}th dining visit! You currently have ${visits} of ${target} visits.`);
+        return;
+      }
+
+      // Calculate 7-visit reward discount (e.g. 50% up to ₹500 cap)
+      const pct = loyaltyData?.discount_percent || 50;
+      const maxCapPaise = loyaltyData?.max_discount_paise || 50000;
+      let calculatedDiscount = Math.round(total * (pct / 100));
+      if (maxCapPaise > 0) {
+        calculatedDiscount = Math.min(calculatedDiscount, maxCapPaise);
+      }
+
+      setAppliedCoupon({
+        code,
+        title: loyaltyData?.reward_title || '7th Visit Celebration Reward',
+        discountPaise: calculatedDiscount,
+        message: `${pct}% OFF applied (up to ${fmt(maxCapPaise)})`,
+      });
+      setCouponCodeInput(code);
+      dynaura.success({
+        title: '7th Visit Milestone Reward Applied!',
+        description: `Saved ${fmt(calculatedDiscount)} on your celebratory dining visit.`,
+      });
+      return;
+    }
+
+    // 2. Check active coupons from public database
+    const matched = availableCoupons.find((c) => (c.code || '').toUpperCase() === code);
+    if (!matched) {
+      // Check fallback codes like DESI100, FLAT50, etc.
+      if (code === 'DESI100') {
+        const minAmountPaise = 80000;
+        if (total < minAmountPaise) {
+          setCouponError('DESI100 requires a minimum order of ₹800.00.');
+          return;
+        }
+        setAppliedCoupon({
+          code: 'DESI100',
+          title: 'Flat ₹100 OFF',
+          discountPaise: 10000,
+          message: '₹100 instant reduction applied',
+        });
+        dynaura.success({ title: 'Coupon DESI100 Applied!', description: 'Saved ₹100.00 on your order.' });
+        return;
+      }
+
+      setCouponError('Invalid or expired coupon code.');
+      return;
+    }
+
+    // Validate minimum spend
+    const minOrderPaise = (matched.min_order_amount_paise ?? (matched.min_order_amount * 100)) || 0;
+    if (total < minOrderPaise) {
+      setCouponError(`This coupon requires a minimum order of ${fmt(minOrderPaise)}.`);
+      return;
+    }
+
+    let calculatedDiscount = 0;
+    const isFlat = (matched.discount_type || '').toUpperCase() === 'FLAT' || (matched.discount_type || '').toUpperCase() === 'FLAT_AMOUNT';
+    if (isFlat) {
+      calculatedDiscount = (matched.discount_value_paise ?? Math.round(matched.discount_value * 100)) || 0;
+    } else {
+      const pct = matched.discount_value || 10;
+      calculatedDiscount = Math.round(total * (pct / 100));
+      const maxDiscount = (matched.max_discount_amount_paise ?? Math.round((matched.max_discount_amount || 500) * 100)) || 0;
+      if (maxDiscount > 0) {
+        calculatedDiscount = Math.min(calculatedDiscount, maxDiscount);
+      }
+    }
+
+    calculatedDiscount = Math.min(calculatedDiscount, total);
+
+    setAppliedCoupon({
+      code: matched.code,
+      title: matched.title || matched.description || matched.code,
+      discountPaise: calculatedDiscount,
+      message: `${fmt(calculatedDiscount)} discount applied`,
+    });
+    setCouponCodeInput(matched.code);
+    dynaura.success({
+      title: `Coupon ${matched.code} Applied!`,
+      description: `Saved ${fmt(calculatedDiscount)} on your order.`,
+    });
+  };
+
+  const removeCoupon = () => {
+    setAppliedCoupon(null);
+    setCouponCodeInput('');
+    setCouponError('');
+  };
 
   const quickNotes = ['Less Spicy', 'Extra Chutney', 'Serve Warm', 'No Onion/Garlic'];
 
   const submitOrder = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSubmittingRef.current || loading) return;
     setError('');
 
     const trimmedName = name.trim();
@@ -189,9 +533,30 @@ function CheckoutContent() {
       return;
     }
 
+    isSubmittingRef.current = true;
     setLoading(true);
 
     try {
+      // 1. Re-validate latest table seating & active session before dispatch
+      let activeSessionId = tableInfo.current_seating_session_id;
+      if (token) {
+        try {
+          const freshTable = await getTable(token);
+          if (freshTable?.data) {
+            setTableInfo((prev: any) => ({ ...prev, ...freshTable.data, token }));
+            if (freshTable.data.status !== 'OCCUPIED') {
+              setError(`Table ${freshTable.data.table_number || ''} is unseated. Please ask floor staff to seat you before placing your order.`);
+              dynaura.warning({
+                title: `Table ${freshTable.data.table_number || ''} Unseated`,
+                description: 'Please ask floor captain to open your table before placing an order.',
+              });
+              return;
+            }
+            activeSessionId = freshTable.data.current_seating_session_id || activeSessionId;
+          }
+        } catch {}
+      }
+
       const orderItems = items.map((i) => ({
         menu_item_id: i.item.id,
         item_name: i.item.name,
@@ -205,8 +570,11 @@ function CheckoutContent() {
         table_number: tableInfo.table_number,
         customer_name: trimmedName,
         customer_phone: cleanPhone,
+        seating_session_id: activeSessionId,
         items: orderItems,
         notes: notes.trim() || undefined,
+        coupon_code: appliedCoupon?.code,
+        discount_paise: appliedCoupon?.discountPaise,
       });
 
       const orderData = res.data;
@@ -223,6 +591,8 @@ function CheckoutContent() {
           customer_phone: cleanPhone,
           items: orderItems,
           subtotal_paise: total,
+          discount_paise: discountPaise,
+          applied_coupon_code: appliedCoupon?.code,
           cgst_paise: cgst,
           sgst_paise: sgst,
           cgst_rate: cgstRate,
@@ -240,12 +610,21 @@ function CheckoutContent() {
       clear();
       router.push(`/table/${token}/confirmation`);
     } catch (err: any) {
-      if (err.isPosOffline || String(err.message).includes('RESTAURANT_POS_OFFLINE')) {
+      const rawMsg = err?.message;
+      const errMsg =
+        typeof rawMsg === 'string'
+          ? rawMsg
+          : typeof rawMsg?.message === 'string'
+          ? rawMsg.message
+          : 'Failed to submit order. Please try again or alert staff.';
+
+      if (err.isPosOffline || errMsg.includes('RESTAURANT_POS_OFFLINE')) {
         setShowOfflineWaiterModal(true);
         return;
       }
-      setError(err.message || 'Failed to submit order. Please try again or alert staff.');
+      setError(errMsg);
     } finally {
+      isSubmittingRef.current = false;
       setLoading(false);
     }
   };
@@ -269,7 +648,10 @@ function CheckoutContent() {
             </p>
           </div>
         </div>
-        <ThemeToggle />
+        <div className="flex items-center gap-2">
+          <AccountButton onClick={() => setAccountOpen(true)} activeOrderCount={activeOrders.length} />
+          <ThemeToggle />
+        </div>
       </header>
 
       <form onSubmit={submitOrder} className="p-4 space-y-4 flex-1">
@@ -295,19 +677,24 @@ function CheckoutContent() {
             )}
           </div>
         )}
-        {/* Top: Customer Mobile Number Card (Shows user number at top of cart) */}
+        {/* Top: Customer Details Card */}
         {phone && !isEditingPhone ? (
           <div className="bg-white dark:bg-[#16181e] border border-neutral-200/80 dark:border-white/10 rounded-2xl p-3 flex items-center justify-between shadow-xs transition-colors duration-200">
-            <div className="flex items-center gap-2.5">
+            <div className="flex items-center gap-2.5 min-w-0">
               <div className="w-8 h-8 rounded-full bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-400 flex items-center justify-center shrink-0">
-                <Phone size={15} weight="bold" />
+                <User size={15} weight="bold" />
               </div>
-              <div>
-                <div className="text-[10px] text-neutral-400 dark:text-neutral-500 font-bold uppercase tracking-wider">
-                  Customer Mobile Number
+              <div className="min-w-0">
+                <div className="text-[10px] text-neutral-400 dark:text-neutral-500 font-bold uppercase tracking-wider flex items-center gap-1.5">
+                  <span>Diner Details</span>
+                  {loyaltyData?.loyalty_tier && (
+                    <span className="text-[9px] px-1.5 py-0.2 rounded bg-amber-100 dark:bg-amber-950/70 text-amber-800 dark:text-amber-300 font-bold">
+                      {loyaltyData.loyalty_tier}
+                    </span>
+                  )}
                 </div>
-                <div className="font-extrabold text-xs text-neutral-900 dark:text-neutral-100 tabular-nums">
-                  +91 {phone}
+                <div className="font-extrabold text-xs text-neutral-900 dark:text-neutral-100 truncate">
+                  {name || 'Guest Diner'} • <span className="tabular-nums font-mono text-neutral-500 dark:text-neutral-400">+91 {phone}</span>
                 </div>
               </div>
             </div>
@@ -317,42 +704,149 @@ function CheckoutContent() {
                 setPhoneInput(phone);
                 setIsEditingPhone(true);
               }}
-              className="text-xs font-bold text-[#c21807] dark:text-orange-400 hover:underline cursor-pointer px-2 py-1 rounded-lg"
+              className="text-xs font-bold text-[#c21807] dark:text-orange-400 hover:underline cursor-pointer px-2 py-1 rounded-lg shrink-0"
             >
               Change
             </button>
           </div>
         ) : (
-          <div className="bg-white dark:bg-[#16181e] border border-amber-200/90 dark:border-amber-900/40 rounded-2xl p-3.5 shadow-xs space-y-2 transition-colors duration-200">
+          <div className="bg-white dark:bg-[#16181e] border border-amber-200/90 dark:border-amber-900/40 rounded-2xl p-3.5 shadow-xs space-y-2.5 transition-colors duration-200">
             <div className="flex items-center justify-between">
               <span className="text-xs font-bold text-neutral-900 dark:text-neutral-100 flex items-center gap-1.5">
                 <Phone size={15} weight="bold" className="text-[#c21807]" />
-                <span>Enter Mobile Number</span>
+                <span>Enter Diner Details</span>
               </span>
-              <span className="text-[10px] text-neutral-400 dark:text-neutral-500">To view & link your table orders</span>
+              <span className="text-[10px] text-neutral-400 dark:text-neutral-500">Auto-loads your orders &amp; rewards</span>
             </div>
-            <div className="flex gap-2">
-              <span className="bg-neutral-100 dark:bg-white/10 border border-neutral-200 dark:border-white/10 rounded-xl px-2.5 py-2 text-xs font-bold text-neutral-600 dark:text-neutral-300 flex items-center gap-1">
-                +91
-              </span>
-              <input
-                type="tel"
-                maxLength={10}
-                value={phoneInput}
-                onChange={(e) => setPhoneInput(e.target.value.replace(/\D/g, ''))}
-                placeholder="10-digit mobile number"
-                className="flex-1 bg-neutral-50 dark:bg-white/5 border border-neutral-200 dark:border-white/10 rounded-xl px-3 py-2 text-xs text-neutral-900 dark:text-neutral-100 font-medium tabular-nums focus:outline-none focus:ring-2 focus:ring-[#c21807]/20 focus:border-[#c21807]"
-              />
-              <button
-                type="button"
-                disabled={phoneInput.replace(/\D/g, '').length < 10}
-                onClick={handleSavePhone}
-                className="bg-[#c21807] hover:bg-[#a91c12] disabled:opacity-50 text-white text-xs font-bold px-3.5 py-2 rounded-xl transition-all cursor-pointer shadow-xs"
-              >
-                Save
-              </button>
+
+            <div className="space-y-2">
+              <div className="flex gap-2">
+                <span className="bg-neutral-100 dark:bg-white/10 border border-neutral-200 dark:border-white/10 rounded-xl px-2.5 py-2 text-xs font-bold text-neutral-600 dark:text-neutral-300 flex items-center gap-1">
+                  +91
+                </span>
+                <input
+                  type="tel"
+                  maxLength={10}
+                  value={phoneInput}
+                  onChange={(e) => handlePhoneInputChange(e.target.value)}
+                  placeholder="10-digit mobile number"
+                  className="flex-1 bg-neutral-50 dark:bg-white/5 border border-neutral-200 dark:border-white/10 rounded-xl px-3 py-2 text-xs text-neutral-900 dark:text-neutral-100 font-medium tabular-nums focus:outline-none focus:ring-2 focus:ring-[#c21807]/20 focus:border-[#c21807]"
+                />
+              </div>
+
+              {isLookingUp && (
+                <div className="text-[10px] text-amber-600 dark:text-amber-400 flex items-center gap-1">
+                  <span className="w-2.5 h-2.5 border-2 border-amber-600 border-t-transparent rounded-full animate-spin" />
+                  <span>Looking up your dining profile...</span>
+                </div>
+              )}
+              {lookupMessage && !isLookingUp && (
+                <p className="text-[11px] font-bold text-emerald-600 dark:text-emerald-400">
+                  {lookupMessage}
+                </p>
+              )}
+
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={name}
+                  onChange={(e) => {
+                    setName(e.target.value);
+                    try {
+                      localStorage.setItem('customer_name', e.target.value);
+                    } catch {}
+                  }}
+                  placeholder="Your Full Name (e.g. Rahul Sharma)"
+                  className="flex-1 bg-neutral-50 dark:bg-white/5 border border-neutral-200 dark:border-white/10 rounded-xl px-3 py-2 text-xs text-neutral-900 dark:text-neutral-100 font-medium focus:outline-none focus:ring-2 focus:ring-[#c21807]/20 focus:border-[#c21807]"
+                />
+                <button
+                  type="button"
+                  disabled={phoneInput.replace(/\D/g, '').length < 10 || !name.trim()}
+                  onClick={handleSavePhone}
+                  className="bg-[#c21807] hover:bg-[#a91c12] disabled:opacity-50 text-white text-xs font-bold px-4 py-2 rounded-xl transition-all cursor-pointer shadow-xs shrink-0"
+                >
+                  Save
+                </button>
+              </div>
             </div>
           </div>
+        )}
+
+        {/* Customer Dining Loyalty & 7-Visit Milestone Tracker */}
+        {phone && !isEditingPhone && (
+          <section className="bg-gradient-to-br from-amber-500/10 via-orange-500/5 to-amber-500/5 dark:from-amber-950/40 dark:via-orange-950/20 dark:to-neutral-900 border border-amber-300/80 dark:border-amber-600/40 rounded-3xl p-4 shadow-xs space-y-3 transition-colors duration-200">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className="w-7 h-7 rounded-lg bg-amber-500/20 text-amber-700 dark:text-amber-400 flex items-center justify-center shrink-0">
+                  <Sparkle size={16} weight="fill" />
+                </div>
+                <div>
+                  <h3 className="font-extrabold text-xs text-neutral-900 dark:text-neutral-100 uppercase tracking-wide">
+                    Loyalty Milestone &amp; Rewards
+                  </h3>
+                  <p className="text-[10px] text-neutral-500 dark:text-neutral-400">
+                    Tier: <span className="font-bold text-amber-700 dark:text-amber-400">{loyaltyData?.loyalty_tier || 'BRONZE'}</span> • Verified Dining
+                  </p>
+                </div>
+              </div>
+              <span className="text-[11px] font-black text-amber-800 dark:text-amber-300 bg-amber-100/80 dark:bg-amber-900/60 px-2.5 py-0.5 rounded-full tabular-nums">
+                {loyaltyData?.visit_count || 0} / {loyaltyData?.target_visits || 7} Visits
+              </span>
+            </div>
+
+            {/* Progress Bar */}
+            <div className="space-y-1">
+              <div className="w-full bg-neutral-200 dark:bg-white/10 h-2 rounded-full overflow-hidden">
+                <div
+                  className="bg-gradient-to-r from-amber-500 to-orange-500 h-full rounded-full transition-all duration-500"
+                  style={{
+                    width: `${Math.min(100, Math.round(((loyaltyData?.visit_count || 0) / (loyaltyData?.target_visits || 7)) * 100))}%`,
+                  }}
+                />
+              </div>
+              <div className="flex justify-between items-center text-[10px] text-neutral-500 dark:text-neutral-400">
+                <span>Start</span>
+                <span>
+                  {loyaltyData?.milestone_unlocked
+                    ? 'Milestone Unlocked!'
+                    : `${(loyaltyData?.target_visits || 7) - (loyaltyData?.visit_count || 0)} more visits to 7th Visit Reward`}
+                </span>
+                <span>7th Visit</span>
+              </div>
+            </div>
+
+            {/* Unlocked Reward Banner */}
+            {loyaltyData?.milestone_unlocked ? (
+              <div className="bg-white/80 dark:bg-[#16181e]/90 border border-emerald-300 dark:border-emerald-700/60 rounded-2xl p-3 flex items-center justify-between gap-3 shadow-2xs">
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <div className="w-8 h-8 rounded-xl bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0">
+                    <Trophy size={18} weight="fill" />
+                  </div>
+                  <div className="min-w-0">
+                    <div className="font-extrabold text-xs text-neutral-900 dark:text-neutral-100 truncate">
+                      {loyaltyData.reward_title}
+                    </div>
+                    <div className="text-[10px] text-emerald-700 dark:text-emerald-400 font-medium">
+                      Code: <strong className="font-mono">{loyaltyData.eligible_coupon_code}</strong> • 50% OFF up to ₹500
+                    </div>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => applyCouponCode(loyaltyData.eligible_coupon_code)}
+                  disabled={appliedCoupon?.code === loyaltyData.eligible_coupon_code}
+                  className="bg-emerald-600 hover:bg-emerald-700 disabled:opacity-60 text-white font-extrabold text-[11px] px-3 py-1.5 rounded-xl shadow-xs shrink-0 transition-all cursor-pointer active:scale-95"
+                >
+                  {appliedCoupon?.code === loyaltyData.eligible_coupon_code ? 'Applied' : 'Apply Reward'}
+                </button>
+              </div>
+            ) : (
+              <p className="text-[11px] text-neutral-600 dark:text-neutral-300 leading-relaxed bg-white/60 dark:bg-white/5 p-2.5 rounded-xl border border-amber-200/60 dark:border-white/5">
+                Visit our restaurant <strong>7 times</strong> to unlock a massive celebration discount or free meal reward on your bill!
+              </p>
+            )}
+          </section>
         )}
 
         {/* Table Banner Card (Pattern 3: Host-Seated State Machine) */}
@@ -636,7 +1130,9 @@ function CheckoutContent() {
               </div>
 
               <div className="space-y-3">
-                {completedOrders.map((po, idx) => {
+                {completedOrders
+                  .slice((pastOrdersPage - 1) * 4, pastOrdersPage * 4)
+                  .map((po, idx) => {
                   const orderId = po.id || po.order?.id || idx;
                   const orderNum = po.order_number || po.order?.order_number || 'ORD';
                   const orderTotal = po.total_amount_paise ?? po.order?.total_amount_paise ?? 0;
@@ -695,6 +1191,35 @@ function CheckoutContent() {
                     </div>
                   );
                 })}
+
+                {/* Pagination Controls for Delivered Orders */}
+                {completedOrders.length > 4 && (
+                  <div className="pt-2 flex items-center justify-between text-xs">
+                    <button
+                      type="button"
+                      disabled={pastOrdersPage <= 1}
+                      onClick={() => setPastOrdersPage((p) => Math.max(1, p - 1))}
+                      className="px-3 py-1.5 rounded-xl border border-neutral-200 dark:border-white/10 bg-white dark:bg-white/5 text-neutral-700 dark:text-neutral-300 font-bold disabled:opacity-40 disabled:cursor-not-allowed hover:bg-neutral-50 dark:hover:bg-white/10 transition-colors flex items-center gap-1 cursor-pointer"
+                    >
+                      <CaretLeft size={14} weight="bold" />
+                      <span>Prev</span>
+                    </button>
+
+                    <span className="text-[11px] font-bold text-neutral-500 dark:text-neutral-400">
+                      Page {pastOrdersPage} of {Math.ceil(completedOrders.length / 4)}
+                    </span>
+
+                    <button
+                      type="button"
+                      disabled={pastOrdersPage >= Math.ceil(completedOrders.length / 4)}
+                      onClick={() => setPastOrdersPage((p) => Math.min(Math.ceil(completedOrders.length / 4), p + 1))}
+                      className="px-3 py-1.5 rounded-xl border border-neutral-200 dark:border-white/10 bg-white dark:bg-white/5 text-neutral-700 dark:text-neutral-300 font-bold disabled:opacity-40 disabled:cursor-not-allowed hover:bg-neutral-50 dark:hover:bg-white/10 transition-colors flex items-center gap-1 cursor-pointer"
+                    >
+                      <span>Next</span>
+                      <CaretRight size={14} weight="bold" />
+                    </button>
+                  </div>
+                )}
               </div>
             </div>
           ) : activeOrders.length === 0 ? (
@@ -712,6 +1237,116 @@ function CheckoutContent() {
           ) : null
         )}
 
+        {/* Coupon & Discount Offers Card */}
+        {items.length > 0 && (
+          <section className="bg-white dark:bg-[#16181e] rounded-3xl border border-neutral-200/70 dark:border-white/10 p-4 shadow-xs space-y-3 transition-colors duration-200">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-1.5 text-xs font-black text-neutral-900 dark:text-neutral-100 uppercase tracking-wide">
+                <Tag size={15} weight="bold" className="text-[#c21807] dark:text-orange-400" />
+                <span>Offers &amp; Coupons</span>
+              </div>
+              {appliedCoupon && (
+                <span className="text-[10px] font-bold text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/60 px-2 py-0.5 rounded-full border border-emerald-200/60 dark:border-emerald-800/60">
+                  Coupon Active
+                </span>
+              )}
+            </div>
+
+            {appliedCoupon ? (
+              <div className="bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-300 dark:border-emerald-700/60 rounded-2xl p-3 flex items-center justify-between gap-3 shadow-2xs">
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <div className="w-8 h-8 rounded-xl bg-emerald-100 dark:bg-emerald-900/60 text-emerald-700 dark:text-emerald-300 flex items-center justify-center shrink-0">
+                    <CheckCircle size={18} weight="fill" />
+                  </div>
+                  <div className="min-w-0">
+                    <div className="font-mono font-extrabold text-xs text-emerald-950 dark:text-emerald-100 truncate">
+                      {appliedCoupon.code}
+                    </div>
+                    <div className="text-[11px] text-emerald-700 dark:text-emerald-400 font-semibold">
+                      Saved {fmt(appliedCoupon.discountPaise)} ({appliedCoupon.title})
+                    </div>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={removeCoupon}
+                  className="w-7 h-7 rounded-full bg-emerald-200/60 dark:bg-emerald-800/60 text-emerald-800 dark:text-emerald-200 hover:bg-emerald-300 flex items-center justify-center transition-colors cursor-pointer shrink-0"
+                  aria-label="Remove coupon"
+                >
+                  <X size={13} weight="bold" />
+                </button>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={couponCodeInput}
+                    onChange={(e) => {
+                      setCouponCodeInput(e.target.value.toUpperCase());
+                      setCouponError('');
+                    }}
+                    placeholder="Enter coupon code (e.g. VISIT7FREE)"
+                    className="flex-1 bg-neutral-50 dark:bg-white/5 border border-neutral-200 dark:border-white/10 rounded-xl px-3 py-2 text-xs font-mono font-bold text-neutral-900 dark:text-neutral-100 uppercase placeholder:normal-case placeholder:font-sans placeholder:font-normal placeholder:text-neutral-400 focus:outline-none focus:ring-2 focus:ring-[#c21807]/20 focus:border-[#c21807]"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => applyCouponCode()}
+                    disabled={!couponCodeInput.trim()}
+                    className="bg-[#c21807] hover:bg-[#a91c12] disabled:opacity-50 text-white font-bold text-xs px-4 py-2 rounded-xl transition-all cursor-pointer shadow-xs active:scale-95 shrink-0"
+                  >
+                    Apply
+                  </button>
+                </div>
+
+                {couponError && (
+                  <p className="text-[11px] text-rose-600 dark:text-rose-400 font-medium flex items-center gap-1">
+                    <WarningCircle size={13} weight="bold" className="shrink-0" />
+                    <span>{couponError}</span>
+                  </p>
+                )}
+
+                {/* Available Quick Suggestion Chips */}
+                <div className="flex items-center gap-1.5 pt-1 overflow-x-auto no-scrollbar">
+                  <span className="text-[10px] font-bold text-neutral-400 dark:text-neutral-500 uppercase tracking-wider shrink-0">
+                    Offers:
+                  </span>
+                  {loyaltyData?.milestone_unlocked && (
+                    <button
+                      type="button"
+                      onClick={() => applyCouponCode(loyaltyData.eligible_coupon_code)}
+                      className="text-[10px] font-bold bg-amber-100 dark:bg-amber-950/70 text-amber-800 dark:text-amber-300 border border-amber-300 dark:border-amber-700/60 px-2.5 py-1 rounded-full shrink-0 hover:bg-amber-200 transition-colors cursor-pointer flex items-center gap-1"
+                    >
+                      <Sparkle size={10} weight="fill" />
+                      <span>{loyaltyData.eligible_coupon_code} (7th Visit)</span>
+                    </button>
+                  )}
+                  {availableCoupons.map((c) => (
+                    <button
+                      key={c.id || c.code}
+                      type="button"
+                      onClick={() => applyCouponCode(c.code)}
+                      className="text-[10px] font-bold bg-neutral-100 dark:bg-white/10 hover:bg-neutral-200 dark:hover:bg-white/15 text-neutral-700 dark:text-neutral-300 px-2.5 py-1 rounded-full shrink-0 transition-colors cursor-pointer border border-neutral-200/70 dark:border-white/10"
+                    >
+                      {c.code}
+                    </button>
+                  ))}
+                  {!availableCoupons.some((c) => c.code === 'DESI100') && (
+                    <button
+                      type="button"
+                      onClick={() => applyCouponCode('DESI100')}
+                      className="text-[10px] font-bold bg-neutral-100 dark:bg-white/10 hover:bg-neutral-200 dark:hover:bg-white/15 text-neutral-700 dark:text-neutral-300 px-2.5 py-1 rounded-full shrink-0 transition-colors cursor-pointer border border-neutral-200/70 dark:border-white/10"
+                    >
+                      DESI100
+                    </button>
+                  )}
+                </div>
+              </div>
+            )}
+          </section>
+        )}
+
         {/* Bill Summary - Only shown for dishes in current round */}
         {items.length > 0 && (
           <section className="bg-white dark:bg-[#16181e] rounded-3xl border border-neutral-200/70 dark:border-white/10 p-4 shadow-xs space-y-2 transition-colors duration-200">
@@ -721,6 +1356,16 @@ function CheckoutContent() {
               <span>Current Round Items</span>
               <span className="font-bold text-neutral-900 dark:text-neutral-100 tabular-nums">{fmt(total)}</span>
             </div>
+
+            {appliedCoupon && appliedCoupon.discountPaise > 0 && (
+              <div className="flex justify-between text-xs text-emerald-700 dark:text-emerald-400 font-semibold">
+                <span className="flex items-center gap-1">
+                  <Tag size={13} weight="bold" />
+                  <span>Coupon ({appliedCoupon.code})</span>
+                </span>
+                <span className="font-bold tabular-nums">-{fmt(appliedCoupon.discountPaise)}</span>
+              </div>
+            )}
 
             <div className="flex justify-between text-xs text-neutral-500 dark:text-neutral-400">
               <span>CGST ({cgstRate}%)</span>
@@ -1066,6 +1711,16 @@ function CheckoutContent() {
           </div>
         </div>
       )}
+
+      {/* Swiggy/Zomato style Customer Account Drawer */}
+      <CustomerAccountDrawer
+        isOpen={accountOpen}
+        onClose={() => setAccountOpen(false)}
+        tableToken={token}
+        tableId={tableInfo?.id}
+        tableNumber={tableInfo?.table_number}
+        onApplyCoupon={(code) => applyCouponCode(code)}
+      />
     </div>
   );
 }

@@ -58,6 +58,22 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             last_seen_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
             metadata JSONB
         );
+
+        -- Customers compatibility & unique constraint
+        ALTER TABLE customers ADD COLUMN IF NOT EXISTS total_spent_paise BIGINT DEFAULT 0;
+        ALTER TABLE customers ADD COLUMN IF NOT EXISTS total_spend_paise BIGINT DEFAULT 0;
+        ALTER TABLE customers ADD COLUMN IF NOT EXISTS total_orders INT DEFAULT 0;
+        ALTER TABLE customers ADD COLUMN IF NOT EXISTS visit_count INT DEFAULT 0;
+        UPDATE customers SET total_spent_paise = COALESCE(total_spent_paise, total_spend_paise, 0);
+        UPDATE customers SET total_spend_paise = COALESCE(total_spend_paise, total_spent_paise, 0);
+        UPDATE customers SET total_orders = COALESCE(total_orders, visit_count, 0);
+        UPDATE customers SET visit_count = COALESCE(visit_count, total_orders, 0);
+        CREATE UNIQUE INDEX IF NOT EXISTS uq_customers_restaurant_phone ON customers(restaurant_id, phone);
+        ALTER TABLE orders ALTER COLUMN order_number DROP NOT NULL;
+        CREATE INDEX IF NOT EXISTS idx_orders_customer_phone ON orders(restaurant_id, customer_phone);
+        CREATE INDEX IF NOT EXISTS idx_orders_customer_phone_e164 ON orders(restaurant_id, customer_phone_e164);
+        CREATE INDEX IF NOT EXISTS idx_orders_table_created ON orders(restaurant_id, table_id, created_at);
+        CREATE INDEX IF NOT EXISTS idx_order_items_order_id ON order_items(order_id);
         "#,
     )
     .execute(&pool)

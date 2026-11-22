@@ -10,6 +10,10 @@ use uuid::Uuid;
 
 use crate::{config::AppState, gateway::GatewayHeartbeatClient};
 
+pub async fn health_check() -> impl IntoResponse {
+    (StatusCode::OK, Json(json!({ "status": "ok" })))
+}
+
 pub async fn liveness() -> impl IntoResponse {
     (StatusCode::OK, Json(json!({ "status": "alive" })))
 }

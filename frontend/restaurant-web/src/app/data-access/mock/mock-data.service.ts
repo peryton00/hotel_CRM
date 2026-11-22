@@ -22,7 +22,11 @@ import {
   RefundRecord,
 } from '../../core/models/billing.model';
 import { Reservation, ReservationStatus } from '../../core/models/reservation.model';
-import { LoyaltyTierConfig, LoyaltyTransaction } from '../../core/models/loyalty.model';
+import {
+  LoyaltyTierConfig,
+  LoyaltyTransaction,
+  DEFAULT_LOYALTY_TIERS,
+} from '../../core/models/loyalty.model';
 import { Feedback } from '../../core/models/feedback.model';
 import { StaffMember } from '../../core/models/staff.model';
 import { AuditLogEntry } from '../../core/models/audit.model';
@@ -100,7 +104,7 @@ export class MockDataService {
     this.reservations.set([]);
     this.staffMembers.set([]);
     this.feedbacks.set([]);
-    this.loyaltyTiers.set([]);
+    this.loyaltyTiers.set(DEFAULT_LOYALTY_TIERS);
     this.loyaltyTransactions.set([]);
     this.invoices.set([]);
     this.splitBills.set([]);
@@ -591,6 +595,72 @@ export class MockDataService {
     });
 
     return newAssignment;
+  }
+
+  updateCoupon(coupon: Coupon): { success: boolean; coupon?: Coupon } {
+    const updated = this.coupons().map((c) => (c.id === coupon.id ? coupon : c));
+    this.coupons.set(updated);
+    this.saveLocal('coupons', updated);
+    return { success: true, coupon };
+  }
+
+  toggleFeedbackVisibility(feedbackId: string, isPublic: boolean): { success: boolean } {
+    const updated = this.feedbacks().map((f) => (f.id === feedbackId ? { ...f, isPublic } : f));
+    this.feedbacks.set(updated);
+    this.saveLocal('feedbacks', updated);
+    return { success: true };
+  }
+
+  logCustomerVisit(
+    customerIdOrPhone: string,
+    note?: string,
+  ): { success: boolean; customer?: Customer } {
+    const list = this.customers();
+    const cleanQuery = customerIdOrPhone.trim().replace(/\s+/g, '');
+    const cust = list.find(
+      (c) =>
+        c.id === cleanQuery ||
+        c.phone === cleanQuery ||
+        c.phoneE164 === cleanQuery ||
+        (c.phone && cleanQuery.length >= 10 && c.phone.endsWith(cleanQuery.slice(-10))),
+    );
+
+    if (!cust) return { success: false };
+
+    const newVisitCount = (cust.visitCount || 0) + 1;
+    let newTier = cust.loyaltyTier;
+    if (newVisitCount >= 10) newTier = 'PLATINUM';
+    else if (newVisitCount >= 5) newTier = 'GOLD';
+    else if (newVisitCount >= 3) newTier = 'SILVER';
+    else newTier = 'BRONZE';
+
+    const nowIso = new Date().toISOString();
+    const updatedCust: Customer = {
+      ...cust,
+      visitCount: newVisitCount,
+      lastVisit: nowIso,
+      loyaltyTier: newTier,
+      status: newVisitCount >= 10 ? 'VIP' : cust.status,
+    };
+
+    const newTx: LoyaltyTransaction = {
+      id: `lt-v-${Date.now().toString().slice(-4)}`,
+      customerId: cust.id,
+      customerName: cust.name,
+      type: 'EARNED',
+      points: 50,
+      description: note?.trim() || `Visit #${newVisitCount} logged (Dining milestone)`,
+      date: nowIso,
+    };
+
+    const updatedCusts = this.customers().map((c) => (c.id === cust.id ? updatedCust : c));
+    this.customers.set(updatedCusts);
+    this.saveLocal('customers', updatedCusts);
+    const updatedTx = [newTx, ...this.loyaltyTransactions()];
+    this.loyaltyTransactions.set(updatedTx);
+    this.saveLocal('loyaltyTransactions', updatedTx);
+
+    return { success: true, customer: updatedCust };
   }
 
   /**

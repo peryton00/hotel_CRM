@@ -35,7 +35,7 @@ type SettingsTab = 'general' | 'tax' | 'printer' | 'service' | 'maintenance' | '
             </span>
             <span class="status-pill">
               <i class="ph ph-receipt"></i>
-              GST Active (5.0%)
+              GST Active ({{ profile.cgstRate + profile.sgstRate | number: '1.1-1' }}%)
             </span>
             @if (isDirty()) {
               <span class="status-pill warning-pill">
@@ -46,7 +46,8 @@ type SettingsTab = 'general' | 'tax' | 'printer' | 'service' | 'maintenance' | '
           </div>
           <h1 class="heading-display">Restaurant Settings</h1>
           <p class="text-muted">
-            Brand identity, ESC/POS receipt printers, tax compliance, and kitchen operations.
+            Brand identity, Google reviews, ESC/POS receipt printers, tax compliance, and kitchen
+            operations.
           </p>
         </div>
 
@@ -77,1153 +78,1287 @@ type SettingsTab = 'general' | 'tax' | 'printer' | 'service' | 'maintenance' | '
         }
       </div>
 
-      <!-- Settings Navigation Tabs -->
-      <div class="settings-tabs-bar" role="tablist">
-        <button
-          type="button"
-          class="settings-tab-btn"
-          [class.active]="activeTab === 'general'"
-          (click)="activeTab = 'general'"
-        >
-          <i class="ph ph-storefront"></i>
-          <span>Brand & Contact</span>
-        </button>
-        <button
-          type="button"
-          class="settings-tab-btn"
-          [class.active]="activeTab === 'tax'"
-          (click)="activeTab = 'tax'"
-        >
-          <i class="ph ph-receipt"></i>
-          <span>Taxes & Invoicing</span>
-        </button>
-        <button
-          type="button"
-          class="settings-tab-btn"
-          [class.active]="activeTab === 'printer'"
-          (click)="activeTab = 'printer'"
-        >
-          <i class="ph ph-printer"></i>
-          <span>Thermal Printer</span>
-          <span class="tab-chip">ESC/POS</span>
-        </button>
-        <button
-          type="button"
-          class="settings-tab-btn"
-          [class.active]="activeTab === 'service'"
-          (click)="activeTab = 'service'"
-        >
-          <i class="ph ph-cooking-pot"></i>
-          <span>Kitchen & Ops</span>
-        </button>
-        <button
-          type="button"
-          class="settings-tab-btn"
-          [class.active]="activeTab === 'maintenance'"
-          (click)="activeTab = 'maintenance'"
-        >
-          <i class="ph ph-database"></i>
-          <span>System & Storage</span>
-        </button>
-        @if (auth.isAdmin()) {
-          <button
-            type="button"
-            class="settings-tab-btn"
-            [class.active]="activeTab === 'security'"
-            (click)="activeTab = 'security'"
-          >
-            <i class="ph ph-shield-check"></i>
-            <span>Admin Security</span>
-          </button>
-        }
+      <!-- Quick Search / Option Navigator Bar -->
+      <div class="settings-search-bar">
+        <div class="search-input-wrap">
+          <i class="ph ph-magnifying-glass search-icon"></i>
+          <input
+            type="text"
+            class="form-input search-input"
+            placeholder="Search all settings (e.g. google review, gst, printer, password, takeaway, qr menu)..."
+            [ngModel]="settingsSearchQuery()"
+            (ngModelChange)="settingsSearchQuery.set($event)"
+          />
+          @if (settingsSearchQuery()) {
+            <button
+              type="button"
+              class="search-clear-btn"
+              (click)="settingsSearchQuery.set('')"
+              title="Clear search filter"
+            >
+              <i class="ph ph-x"></i>
+            </button>
+          }
+        </div>
       </div>
 
-      <!-- TAB 1: BRAND PROFILE & CONTACT -->
-      @if (activeTab === 'general') {
-        <div class="settings-grid">
-          <div class="panel-box">
-            <div class="panel-header-row">
-              <div class="panel-title-group">
-                <div class="panel-icon-wrap">
-                  <i class="ph ph-storefront"></i>
-                </div>
-                <div class="panel-title-text">
-                  <h2 class="heading-card">Brand Identity</h2>
-                  <p class="panel-subtitle">
-                    Public restaurant name, menu banner details, and concept description.
-                  </p>
-                </div>
-              </div>
-              <span class="panel-badge">Public Display</span>
-            </div>
-
-            <div class="form-group">
-              <label class="form-label">Establishment Name *</label>
-              <div class="input-with-icon">
-                <i class="ph ph-buildings field-icon"></i>
-                <input type="text" class="form-input has-icon" [(ngModel)]="profile.name" />
-              </div>
-            </div>
-
-            <div class="form-group">
-              <label class="form-label">Tagline / Culinary Subtitle</label>
-              <div class="input-with-icon">
-                <i class="ph ph-sparkle field-icon"></i>
-                <input type="text" class="form-input has-icon" [(ngModel)]="profile.tagline" />
-              </div>
-            </div>
-
-            <div class="form-group">
-              <label class="form-label">Concept Description</label>
-              <textarea class="form-textarea" rows="3" [(ngModel)]="profile.description"></textarea>
-              <span class="field-hint"
-                >Appears on the digital QR ordering welcome screen and customer receipt
-                header.</span
-              >
-            </div>
-          </div>
-
-          <div class="panel-box">
-            <div class="panel-header-row">
-              <div class="panel-title-group">
-                <div class="panel-icon-wrap">
-                  <i class="ph ph-map-pin"></i>
-                </div>
-                <div class="panel-title-text">
-                  <h2 class="heading-card">Contact & Location</h2>
-                  <p class="panel-subtitle">
-                    Physical address and official customer support contact lines.
-                  </p>
-                </div>
+      <!-- Settings Master-Detail Layout -->
+      <div class="settings-layout">
+        <!-- Sidebar Navigation Rail -->
+        <aside class="settings-sidebar" role="tablist" aria-label="Settings categories">
+          @for (group of groupedNavItems(); track group.category) {
+            <div class="sidebar-category-group">
+              <span class="sidebar-category-heading">{{ group.category }}</span>
+              <div class="sidebar-nav-items">
+                @for (item of group.items; track item.id) {
+                  <button
+                    type="button"
+                    class="sidebar-nav-btn"
+                    [class.active]="activeTab === item.id"
+                    [class.search-matched]="settingsSearchQuery() && item.matchesSearch"
+                    [class.dimmed]="settingsSearchQuery() && !item.matchesSearch"
+                    (click)="switchTab(item.id)"
+                  >
+                    <div class="nav-btn-icon-box">
+                      <i class="ph" [class]="item.icon"></i>
+                    </div>
+                    <div class="nav-btn-text">
+                      <div class="nav-btn-title-row">
+                        <span class="nav-btn-label">{{ item.label }}</span>
+                        @if (item.badge) {
+                          <span class="tab-chip">{{ item.badge }}</span>
+                        }
+                      </div>
+                      <span class="nav-btn-desc">{{ item.description }}</span>
+                    </div>
+                  </button>
+                }
               </div>
             </div>
+          }
+        </aside>
 
-            <div class="form-row-2">
-              <div class="form-group">
-                <label class="form-label">Contact Phone</label>
-                <div class="input-with-icon">
-                  <i class="ph ph-phone field-icon"></i>
-                  <input
-                    type="text"
-                    class="form-input has-icon"
-                    [(ngModel)]="profile.contactPhone"
-                  />
-                </div>
-              </div>
-              <div class="form-group">
-                <label class="form-label">Support Email</label>
-                <div class="input-with-icon">
-                  <i class="ph ph-envelope field-icon"></i>
-                  <input
-                    type="email"
-                    class="form-input has-icon"
-                    [(ngModel)]="profile.contactEmail"
-                  />
-                </div>
-              </div>
+        <!-- Right Content Pane -->
+        <main class="settings-content-pane">
+          <!-- Active Tab Category Banner -->
+          <div class="active-tab-banner">
+            <div class="tab-banner-left">
+              <span class="tab-banner-category">{{ currentNavCategory() }}</span>
+              <h2 class="tab-banner-title">{{ currentNavTitle() }}</h2>
             </div>
-
-            <div class="form-group">
-              <label class="form-label">Customer Mobile Menu Website (QR Target Hosted Link)</label>
-              <div class="input-with-icon">
-                <i class="ph ph-globe field-icon"></i>
-                <input
-                  type="url"
-                  class="form-input has-icon"
-                  [(ngModel)]="profile.customerMenuUrl"
-                  placeholder="https://gurukripadhaba-menu.vercel.app"
-                />
-              </div>
-              <span class="field-hint">
-                Public hosted URL embedded into table QR codes and standees for customer mobile
-                ordering.
+            @if (isDirty()) {
+              <span class="status-pill warning-pill">
+                <span class="status-dot warning-dot"></span>
+                Unsaved Changes Pending
               </span>
-            </div>
-
-            <div class="form-group">
-              <label class="form-label">Street Address</label>
-              <div class="input-with-icon">
-                <i class="ph ph-navigation-arrow field-icon"></i>
-                <input type="text" class="form-input has-icon" [(ngModel)]="profile.street" />
-              </div>
-            </div>
-
-            <div class="form-row-2">
-              <div class="form-group">
-                <label class="form-label">City</label>
-                <input type="text" class="form-input" [(ngModel)]="profile.city" />
-              </div>
-              <div class="form-group">
-                <label class="form-label">State & PIN</label>
-                <input type="text" class="form-input" [(ngModel)]="profile.statePin" />
-              </div>
-            </div>
-          </div>
-        </div>
-      }
-
-      <!-- TAB 2: TAXES & INVOICING -->
-      @if (activeTab === 'tax') {
-        <div class="settings-grid">
-          <div class="panel-box">
-            <div class="panel-header-row">
-              <div class="panel-title-group">
-                <div class="panel-icon-wrap">
-                  <i class="ph ph-receipt"></i>
-                </div>
-                <div class="panel-title-text">
-                  <h2 class="heading-card">Goods & Services Tax (GST)</h2>
-                  <p class="panel-subtitle">
-                    Standard Indian GST tax brackets applied at POS checkout.
-                  </p>
-                </div>
-              </div>
-              <span class="panel-badge">Tax Slab: 5.0%</span>
-            </div>
-
-            <div class="form-row-2">
-              <div class="form-group">
-                <label class="form-label">CGST Rate</label>
-                <div class="input-with-suffix">
-                  <input
-                    type="number"
-                    step="0.1"
-                    min="0"
-                    max="28"
-                    class="form-input has-suffix"
-                    [(ngModel)]="profile.cgstRate"
-                  />
-                  <span class="field-suffix">%</span>
-                </div>
-              </div>
-              <div class="form-group">
-                <label class="form-label">SGST Rate</label>
-                <div class="input-with-suffix">
-                  <input
-                    type="number"
-                    step="0.1"
-                    min="0"
-                    max="28"
-                    class="form-input has-suffix"
-                    [(ngModel)]="profile.sgstRate"
-                  />
-                  <span class="field-suffix">%</span>
-                </div>
-              </div>
-            </div>
-
-            <div class="form-group">
-              <label class="form-label">GST Identification Number (GSTIN)</label>
-              <div class="input-with-icon">
-                <i class="ph ph-identification-card field-icon"></i>
-                <input
-                  type="text"
-                  class="form-input has-icon font-mono uppercase"
-                  [(ngModel)]="profile.gstNumber"
-                />
-              </div>
-              <span class="field-hint"
-                >15-digit statutory GSTIN displayed on customer bills and B2B reports.</span
-              >
-            </div>
-
-            <div class="form-row-2">
-              <div class="form-group">
-                <label class="form-label">Service Charge</label>
-                <div class="input-with-suffix">
-                  <input
-                    type="number"
-                    step="0.5"
-                    min="0"
-                    max="20"
-                    class="form-input has-suffix"
-                    [(ngModel)]="profile.serviceChargeRate"
-                  />
-                  <span class="field-suffix">%</span>
-                </div>
-              </div>
-              <div class="form-group">
-                <label class="form-label">Default Currency</label>
-                <input type="text" class="form-input disabled-input" value="INR (₹)" disabled />
-              </div>
-            </div>
-          </div>
-
-          <div class="panel-box">
-            <div class="panel-header-row">
-              <div class="panel-title-group">
-                <div class="panel-icon-wrap">
-                  <i class="ph ph-article"></i>
-                </div>
-                <div class="panel-title-text">
-                  <h2 class="heading-card">Receipt & Bill Customization</h2>
-                  <p class="panel-subtitle">
-                    Mandated licenses and customized guest checkout notes.
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            <div class="form-group">
-              <label class="form-label">FSSAI License / Registration #</label>
-              <div class="input-with-icon">
-                <i class="ph ph-shield-check field-icon"></i>
-                <input
-                  type="text"
-                  class="form-input has-icon font-mono"
-                  [(ngModel)]="profile.fssaiNumber"
-                  placeholder="14-digit FSSAI License Number"
-                />
-              </div>
-              <span class="field-hint"
-                >Mandated food safety license number printed on physical receipts.</span
-              >
-            </div>
-
-            <div class="form-group">
-              <label class="form-label">Invoice Footer Message</label>
-              <textarea
-                class="form-textarea"
-                rows="3"
-                [(ngModel)]="profile.invoiceFooter"
-                placeholder="e.g. Thank you for dining with us! Please visit us again."
-              ></textarea>
-              <span class="field-hint"
-                >Printed at the bottom of customer receipts before the QR code.</span
-              >
-            </div>
-          </div>
-        </div>
-      }
-
-      <!-- TAB 3: HARDWARE & THERMAL PRINTER (ESC/POS) -->
-      @if (activeTab === 'printer') {
-        <div class="settings-grid">
-          <div class="panel-box">
-            <div class="panel-header-row">
-              <div class="panel-title-group">
-                <div class="panel-icon-wrap">
-                  <i class="ph ph-printer"></i>
-                </div>
-                <div class="panel-title-text">
-                  <h2 class="heading-card">Hardware Receipt Printer (ESC/POS)</h2>
-                  <p class="panel-subtitle">
-                    Raw spooling to USB thermal printers or Network LAN sockets.
-                  </p>
-                </div>
-              </div>
-              <span class="panel-badge highlight">Raw Protocol</span>
-            </div>
-
-            <div class="form-group">
-              <label class="form-label">Printer Interface Target</label>
-              <div class="radio-cards-cluster">
-                <label class="radio-card" [class.selected]="printerConfig().target === 'WINDOWS'">
-                  <input
-                    type="radio"
-                    name="printerTarget"
-                    value="WINDOWS"
-                    [checked]="printerConfig().target === 'WINDOWS'"
-                    (change)="updatePrinterConfig('target', 'WINDOWS')"
-                  />
-                  <div class="radio-card-content">
-                    <i class="ph ph-usb"></i>
-                    <div>
-                      <strong>Windows / USB Thermal Printer (Tauri Native)</strong>
-                      <span>Direct raw spooling via Windows printer driver</span>
-                    </div>
-                  </div>
-                </label>
-
-                <label class="radio-card" [class.selected]="printerConfig().target === 'NETWORK'">
-                  <input
-                    type="radio"
-                    name="printerTarget"
-                    value="NETWORK"
-                    [checked]="printerConfig().target === 'NETWORK'"
-                    (change)="updatePrinterConfig('target', 'NETWORK')"
-                  />
-                  <div class="radio-card-content">
-                    <i class="ph ph-wifi-high"></i>
-                    <div>
-                      <strong>Network / Ethernet Printer (TCP Port 9100)</strong>
-                      <span>Direct socket connection across local LAN</span>
-                    </div>
-                  </div>
-                </label>
-
-                <label class="radio-card" [class.selected]="printerConfig().target === 'BROWSER'">
-                  <input
-                    type="radio"
-                    name="printerTarget"
-                    value="BROWSER"
-                    [checked]="printerConfig().target === 'BROWSER'"
-                    (change)="updatePrinterConfig('target', 'BROWSER')"
-                  />
-                  <div class="radio-card-content">
-                    <i class="ph ph-browser"></i>
-                    <div>
-                      <strong>Standard Browser Print Dialog</strong>
-                      <span>Operating system print preview window (fallback)</span>
-                    </div>
-                  </div>
-                </label>
-              </div>
-            </div>
-
-            @if (printerConfig().target === 'WINDOWS') {
-              <div class="form-group">
-                <div class="label-with-action">
-                  <label class="form-label">Select Installed Windows Thermal Printer</label>
-                  <button
-                    type="button"
-                    class="btn-text"
-                    (click)="loadSystemPrinters()"
-                    [disabled]="isLoadingPrinters()"
-                  >
-                    <i class="ph ph-arrows-clockwise" [class.ph-spin]="isLoadingPrinters()"></i>
-                    <span>Refresh</span>
-                  </button>
-                </div>
-                <select
-                  class="form-select"
-                  [ngModel]="printerConfig().printerName"
-                  (ngModelChange)="updatePrinterConfig('printerName', $event)"
-                >
-                  <option value="">-- Use System Default Printer --</option>
-                  @for (p of availablePrinters(); track p.name) {
-                    <option [value]="p.name">
-                      {{ p.name }} {{ p.is_default ? '(Default)' : '' }}
-                      {{ p.port_name ? '[' + p.port_name + ']' : '' }}
-                    </option>
-                  }
-                </select>
-                <span class="field-hint">
-                  Detected {{ availablePrinters().length }} printer(s) installed on this
-                  workstation.
-                </span>
-              </div>
-            }
-
-            @if (printerConfig().target === 'NETWORK') {
-              <div class="form-group">
-                <label class="form-label">Printer IP Address & Port (Port 9100)</label>
-                <input
-                  type="text"
-                  class="form-input font-mono"
-                  placeholder="e.g. 192.168.1.100:9100"
-                  [ngModel]="printerConfig().networkAddress"
-                  (ngModelChange)="updatePrinterConfig('networkAddress', $event)"
-                />
-                <span class="field-hint">
-                  Standard ESC/POS thermal printers listen for raw socket print jobs on TCP port
-                  9100.
-                </span>
-              </div>
             }
           </div>
 
-          <div class="panel-box">
-            <div class="panel-header-row">
-              <div class="panel-title-group">
-                <div class="panel-icon-wrap">
-                  <i class="ph ph-sliders"></i>
-                </div>
-                <div class="panel-title-text">
-                  <h2 class="heading-card">Formatting & Mechanics</h2>
-                  <p class="panel-subtitle">
-                    Paper roll width, automatic cutting, and drawer kick pulses.
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            <div class="form-group">
-              <label class="form-label">Receipt Paper Width</label>
-              <div class="segmented-control">
-                <button
-                  type="button"
-                  class="seg-btn"
-                  [class.active]="printerConfig().paperWidth === '80mm'"
-                  (click)="updatePrinterConfig('paperWidth', '80mm')"
-                >
-                  <strong>80mm (Standard POS)</strong>
-                  <span>48 characters per line</span>
-                </button>
-                <button
-                  type="button"
-                  class="seg-btn"
-                  [class.active]="printerConfig().paperWidth === '58mm'"
-                  (click)="updatePrinterConfig('paperWidth', '58mm')"
-                >
-                  <strong>58mm (Compact POS)</strong>
-                  <span>32 characters per line</span>
-                </button>
-              </div>
-            </div>
-
-            <div class="form-check-group">
-              <label class="form-checkbox-label">
-                <input
-                  type="checkbox"
-                  [checked]="printerConfig().autoCut"
-                  (change)="updatePrinterConfig('autoCut', $any($event.target).checked)"
-                />
-                <div class="checkbox-text">
-                  <strong>Automatic Paper Cutting</strong>
-                  <span class="text-xs text-muted"
-                    >Sends ESC/POS cut sequence (GS V A 3) at receipt completion.</span
-                  >
-                </div>
-              </label>
-
-              <label class="form-checkbox-label">
-                <input
-                  type="checkbox"
-                  [checked]="printerConfig().openCashDrawer"
-                  (change)="updatePrinterConfig('openCashDrawer', $any($event.target).checked)"
-                />
-                <div class="checkbox-text">
-                  <strong>Open Cash Drawer (Kick Pulse)</strong>
-                  <span class="text-xs text-muted"
-                    >Sends drawer pulse (ESC p 0) to trigger connected cash drawer.</span
-                  >
-                </div>
-              </label>
-            </div>
-
-            <div class="printer-test-cluster">
-              <div class="cluster-info">
-                <strong>Verify Hardware Communication</strong>
-                <p class="text-xs text-muted">
-                  Send an instant test slip with alignment, font scale, and auto-cut.
-                </p>
-              </div>
-              <button
-                type="button"
-                class="btn btn-secondary"
-                (click)="testThermalPrint()"
-                [disabled]="isTestingPrint()"
-              >
-                @if (isTestingPrint()) {
-                  <i class="ph ph-spinner ph-spin"></i>
-                  <span>Printing...</span>
-                } @else {
-                  <i class="ph ph-printer"></i>
-                  <span>Test Print Slip</span>
-                }
-              </button>
-            </div>
-          </div>
-        </div>
-      }
-
-      <!-- TAB 4: KITCHEN & OPERATIONS -->
-      @if (activeTab === 'service') {
-        <div class="settings-grid">
-          <div class="panel-box">
-            <div class="panel-header-row">
-              <div class="panel-title-group">
-                <div class="panel-icon-wrap">
-                  <i class="ph ph-cooking-pot"></i>
-                </div>
-                <div class="panel-title-text">
-                  <h2 class="heading-card">Kitchen Dispatch Rules</h2>
-                  <p class="panel-subtitle">Preparation pacing and digital table ordering rules.</p>
-                </div>
-              </div>
-            </div>
-
-            <div class="form-row-2">
-              <div class="form-group">
-                <label class="form-label">Estimated Prep Time</label>
-                <div class="input-with-suffix">
-                  <input
-                    type="number"
-                    min="5"
-                    max="120"
-                    class="form-input has-suffix"
-                    [(ngModel)]="profile.estimatedPrepMinutes"
-                  />
-                  <span class="field-suffix">mins</span>
-                </div>
-              </div>
-              <div class="form-group">
-                <label class="form-label">Minimum Order Spend</label>
-                <div class="input-with-suffix">
-                  <input
-                    type="number"
-                    min="0"
-                    step="50"
-                    class="form-input has-suffix"
-                    [(ngModel)]="profile.minOrderAmount"
-                  />
-                  <span class="field-suffix">₹</span>
-                </div>
-              </div>
-            </div>
-
-            <div class="form-group">
-              <label class="form-label">Dine-In Table Ordering</label>
-              <select class="form-select" [(ngModel)]="profile.dineInEnabled">
-                <option [ngValue]="true">Enabled (Accept QR code table orders)</option>
-                <option [ngValue]="false">Disabled (Pause digital table ordering)</option>
-              </select>
-              <span class="field-hint"
-                >When disabled, customers scanning table QR codes see menu in view-only mode.</span
-              >
-            </div>
-          </div>
-
-          <div class="panel-box">
-            <div class="panel-header-row">
-              <div class="panel-title-group">
-                <div class="panel-icon-wrap">
-                  <i class="ph ph-bag"></i>
-                </div>
-                <div class="panel-title-text">
-                  <h2 class="heading-card">Counter & Takeaway Pacing</h2>
-                  <p class="panel-subtitle">Pickup buffers and counter order workflows.</p>
-                </div>
-              </div>
-            </div>
-
-            <div class="form-group">
-              <label class="form-label">Takeaway & Counter Ordering</label>
-              <select class="form-select" [(ngModel)]="profile.takeawayEnabled">
-                <option [ngValue]="true">Enabled (Accept counter & takeaway orders)</option>
-                <option [ngValue]="false">Disabled (Dine-in only)</option>
-              </select>
-            </div>
-
-            <div class="form-group">
-              <label class="form-label">Pickup Time Buffer</label>
-              <div class="input-with-suffix">
-                <input
-                  type="number"
-                  min="5"
-                  max="60"
-                  class="form-input has-suffix"
-                  [(ngModel)]="profile.pickupBufferMinutes"
-                />
-                <span class="field-suffix">mins</span>
-              </div>
-              <span class="field-hint"
-                >Buffer time added to takeaway order preparation estimates.</span
-              >
-            </div>
-          </div>
-        </div>
-      }
-
-      <!-- TAB 5: SYSTEM & STORAGE -->
-      @if (activeTab === 'maintenance') {
-        <div class="settings-grid maintenance-layout">
-          <!-- 1. Live Infrastructure & Core System Health -->
-          <div class="panel-box full-width-panel">
-            <div class="panel-header-row">
-              <div class="panel-title-group">
-                <div class="panel-icon-wrap primary-icon-wrap">
-                  <i class="ph ph-heartbeat"></i>
-                </div>
-                <div class="panel-title-text">
-                  <h2 class="heading-card">Live Infrastructure & System Health</h2>
-                  <p class="panel-subtitle">
-                    Real-time connectivity, health telemetry, and round-trip latency across POS
-                    engines.
-                  </p>
-                </div>
-              </div>
-              <div class="panel-header-actions">
-                @if (lastCheckedTime()) {
-                  <span class="last-check-text">
-                    Checked {{ lastCheckedTime() | date: 'HH:mm:ss' }}
-                  </span>
-                }
-                <button
-                  type="button"
-                  class="btn btn-secondary btn-sm refresh-diagnostics-btn"
-                  (click)="checkSystemHealth()"
-                  [disabled]="isCheckingHealth()"
-                >
-                  <i class="ph ph-arrows-clockwise" [class.ph-spin]="isCheckingHealth()"></i>
-                  <span>{{ isCheckingHealth() ? 'Pinging...' : 'Refresh Status' }}</span>
-                </button>
-              </div>
-            </div>
-
-            <!-- 3 System Status Cards Grid -->
-            <div class="system-status-cards">
-              <!-- Card 1: Local Backend -->
-              <div
-                class="system-status-card"
-                [class.status-card-online]="systemStatuses().localBackend.online"
-                [class.status-card-offline]="!systemStatuses().localBackend.online"
-              >
-                <div class="system-status-card-header">
-                  <div class="system-target-info">
-                    <span class="system-type-tag">Local Engine</span>
-                    <h3 class="system-target-name">Local POS Backend</h3>
-                  </div>
-                  <span
-                    class="system-status-pill"
-                    [class.pill-online]="systemStatuses().localBackend.online"
-                    [class.pill-offline]="!systemStatuses().localBackend.online"
-                  >
-                    <span
-                      class="status-pulse-dot"
-                      [class.dot-online]="systemStatuses().localBackend.online"
-                      [class.dot-offline]="!systemStatuses().localBackend.online"
-                    ></span>
-                    {{ systemStatuses().localBackend.statusText }}
-                  </span>
-                </div>
-                <div class="system-status-card-body">
-                  <div class="system-endpoint-row">
-                    <i class="ph ph-desktop"></i>
-                    <code>{{ systemStatuses().localBackend.url }}</code>
-                  </div>
-                  <p class="system-status-desc">{{ systemStatuses().localBackend.details }}</p>
-                </div>
-                <div class="system-status-card-footer">
-                  <span class="system-latency-label">Response Latency</span>
-                  <span
-                    class="system-latency-val"
-                    [class.latency-good]="
-                      systemStatuses().localBackend.latencyMs > 0 &&
-                      systemStatuses().localBackend.latencyMs < 100
-                    "
-                  >
-                    {{
-                      systemStatuses().localBackend.latencyMs
-                        ? systemStatuses().localBackend.latencyMs + ' ms'
-                        : 'N/A'
-                    }}
-                  </span>
-                </div>
-              </div>
-
-              <!-- Card 2: Live Backend -->
-              <div
-                class="system-status-card"
-                [class.status-card-online]="systemStatuses().liveBackend.online"
-                [class.status-card-offline]="!systemStatuses().liveBackend.online"
-              >
-                <div class="system-status-card-header">
-                  <div class="system-target-info">
-                    <span class="system-type-tag">Cloud Gateway</span>
-                    <h3 class="system-target-name">Live Cloud Backend</h3>
-                  </div>
-                  <span
-                    class="system-status-pill"
-                    [class.pill-online]="systemStatuses().liveBackend.online"
-                    [class.pill-offline]="!systemStatuses().liveBackend.online"
-                  >
-                    <span
-                      class="status-pulse-dot"
-                      [class.dot-online]="systemStatuses().liveBackend.online"
-                      [class.dot-offline]="!systemStatuses().liveBackend.online"
-                    ></span>
-                    {{ systemStatuses().liveBackend.statusText }}
-                  </span>
-                </div>
-                <div class="system-status-card-body">
-                  <div class="system-endpoint-row">
-                    <i class="ph ph-cloud"></i>
-                    <code>{{ systemStatuses().liveBackend.url }}</code>
-                  </div>
-                  <p class="system-status-desc">{{ systemStatuses().liveBackend.details }}</p>
-                </div>
-                <div class="system-status-card-footer">
-                  <span class="system-latency-label">Response Latency</span>
-                  <span
-                    class="system-latency-val"
-                    [class.latency-good]="
-                      systemStatuses().liveBackend.latencyMs > 0 &&
-                      systemStatuses().liveBackend.latencyMs < 500
-                    "
-                  >
-                    {{
-                      systemStatuses().liveBackend.latencyMs
-                        ? systemStatuses().liveBackend.latencyMs + ' ms'
-                        : 'N/A'
-                    }}
-                  </span>
-                </div>
-              </div>
-
-              <!-- Card 3: Database -->
-              <div
-                class="system-status-card"
-                [class.status-card-online]="systemStatuses().database.online"
-                [class.status-card-offline]="!systemStatuses().database.online"
-              >
-                <div class="system-status-card-header">
-                  <div class="system-target-info">
-                    <span class="system-type-tag">PostgreSQL Relational DB</span>
-                    <h3 class="system-target-name">Supabase Database</h3>
-                  </div>
-                  <span
-                    class="system-status-pill"
-                    [class.pill-online]="systemStatuses().database.online"
-                    [class.pill-offline]="!systemStatuses().database.online"
-                  >
-                    <span
-                      class="status-pulse-dot"
-                      [class.dot-online]="systemStatuses().database.online"
-                      [class.dot-offline]="!systemStatuses().database.online"
-                    ></span>
-                    {{ systemStatuses().database.statusText }}
-                  </span>
-                </div>
-                <div class="system-status-card-body">
-                  <div class="system-endpoint-row">
-                    <i class="ph ph-database"></i>
-                    <code>{{ systemStatuses().database.url }}</code>
-                  </div>
-                  <p class="system-status-desc">{{ systemStatuses().database.details }}</p>
-                </div>
-                <div class="system-status-card-footer">
-                  <span class="system-latency-label">Response Latency</span>
-                  <span
-                    class="system-latency-val"
-                    [class.latency-good]="
-                      systemStatuses().database.latencyMs > 0 &&
-                      systemStatuses().database.latencyMs < 300
-                    "
-                  >
-                    {{
-                      systemStatuses().database.latencyMs
-                        ? systemStatuses().database.latencyMs + ' ms'
-                        : 'N/A'
-                    }}
-                  </span>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <!-- 2. System & Transaction Audit Logs -->
-          <div class="panel-box full-width-panel">
-            <div class="panel-header-row">
-              <div class="panel-title-group">
-                <div class="panel-icon-wrap primary-icon-wrap">
-                  <i class="ph ph-clipboard-text"></i>
-                </div>
-                <div class="panel-title-text">
-                  <h2 class="heading-card">System & Transaction Audit Logs</h2>
-                  <p class="panel-subtitle">
-                    Immutable event ledger tracking administrative overrides, orders, bill
-                    settlements, and operational states.
-                  </p>
-                </div>
-              </div>
-              <div class="audit-toolbar-actions">
-                <button
-                  type="button"
-                  class="btn btn-secondary btn-sm"
-                  (click)="exportAuditLogs()"
-                  title="Export audit log report as JSON"
-                >
-                  <i class="ph ph-download-simple"></i>
-                  <span>Export Logs</span>
-                </button>
-              </div>
-            </div>
-
-            <!-- Audit Filtering & Search Controls -->
-            <div class="audit-filter-controls">
-              <div class="audit-filter-chips">
-                @for (
-                  cat of ['ALL', 'AUTH', 'ORDER', 'RECEIPT', 'INVOICE', 'COUPON', 'SYSTEM'];
-                  track cat
-                ) {
-                  <button
-                    type="button"
-                    class="audit-chip"
-                    [class.active]="auditCategoryFilter() === cat"
-                    (click)="setAuditCategory(cat)"
-                  >
-                    {{ cat }}
-                  </button>
-                }
-              </div>
-              <div class="audit-search-wrap">
-                <i class="ph ph-magnifying-glass input-icon"></i>
-                <input
-                  type="text"
-                  class="form-input with-icon"
-                  placeholder="Search logs by actor, action, notes, or entity ID..."
-                  [ngModel]="auditSearchText()"
-                  (ngModelChange)="onAuditSearchChange($event)"
-                />
-              </div>
-              <span class="audit-count-badge"> {{ filteredAuditLogs().length }} entries </span>
-            </div>
-
-            <!-- Audit Feed List with Incremental Pagination (20 initial, +10 load more) -->
-            <div class="audit-feed-wrapper">
-              @if (filteredAuditLogs().length > 0) {
-                <div class="audit-feed-list">
-                  @for (entry of paginatedAuditLogs(); track entry.id) {
-                    <div class="audit-feed-row">
-                      <div class="audit-timestamp-cell">
-                        <span class="audit-time">{{ entry.timestamp | date: 'HH:mm:ss' }}</span>
-                        <span class="audit-date">{{ entry.timestamp | date: 'mediumDate' }}</span>
-                      </div>
-                      <div class="audit-action-cell">
-                        <span class="audit-action-tag" [attr.data-action]="entry.action">
-                          {{ entry.action.replaceAll('_', ' ') }}
-                        </span>
-                        <span class="audit-entity-label">
-                          {{ entry.entityType }}: <code>{{ entry.entityId.slice(0, 14) }}</code>
-                        </span>
-                      </div>
-                      <div class="audit-notes-cell">
-                        <p class="audit-notes-text">
-                          {{ entry.notes || 'Routine operation event recorded.' }}
-                        </p>
-                      </div>
-                      <div class="audit-actor-cell">
-                        <span class="actor-role-pill" [attr.data-role]="entry.actorRole">
-                          {{ entry.actorRole }}
-                        </span>
-                        <span class="actor-name-text">{{
-                          entry.actorLabel || 'Authorized User'
-                        }}</span>
-                      </div>
+          <!-- TAB 1: BRAND PROFILE & CONTACT -->
+          @if (activeTab === 'general') {
+            <div class="settings-grid">
+              <div class="panel-box">
+                <div class="panel-header-row">
+                  <div class="panel-title-group">
+                    <div class="panel-icon-wrap">
+                      <i class="ph ph-storefront"></i>
                     </div>
-                  }
+                    <div class="panel-title-text">
+                      <h2 class="heading-card">Brand Identity</h2>
+                      <p class="panel-subtitle">
+                        Public restaurant name, menu banner details, and concept description.
+                      </p>
+                    </div>
+                  </div>
+                  <span class="panel-badge">Public Display</span>
+                </div>
 
-                  <!-- Pagination Control (Load 10 by 10) -->
-                  <div class="audit-pagination-bar" [class.all-loaded]="!hasMoreAuditLogs()">
-                    <span class="pagination-info">
-                      Showing <strong>{{ paginatedAuditLogs().length }}</strong> of
-                      <strong>{{ filteredAuditLogs().length }}</strong> records
-                    </span>
-                    @if (hasMoreAuditLogs()) {
+                <div class="form-group">
+                  <label class="form-label">Establishment Name *</label>
+                  <div class="input-with-icon">
+                    <i class="ph ph-buildings field-icon"></i>
+                    <input type="text" class="form-input has-icon" [(ngModel)]="profile.name" />
+                  </div>
+                </div>
+
+                <div class="form-group">
+                  <label class="form-label">Tagline / Culinary Subtitle</label>
+                  <div class="input-with-icon">
+                    <i class="ph ph-sparkle field-icon"></i>
+                    <input type="text" class="form-input has-icon" [(ngModel)]="profile.tagline" />
+                  </div>
+                </div>
+
+                <div class="form-group">
+                  <label class="form-label">Concept Description</label>
+                  <textarea
+                    class="form-textarea"
+                    rows="3"
+                    [(ngModel)]="profile.description"
+                  ></textarea>
+                  <span class="field-hint"
+                    >Appears on the digital QR ordering welcome screen and customer receipt
+                    header.</span
+                  >
+                </div>
+              </div>
+
+              <!-- Dedicated Google Review & Public Presence Card -->
+              <div class="panel-box google-review-panel">
+                <div class="panel-header-row">
+                  <div class="panel-title-group">
+                    <div class="panel-icon-wrap google-icon-wrap">
+                      <i class="ph ph-star-fill"></i>
+                    </div>
+                    <div class="panel-title-text">
+                      <h2 class="heading-card">Google Reviews & Online Presence</h2>
+                      <p class="panel-subtitle">
+                        Direct Google review shortlink and customer QR mobile menu hosting URL.
+                      </p>
+                    </div>
+                  </div>
+                  <span class="panel-badge highlight">
+                    <i class="ph ph-star-fill"></i> Public Reputation
+                  </span>
+                </div>
+
+                <div class="form-group">
+                  <div class="label-with-action">
+                    <label class="form-label">Google Review Redirect URL</label>
+                    @if (profile.googleReviewUrl) {
                       <button
                         type="button"
-                        class="btn btn-secondary btn-sm load-more-btn"
-                        (click)="loadMoreAuditLogs()"
+                        class="btn-text"
+                        (click)="testGoogleReviewLink()"
+                        title="Verify link in a new browser tab"
                       >
-                        <i class="ph ph-arrow-down"></i>
-                        <span>Load 10 More</span>
+                        <i class="ph ph-arrow-square-out"></i>
+                        <span>Test Live Link</span>
                       </button>
-                    } @else if (filteredAuditLogs().length > 20) {
-                      <span class="all-loaded-tag">
-                        <i class="ph ph-check-circle"></i>
-                        All {{ filteredAuditLogs().length }} entries loaded
-                      </span>
                     }
                   </div>
+                  <div class="input-with-icon">
+                    <i class="ph ph-google-logo field-icon google-color"></i>
+                    <input
+                      type="url"
+                      class="form-input has-icon"
+                      [(ngModel)]="profile.googleReviewUrl"
+                      placeholder="https://g.page/r/.../review or https://search.google.com/local/writereview?placeid=..."
+                    />
+                  </div>
+                  <span class="field-hint">
+                    When customers tap "Review us on Google" on their bill confirmation screen or
+                    scan the feedback QR, they are automatically forwarded to this link.
+                  </span>
                 </div>
-              } @else {
-                <div class="empty-audit-state">
-                  <i class="ph ph-clock-counter-clockwise"></i>
-                  <p>No audit events match the selected filter criteria.</p>
-                </div>
-              }
-            </div>
-          </div>
 
-          <!-- 3. Local Storage Diagnostics -->
-          <div class="panel-box">
-            <div class="panel-header-row">
-              <div class="panel-title-group">
-                <div class="panel-icon-wrap">
-                  <i class="ph ph-database"></i>
+                <div class="help-tip-card">
+                  <div class="help-tip-icon">
+                    <i class="ph ph-lightbulb"></i>
+                  </div>
+                  <div class="help-tip-content">
+                    <strong>How to get your direct Google Review Link:</strong>
+                    <ol class="help-steps-list">
+                      <li>Open <strong>Google Maps</strong> or Google Business Profile.</li>
+                      <li>
+                        Search for your restaurant (e.g. <em>{{ profile.name }}</em
+                        >).
+                      </li>
+                      <li>
+                        Click <strong>"Ask for reviews"</strong> or
+                        <strong>"Get more reviews"</strong>.
+                      </li>
+                      <li>Copy the short review URL and paste it above.</li>
+                    </ol>
+                  </div>
                 </div>
-                <div class="panel-title-text">
-                  <h2 class="heading-card">Local Storage Diagnostics</h2>
-                  <p class="panel-subtitle">
-                    Zero-latency offline data snapshots cached in browser memory.
-                  </p>
-                </div>
-              </div>
-              <span class="panel-badge success">Synchronized</span>
-            </div>
 
-            <div class="storage-metrics-grid">
-              <div class="storage-metric-card">
-                <span class="metric-num">{{ ordersCount() }}</span>
-                <span class="metric-lbl">Cached Orders</span>
-              </div>
-              <div class="storage-metric-card">
-                <span class="metric-num">{{ menuCount() }}</span>
-                <span class="metric-lbl">Menu Items</span>
-              </div>
-              <div class="storage-metric-card">
-                <span class="metric-num">{{ tablesCount() }}</span>
-                <span class="metric-lbl">Dining Tables</span>
-              </div>
-              <div class="storage-metric-card">
-                <span class="metric-num">{{ customersCount() }}</span>
-                <span class="metric-lbl">Profiles Saved</span>
-              </div>
-            </div>
-          </div>
-
-          <!-- 4. Reset Demo State -->
-          <div class="panel-box danger-box">
-            <div class="panel-header-row">
-              <div class="panel-title-group">
-                <div class="panel-icon-wrap danger-icon-wrap">
-                  <i class="ph ph-warning-octagon"></i>
-                </div>
-                <div class="panel-title-text">
-                  <h2 class="heading-card danger-title">Reset Demo State</h2>
-                  <p class="panel-subtitle">Clear local modifications and re-seed defaults.</p>
-                </div>
-              </div>
-              <span class="panel-badge danger">Destructive</span>
-            </div>
-
-            <p class="text-sm text-secondary">
-              Clears local session cache and restores the standard catalog, table layout, and sample
-              orders to factory demo state.
-            </p>
-
-            <div class="action-footer">
-              <button class="btn btn-danger" (click)="confirmResetOpen = true">
-                <i class="ph ph-arrow-counter-clockwise"></i>
-                <span>Restore Defaults</span>
-              </button>
-            </div>
-          </div>
-        </div>
-      }
-
-      <!-- TAB 6: ADMIN SECURITY (PASSWORD CHANGE) -->
-      @if (activeTab === 'security') {
-        <div class="settings-grid">
-          <div class="panel-box security-box">
-            <div class="panel-header-row">
-              <div class="panel-title-group">
-                <div class="panel-icon-wrap warning-icon-wrap">
-                  <i class="ph ph-shield-check"></i>
-                </div>
-                <div class="panel-title-text">
-                  <h2 class="heading-card">Master Admin Credentials</h2>
-                  <p class="panel-subtitle">
-                    Authorize bills, reprint duplicates, modify paid orders, and change system
-                    settings.
-                  </p>
+                <div class="form-group pt-2 border-t">
+                  <div class="label-with-action">
+                    <label class="form-label"
+                      >Customer Mobile Menu Website (QR Target Hosted Link)</label
+                    >
+                    <div class="header-actions-inline">
+                      <button
+                        type="button"
+                        class="btn-text"
+                        (click)="copyMenuUrl()"
+                        title="Copy customer menu URL"
+                      >
+                        <i class="ph ph-copy"></i>
+                        <span>Copy URL</span>
+                      </button>
+                      <button
+                        type="button"
+                        class="btn-text"
+                        (click)="openMenuUrl()"
+                        title="Open customer menu in new tab"
+                      >
+                        <i class="ph ph-arrow-square-out"></i>
+                        <span>Preview Menu</span>
+                      </button>
+                    </div>
+                  </div>
+                  <div class="input-with-icon">
+                    <i class="ph ph-globe field-icon"></i>
+                    <input
+                      type="url"
+                      class="form-input has-icon"
+                      [(ngModel)]="profile.customerMenuUrl"
+                      placeholder="https://gurukripadhaba-menu.vercel.app"
+                    />
+                  </div>
+                  <span class="field-hint">
+                    Public hosted URL embedded into dining table QR codes and standees for mobile
+                    ordering.
+                  </span>
                 </div>
               </div>
-              <span class="panel-badge warning">High Privilege</span>
-            </div>
 
-            <div class="security-banner">
-              <i class="ph ph-info"></i>
-              <div>
-                <strong>Single Password Security</strong>
-                <span
-                  >Changing this updates the master admin credentials across local storage and the
-                  cloud database.</span
-                >
+              <div class="panel-box">
+                <div class="panel-header-row">
+                  <div class="panel-title-group">
+                    <div class="panel-icon-wrap">
+                      <i class="ph ph-map-pin"></i>
+                    </div>
+                    <div class="panel-title-text">
+                      <h2 class="heading-card">Contact & Location</h2>
+                      <p class="panel-subtitle">
+                        Physical address and official customer support contact lines.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="form-row-2">
+                  <div class="form-group">
+                    <label class="form-label">Contact Phone</label>
+                    <div class="input-with-icon">
+                      <i class="ph ph-phone field-icon"></i>
+                      <input
+                        type="text"
+                        class="form-input has-icon"
+                        [(ngModel)]="profile.contactPhone"
+                      />
+                    </div>
+                  </div>
+                  <div class="form-group">
+                    <label class="form-label">Support Email</label>
+                    <div class="input-with-icon">
+                      <i class="ph ph-envelope field-icon"></i>
+                      <input
+                        type="email"
+                        class="form-input has-icon"
+                        [(ngModel)]="profile.contactEmail"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <div class="form-group">
+                  <label class="form-label">Street Address</label>
+                  <div class="input-with-icon">
+                    <i class="ph ph-navigation-arrow field-icon"></i>
+                    <input type="text" class="form-input has-icon" [(ngModel)]="profile.street" />
+                  </div>
+                </div>
+
+                <div class="form-row-2">
+                  <div class="form-group">
+                    <label class="form-label">City</label>
+                    <input type="text" class="form-input" [(ngModel)]="profile.city" />
+                  </div>
+                  <div class="form-group">
+                    <label class="form-label">State & PIN</label>
+                    <input type="text" class="form-input" [(ngModel)]="profile.statePin" />
+                  </div>
+                </div>
               </div>
             </div>
+          }
 
-            <div class="form-group">
-              <label class="form-label">Current Admin Password (Optional)</label>
-              <div class="input-with-action">
-                <input
-                  [type]="showCurrentPwd ? 'text' : 'password'"
-                  class="form-input"
-                  placeholder="Enter current password if set"
-                  [(ngModel)]="pwdForm.currentPassword"
-                />
-                <button
-                  type="button"
-                  class="toggle-visibility-btn"
-                  (click)="showCurrentPwd = !showCurrentPwd"
-                  [attr.aria-label]="showCurrentPwd ? 'Hide password' : 'Show password'"
-                >
-                  <i
-                    class="ph"
-                    [class.ph-eye]="!showCurrentPwd"
-                    [class.ph-eye-slash]="showCurrentPwd"
-                  ></i>
-                </button>
+          <!-- TAB 2: TAXES & INVOICING -->
+          @if (activeTab === 'tax') {
+            <div class="settings-grid">
+              <div class="panel-box">
+                <div class="panel-header-row">
+                  <div class="panel-title-group">
+                    <div class="panel-icon-wrap">
+                      <i class="ph ph-receipt"></i>
+                    </div>
+                    <div class="panel-title-text">
+                      <h2 class="heading-card">Goods & Services Tax (GST)</h2>
+                      <p class="panel-subtitle">
+                        Standard Indian GST tax brackets applied at POS checkout.
+                      </p>
+                    </div>
+                  </div>
+                  <span class="panel-badge">Tax Slab: 5.0%</span>
+                </div>
+
+                <div class="form-row-2">
+                  <div class="form-group">
+                    <label class="form-label">CGST Rate</label>
+                    <div class="input-with-suffix">
+                      <input
+                        type="number"
+                        step="0.1"
+                        min="0"
+                        max="28"
+                        class="form-input has-suffix"
+                        [(ngModel)]="profile.cgstRate"
+                      />
+                      <span class="field-suffix">%</span>
+                    </div>
+                  </div>
+                  <div class="form-group">
+                    <label class="form-label">SGST Rate</label>
+                    <div class="input-with-suffix">
+                      <input
+                        type="number"
+                        step="0.1"
+                        min="0"
+                        max="28"
+                        class="form-input has-suffix"
+                        [(ngModel)]="profile.sgstRate"
+                      />
+                      <span class="field-suffix">%</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="form-group">
+                  <label class="form-label">GST Identification Number (GSTIN)</label>
+                  <div class="input-with-icon">
+                    <i class="ph ph-identification-card field-icon"></i>
+                    <input
+                      type="text"
+                      class="form-input has-icon font-mono uppercase"
+                      [(ngModel)]="profile.gstNumber"
+                    />
+                  </div>
+                  <span class="field-hint"
+                    >15-digit statutory GSTIN displayed on customer bills and B2B reports.</span
+                  >
+                </div>
+
+                <div class="form-row-2">
+                  <div class="form-group">
+                    <label class="form-label">Service Charge</label>
+                    <div class="input-with-suffix">
+                      <input
+                        type="number"
+                        step="0.5"
+                        min="0"
+                        max="20"
+                        class="form-input has-suffix"
+                        [(ngModel)]="profile.serviceChargeRate"
+                      />
+                      <span class="field-suffix">%</span>
+                    </div>
+                  </div>
+                  <div class="form-group">
+                    <label class="form-label">Default Currency</label>
+                    <input type="text" class="form-input disabled-input" value="INR (₹)" disabled />
+                  </div>
+                </div>
+              </div>
+
+              <div class="panel-box">
+                <div class="panel-header-row">
+                  <div class="panel-title-group">
+                    <div class="panel-icon-wrap">
+                      <i class="ph ph-article"></i>
+                    </div>
+                    <div class="panel-title-text">
+                      <h2 class="heading-card">Receipt & Bill Customization</h2>
+                      <p class="panel-subtitle">
+                        Mandated licenses and customized guest checkout notes.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="form-group">
+                  <label class="form-label">FSSAI License / Registration #</label>
+                  <div class="input-with-icon">
+                    <i class="ph ph-shield-check field-icon"></i>
+                    <input
+                      type="text"
+                      class="form-input has-icon font-mono"
+                      [(ngModel)]="profile.fssaiNumber"
+                      placeholder="14-digit FSSAI License Number"
+                    />
+                  </div>
+                  <span class="field-hint"
+                    >Mandated food safety license number printed on physical receipts.</span
+                  >
+                </div>
+
+                <div class="form-group">
+                  <label class="form-label">Invoice Footer Message</label>
+                  <textarea
+                    class="form-textarea"
+                    rows="3"
+                    [(ngModel)]="profile.invoiceFooter"
+                    placeholder="e.g. Thank you for dining with us! Please visit us again."
+                  ></textarea>
+                  <span class="field-hint"
+                    >Printed at the bottom of customer receipts before the QR code.</span
+                  >
+                </div>
               </div>
             </div>
+          }
 
-            <div class="form-group">
-              <label class="form-label">New Admin Password *</label>
-              <div class="input-with-action">
-                <input
-                  [type]="showNewPwd ? 'text' : 'password'"
-                  class="form-input"
-                  placeholder="Enter new password (min. 4 characters)"
-                  [(ngModel)]="pwdForm.newPassword"
-                />
-                <button
-                  type="button"
-                  class="toggle-visibility-btn"
-                  (click)="showNewPwd = !showNewPwd"
-                  [attr.aria-label]="showNewPwd ? 'Hide password' : 'Show password'"
-                >
-                  <i class="ph" [class.ph-eye]="!showNewPwd" [class.ph-eye-slash]="showNewPwd"></i>
-                </button>
-              </div>
-            </div>
+          <!-- TAB 3: HARDWARE & THERMAL PRINTER (ESC/POS) -->
+          @if (activeTab === 'printer') {
+            <div class="settings-grid">
+              <div class="panel-box">
+                <div class="panel-header-row">
+                  <div class="panel-title-group">
+                    <div class="panel-icon-wrap">
+                      <i class="ph ph-printer"></i>
+                    </div>
+                    <div class="panel-title-text">
+                      <h2 class="heading-card">Hardware Receipt Printer (ESC/POS)</h2>
+                      <p class="panel-subtitle">
+                        Raw spooling to USB thermal printers or Network LAN sockets.
+                      </p>
+                    </div>
+                  </div>
+                  <span class="panel-badge highlight">Raw Protocol</span>
+                </div>
 
-            <div class="form-group">
-              <label class="form-label">Confirm New Password *</label>
-              <div class="input-with-action">
-                <input
-                  [type]="showConfirmPwd ? 'text' : 'password'"
-                  class="form-input"
-                  placeholder="Re-enter new password"
-                  [(ngModel)]="pwdForm.confirmPassword"
-                />
-                <button
-                  type="button"
-                  class="toggle-visibility-btn"
-                  (click)="showConfirmPwd = !showConfirmPwd"
-                  [attr.aria-label]="showConfirmPwd ? 'Hide password' : 'Show password'"
-                >
-                  <i
-                    class="ph"
-                    [class.ph-eye]="!showConfirmPwd"
-                    [class.ph-eye-slash]="showConfirmPwd"
-                  ></i>
-                </button>
-              </div>
-              @if (
-                pwdForm.newPassword &&
-                pwdForm.confirmPassword &&
-                pwdForm.newPassword !== pwdForm.confirmPassword
-              ) {
-                <span class="field-error-text">Passwords do not match</span>
-              }
-            </div>
+                <div class="form-group">
+                  <label class="form-label">Printer Interface Target</label>
+                  <div class="radio-cards-cluster">
+                    <label
+                      class="radio-card"
+                      [class.selected]="printerConfig().target === 'WINDOWS'"
+                    >
+                      <input
+                        type="radio"
+                        name="printerTarget"
+                        value="WINDOWS"
+                        [checked]="printerConfig().target === 'WINDOWS'"
+                        (change)="updatePrinterConfig('target', 'WINDOWS')"
+                      />
+                      <div class="radio-card-content">
+                        <i class="ph ph-usb"></i>
+                        <div>
+                          <strong>Windows / USB Thermal Printer (Tauri Native)</strong>
+                          <span>Direct raw spooling via Windows printer driver</span>
+                        </div>
+                      </div>
+                    </label>
 
-            <div class="action-footer">
-              <button
-                type="button"
-                class="btn btn-primary"
-                (click)="updateAdminPassword()"
-                [disabled]="
-                  isUpdatingPassword ||
-                  !pwdForm.newPassword ||
-                  pwdForm.newPassword !== pwdForm.confirmPassword ||
-                  pwdForm.newPassword.length < 4
-                "
-              >
-                @if (isUpdatingPassword) {
-                  <i class="ph ph-spinner ph-spin"></i>
-                  <span>Updating Password...</span>
-                } @else {
-                  <i class="ph ph-shield-check"></i>
-                  <span>Update Admin Password</span>
+                    <label
+                      class="radio-card"
+                      [class.selected]="printerConfig().target === 'NETWORK'"
+                    >
+                      <input
+                        type="radio"
+                        name="printerTarget"
+                        value="NETWORK"
+                        [checked]="printerConfig().target === 'NETWORK'"
+                        (change)="updatePrinterConfig('target', 'NETWORK')"
+                      />
+                      <div class="radio-card-content">
+                        <i class="ph ph-wifi-high"></i>
+                        <div>
+                          <strong>Network / Ethernet Printer (TCP Port 9100)</strong>
+                          <span>Direct socket connection across local LAN</span>
+                        </div>
+                      </div>
+                    </label>
+
+                    <label
+                      class="radio-card"
+                      [class.selected]="printerConfig().target === 'BROWSER'"
+                    >
+                      <input
+                        type="radio"
+                        name="printerTarget"
+                        value="BROWSER"
+                        [checked]="printerConfig().target === 'BROWSER'"
+                        (change)="updatePrinterConfig('target', 'BROWSER')"
+                      />
+                      <div class="radio-card-content">
+                        <i class="ph ph-browser"></i>
+                        <div>
+                          <strong>Standard Browser Print Dialog</strong>
+                          <span>Operating system print preview window (fallback)</span>
+                        </div>
+                      </div>
+                    </label>
+                  </div>
+                </div>
+
+                @if (printerConfig().target === 'WINDOWS') {
+                  <div class="form-group">
+                    <div class="label-with-action">
+                      <label class="form-label">Select Installed Windows Thermal Printer</label>
+                      <button
+                        type="button"
+                        class="btn-text"
+                        (click)="loadSystemPrinters()"
+                        [disabled]="isLoadingPrinters()"
+                      >
+                        <i class="ph ph-arrows-clockwise" [class.ph-spin]="isLoadingPrinters()"></i>
+                        <span>Refresh</span>
+                      </button>
+                    </div>
+                    <select
+                      class="form-select"
+                      [ngModel]="printerConfig().printerName"
+                      (ngModelChange)="updatePrinterConfig('printerName', $event)"
+                    >
+                      <option value="">-- Use System Default Printer --</option>
+                      @for (p of availablePrinters(); track p.name) {
+                        <option [value]="p.name">
+                          {{ p.name }} {{ p.is_default ? '(Default)' : '' }}
+                          {{ p.port_name ? '[' + p.port_name + ']' : '' }}
+                        </option>
+                      }
+                    </select>
+                    <span class="field-hint">
+                      Detected {{ availablePrinters().length }} printer(s) installed on this
+                      workstation.
+                    </span>
+                  </div>
                 }
-              </button>
+
+                @if (printerConfig().target === 'NETWORK') {
+                  <div class="form-group">
+                    <label class="form-label">Printer IP Address & Port (Port 9100)</label>
+                    <input
+                      type="text"
+                      class="form-input font-mono"
+                      placeholder="e.g. 192.168.1.100:9100"
+                      [ngModel]="printerConfig().networkAddress"
+                      (ngModelChange)="updatePrinterConfig('networkAddress', $event)"
+                    />
+                    <span class="field-hint">
+                      Standard ESC/POS thermal printers listen for raw socket print jobs on TCP port
+                      9100.
+                    </span>
+                  </div>
+                }
+              </div>
+
+              <div class="panel-box">
+                <div class="panel-header-row">
+                  <div class="panel-title-group">
+                    <div class="panel-icon-wrap">
+                      <i class="ph ph-sliders"></i>
+                    </div>
+                    <div class="panel-title-text">
+                      <h2 class="heading-card">Formatting & Mechanics</h2>
+                      <p class="panel-subtitle">
+                        Paper roll width, automatic cutting, and drawer kick pulses.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="form-group">
+                  <label class="form-label">Receipt Paper Width</label>
+                  <div class="segmented-control">
+                    <button
+                      type="button"
+                      class="seg-btn"
+                      [class.active]="printerConfig().paperWidth === '80mm'"
+                      (click)="updatePrinterConfig('paperWidth', '80mm')"
+                    >
+                      <strong>80mm (Standard POS)</strong>
+                      <span>48 characters per line</span>
+                    </button>
+                    <button
+                      type="button"
+                      class="seg-btn"
+                      [class.active]="printerConfig().paperWidth === '58mm'"
+                      (click)="updatePrinterConfig('paperWidth', '58mm')"
+                    >
+                      <strong>58mm (Compact POS)</strong>
+                      <span>32 characters per line</span>
+                    </button>
+                  </div>
+                </div>
+
+                <div class="form-check-group">
+                  <label class="form-checkbox-label">
+                    <input
+                      type="checkbox"
+                      [checked]="printerConfig().autoCut"
+                      (change)="updatePrinterConfig('autoCut', $any($event.target).checked)"
+                    />
+                    <div class="checkbox-text">
+                      <strong>Automatic Paper Cutting</strong>
+                      <span class="text-xs text-muted"
+                        >Sends ESC/POS cut sequence (GS V A 3) at receipt completion.</span
+                      >
+                    </div>
+                  </label>
+
+                  <label class="form-checkbox-label">
+                    <input
+                      type="checkbox"
+                      [checked]="printerConfig().openCashDrawer"
+                      (change)="updatePrinterConfig('openCashDrawer', $any($event.target).checked)"
+                    />
+                    <div class="checkbox-text">
+                      <strong>Open Cash Drawer (Kick Pulse)</strong>
+                      <span class="text-xs text-muted"
+                        >Sends drawer pulse (ESC p 0) to trigger connected cash drawer.</span
+                      >
+                    </div>
+                  </label>
+                </div>
+
+                <div class="printer-test-cluster">
+                  <div class="cluster-info">
+                    <strong>Verify Hardware Communication</strong>
+                    <p class="text-xs text-muted">
+                      Send an instant test slip with alignment, font scale, and auto-cut.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    class="btn btn-secondary"
+                    (click)="testThermalPrint()"
+                    [disabled]="isTestingPrint()"
+                  >
+                    @if (isTestingPrint()) {
+                      <i class="ph ph-spinner ph-spin"></i>
+                      <span>Printing...</span>
+                    } @else {
+                      <i class="ph ph-printer"></i>
+                      <span>Test Print Slip</span>
+                    }
+                  </button>
+                </div>
+              </div>
             </div>
-          </div>
-        </div>
-      }
+          }
+
+          <!-- TAB 4: KITCHEN & OPERATIONS -->
+          @if (activeTab === 'service') {
+            <div class="settings-grid">
+              <div class="panel-box">
+                <div class="panel-header-row">
+                  <div class="panel-title-group">
+                    <div class="panel-icon-wrap">
+                      <i class="ph ph-cooking-pot"></i>
+                    </div>
+                    <div class="panel-title-text">
+                      <h2 class="heading-card">Kitchen Dispatch Rules</h2>
+                      <p class="panel-subtitle">
+                        Preparation pacing and digital table ordering rules.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="form-row-2">
+                  <div class="form-group">
+                    <label class="form-label">Estimated Prep Time</label>
+                    <div class="input-with-suffix">
+                      <input
+                        type="number"
+                        min="5"
+                        max="120"
+                        class="form-input has-suffix"
+                        [(ngModel)]="profile.estimatedPrepMinutes"
+                      />
+                      <span class="field-suffix">mins</span>
+                    </div>
+                  </div>
+                  <div class="form-group">
+                    <label class="form-label">Minimum Order Spend</label>
+                    <div class="input-with-suffix">
+                      <input
+                        type="number"
+                        min="0"
+                        step="50"
+                        class="form-input has-suffix"
+                        [(ngModel)]="profile.minOrderAmount"
+                      />
+                      <span class="field-suffix">₹</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="form-group">
+                  <label class="form-label">Dine-In Table Ordering</label>
+                  <select class="form-select" [(ngModel)]="profile.dineInEnabled">
+                    <option [ngValue]="true">Enabled (Accept QR code table orders)</option>
+                    <option [ngValue]="false">Disabled (Pause digital table ordering)</option>
+                  </select>
+                  <span class="field-hint"
+                    >When disabled, customers scanning table QR codes see menu in view-only
+                    mode.</span
+                  >
+                </div>
+              </div>
+
+              <div class="panel-box">
+                <div class="panel-header-row">
+                  <div class="panel-title-group">
+                    <div class="panel-icon-wrap">
+                      <i class="ph ph-bag"></i>
+                    </div>
+                    <div class="panel-title-text">
+                      <h2 class="heading-card">Counter & Takeaway Pacing</h2>
+                      <p class="panel-subtitle">Pickup buffers and counter order workflows.</p>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="form-group">
+                  <label class="form-label">Takeaway & Counter Ordering</label>
+                  <select class="form-select" [(ngModel)]="profile.takeawayEnabled">
+                    <option [ngValue]="true">Enabled (Accept counter & takeaway orders)</option>
+                    <option [ngValue]="false">Disabled (Dine-in only)</option>
+                  </select>
+                </div>
+
+                <div class="form-group">
+                  <label class="form-label">Pickup Time Buffer</label>
+                  <div class="input-with-suffix">
+                    <input
+                      type="number"
+                      min="5"
+                      max="60"
+                      class="form-input has-suffix"
+                      [(ngModel)]="profile.pickupBufferMinutes"
+                    />
+                    <span class="field-suffix">mins</span>
+                  </div>
+                  <span class="field-hint"
+                    >Buffer time added to takeaway order preparation estimates.</span
+                  >
+                </div>
+              </div>
+            </div>
+          }
+
+          <!-- TAB 5: SYSTEM & STORAGE -->
+          @if (activeTab === 'maintenance') {
+            <div class="settings-grid maintenance-layout">
+              <!-- 1. Live Infrastructure & Core System Health -->
+              <div class="panel-box full-width-panel">
+                <div class="panel-header-row">
+                  <div class="panel-title-group">
+                    <div class="panel-icon-wrap primary-icon-wrap">
+                      <i class="ph ph-heartbeat"></i>
+                    </div>
+                    <div class="panel-title-text">
+                      <h2 class="heading-card">Live Infrastructure & System Health</h2>
+                      <p class="panel-subtitle">
+                        Real-time connectivity, health telemetry, and round-trip latency across POS
+                        engines.
+                      </p>
+                    </div>
+                  </div>
+                  <div class="panel-header-actions">
+                    @if (lastCheckedTime()) {
+                      <span class="last-check-text">
+                        Checked {{ lastCheckedTime() | date: 'HH:mm:ss' }}
+                      </span>
+                    }
+                    <button
+                      type="button"
+                      class="btn btn-secondary btn-sm refresh-diagnostics-btn"
+                      (click)="checkSystemHealth()"
+                      [disabled]="isCheckingHealth()"
+                    >
+                      <i class="ph ph-arrows-clockwise" [class.ph-spin]="isCheckingHealth()"></i>
+                      <span>{{ isCheckingHealth() ? 'Pinging...' : 'Refresh Status' }}</span>
+                    </button>
+                  </div>
+                </div>
+
+                <!-- 3 System Status Cards Grid -->
+                <div class="system-status-cards">
+                  <!-- Card 1: Local Backend -->
+                  <div
+                    class="system-status-card"
+                    [class.status-card-online]="systemStatuses().localBackend.online"
+                    [class.status-card-offline]="!systemStatuses().localBackend.online"
+                  >
+                    <div class="system-status-card-header">
+                      <div class="system-target-info">
+                        <span class="system-type-tag">Local Engine</span>
+                        <h3 class="system-target-name">Local POS Backend</h3>
+                      </div>
+                      <span
+                        class="system-status-pill"
+                        [class.pill-online]="systemStatuses().localBackend.online"
+                        [class.pill-offline]="!systemStatuses().localBackend.online"
+                      >
+                        <span
+                          class="status-pulse-dot"
+                          [class.dot-online]="systemStatuses().localBackend.online"
+                          [class.dot-offline]="!systemStatuses().localBackend.online"
+                        ></span>
+                        {{ systemStatuses().localBackend.statusText }}
+                      </span>
+                    </div>
+                    <div class="system-status-card-body">
+                      <div class="system-endpoint-row">
+                        <i class="ph ph-desktop"></i>
+                        <code>{{ systemStatuses().localBackend.url }}</code>
+                      </div>
+                      <p class="system-status-desc">{{ systemStatuses().localBackend.details }}</p>
+                    </div>
+                    <div class="system-status-card-footer">
+                      <span class="system-latency-label">Response Latency</span>
+                      <span
+                        class="system-latency-val"
+                        [class.latency-good]="
+                          systemStatuses().localBackend.latencyMs > 0 &&
+                          systemStatuses().localBackend.latencyMs < 100
+                        "
+                      >
+                        {{
+                          systemStatuses().localBackend.latencyMs
+                            ? systemStatuses().localBackend.latencyMs + ' ms'
+                            : 'N/A'
+                        }}
+                      </span>
+                    </div>
+                  </div>
+
+                  <!-- Card 2: Live Backend -->
+                  <div
+                    class="system-status-card"
+                    [class.status-card-online]="systemStatuses().liveBackend.online"
+                    [class.status-card-offline]="!systemStatuses().liveBackend.online"
+                  >
+                    <div class="system-status-card-header">
+                      <div class="system-target-info">
+                        <span class="system-type-tag">Cloud Gateway</span>
+                        <h3 class="system-target-name">Live Cloud Backend</h3>
+                      </div>
+                      <span
+                        class="system-status-pill"
+                        [class.pill-online]="systemStatuses().liveBackend.online"
+                        [class.pill-offline]="!systemStatuses().liveBackend.online"
+                      >
+                        <span
+                          class="status-pulse-dot"
+                          [class.dot-online]="systemStatuses().liveBackend.online"
+                          [class.dot-offline]="!systemStatuses().liveBackend.online"
+                        ></span>
+                        {{ systemStatuses().liveBackend.statusText }}
+                      </span>
+                    </div>
+                    <div class="system-status-card-body">
+                      <div class="system-endpoint-row">
+                        <i class="ph ph-cloud"></i>
+                        <code>{{ systemStatuses().liveBackend.url }}</code>
+                      </div>
+                      <p class="system-status-desc">{{ systemStatuses().liveBackend.details }}</p>
+                    </div>
+                    <div class="system-status-card-footer">
+                      <span class="system-latency-label">Response Latency</span>
+                      <span
+                        class="system-latency-val"
+                        [class.latency-good]="
+                          systemStatuses().liveBackend.latencyMs > 0 &&
+                          systemStatuses().liveBackend.latencyMs < 500
+                        "
+                      >
+                        {{
+                          systemStatuses().liveBackend.latencyMs
+                            ? systemStatuses().liveBackend.latencyMs + ' ms'
+                            : 'N/A'
+                        }}
+                      </span>
+                    </div>
+                  </div>
+
+                  <!-- Card 3: Database -->
+                  <div
+                    class="system-status-card"
+                    [class.status-card-online]="systemStatuses().database.online"
+                    [class.status-card-offline]="!systemStatuses().database.online"
+                  >
+                    <div class="system-status-card-header">
+                      <div class="system-target-info">
+                        <span class="system-type-tag">PostgreSQL Relational DB</span>
+                        <h3 class="system-target-name">Supabase Database</h3>
+                      </div>
+                      <span
+                        class="system-status-pill"
+                        [class.pill-online]="systemStatuses().database.online"
+                        [class.pill-offline]="!systemStatuses().database.online"
+                      >
+                        <span
+                          class="status-pulse-dot"
+                          [class.dot-online]="systemStatuses().database.online"
+                          [class.dot-offline]="!systemStatuses().database.online"
+                        ></span>
+                        {{ systemStatuses().database.statusText }}
+                      </span>
+                    </div>
+                    <div class="system-status-card-body">
+                      <div class="system-endpoint-row">
+                        <i class="ph ph-database"></i>
+                        <code>{{ systemStatuses().database.url }}</code>
+                      </div>
+                      <p class="system-status-desc">{{ systemStatuses().database.details }}</p>
+                    </div>
+                    <div class="system-status-card-footer">
+                      <span class="system-latency-label">Response Latency</span>
+                      <span
+                        class="system-latency-val"
+                        [class.latency-good]="
+                          systemStatuses().database.latencyMs > 0 &&
+                          systemStatuses().database.latencyMs < 300
+                        "
+                      >
+                        {{
+                          systemStatuses().database.latencyMs
+                            ? systemStatuses().database.latencyMs + ' ms'
+                            : 'N/A'
+                        }}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- 2. System & Transaction Audit Logs -->
+              <div class="panel-box full-width-panel">
+                <div class="panel-header-row">
+                  <div class="panel-title-group">
+                    <div class="panel-icon-wrap primary-icon-wrap">
+                      <i class="ph ph-clipboard-text"></i>
+                    </div>
+                    <div class="panel-title-text">
+                      <h2 class="heading-card">System & Transaction Audit Logs</h2>
+                      <p class="panel-subtitle">
+                        Immutable event ledger tracking administrative overrides, orders, bill
+                        settlements, and operational states.
+                      </p>
+                    </div>
+                  </div>
+                  <div class="audit-toolbar-actions">
+                    <button
+                      type="button"
+                      class="btn btn-secondary btn-sm"
+                      (click)="exportAuditLogs()"
+                      title="Export audit log report as JSON"
+                    >
+                      <i class="ph ph-download-simple"></i>
+                      <span>Export Logs</span>
+                    </button>
+                  </div>
+                </div>
+
+                <!-- Audit Filtering & Search Controls -->
+                <div class="audit-filter-controls">
+                  <div class="audit-filter-chips">
+                    @for (
+                      cat of ['ALL', 'AUTH', 'ORDER', 'RECEIPT', 'INVOICE', 'COUPON', 'SYSTEM'];
+                      track cat
+                    ) {
+                      <button
+                        type="button"
+                        class="audit-chip"
+                        [class.active]="auditCategoryFilter() === cat"
+                        (click)="setAuditCategory(cat)"
+                      >
+                        {{ cat }}
+                      </button>
+                    }
+                  </div>
+                  <div class="audit-search-wrap">
+                    <i class="ph ph-magnifying-glass input-icon"></i>
+                    <input
+                      type="text"
+                      class="form-input with-icon"
+                      placeholder="Search logs by actor, action, notes, or entity ID..."
+                      [ngModel]="auditSearchText()"
+                      (ngModelChange)="onAuditSearchChange($event)"
+                    />
+                  </div>
+                  <span class="audit-count-badge"> {{ filteredAuditLogs().length }} entries </span>
+                </div>
+
+                <!-- Audit Feed List with Incremental Pagination (20 initial, +10 load more) -->
+                <div class="audit-feed-wrapper">
+                  @if (filteredAuditLogs().length > 0) {
+                    <div class="audit-feed-list">
+                      @for (entry of paginatedAuditLogs(); track entry.id) {
+                        <div class="audit-feed-row">
+                          <div class="audit-timestamp-cell">
+                            <span class="audit-time">{{ entry.timestamp | date: 'HH:mm:ss' }}</span>
+                            <span class="audit-date">{{
+                              entry.timestamp | date: 'mediumDate'
+                            }}</span>
+                          </div>
+                          <div class="audit-action-cell">
+                            <span class="audit-action-tag" [attr.data-action]="entry.action">
+                              {{ entry.action.replaceAll('_', ' ') }}
+                            </span>
+                            <span class="audit-entity-label">
+                              {{ entry.entityType }}: <code>{{ entry.entityId.slice(0, 14) }}</code>
+                            </span>
+                          </div>
+                          <div class="audit-notes-cell">
+                            <p class="audit-notes-text">
+                              {{ entry.notes || 'Routine operation event recorded.' }}
+                            </p>
+                          </div>
+                          <div class="audit-actor-cell">
+                            <span class="actor-role-pill" [attr.data-role]="entry.actorRole">
+                              {{ entry.actorRole }}
+                            </span>
+                            <span class="actor-name-text">{{
+                              entry.actorLabel || 'Authorized User'
+                            }}</span>
+                          </div>
+                        </div>
+                      }
+
+                      <!-- Pagination Control (Load 10 by 10) -->
+                      <div class="audit-pagination-bar" [class.all-loaded]="!hasMoreAuditLogs()">
+                        <span class="pagination-info">
+                          Showing <strong>{{ paginatedAuditLogs().length }}</strong> of
+                          <strong>{{ filteredAuditLogs().length }}</strong> records
+                        </span>
+                        @if (hasMoreAuditLogs()) {
+                          <button
+                            type="button"
+                            class="btn btn-secondary btn-sm load-more-btn"
+                            (click)="loadMoreAuditLogs()"
+                          >
+                            <i class="ph ph-arrow-down"></i>
+                            <span>Load 10 More</span>
+                          </button>
+                        } @else if (filteredAuditLogs().length > 20) {
+                          <span class="all-loaded-tag">
+                            <i class="ph ph-check-circle"></i>
+                            All {{ filteredAuditLogs().length }} entries loaded
+                          </span>
+                        }
+                      </div>
+                    </div>
+                  } @else {
+                    <div class="empty-audit-state">
+                      <i class="ph ph-clock-counter-clockwise"></i>
+                      <p>No audit events match the selected filter criteria.</p>
+                    </div>
+                  }
+                </div>
+              </div>
+
+              <!-- 3. Local Storage Diagnostics -->
+              <div class="panel-box">
+                <div class="panel-header-row">
+                  <div class="panel-title-group">
+                    <div class="panel-icon-wrap">
+                      <i class="ph ph-database"></i>
+                    </div>
+                    <div class="panel-title-text">
+                      <h2 class="heading-card">Local Storage Diagnostics</h2>
+                      <p class="panel-subtitle">
+                        Zero-latency offline data snapshots cached in browser memory.
+                      </p>
+                    </div>
+                  </div>
+                  <span class="panel-badge success">Synchronized</span>
+                </div>
+
+                <div class="storage-metrics-grid">
+                  <div class="storage-metric-card">
+                    <span class="metric-num">{{ ordersCount() }}</span>
+                    <span class="metric-lbl">Cached Orders</span>
+                  </div>
+                  <div class="storage-metric-card">
+                    <span class="metric-num">{{ menuCount() }}</span>
+                    <span class="metric-lbl">Menu Items</span>
+                  </div>
+                  <div class="storage-metric-card">
+                    <span class="metric-num">{{ tablesCount() }}</span>
+                    <span class="metric-lbl">Dining Tables</span>
+                  </div>
+                  <div class="storage-metric-card">
+                    <span class="metric-num">{{ customersCount() }}</span>
+                    <span class="metric-lbl">Profiles Saved</span>
+                  </div>
+                </div>
+              </div>
+
+              <!-- 4. Reset Demo State -->
+              <div class="panel-box danger-box">
+                <div class="panel-header-row">
+                  <div class="panel-title-group">
+                    <div class="panel-icon-wrap danger-icon-wrap">
+                      <i class="ph ph-warning-octagon"></i>
+                    </div>
+                    <div class="panel-title-text">
+                      <h2 class="heading-card danger-title">Reset Demo State</h2>
+                      <p class="panel-subtitle">Clear local modifications and re-seed defaults.</p>
+                    </div>
+                  </div>
+                  <span class="panel-badge danger">Destructive</span>
+                </div>
+
+                <p class="text-sm text-secondary">
+                  Clears local session cache and restores the standard catalog, table layout, and
+                  sample orders to factory demo state.
+                </p>
+
+                <div class="action-footer">
+                  <button class="btn btn-danger" (click)="confirmResetOpen = true">
+                    <i class="ph ph-arrow-counter-clockwise"></i>
+                    <span>Restore Defaults</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+          }
+
+          <!-- TAB 6: ADMIN SECURITY (PASSWORD CHANGE) -->
+          @if (activeTab === 'security') {
+            <div class="settings-grid">
+              <div class="panel-box security-box">
+                <div class="panel-header-row">
+                  <div class="panel-title-group">
+                    <div class="panel-icon-wrap warning-icon-wrap">
+                      <i class="ph ph-shield-check"></i>
+                    </div>
+                    <div class="panel-title-text">
+                      <h2 class="heading-card">Master Admin Credentials</h2>
+                      <p class="panel-subtitle">
+                        Authorize bills, reprint duplicates, modify paid orders, and change system
+                        settings.
+                      </p>
+                    </div>
+                  </div>
+                  <span class="panel-badge warning">High Privilege</span>
+                </div>
+
+                <div class="security-banner">
+                  <i class="ph ph-info"></i>
+                  <div>
+                    <strong>Single Password Security</strong>
+                    <span
+                      >Changing this updates the master admin credentials across local storage and
+                      the cloud database.</span
+                    >
+                  </div>
+                </div>
+
+                <div class="form-group">
+                  <label class="form-label">Current Admin Password (Optional)</label>
+                  <div class="input-with-action">
+                    <input
+                      [type]="showCurrentPwd ? 'text' : 'password'"
+                      class="form-input"
+                      placeholder="Enter current password if set"
+                      [(ngModel)]="pwdForm.currentPassword"
+                    />
+                    <button
+                      type="button"
+                      class="toggle-visibility-btn"
+                      (click)="showCurrentPwd = !showCurrentPwd"
+                      [attr.aria-label]="showCurrentPwd ? 'Hide password' : 'Show password'"
+                    >
+                      <i
+                        class="ph"
+                        [class.ph-eye]="!showCurrentPwd"
+                        [class.ph-eye-slash]="showCurrentPwd"
+                      ></i>
+                    </button>
+                  </div>
+                </div>
+
+                <div class="form-group">
+                  <label class="form-label">New Admin Password *</label>
+                  <div class="input-with-action">
+                    <input
+                      [type]="showNewPwd ? 'text' : 'password'"
+                      class="form-input"
+                      placeholder="Enter new password (min. 4 characters)"
+                      [(ngModel)]="pwdForm.newPassword"
+                    />
+                    <button
+                      type="button"
+                      class="toggle-visibility-btn"
+                      (click)="showNewPwd = !showNewPwd"
+                      [attr.aria-label]="showNewPwd ? 'Hide password' : 'Show password'"
+                    >
+                      <i
+                        class="ph"
+                        [class.ph-eye]="!showNewPwd"
+                        [class.ph-eye-slash]="showNewPwd"
+                      ></i>
+                    </button>
+                  </div>
+                </div>
+
+                <div class="form-group">
+                  <label class="form-label">Confirm New Password *</label>
+                  <div class="input-with-action">
+                    <input
+                      [type]="showConfirmPwd ? 'text' : 'password'"
+                      class="form-input"
+                      placeholder="Re-enter new password"
+                      [(ngModel)]="pwdForm.confirmPassword"
+                    />
+                    <button
+                      type="button"
+                      class="toggle-visibility-btn"
+                      (click)="showConfirmPwd = !showConfirmPwd"
+                      [attr.aria-label]="showConfirmPwd ? 'Hide password' : 'Show password'"
+                    >
+                      <i
+                        class="ph"
+                        [class.ph-eye]="!showConfirmPwd"
+                        [class.ph-eye-slash]="showConfirmPwd"
+                      ></i>
+                    </button>
+                  </div>
+                  @if (
+                    pwdForm.newPassword &&
+                    pwdForm.confirmPassword &&
+                    pwdForm.newPassword !== pwdForm.confirmPassword
+                  ) {
+                    <span class="field-error-text">Passwords do not match</span>
+                  }
+                </div>
+
+                <div class="action-footer">
+                  <button
+                    type="button"
+                    class="btn btn-primary"
+                    (click)="updateAdminPassword()"
+                    [disabled]="
+                      isUpdatingPassword ||
+                      !pwdForm.newPassword ||
+                      pwdForm.newPassword !== pwdForm.confirmPassword ||
+                      pwdForm.newPassword.length < 4
+                    "
+                  >
+                    @if (isUpdatingPassword) {
+                      <i class="ph ph-spinner ph-spin"></i>
+                      <span>Updating Password...</span>
+                    } @else {
+                      <i class="ph ph-shield-check"></i>
+                      <span>Update Admin Password</span>
+                    }
+                  </button>
+                </div>
+              </div>
+            </div>
+          }
+        </main>
+      </div>
 
       <!-- Confirmation Modal -->
       <app-confirm-modal
@@ -1343,6 +1478,292 @@ type SettingsTab = 'general' | 'tax' | 'printer' | 'service' | 'maintenance' | '
       .warning-dot {
         background: #f59e0b !important;
         box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.25) !important;
+      }
+
+      .settings-search-bar {
+        position: relative;
+        margin-bottom: 4px;
+      }
+
+      .search-input-wrap {
+        position: relative;
+        display: flex;
+        align-items: center;
+
+        .search-icon {
+          position: absolute;
+          left: 14px;
+          color: var(--color-text-muted);
+          font-size: 1.125rem;
+          pointer-events: none;
+        }
+
+        .search-input {
+          padding-left: 42px;
+          padding-right: 40px;
+          height: 44px;
+          border-radius: var(--radius-md);
+          background: var(--color-surface);
+          border: 1px solid var(--color-border);
+          font-size: 0.875rem;
+          color: var(--color-text-primary);
+          transition: all var(--transition-fast);
+
+          &:focus {
+            border-color: var(--color-primary);
+            box-shadow: 0 0 0 3px rgba(194, 65, 12, 0.12);
+          }
+        }
+
+        .search-clear-btn {
+          position: absolute;
+          right: 12px;
+          background: transparent;
+          border: none;
+          color: var(--color-text-muted);
+          font-size: 1rem;
+          cursor: pointer;
+          padding: 4px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+
+          &:hover {
+            color: var(--color-text-primary);
+          }
+        }
+      }
+
+      .settings-layout {
+        display: grid;
+        grid-template-columns: 290px 1fr;
+        gap: 24px;
+        align-items: flex-start;
+
+        @media (max-width: 960px) {
+          grid-template-columns: 1fr;
+        }
+      }
+
+      .settings-sidebar {
+        background: var(--color-surface);
+        border: 1px solid var(--color-border);
+        border-radius: var(--radius-lg);
+        padding: 14px;
+        display: flex;
+        flex-direction: column;
+        gap: 16px;
+        box-shadow: var(--shadow-sm);
+        position: sticky;
+        top: 20px;
+
+        @media (max-width: 960px) {
+          position: static;
+        }
+      }
+
+      .sidebar-category-group {
+        display: flex;
+        flex-direction: column;
+        gap: 5px;
+      }
+
+      .sidebar-category-heading {
+        font-size: 0.6875rem;
+        font-weight: 800;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--color-text-muted);
+        padding: 0 8px 2px 8px;
+      }
+
+      .sidebar-nav-items {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+      }
+
+      .sidebar-nav-btn {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 10px 12px;
+        border-radius: var(--radius-md);
+        border: 1px solid transparent;
+        background: transparent;
+        text-align: left;
+        cursor: pointer;
+        transition: all var(--transition-fast);
+        width: 100%;
+
+        &:hover {
+          background: rgba(0, 0, 0, 0.04);
+        }
+
+        &.active {
+          background: rgba(194, 65, 12, 0.08);
+          border-color: rgba(194, 65, 12, 0.25);
+
+          .nav-btn-icon-box {
+            background: var(--color-primary);
+            color: white;
+          }
+
+          .nav-btn-label {
+            color: var(--color-primary);
+            font-weight: 700;
+          }
+        }
+
+        &.search-matched:not(.active) {
+          border-color: rgba(245, 158, 11, 0.4);
+          background: rgba(245, 158, 11, 0.06);
+        }
+
+        &.dimmed {
+          opacity: 0.35;
+        }
+      }
+
+      .nav-btn-icon-box {
+        width: 36px;
+        height: 36px;
+        border-radius: var(--radius-sm);
+        background: rgba(0, 0, 0, 0.05);
+        color: var(--color-text-secondary);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.125rem;
+        flex-shrink: 0;
+        transition: all var(--transition-fast);
+      }
+
+      .nav-btn-text {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+        min-width: 0;
+        flex: 1;
+      }
+
+      .nav-btn-title-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 6px;
+      }
+
+      .nav-btn-label {
+        font-size: 0.8125rem;
+        font-weight: 600;
+        color: var(--color-text-primary);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+
+      .nav-btn-desc {
+        font-size: 0.6875rem;
+        color: var(--color-text-muted);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+
+      .settings-content-pane {
+        display: flex;
+        flex-direction: column;
+        gap: 20px;
+        min-width: 0;
+      }
+
+      .active-tab-banner {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 16px 20px;
+        background: var(--color-surface);
+        border: 1px solid var(--color-border);
+        border-radius: var(--radius-md);
+        box-shadow: var(--shadow-xs);
+
+        .tab-banner-category {
+          font-size: 0.6875rem;
+          font-weight: 800;
+          letter-spacing: 0.06em;
+          text-transform: uppercase;
+          color: var(--color-primary);
+        }
+
+        .tab-banner-title {
+          font-size: 1.1875rem;
+          font-weight: 700;
+          color: var(--color-text-primary);
+          margin: 2px 0 0 0;
+        }
+      }
+
+      .google-review-panel {
+        border-left: 3px solid #ea4335 !important;
+      }
+
+      .google-icon-wrap {
+        background: rgba(234, 67, 53, 0.1) !important;
+        color: #ea4335 !important;
+      }
+
+      .google-color {
+        color: #ea4335;
+      }
+
+      .help-tip-card {
+        display: flex;
+        gap: 12px;
+        padding: 12px 14px;
+        border-radius: var(--radius-sm);
+        background: rgba(245, 158, 11, 0.08);
+        border: 1px solid rgba(245, 158, 11, 0.2);
+        color: var(--color-text-secondary);
+        font-size: 0.75rem;
+        line-height: 1.45;
+
+        .help-tip-icon {
+          font-size: 1.125rem;
+          color: #d97706;
+          flex-shrink: 0;
+          margin-top: 2px;
+        }
+
+        .help-steps-list {
+          margin: 6px 0 0 16px;
+          padding: 0;
+          display: flex;
+          flex-direction: column;
+          gap: 3px;
+
+          code {
+            font-family: monospace;
+            background: rgba(0, 0, 0, 0.06);
+            padding: 1px 4px;
+            border-radius: 3px;
+          }
+        }
+      }
+
+      .header-actions-inline {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+
+      .test-link-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        font-size: 0.75rem;
+        padding: 4px 10px;
+        white-space: nowrap;
       }
 
       .settings-tabs-bar {
@@ -2620,6 +3041,109 @@ export class SettingsComponent implements OnInit {
   }
 
   activeTab: SettingsTab = 'general';
+  settingsSearchQuery = signal<string>('');
+
+  navItems = [
+    {
+      id: 'general' as SettingsTab,
+      category: 'RESTAURANT & PRESENCE',
+      label: 'Brand & Public Presence',
+      description: 'Profile identity, Google reviews, QR menu',
+      icon: 'ph-storefront',
+      keywords:
+        'brand name tagline description logo phone email street city state pin google review reviews rating feedback qr menu website online',
+    },
+    {
+      id: 'tax' as SettingsTab,
+      category: 'BILLING & COMPLIANCE',
+      label: 'Taxes & Invoicing',
+      description: 'GST tax rates, FSSAI, bill notes, UPI',
+      icon: 'ph-receipt',
+      keywords:
+        'tax taxes gst cgst sgst service charge gstin invoice bill receipt fssai license footer currency upi payment',
+    },
+    {
+      id: 'printer' as SettingsTab,
+      category: 'HARDWARE & DEVICES',
+      label: 'Thermal Printer',
+      description: 'ESC/POS, 80mm/58mm, USB / LAN spooling',
+      icon: 'ph-printer',
+      badge: 'ESC/POS',
+      keywords:
+        'printer thermal escpos usb network lan windows driver 80mm 58mm autocut drawer test print spooler',
+    },
+    {
+      id: 'service' as SettingsTab,
+      category: 'KITCHEN & CHANNELS',
+      label: 'Kitchen & Ordering',
+      description: 'Dine-in QR tables, prep buffer, takeaway',
+      icon: 'ph-cooking-pot',
+      keywords:
+        'kitchen service dispatch table ordering dine in takeaway counter prep time preparation buffer minimum spend',
+    },
+    {
+      id: 'maintenance' as SettingsTab,
+      category: 'PLATFORM & SYSTEM',
+      label: 'System & Storage',
+      description: 'Telemetry, cloud latency, local cache',
+      icon: 'ph-database',
+      keywords:
+        'system maintenance health telemetry latency ping backend axum supabase database storage local cache reset demo backup',
+    },
+    {
+      id: 'security' as SettingsTab,
+      category: 'ACCESS & SECURITY',
+      label: 'Admin Security',
+      description: 'Master PIN/password, audit event ledger',
+      icon: 'ph-shield-check',
+      adminOnly: true,
+      keywords: 'security admin password pin master credentials audit logs events ledger history',
+    },
+  ];
+
+  groupedNavItems = computed(() => {
+    const query = this.settingsSearchQuery().toLowerCase().trim();
+    const isAdmin = this.auth.isAdmin();
+    const available = this.navItems.filter((item) => !item.adminOnly || isAdmin);
+
+    const categories = [
+      'RESTAURANT & PRESENCE',
+      'BILLING & COMPLIANCE',
+      'HARDWARE & DEVICES',
+      'KITCHEN & CHANNELS',
+      'PLATFORM & SYSTEM',
+      'ACCESS & SECURITY',
+    ];
+
+    return categories
+      .map((cat) => {
+        const items = available
+          .filter((i) => i.category === cat)
+          .map((i) => ({
+            ...i,
+            matchesSearch:
+              !query ||
+              i.label.toLowerCase().includes(query) ||
+              i.description.toLowerCase().includes(query) ||
+              i.keywords.includes(query),
+          }));
+        return { category: cat, items };
+      })
+      .filter((g) => g.items.length > 0);
+  });
+
+  currentNavItem = computed(() => {
+    const current = this.activeTab;
+    return this.navItems.find((n) => n.id === current) || this.navItems[0];
+  });
+
+  currentNavCategory = computed(() => this.currentNavItem().category);
+  currentNavTitle = computed(() => this.currentNavItem().label);
+
+  switchTab(tab: SettingsTab): void {
+    this.activeTab = tab;
+  }
+
   confirmResetOpen = false;
   savedProfileJson = '';
 
@@ -2708,6 +3232,7 @@ export class SettingsComponent implements OnInit {
     contactPhone: '+91 80 4912 8800',
     contactEmail: 'contact@gurukripadhaba.com',
     customerMenuUrl: 'https://gurukripadhaba-menu.vercel.app',
+    googleReviewUrl: '',
     street: '14 Heritage Promenade, MG Road',
     city: 'Bengaluru',
     statePin: 'Karnataka - 560001',
@@ -2797,6 +3322,12 @@ export class SettingsComponent implements OnInit {
           res.contact?.website ||
           environment.customerMenuUrl ||
           'https://gurukripadhaba-menu.vercel.app',
+        googleReviewUrl:
+          (res as any)?.google_review_url ||
+          res.googleReviewUrl ||
+          res.contact?.googleReviewUrl ||
+          this.profile.googleReviewUrl ||
+          '',
         street: res.address?.street || this.profile.street,
         city: res.address?.city || this.profile.city,
         statePin: `${res.address?.state || 'Karnataka'} - ${res.address?.zip || '560001'}`,
@@ -2822,6 +3353,7 @@ export class SettingsComponent implements OnInit {
       environment.customerMenuUrl ||
       'https://gurukripadhaba-menu.vercel.app'
     ).trim();
+    const cleanGoogleReviewUrl = (this.profile.googleReviewUrl || '').trim();
     localStorage.setItem('hotel_crm_customer_menu_url', cleanMenuUrl);
 
     const current = this.mock.restaurant();
@@ -2843,10 +3375,12 @@ export class SettingsComponent implements OnInit {
       openingHours: current?.openingHours || [],
       currency: current?.currency || 'INR',
       currencySymbol: current?.currencySymbol || '₹',
+      googleReviewUrl: cleanGoogleReviewUrl,
       contact: {
         phone: this.profile.contactPhone,
         email: this.profile.contactEmail,
         website: cleanMenuUrl,
+        googleReviewUrl: cleanGoogleReviewUrl,
       },
       address: {
         ...current?.address,
@@ -2882,6 +3416,39 @@ export class SettingsComponent implements OnInit {
         this.toastService.success('Restaurant settings saved locally');
       },
     });
+  }
+
+  testGoogleReviewLink(): void {
+    const url = (this.profile.googleReviewUrl || '').trim();
+    if (!url) {
+      this.toastService.warning('Please enter a Google Review redirect link first.');
+      return;
+    }
+    const formatted =
+      url.startsWith('http://') || url.startsWith('https://') ? url : `https://${url}`;
+    window.open(formatted, '_blank', 'noopener,noreferrer');
+  }
+
+  copyMenuUrl(): void {
+    const url =
+      this.profile.customerMenuUrl ||
+      environment.customerMenuUrl ||
+      'https://gurukripadhaba-menu.vercel.app';
+    if (navigator?.clipboard) {
+      navigator.clipboard.writeText(url).then(() => {
+        this.toastService.success('Customer Mobile Menu URL copied to clipboard');
+      });
+    } else {
+      this.toastService.info(`Menu URL: ${url}`);
+    }
+  }
+
+  openMenuUrl(): void {
+    const url =
+      this.profile.customerMenuUrl ||
+      environment.customerMenuUrl ||
+      'https://gurukripadhaba-menu.vercel.app';
+    window.open(url, '_blank', 'noopener,noreferrer');
   }
 
   updateAdminPassword(): void {
@@ -2923,12 +3490,22 @@ export class SettingsComponent implements OnInit {
       .get<{ status: string }>('http://127.0.0.1:3000/api/v1/health')
       .pipe(
         timeout(2000),
-        catchError(() => of(null)),
+        catchError(() =>
+          this.http.get<{ status: string }>('http://127.0.0.1:3000/health/live').pipe(
+            timeout(1500),
+            catchError(() => of(null)),
+          ),
+        ),
       )
       .subscribe((res) => {
         const t1 = performance.now();
         const duration = Math.round(t1 - t0Local);
-        const isOk = Boolean(res && (res as any).status === 'ok');
+        const isOk = Boolean(
+          res &&
+            ((res as any).status === 'ok' ||
+              (res as any).status === 'alive' ||
+              (res as any).status === 'ready'),
+        );
 
         this.systemStatuses.update((curr) => ({
           ...curr,
@@ -2947,22 +3524,32 @@ export class SettingsComponent implements OnInit {
     // 2. Check Live Cloud Backend
     const t0Cloud = performance.now();
     this.http
-      .get<{ status: string }>('https://hotel-crm-api-vpxu.onrender.com/health')
+      .get<{ status: string }>('https://hotel-crm-api-vpxu.onrender.com/health/live')
       .pipe(
         timeout(5000),
-        catchError(() => of(null)),
+        catchError(() =>
+          this.http.get<{ status: string }>('https://hotel-crm-api-vpxu.onrender.com/health').pipe(
+            timeout(3000),
+            catchError(() => of(null)),
+          ),
+        ),
       )
       .subscribe((res) => {
         const t1 = performance.now();
         const duration = Math.round(t1 - t0Cloud);
-        const isOk = Boolean(res && (res as any).status === 'ok');
+        const isOk = Boolean(
+          res &&
+            ((res as any).status === 'ok' ||
+              (res as any).status === 'alive' ||
+              (res as any).status === 'ready'),
+        );
 
         this.systemStatuses.update((curr) => ({
           ...curr,
           liveBackend: {
             online: isOk,
             statusText: isOk ? 'Healthy / Active' : 'Standby / Sleep',
-            url: 'https://hotel-crm-api-vpxu.onrender.com/health',
+            url: 'https://hotel-crm-api-vpxu.onrender.com/health/live',
             details: isOk
               ? 'Render cloud service active & responding with zero errors.'
               : 'Render free-tier instance sleeping or spinning up.',

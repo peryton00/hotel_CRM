@@ -4,6 +4,7 @@ import { CartProvider } from '@/lib/cart-context';
 import { Analytics } from '@vercel/analytics/next';
 import { SpeedInsights } from '@vercel/speed-insights/next';
 import { Toaster } from 'dynaura';
+import { PreventDoubleClick } from '@/components/PreventDoubleClick';
 
 
 export const metadata: Metadata = {
@@ -47,6 +48,7 @@ export default function RootLayout({
         />
       </head>
       <body className="bg-[#f8f6f2] dark:bg-[#0c0e12] text-neutral-900 dark:text-neutral-100 antialiased min-h-screen transition-colors duration-200">
+        <PreventDoubleClick />
         <Toaster />
         <CartProvider>{children}</CartProvider>
         <Analytics />

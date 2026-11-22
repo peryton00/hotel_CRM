@@ -20,7 +20,8 @@ impl CustomerRepository {
             sqlx::query_as::<_, Customer>(
                 r#"
                 SELECT id, restaurant_id, name, phone, email, address, notes,
-                       total_orders AS visit_count, total_spent_paise AS total_spend_paise,
+                       COALESCE(total_orders, visit_count, 0) AS visit_count,
+                       COALESCE(total_spend_paise, total_spent_paise, 0) AS total_spend_paise,
                        loyalty_points, loyalty_tier::text AS loyalty_tier,
                        created_at, updated_at
                 FROM customers
@@ -37,7 +38,8 @@ impl CustomerRepository {
             sqlx::query_as::<_, Customer>(
                 r#"
                 SELECT id, restaurant_id, name, phone, email, address, notes,
-                       total_orders AS visit_count, total_spent_paise AS total_spend_paise,
+                       COALESCE(total_orders, visit_count, 0) AS visit_count,
+                       COALESCE(total_spend_paise, total_spent_paise, 0) AS total_spend_paise,
                        loyalty_points, loyalty_tier::text AS loyalty_tier,
                        created_at, updated_at
                 FROM customers
@@ -70,7 +72,8 @@ impl CustomerRepository {
                 notes = COALESCE(EXCLUDED.notes, customers.notes),
                 updated_at = NOW()
             RETURNING id, restaurant_id, name, phone, email, address, notes,
-                      total_orders AS visit_count, total_spent_paise AS total_spend_paise,
+                      COALESCE(total_orders, visit_count, 0) AS visit_count,
+                      COALESCE(total_spend_paise, total_spent_paise, 0) AS total_spend_paise,
                       loyalty_points, loyalty_tier::text AS loyalty_tier,
                       created_at, updated_at
             "#,
@@ -100,7 +103,8 @@ impl CustomerRepository {
                 updated_at = NOW()
             WHERE restaurant_id = $1 AND id = $2
             RETURNING id, restaurant_id, name, phone, email, address, notes,
-                      total_orders AS visit_count, total_spent_paise AS total_spend_paise,
+                      COALESCE(total_orders, visit_count, 0) AS visit_count,
+                      COALESCE(total_spend_paise, total_spent_paise, 0) AS total_spend_paise,
                       loyalty_points, loyalty_tier::text AS loyalty_tier,
                       created_at, updated_at
             "#,

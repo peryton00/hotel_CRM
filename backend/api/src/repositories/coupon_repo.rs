@@ -7,7 +7,7 @@ use crate::{
     models::{
         coupon::{
             Coupon, CouponRedemption, CreateCouponRequest, RedeemCouponRequest,
-            ValidateCouponRequest, ValidateCouponResponse,
+            UpdateCouponRequest, ValidateCouponRequest, ValidateCouponResponse,
         },
         paise::Paise,
     },
@@ -103,6 +103,48 @@ impl CouponRepository {
         .bind(restaurant_id)
         .bind(coupon_id)
         .bind(is_active)
+        .fetch_one(pool)
+        .await?;
+
+        Ok(coupon)
+    }
+
+    pub async fn update_coupon(
+        pool: &PgPool,
+        restaurant_id: Uuid,
+        coupon_id: Uuid,
+        req: UpdateCouponRequest,
+    ) -> Result<Coupon, AppError> {
+        let coupon = sqlx::query_as::<_, Coupon>(
+            r#"
+            UPDATE coupons
+            SET title = COALESCE($3, title),
+                description = COALESCE($4, description),
+                discount_type = COALESCE($5, discount_type),
+                discount_value = COALESCE($6, discount_value),
+                min_order_amount_paise = COALESCE($7, min_order_amount_paise),
+                max_discount_amount_paise = COALESCE($8, max_discount_amount_paise),
+                one_time_per_customer = COALESCE($9, one_time_per_customer),
+                is_active = COALESCE($10, is_active),
+                updated_at = NOW()
+            WHERE restaurant_id = $1 AND id = $2
+            RETURNING id, restaurant_id, code, description,
+                      discount_type::text AS discount_type,
+                      discount_value::float8 AS discount_value,
+                      min_order_amount_paise, max_discount_amount_paise, one_time_per_customer,
+                      is_active, start_date, end_date, created_at, updated_at
+            "#,
+        )
+        .bind(restaurant_id)
+        .bind(coupon_id)
+        .bind(req.title)
+        .bind(req.description)
+        .bind(req.discount_type)
+        .bind(req.discount_value)
+        .bind(req.min_order_amount_paise)
+        .bind(req.max_discount_amount_paise)
+        .bind(req.one_time_per_customer)
+        .bind(req.is_active)
         .fetch_one(pool)
         .await?;
 

@@ -47,6 +47,10 @@ pub struct RestaurantTable {
     pub qr_code_identifier: Option<String>,
     pub active_order_id: Option<Uuid>,
     pub assigned_staff_id: Option<Uuid>,
+    #[sqlx(default)]
+    pub ordering_enabled: bool,
+    #[sqlx(default)]
+    pub current_seating_session_id: Option<Uuid>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }

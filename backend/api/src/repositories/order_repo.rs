@@ -20,6 +20,12 @@ impl OrderRepository {
         staff_id: Option<Uuid>,
         req: CreateOrderRequest,
     ) -> Result<OrderWithItems, AppError> {
+        if req.items.is_empty() {
+            return Err(AppError::BadRequest(
+                "Cannot create order with no items".to_string(),
+            ));
+        }
+
         let mut tx = pool.begin().await?;
 
         // 1. Calculate items total in paise
@@ -90,19 +96,83 @@ impl OrderRepository {
             .filter(|s| !s.is_empty())
             .unwrap_or("+919999999999");
 
+        // Online & POS Customer auto-enrollment: link order to customer record by phone
+        let resolved_customer_id = if let Some(phone) = req
+            .customer_phone
+            .as_deref()
+            .map(|s| s.trim())
+            .filter(|s| s.len() >= 10 && *s != "+919999999999")
+        {
+            let clean_phone = phone.chars().filter(|c| c.is_ascii_digit()).collect::<String>();
+            let phone_to_match = if clean_phone.len() >= 10 {
+                &clean_phone[clean_phone.len() - 10..]
+            } else {
+                phone
+            };
+
+            let existing_id = sqlx::query_scalar::<_, Uuid>(
+                "SELECT id FROM customers WHERE restaurant_id = $1 AND (phone LIKE '%' || $2 OR phone_e164 LIKE '%' || $2) LIMIT 1",
+            )
+            .bind(restaurant_id)
+            .bind(phone_to_match)
+            .fetch_optional(&mut *tx)
+            .await?;
+
+            if let Some(cid) = existing_id {
+                let _ = sqlx::query(
+                    r#"
+                    UPDATE customers
+                    SET total_orders = COALESCE(total_orders, 0) + 1,
+                        visit_count = COALESCE(visit_count, 0) + 1,
+                        total_spend_paise = COALESCE(total_spend_paise, 0) + $2,
+                        total_spent_paise = COALESCE(total_spent_paise, 0) + $2,
+                        name = CASE WHEN name = 'Walk-in Guest' OR name = '' THEN $3 ELSE name END,
+                        updated_at = NOW()
+                    WHERE id = $1
+                    "#,
+                )
+                .bind(cid)
+                .bind(breakdown.final_amount_paise)
+                .bind(cust_name)
+                .execute(&mut *tx)
+                .await;
+
+                Some(cid)
+            } else {
+                let new_cid = sqlx::query_scalar::<_, Uuid>(
+                    r#"
+                    INSERT INTO customers (restaurant_id, name, phone, phone_e164, total_orders, visit_count, total_spend_paise, total_spent_paise, updated_at)
+                    VALUES ($1, $2, $3, $3, 1, 1, $4, $4, NOW())
+                    RETURNING id
+                    "#,
+                )
+                .bind(restaurant_id)
+                .bind(cust_name)
+                .bind(phone)
+                .bind(breakdown.final_amount_paise)
+                .fetch_optional(&mut *tx)
+                .await?;
+
+                new_cid.or(req.customer_id)
+            }
+        } else {
+            req.customer_id
+        };
+
         // 3. Insert order
+        let generated_order_number = format!("ORD-{}", &Uuid::new_v4().to_string()[..8].to_uppercase());
         let order = sqlx::query_as::<_, Order>(
             r#"
             INSERT INTO orders (
-                restaurant_id, order_type, pickup_reference, status, payment_status,
+                restaurant_id, order_number, order_type, pickup_reference, status, payment_status,
                 table_id, customer_id, customer_name, customer_phone_e164, customer_phone,
                 subtotal_paise, discount_paise, applied_coupon_code, tax_paise,
                 cgst_rate, sgst_rate,
                 service_charge_paise, round_off_paise, total_amount_paise, notes,
                 server_staff_id, legacy_unknown_timestamp
             )
-            VALUES ($1, $2, $3, 'confirmed', 'pending', $4, $5, $6, $7, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, false)
-            RETURNING id, restaurant_id, 'ORD-' || UPPER(SUBSTRING(id::text, 1, 8)) AS order_number, order_type, pickup_reference, status, payment_status, payment_method,
+            VALUES ($1, $2, $3, $4, 'confirmed', 'pending', $5, $6, $7, $8, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, false)
+            RETURNING id, restaurant_id, order_number, order_type, pickup_reference, status, payment_status, payment_method,
                       table_id, customer_id, customer_name, customer_phone_e164, subtotal_paise, discount_paise, applied_coupon_code, tax_paise,
                       cgst_rate::float8 AS cgst_rate, sgst_rate::float8 AS sgst_rate,
                       service_charge_paise, round_off_paise, total_amount_paise, notes,
@@ -111,10 +181,11 @@ impl OrderRepository {
             "#,
         )
         .bind(restaurant_id)
+        .bind(&generated_order_number)
         .bind(&req.order_type)
         .bind(&req.pickup_reference)
         .bind(req.table_id)
-        .bind(req.customer_id)
+        .bind(resolved_customer_id)
         .bind(cust_name)
         .bind(cust_phone)
         .bind(breakdown.subtotal_paise)
@@ -264,12 +335,19 @@ impl OrderRepository {
         customer_phone: &str,
         table_id: Option<Uuid>,
     ) -> Result<Vec<OrderWithItems>, AppError> {
-        let phone_pattern = format!("%{}%", customer_phone.trim());
+        let clean_phone = customer_phone.trim();
+        let phone_pattern = if clean_phone.is_empty() {
+            "%__NONE__%".to_string()
+        } else {
+            format!("%{}%", clean_phone)
+        };
+        let exact_e164 = format!("+91{}", clean_phone.trim_start_matches("91"));
+
         let orders = if let Some(tid) = table_id {
             sqlx::query_as::<_, Order>(
                 r#"
                 SELECT id, restaurant_id,
-                       'ORD-' || UPPER(SUBSTRING(id::text, 1, 8)) AS order_number,
+                       COALESCE(order_number, 'ORD-' || UPPER(SUBSTRING(id::text, 1, 8))) AS order_number,
                        order_type, pickup_reference, status, payment_status, payment_method,
                        table_id, customer_id, customer_name, customer_phone_e164, subtotal_paise, discount_paise, applied_coupon_code, tax_paise,
                        COALESCE(cgst_rate, CASE WHEN subtotal_paise > 0 AND tax_paise > 0 THEN ROUND((tax_paise::numeric / subtotal_paise::numeric * 50.0), 2) ELSE 2.5 END)::float8 AS cgst_rate,
@@ -279,22 +357,29 @@ impl OrderRepository {
                        legacy_unknown_timestamp
                 FROM orders
                 WHERE restaurant_id = $1
-                  AND (customer_phone_e164 LIKE $2 OR customer_phone LIKE $2)
-                  AND table_id = $3
-                  AND created_at >= NOW() - INTERVAL '24 hours'
+                  AND (
+                      (table_id = $4 AND created_at >= NOW() - INTERVAL '24 hours')
+                      OR customer_phone = $2
+                      OR customer_phone_e164 = $2
+                      OR customer_phone_e164 = $3
+                      OR customer_phone LIKE $5
+                  )
                 ORDER BY created_at DESC
+                LIMIT 50
                 "#,
             )
             .bind(restaurant_id)
-            .bind(&phone_pattern)
+            .bind(clean_phone)
+            .bind(&exact_e164)
             .bind(tid)
+            .bind(&phone_pattern)
             .fetch_all(pool)
             .await?
         } else {
             sqlx::query_as::<_, Order>(
                 r#"
                 SELECT id, restaurant_id,
-                       'ORD-' || UPPER(SUBSTRING(id::text, 1, 8)) AS order_number,
+                       COALESCE(order_number, 'ORD-' || UPPER(SUBSTRING(id::text, 1, 8))) AS order_number,
                        order_type, pickup_reference, status, payment_status, payment_method,
                        table_id, customer_id, customer_name, customer_phone_e164, subtotal_paise, discount_paise, applied_coupon_code, tax_paise,
                        COALESCE(cgst_rate, CASE WHEN subtotal_paise > 0 AND tax_paise > 0 THEN ROUND((tax_paise::numeric / subtotal_paise::numeric * 50.0), 2) ELSE 2.5 END)::float8 AS cgst_rate,
@@ -304,34 +389,55 @@ impl OrderRepository {
                        legacy_unknown_timestamp
                 FROM orders
                 WHERE restaurant_id = $1
-                  AND (customer_phone_e164 LIKE $2 OR customer_phone LIKE $2)
-                  AND created_at >= NOW() - INTERVAL '24 hours'
+                  AND (
+                      customer_phone = $2
+                      OR customer_phone_e164 = $2
+                      OR customer_phone_e164 = $3
+                      OR customer_phone LIKE $4
+                  )
                 ORDER BY created_at DESC
+                LIMIT 50
                 "#,
             )
             .bind(restaurant_id)
+            .bind(clean_phone)
+            .bind(&exact_e164)
             .bind(&phone_pattern)
             .fetch_all(pool)
             .await?
         };
 
-        let mut result = Vec::with_capacity(orders.len());
-        for order in orders {
-            let items = sqlx::query_as::<_, OrderItem>(
-                r#"
-                SELECT id, order_id, menu_item_id, name AS item_name, quantity, unit_price_paise,
-                       subtotal_paise, tax_paise, discount_paise, total_paise, notes, status, created_at
-                FROM order_items
-                WHERE order_id = $1
-                ORDER BY created_at ASC
-                "#,
-            )
-            .bind(order.id)
-            .fetch_all(pool)
-            .await?;
-
-            result.push(OrderWithItems { order, items });
+        if orders.is_empty() {
+            return Ok(Vec::new());
         }
+
+        // High Performance Batch: Fetch all items for all orders in ONE database round-trip
+        let order_ids: Vec<Uuid> = orders.iter().map(|o| o.id).collect();
+        let all_items = sqlx::query_as::<_, OrderItem>(
+            r#"
+            SELECT id, order_id, menu_item_id, name AS item_name, quantity, unit_price_paise,
+                   subtotal_paise, tax_paise, discount_paise, total_paise, notes, status, created_at
+            FROM order_items
+            WHERE order_id = ANY($1)
+            ORDER BY created_at ASC
+            "#,
+        )
+        .bind(&order_ids)
+        .fetch_all(pool)
+        .await?;
+
+        let mut items_map: std::collections::HashMap<Uuid, Vec<OrderItem>> = std::collections::HashMap::new();
+        for item in all_items {
+            items_map.entry(item.order_id).or_default().push(item);
+        }
+
+        let result = orders
+            .into_iter()
+            .map(|order| {
+                let items = items_map.remove(&order.id).unwrap_or_default();
+                OrderWithItems { order, items }
+            })
+            .collect();
 
         Ok(result)
     }
@@ -497,20 +603,22 @@ impl OrderRepository {
         .fetch_one(&mut *tx)
         .await?;
 
-        // If completed or cancelled and table was occupied, release table to available
+        // If completed or cancelled and table was occupied, release table to available & wipe session
+        let mut released_table_info: Option<(Uuid, String)> = None;
         if (new_status == "completed" || new_status == "cancelled")
             && current_order.table_id.is_some()
         {
-            sqlx::query(
+            released_table_info = sqlx::query_as::<_, (Uuid, String)>(
                 r#"
                 UPDATE tables
-                SET status = 'AVAILABLE'::table_status, active_order_id = NULL, updated_at = NOW()
+                SET status = 'AVAILABLE'::table_status, active_order_id = NULL, current_seating_session_id = NULL, updated_at = NOW()
                 WHERE id = $1 AND restaurant_id = $2
+                RETURNING id, COALESCE(table_number, number)
                 "#,
             )
             .bind(current_order.table_id)
             .bind(restaurant_id)
-            .execute(&mut *tx)
+            .fetch_optional(&mut *tx)
             .await?;
         }
 
@@ -578,6 +686,16 @@ impl OrderRepository {
         .await?;
 
         tx.commit().await?;
+
+        if let Some((tbl_id, tbl_num)) = released_table_info {
+            crate::ws::broadcast_table_status(
+                tbl_id,
+                &tbl_num,
+                "AVAILABLE",
+                true,
+                None,
+            );
+        }
 
         Ok(OrderWithItems {
             order: updated_order,

@@ -20,7 +20,13 @@ import {
   RefundRecord,
 } from '../../core/models/billing.model';
 import { Reservation, ReservationStatus } from '../../core/models/reservation.model';
-import { LoyaltyTierConfig, LoyaltyTransaction } from '../../core/models/loyalty.model';
+import {
+  LoyaltyTierConfig,
+  LoyaltyTransaction,
+  DEFAULT_LOYALTY_TIERS,
+  LoyaltyMilestoneRewardConfig,
+  DEFAULT_MILESTONE_REWARD,
+} from '../../core/models/loyalty.model';
 import { Feedback } from '../../core/models/feedback.model';
 import { StaffMember } from '../../core/models/staff.model';
 import { StaffAttendance, StaffPerformanceSummary } from '../../core/models/attendance.model';
@@ -176,6 +182,11 @@ export class RestaurantDataService {
   readonly liveOrderEvent = this.testMock
     ? this.testMock.liveOrderEvent
     : signal<{ type: string; order?: Order; timestamp: number } | null>(null);
+  readonly liveReservationEvent = signal<{
+    type: string;
+    reservation?: Reservation;
+    timestamp: number;
+  } | null>(null);
   readonly coupons = this.testMock ? this.testMock.coupons : signal<Coupon[]>([]);
   readonly couponAssignments = this.testMock
     ? this.testMock.couponAssignments
@@ -546,7 +557,10 @@ export class RestaurantDataService {
   readonly reservations = this.testMock ? this.testMock.reservations : signal<Reservation[]>([]);
   readonly loyaltyTiers = this.testMock
     ? this.testMock.loyaltyTiers
-    : signal<LoyaltyTierConfig[]>([]);
+    : signal<LoyaltyTierConfig[]>(DEFAULT_LOYALTY_TIERS);
+  readonly milestoneRewardConfig = signal<LoyaltyMilestoneRewardConfig>(
+    this.readLocal<LoyaltyMilestoneRewardConfig>('loyaltyMilestoneConfig', DEFAULT_MILESTONE_REWARD),
+  );
   readonly loyaltyTransactions = this.testMock
     ? this.testMock.loyaltyTransactions
     : signal<LoyaltyTransaction[]>([]);
@@ -1030,9 +1044,7 @@ export class RestaurantDataService {
           customerPhone: r.customer_phone,
           partySize: r.guest_count,
           reservationTime: r.reservation_time,
-          reservationDate: r.reservation_time
-            ? r.reservation_time.split('T')[0]
-            : new Date().toISOString().split('T')[0],
+          reservationDate: r.reservation_time || r.reservation_date || new Date().toISOString(),
           status: (r.status || 'CONFIRMED').toUpperCase() as ReservationStatus,
           tableId: r.table_id,
           specialRequests: r.special_requests,
@@ -1980,6 +1992,46 @@ export class RestaurantDataService {
     return { success: true };
   }
 
+  updateCoupon(coupon: Coupon): { success: boolean; coupon?: Coupon } {
+    if (this.testMock) {
+      const updated = this.testMock.coupons().map((c) => (c.id === coupon.id ? coupon : c));
+      this.testMock.coupons.set(updated);
+      this.testMock.saveLocal('coupons', updated);
+      return { success: true, coupon };
+    }
+
+    const updated = this.coupons().map((c) => (c.id === coupon.id ? coupon : c));
+    this.coupons.set(updated);
+    this.saveLocal('coupons', updated);
+
+    this.api
+      .put<any>(`/coupons/${coupon.id}`, {
+        name: coupon.name,
+        description: coupon.description,
+        discount_type: coupon.discountType.toLowerCase(),
+        discount_value: coupon.discountValue,
+        min_order_value: coupon.minOrderValue,
+        max_discount_amount: coupon.maxDiscountAmount,
+        usage_limit: coupon.usageLimit,
+        per_customer_limit: coupon.perCustomerLimit,
+        is_targeted: coupon.isTargeted,
+      })
+      .subscribe({
+        next: () => {},
+        error: (err) => {
+          if (this.isConnectionOffline(err)) {
+            console.warn(
+              '[RestaurantDataService] Database offline during updateCoupon; preserved locally.',
+            );
+          } else {
+            this.handleApiError('Failed to update coupon', err);
+          }
+        },
+      });
+
+    return { success: true, coupon };
+  }
+
   // --- Loyalty & Points Mutations ---
   awardLoyaltyPoints(customerId: string, points: number, reason: string): { success: boolean } {
     const cust = (this.testMock ? this.testMock.customers() : this.customers()).find(
@@ -2036,6 +2088,170 @@ export class RestaurantDataService {
           }
         },
       });
+
+    return { success: true };
+  }
+
+  logCustomerVisit(
+    customerIdOrPhone: string,
+    note?: string,
+  ): { success: boolean; customer?: Customer } {
+    const list = this.testMock ? this.testMock.customers() : this.customers();
+    const cleanQuery = customerIdOrPhone.trim().replace(/\s+/g, '');
+    const cust = list.find(
+      (c) =>
+        c.id === cleanQuery ||
+        c.phone === cleanQuery ||
+        c.phoneE164 === cleanQuery ||
+        (c.phone && cleanQuery.length >= 10 && c.phone.endsWith(cleanQuery.slice(-10))),
+    );
+
+    if (!cust) return { success: false };
+
+    const newVisitCount = (cust.visitCount || 0) + 1;
+    let newTier = cust.loyaltyTier;
+    if (newVisitCount >= 10) newTier = 'PLATINUM';
+    else if (newVisitCount >= 5) newTier = 'GOLD';
+    else if (newVisitCount >= 3) newTier = 'SILVER';
+    else newTier = 'BRONZE';
+
+    const nowIso = new Date().toISOString();
+    const updatedCust: Customer = {
+      ...cust,
+      visitCount: newVisitCount,
+      lastVisit: nowIso,
+      loyaltyTier: newTier,
+      status: newVisitCount >= 10 ? 'VIP' : cust.status,
+    };
+
+    const newTx: LoyaltyTransaction = {
+      id: `lt-v-${Date.now().toString().slice(-4)}`,
+      customerId: cust.id,
+      customerName: cust.name,
+      type: 'EARNED',
+      points: 50,
+      description: note?.trim() || `Visit #${newVisitCount} logged (Dining milestone)`,
+      date: nowIso,
+    };
+
+    if (this.testMock) {
+      const updatedCusts = this.testMock
+        .customers()
+        .map((c) => (c.id === cust.id ? updatedCust : c));
+      this.testMock.customers.set(updatedCusts);
+      this.testMock.saveLocal('customers', updatedCusts);
+      const updatedTx = [newTx, ...this.testMock.loyaltyTransactions()];
+      this.testMock.loyaltyTransactions.set(updatedTx);
+      this.testMock.saveLocal('loyaltyTransactions', updatedTx);
+      return { success: true, customer: updatedCust };
+    }
+
+    const updatedCusts = this.customers().map((c) => (c.id === cust.id ? updatedCust : c));
+    this.customers.set(updatedCusts);
+    this.saveLocal('customers', updatedCusts);
+    const updatedTx = [newTx, ...this.loyaltyTransactions()];
+    this.loyaltyTransactions.set(updatedTx);
+    this.saveLocal('loyaltyTransactions', updatedTx);
+
+    return { success: true, customer: updatedCust };
+  }
+
+  syncCustomerFromOrder(order: Order): void {
+    if (!order || !order.customerPhone) return;
+    const phoneRaw = order.customerPhone.trim();
+    if (phoneRaw.length < 10) return;
+
+    const list = this.customers();
+    const cleanDigits = phoneRaw.replace(/\D/g, '').slice(-10);
+    const existing = list.find((c) => {
+      const cClean = (c.phone || '').replace(/\D/g, '').slice(-10);
+      return cClean === cleanDigits;
+    });
+
+    const nowIso = new Date().toISOString();
+    const orderTotal = Number(order.totalAmount ?? (order as any).total ?? 0);
+
+    if (existing) {
+      const nextVisits = (existing.visitCount || 0) + 1;
+      const nextSpend = (existing.totalSpend || 0) + orderTotal;
+      let nextTier = existing.loyaltyTier;
+      if (nextVisits >= 10) nextTier = 'PLATINUM';
+      else if (nextVisits >= 5) nextTier = 'GOLD';
+      else if (nextVisits >= 3) nextTier = 'SILVER';
+      else nextTier = 'BRONZE';
+
+      const updated = list.map((c) =>
+        c.id === existing.id
+          ? {
+              ...c,
+              visitCount: nextVisits,
+              totalSpend: nextSpend,
+              avgOrderValue: Math.round(nextSpend / nextVisits),
+              lastVisit: nowIso,
+              loyaltyTier: nextTier,
+              status: nextVisits >= 10 ? 'VIP' : c.status,
+            }
+          : c,
+      );
+      this.customers.set(updated);
+      this.saveLocal('customers', updated);
+      if (this.testMock) {
+        this.testMock.customers.set(updated);
+        this.testMock.saveLocal('customers', updated);
+      }
+    } else {
+      const newCust: Customer = {
+        id: `cust-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+        name: order.customerName?.trim() || 'Online Guest',
+        phone: order.customerPhone.trim(),
+        customerSince: nowIso,
+        visitCount: 1,
+        lastVisit: nowIso,
+        totalSpend: orderTotal,
+        avgOrderValue: orderTotal,
+        status: 'ACTIVE',
+        loyaltyTier: 'BRONZE',
+        loyaltyPoints: 50,
+        assignedCouponIds: [],
+      };
+      const updated = [newCust, ...list];
+      this.customers.set(updated);
+      this.saveLocal('customers', updated);
+      if (this.testMock) {
+        this.testMock.customers.set(updated);
+        this.testMock.saveLocal('customers', updated);
+      }
+    }
+  }
+
+  updateMilestoneRewardConfig(config: LoyaltyMilestoneRewardConfig): { success: boolean; error?: string } {
+    this.milestoneRewardConfig.set(config);
+    this.saveLocal('loyaltyMilestoneConfig', config);
+
+    // Sync or ensure coupon exists in active coupons
+    if (config.isActive && config.couponCode) {
+      const code = config.couponCode.toUpperCase().trim();
+      const existing = this.coupons().find((c) => c.code.toUpperCase() === code);
+      const discountType = config.rewardType === 'FLAT_DISCOUNT' ? 'FLAT' : 'PERCENT';
+      const discountValue = config.rewardType === 'FLAT_DISCOUNT'
+        ? Math.round((config.flatDiscountPaise || 30000) / 100)
+        : (config.discountPercent || 50);
+
+      if (!existing) {
+        this.createCoupon({
+          code,
+          title: config.title,
+          description: config.description,
+          discount_type: discountType,
+          discount_value: discountValue,
+          min_order_amount: Math.round((config.minBillPaise || 0) / 100),
+          max_discount_amount: config.maxDiscountPaise ? Math.round(config.maxDiscountPaise / 100) : 500,
+          is_active: true,
+          valid_from: new Date().toISOString(),
+          valid_until: new Date(Date.now() + 365 * 24 * 3600 * 1000).toISOString(),
+        } as any);
+      }
+    }
 
     return { success: true };
   }
@@ -2133,6 +2349,40 @@ export class RestaurantDataService {
             );
           } else {
             this.handleApiError('Failed to reply to feedback', err);
+          }
+        },
+      });
+
+    return { success: true };
+  }
+
+  toggleFeedbackVisibility(feedbackId: string, isPublic: boolean): { success: boolean } {
+    if (this.testMock) {
+      const updated = this.testMock
+        .feedbacks()
+        .map((f) => (f.id === feedbackId ? { ...f, isPublic } : f));
+      this.testMock.feedbacks.set(updated);
+      this.testMock.saveLocal('feedbacks', updated);
+      return { success: true };
+    }
+
+    const updated = this.feedbacks().map((f) => (f.id === feedbackId ? { ...f, isPublic } : f));
+    this.feedbacks.set(updated);
+    this.saveLocal('feedbacks', updated);
+
+    this.api
+      .put<any>(`/feedback/${feedbackId}/visibility`, {
+        is_public: isPublic,
+      })
+      .subscribe({
+        next: () => {},
+        error: (err) => {
+          if (this.isConnectionOffline(err)) {
+            console.warn(
+              '[RestaurantDataService] Database offline during toggleFeedbackVisibility; preserved locally.',
+            );
+          } else {
+            this.handleApiError('Failed to update review visibility', err);
           }
         },
       });
@@ -2376,6 +2626,14 @@ export class RestaurantDataService {
       this.orderWs.onmessage = (ev) => {
         try {
           const raw = JSON.parse(ev.data);
+          if (raw.event === 'RESERVATION_CREATED' || raw.type === 'RESERVATION_CREATED') {
+            const resData = raw.reservation || raw.data || raw;
+            this.handleIncomingReservation(resData);
+            return;
+          }
+          if (raw.event === 'TABLE_STATUS_CHANGED') {
+            return;
+          }
           const mapped = this.mapApiOrder(raw.order || raw);
           this.handleIncomingSyncEvent({ type: 'ORDER_CREATED', order: mapped });
         } catch (e) {
@@ -2409,6 +2667,7 @@ export class RestaurantDataService {
         this.orders.set([incoming, ...current]);
         this.liveOrderEvent.set({ type: 'ORDER_CREATED', order: incoming, timestamp: Date.now() });
         this.soundService?.playOrderArrivalSound();
+        this.syncCustomerFromOrder(incoming);
       }
     } else if (ev.type === 'ORDER_UPDATED' && ev.order) {
       const incoming: Order = ev.order;
@@ -2417,6 +2676,56 @@ export class RestaurantDataService {
       this.orders.set(updated);
       this.liveOrderEvent.set({ type: 'ORDER_UPDATED', order: incoming, timestamp: Date.now() });
     }
+  }
+
+  handleIncomingReservation(resData: any): void {
+    if (!resData || !resData.id) return;
+    const incoming: Reservation = {
+      id: resData.id,
+      customerName: resData.customer_name || resData.customerName || 'Valued Diner',
+      customerPhone: resData.customer_phone || resData.customerPhone || '',
+      partySize: resData.guest_count || resData.partySize || 2,
+      reservationTime:
+        resData.reservation_time || resData.reservationTime || new Date().toISOString(),
+      reservationDate:
+        resData.reservation_time || resData.reservationDate || new Date().toISOString(),
+      status: (resData.status || 'CONFIRMED').toUpperCase() as ReservationStatus,
+      tableId: resData.table_id || resData.tableId,
+      specialRequests: resData.special_requests || resData.specialRequests,
+      createdAt: resData.created_at || new Date().toISOString(),
+    };
+    const current = this.reservations();
+    if (!current.some((r) => r.id === incoming.id)) {
+      const updated = [incoming, ...current];
+      this.reservations.set(updated);
+      this.saveLocal('reservations', updated);
+      this.soundService?.playOrderArrivalSound();
+      this.liveReservationEvent.set({
+        type: 'RESERVATION_CREATED',
+        reservation: incoming,
+        timestamp: Date.now(),
+      });
+    }
+  }
+
+  assignTableToReservation(
+    reservationId: string,
+    tableId: string,
+    tableNumber?: string,
+  ): { success: boolean; error?: string } {
+    const table = this.tables().find((t) => t.id === tableId);
+    const resolvedNumber = tableNumber || table?.number;
+    const updated = this.reservations().map((r) =>
+      r.id === reservationId
+        ? { ...r, tableId, tableNumber: resolvedNumber, section: table?.section }
+        : r,
+    );
+    this.reservations.set(updated);
+    this.saveLocal('reservations', updated);
+    this.api.put<any>(`/reservations/${reservationId}/status`, { table_id: tableId }).subscribe({
+      error: () => {},
+    });
+    return { success: true };
   }
 
   private startOrderLivePolling(): void {
@@ -2437,6 +2746,7 @@ export class RestaurantDataService {
           // Detect brand new orders arrived from external devices/customers
           const newOrders = mappedOrders.filter((m: any) => !currentIds.has(m.id));
           if (newOrders.length > 0) {
+            newOrders.forEach((m: any) => this.syncCustomerFromOrder(m));
             const pendingOutbox = this.offlineOutbox();
             const pendingLocalOrders = currentOrders.filter((localOrd) =>
               pendingOutbox.some((act) => act.orderId === localOrd.id),
@@ -2482,6 +2792,7 @@ export class RestaurantDataService {
       this.testMock.orders.set([order, ...this.testMock.orders()]);
       this.liveOrderEvent.set({ type: 'ORDER_CREATED', order, timestamp: Date.now() });
       this.soundService?.playOrderArrivalSound();
+      this.syncCustomerFromOrder(order);
       return;
     }
     const customerName = (order.customerName && order.customerName.trim()) || 'Walk-in Guest';
@@ -2499,6 +2810,7 @@ export class RestaurantDataService {
       const updated = [fullLocalOrder, ...current];
       this.orders.set(updated);
       this.saveLocal('orders', updated);
+      this.syncCustomerFromOrder(fullLocalOrder);
     } else {
       fullLocalOrder = order;
     }
@@ -3914,6 +4226,7 @@ export class RestaurantDataService {
       description: updated.description,
       phone: updated.contact?.phone,
       email: updated.contact?.email,
+      google_review_url: updated.contact?.googleReviewUrl || updated.googleReviewUrl || '',
       address: updated.address?.street,
       city: updated.address?.city,
       state: updated.address?.state,
@@ -3939,7 +4252,15 @@ export class RestaurantDataService {
                 ...current.contact,
                 phone: res.phone || current.contact.phone,
                 email: res.email || current.contact.email,
+                googleReviewUrl:
+                  res.google_review_url !== undefined
+                    ? res.google_review_url
+                    : current.contact.googleReviewUrl,
               },
+              googleReviewUrl:
+                res.google_review_url !== undefined
+                  ? res.google_review_url
+                  : current.googleReviewUrl,
               address: {
                 ...current.address,
                 street: res.address || current.address.street,

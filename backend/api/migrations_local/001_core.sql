@@ -50,6 +50,7 @@ CREATE TABLE IF NOT EXISTS restaurants (
     postal_code VARCHAR(20),
     gstin VARCHAR(50),
     fssai_license VARCHAR(50),
+    google_review_url VARCHAR(500),
     currency VARCHAR(10) NOT NULL DEFAULT 'INR',
     currency_symbol VARCHAR(5) NOT NULL DEFAULT '₹',
     gst_rate NUMERIC(5, 2) NOT NULL DEFAULT 5.00,

@@ -21,7 +21,9 @@ impl TableRepository {
                    capacity, section,
                    status::text AS status,
                    COALESCE(qr_code_identifier, qr_token) AS qr_code_identifier,
-                   active_order_id, assigned_staff_id, created_at, updated_at
+                   active_order_id, assigned_staff_id,
+                   ordering_enabled, current_seating_session_id,
+                   created_at, updated_at
             FROM tables
             WHERE restaurant_id = $1
             ORDER BY number ASC
@@ -46,7 +48,9 @@ impl TableRepository {
                    capacity, section,
                    status::text AS status,
                    COALESCE(qr_code_identifier, qr_token) AS qr_code_identifier,
-                   active_order_id, assigned_staff_id, created_at, updated_at
+                   active_order_id, assigned_staff_id,
+                   ordering_enabled, current_seating_session_id,
+                   created_at, updated_at
             FROM tables
             WHERE restaurant_id = $1 AND id = $2
             "#,
@@ -80,6 +84,17 @@ impl TableRepository {
             None => existing.assigned_staff_id,
         };
 
+        // PentAGI Session Pinning: Ephemeral session generated when table is seated, wiped when freed
+        let new_session_id: Option<Uuid> = if normalized_status == "OCCUPIED" {
+            if existing.status.to_uppercase() != "OCCUPIED" || existing.current_seating_session_id.is_none() {
+                Some(Uuid::new_v4())
+            } else {
+                existing.current_seating_session_id
+            }
+        } else {
+            None
+        };
+
         let table = sqlx::query_as::<_, RestaurantTable>(
             r#"
             UPDATE tables
@@ -87,6 +102,7 @@ impl TableRepository {
                 active_order_id = $4,
                 assigned_staff_id = $5,
                 ordering_enabled = COALESCE($6, ordering_enabled),
+                current_seating_session_id = $7,
                 updated_at = NOW()
             WHERE restaurant_id = $1 AND id = $2
             RETURNING id, restaurant_id,
@@ -94,7 +110,9 @@ impl TableRepository {
                       capacity, section,
                       status::text AS status,
                       COALESCE(qr_code_identifier, qr_token) AS qr_code_identifier,
-                      active_order_id, assigned_staff_id, created_at, updated_at
+                      active_order_id, assigned_staff_id,
+                      ordering_enabled, current_seating_session_id,
+                      created_at, updated_at
             "#,
         )
         .bind(restaurant_id)
@@ -103,8 +121,18 @@ impl TableRepository {
         .bind(new_active_order)
         .bind(new_assigned_staff)
         .bind(ordering_enabled)
+        .bind(new_session_id)
         .fetch_one(pool)
         .await?;
+
+        // Live Push: Broadcast table state transition instantly to POS and Customer Menus
+        crate::ws::broadcast_table_status(
+            table.id,
+            &table.table_number,
+            &table.status,
+            table.ordering_enabled,
+            table.current_seating_session_id,
+        );
 
         Ok(table)
     }

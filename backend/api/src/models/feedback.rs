@@ -13,6 +13,7 @@ pub struct CustomerFeedback {
     pub comments: Option<String>,
     pub resolution_note: Option<String>,
     pub is_resolved: bool,
+    pub is_public: bool,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }
@@ -29,4 +30,9 @@ pub struct CreateFeedbackRequest {
 #[derive(Debug, Clone, Deserialize)]
 pub struct ReplyFeedbackRequest {
     pub resolution_note: String,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct ToggleFeedbackVisibilityRequest {
+    pub is_public: bool,
 }

@@ -255,6 +255,7 @@ pub async fn ensure_schema_and_seed(pool: &sqlx::PgPool) {
         ALTER TABLE staff_members ADD COLUMN IF NOT EXISTS permissions JSONB DEFAULT '[]'::jsonb;
         ALTER TABLE staff_members ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW();
         ALTER TABLE tables ADD COLUMN IF NOT EXISTS assigned_staff_id UUID;
+        ALTER TABLE tables ADD COLUMN IF NOT EXISTS current_seating_session_id UUID;
         CREATE TABLE IF NOT EXISTS restaurant_heartbeats (
             restaurant_id UUID PRIMARY KEY,
             is_online BOOLEAN NOT NULL DEFAULT TRUE,
@@ -473,12 +474,30 @@ pub async fn ensure_schema_and_seed(pool: &sqlx::PgPool) {
         ALTER TABLE customer_feedback ADD COLUMN IF NOT EXISTS ambience_rating INT;
         ALTER TABLE customer_feedback ADD COLUMN IF NOT EXISTS resolution_note TEXT;
         ALTER TABLE customer_feedback ADD COLUMN IF NOT EXISTS is_resolved BOOLEAN DEFAULT FALSE;
+        ALTER TABLE customer_feedback ADD COLUMN IF NOT EXISTS is_public BOOLEAN DEFAULT FALSE;
         ALTER TABLE customer_feedback ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW();
+        ALTER TABLE restaurants ADD COLUMN IF NOT EXISTS google_review_url VARCHAR(500);
         UPDATE customer_feedback f
         SET customer_name = COALESCE(f.customer_name, c.name, 'Valued Guest'),
             customer_phone = COALESCE(f.customer_phone, c.phone, c.phone_e164, '')
         FROM customers c
         WHERE f.customer_id = c.id AND f.customer_name IS NULL;
+
+        -- Customers compatibility & unique constraint
+        ALTER TABLE customers ADD COLUMN IF NOT EXISTS total_spent_paise BIGINT DEFAULT 0;
+        ALTER TABLE customers ADD COLUMN IF NOT EXISTS total_spend_paise BIGINT DEFAULT 0;
+        ALTER TABLE customers ADD COLUMN IF NOT EXISTS total_orders INT DEFAULT 0;
+        ALTER TABLE customers ADD COLUMN IF NOT EXISTS visit_count INT DEFAULT 0;
+        UPDATE customers SET total_spent_paise = COALESCE(total_spent_paise, total_spend_paise, 0);
+        UPDATE customers SET total_spend_paise = COALESCE(total_spend_paise, total_spent_paise, 0);
+        UPDATE customers SET total_orders = COALESCE(total_orders, visit_count, 0);
+        UPDATE customers SET visit_count = COALESCE(visit_count, total_orders, 0);
+        CREATE UNIQUE INDEX IF NOT EXISTS uq_customers_restaurant_phone ON customers(restaurant_id, phone);
+        ALTER TABLE orders ALTER COLUMN order_number DROP NOT NULL;
+        CREATE INDEX IF NOT EXISTS idx_orders_customer_phone ON orders(restaurant_id, customer_phone);
+        CREATE INDEX IF NOT EXISTS idx_orders_customer_phone_e164 ON orders(restaurant_id, customer_phone_e164);
+        CREATE INDEX IF NOT EXISTS idx_orders_table_created ON orders(restaurant_id, table_id, created_at);
+        CREATE INDEX IF NOT EXISTS idx_order_items_order_id ON order_items(order_id);
 
         CREATE TABLE IF NOT EXISTS sync_outbox (
             event_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

@@ -163,6 +163,10 @@ type ViewTab = 'campaigns' | 'entitlements' | 'redemptions';
                 </div>
 
                 <div class="card-actions">
+                  <button class="btn btn-secondary btn-sm" (click)="openEditModal(coup)">
+                    <i class="ph ph-pencil-simple"></i>
+                    <span>Edit</span>
+                  </button>
                   <button
                     class="btn btn-secondary btn-sm assign-quick-btn"
                     (click)="openAssignModal(coup)"
@@ -348,7 +352,13 @@ type ViewTab = 'campaigns' | 'entitlements' | 'redemptions';
         <div class="modal-overlay" (click)="onBackdropClick($event)">
           <div class="modal-card" role="dialog" aria-modal="true">
             <div class="modal-header">
-              <h3 class="heading-card">Create Master Promotional Campaign</h3>
+              <h3 class="heading-card">
+                {{
+                  editingCouponId
+                    ? 'Edit Promotional Campaign'
+                    : 'Create Master Promotional Campaign'
+                }}
+              </h3>
               <button class="close-btn" (click)="showCreateModal = false">
                 <i class="ph ph-x"></i>
               </button>
@@ -446,7 +456,9 @@ type ViewTab = 'campaigns' | 'entitlements' | 'redemptions';
             </div>
             <div class="modal-footer">
               <button class="btn btn-secondary" (click)="showCreateModal = false">Cancel</button>
-              <button class="btn btn-primary" (click)="saveCoupon()">Publish Campaign</button>
+              <button class="btn btn-primary" (click)="saveCoupon()">
+                {{ editingCouponId ? 'Save Changes' : 'Publish Campaign' }}
+              </button>
             </div>
           </div>
         </div>
@@ -914,6 +926,7 @@ export class CouponManagementComponent {
   customers = this.mock.customers;
 
   showCreateModal = false;
+  editingCouponId: string | null = null;
   couponForm: Partial<Coupon> = {};
 
   showAssignModal = false;
@@ -934,6 +947,7 @@ export class CouponManagementComponent {
   }
 
   openCreateModal(): void {
+    this.editingCouponId = null;
     this.couponForm = {
       code: '',
       name: '',
@@ -950,14 +964,34 @@ export class CouponManagementComponent {
     this.showCreateModal = true;
   }
 
+  openEditModal(coupon: Coupon): void {
+    this.editingCouponId = coupon.id;
+    this.couponForm = {
+      ...coupon,
+    };
+    this.showCreateModal = true;
+  }
+
   saveCoupon(): void {
     if (!this.couponForm.code?.trim() || !this.couponForm.discountValue) return;
 
-    this.mock.createCoupon(this.couponForm);
-    this.toastService.success(
-      `Created coupon campaign ${this.couponForm.code.trim().toUpperCase()}`,
-    );
+    if (this.editingCouponId) {
+      const updated = {
+        ...this.couponForm,
+        id: this.editingCouponId,
+      } as Coupon;
+      this.mock.updateCoupon(updated);
+      this.toastService.success(
+        `Updated coupon campaign ${this.couponForm.code.trim().toUpperCase()}`,
+      );
+    } else {
+      this.mock.createCoupon(this.couponForm);
+      this.toastService.success(
+        `Created coupon campaign ${this.couponForm.code.trim().toUpperCase()}`,
+      );
+    }
     this.showCreateModal = false;
+    this.editingCouponId = null;
   }
 
   openAssignModal(coupon?: Coupon): void {

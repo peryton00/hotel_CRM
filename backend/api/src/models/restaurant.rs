@@ -28,6 +28,8 @@ pub struct Restaurant {
     pub sgst_rate: Option<f64>,
     #[sqlx(default)]
     pub service_charge_rate: Option<f64>,
+    #[sqlx(default)]
+    pub google_review_url: Option<String>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }
@@ -49,6 +51,7 @@ pub struct UpdateRestaurantPayload {
     pub cgst_rate: Option<f64>,
     pub sgst_rate: Option<f64>,
     pub service_charge_rate: Option<f64>,
+    pub google_review_url: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

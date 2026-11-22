@@ -11,6 +11,7 @@ export interface Reservation {
   tableNumber?: string;
   section?: string;
   reservationDate: string;
+  reservationTime?: string;
   specialRequests?: string;
   status: ReservationStatus;
   createdAt: string;

@@ -26,30 +26,58 @@ import { EmptyStateComponent } from '../../../shared/components/empty-state/empt
       </div>
 
       <div class="toolbar-card">
-        <div class="rating-filter-tabs">
+        <div class="toolbar-left">
+          <div class="rating-filter-tabs">
+            <button
+              class="tab-btn"
+              [class.active]="ratingFilter() === 0"
+              (click)="ratingFilter.set(0)"
+            >
+              All Stars
+              @if (!isLoading()) {
+                ({{ feedbacks().length }})
+              }
+            </button>
+            <button
+              class="tab-btn"
+              [class.active]="ratingFilter() === 5"
+              (click)="ratingFilter.set(5)"
+            >
+              5 Stars
+            </button>
+            <button
+              class="tab-btn"
+              [class.active]="ratingFilter() === 4"
+              (click)="ratingFilter.set(4)"
+            >
+              4 Stars
+            </button>
+          </div>
+        </div>
+
+        <div class="visibility-filter-tabs">
           <button
             class="tab-btn"
-            [class.active]="ratingFilter() === 0"
-            (click)="ratingFilter.set(0)"
+            [class.active]="visibilityFilter() === 'ALL'"
+            (click)="visibilityFilter.set('ALL')"
           >
-            All Reviews
-            @if (!isLoading()) {
-              ({{ feedbacks().length }})
-            }
+            All Visibility
           </button>
           <button
             class="tab-btn"
-            [class.active]="ratingFilter() === 5"
-            (click)="ratingFilter.set(5)"
+            [class.active]="visibilityFilter() === 'PUBLIC'"
+            (click)="visibilityFilter.set('PUBLIC')"
           >
-            5 Stars
+            <i class="ph ph-eye"></i>
+            <span>Shown on Website</span>
           </button>
           <button
             class="tab-btn"
-            [class.active]="ratingFilter() === 4"
-            (click)="ratingFilter.set(4)"
+            [class.active]="visibilityFilter() === 'HIDDEN'"
+            (click)="visibilityFilter.set('HIDDEN')"
           >
-            4 Stars
+            <i class="ph ph-eye-slash"></i>
+            <span>Hidden</span>
           </button>
         </div>
       </div>
@@ -105,14 +133,35 @@ import { EmptyStateComponent } from '../../../shared/components/empty-state/empt
                   </div>
                 </div>
 
-                <div class="stars-row">
-                  @for (star of [1, 2, 3, 4, 5]; track star) {
+                <div class="header-right-actions">
+                  <button
+                    type="button"
+                    class="btn-vis-toggle"
+                    [class.is-public]="fb.isPublic"
+                    (click)="toggleVisibility(fb)"
+                    [title]="
+                      fb.isPublic
+                        ? 'Click to hide from customer website'
+                        : 'Click to show on customer website'
+                    "
+                  >
                     <i
-                      class="ph ph-star"
-                      [class.text-gold]="star <= fb.rating"
-                      [class.text-muted]="star > fb.rating"
+                      class="ph"
+                      [class.ph-eye]="fb.isPublic"
+                      [class.ph-eye-slash]="!fb.isPublic"
                     ></i>
-                  }
+                    <span>{{ fb.isPublic ? 'Public on Website' : 'Hidden from Website' }}</span>
+                  </button>
+
+                  <div class="stars-row">
+                    @for (star of [1, 2, 3, 4, 5]; track star) {
+                      <i
+                        class="ph ph-star"
+                        [class.text-gold]="star <= fb.rating"
+                        [class.text-muted]="star > fb.rating"
+                      ></i>
+                    }
+                  </div>
                 </div>
               </div>
 
@@ -221,6 +270,49 @@ import { EmptyStateComponent } from '../../../shared/components/empty-state/empt
         border: 1px solid var(--color-border);
         border-radius: var(--radius-md);
         padding: 14px 20px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 12px;
+      }
+      .toolbar-left,
+      .visibility-filter-tabs {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+        flex-wrap: wrap;
+      }
+      .header-right-actions {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        flex-wrap: wrap;
+      }
+      .btn-vis-toggle {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 5px 12px;
+        border-radius: var(--radius-full);
+        font-size: 0.75rem;
+        font-weight: 700;
+        cursor: pointer;
+        border: 1px solid var(--color-border);
+        background: var(--color-surface);
+        color: var(--color-text-muted);
+        transition: all var(--transition-fast);
+
+        &:hover {
+          border-color: var(--color-onyx);
+          color: var(--color-text-primary);
+        }
+
+        &.is-public {
+          background: rgba(34, 197, 94, 0.1);
+          border-color: rgba(34, 197, 94, 0.35);
+          color: var(--color-success);
+        }
       }
       .rating-filter-tabs {
         display: flex;
@@ -371,14 +463,33 @@ export class FeedbackListComponent {
   );
 
   ratingFilter = signal<number>(0);
+  visibilityFilter = signal<'ALL' | 'PUBLIC' | 'HIDDEN'>('ALL');
 
   respondingFeedback: Feedback | null = null;
   responseText = '';
 
   filteredFeedbacks = computed(() => {
-    if (this.ratingFilter() === 0) return this.feedbacks();
-    return this.feedbacks().filter((f) => f.rating === this.ratingFilter());
+    let list = this.feedbacks();
+    if (this.ratingFilter() !== 0) {
+      list = list.filter((f) => f.rating === this.ratingFilter());
+    }
+    if (this.visibilityFilter() === 'PUBLIC') {
+      list = list.filter((f) => Boolean(f.isPublic));
+    } else if (this.visibilityFilter() === 'HIDDEN') {
+      list = list.filter((f) => !f.isPublic);
+    }
+    return list;
   });
+
+  toggleVisibility(fb: Feedback): void {
+    const nextVal = !fb.isPublic;
+    this.mock.toggleFeedbackVisibility(fb.id, nextVal);
+    this.toastService.info(
+      nextVal
+        ? `Review by ${fb.customerName} is now visible on the website`
+        : `Review by ${fb.customerName} is now hidden from the website`,
+    );
+  }
 
   openReplyModal(fb: Feedback): void {
     this.respondingFeedback = fb;

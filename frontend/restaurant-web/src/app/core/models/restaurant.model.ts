@@ -11,6 +11,7 @@ export interface RestaurantContact {
   phone: string;
   email: string;
   website: string;
+  googleReviewUrl?: string;
 }
 
 export interface OpeningHour {
@@ -51,4 +52,5 @@ export interface Restaurant {
   currencySymbol: '₹' | string;
   taxSettings: TaxSettings;
   orderingSettings: OrderingSettings;
+  googleReviewUrl?: string;
 }

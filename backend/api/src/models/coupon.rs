@@ -73,3 +73,15 @@ pub struct CreateCouponRequest {
 pub struct UpdateCouponStatusRequest {
     pub is_active: bool,
 }
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct UpdateCouponRequest {
+    pub title: Option<String>,
+    pub description: Option<String>,
+    pub discount_type: Option<String>,
+    pub discount_value: Option<f64>,
+    pub min_order_amount_paise: Option<i64>,
+    pub max_discount_amount_paise: Option<i64>,
+    pub one_time_per_customer: Option<bool>,
+    pub is_active: Option<bool>,
+}

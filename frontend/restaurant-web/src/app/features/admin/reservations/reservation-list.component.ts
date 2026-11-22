@@ -96,7 +96,26 @@ import { ToastService } from '../../../core/services/toast.service';
                     <strong>{{ res.customerName }}</strong>
                     <div class="text-xs text-muted">{{ res.customerPhone }}</div>
                   </td>
-                  <td>{{ res.reservationDate | date: 'medium' }}</td>
+                  <td>
+                    <div
+                      class="reservation-datetime"
+                      style="display: flex; flex-direction: column; gap: 2px;"
+                    >
+                      <span
+                        style="font-weight: 600; display: inline-flex; align-items: center; gap: 4px;"
+                      >
+                        <i class="ph ph-calendar" style="color: var(--color-primary, #ea580c);"></i>
+                        {{ res.reservationTime || res.reservationDate | date: 'mediumDate' }}
+                      </span>
+                      <span
+                        class="text-xs text-muted"
+                        style="display: inline-flex; align-items: center; gap: 4px;"
+                      >
+                        <i class="ph ph-clock"></i>
+                        {{ res.reservationTime || res.reservationDate | date: 'shortTime' }}
+                      </span>
+                    </div>
+                  </td>
                   <td>
                     <span class="badge badge-outline"
                       ><i class="ph ph-users"></i> {{ res.partySize }} Guests</span
@@ -184,7 +203,13 @@ import { ToastService } from '../../../core/services/toast.service';
               <div class="form-row-2">
                 <div class="form-group">
                   <label class="form-label">Reservation Date *</label>
-                  <input type="date" class="form-input" [(ngModel)]="resDate" required />
+                  <input
+                    type="date"
+                    class="form-input"
+                    [min]="minDate"
+                    [(ngModel)]="resDate"
+                    required
+                  />
                 </div>
                 <div class="form-group">
                   <label class="form-label">Reservation Time *</label>
@@ -340,6 +365,14 @@ export class ReservationListComponent {
   resDate = '';
   resTime = '';
 
+  get minDate(): string {
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+    const day = String(now.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  }
+
   filteredReservations = computed(() => {
     if (this.selectedStatus() === 'ALL') return this.reservations();
     return this.reservations().filter((r) => r.status === this.selectedStatus());
@@ -408,6 +441,11 @@ export class ReservationListComponent {
       !this.resTime
     ) {
       this.toastService.warning('Please fill in all required reservation fields.');
+      return;
+    }
+
+    if (this.resDate < this.minDate) {
+      this.toastService.warning('Reservation date cannot be before today.');
       return;
     }
 

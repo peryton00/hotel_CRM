@@ -335,8 +335,13 @@ pub async fn mark_staff_attendance(
         .map_err(|_| {
             AppError::BadRequest("Invalid date format, expected YYYY-MM-DD".to_string())
         })?;
-    let today = chrono::Utc::now().date_naive();
-    if date > today {
+    // The restaurant operates in local time (e.g. Asia/Kolkata UTC+5:30).
+    // Using raw Utc::now().date_naive() falsely rejects attendance marked after midnight local time.
+    let max_allowed_date = std::cmp::max(
+        chrono::Local::now().date_naive(),
+        (chrono::Utc::now() + chrono::Duration::hours(14)).date_naive(),
+    );
+    if date > max_allowed_date {
         return Err(AppError::BadRequest(
             "Cannot mark attendance for future dates".to_string(),
         ));

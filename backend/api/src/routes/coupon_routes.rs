@@ -12,7 +12,7 @@ use crate::{
     models::{
         common::ApiResponse,
         coupon::{
-            CreateCouponRequest, RedeemCouponRequest, UpdateCouponStatusRequest,
+            CreateCouponRequest, RedeemCouponRequest, UpdateCouponRequest, UpdateCouponStatusRequest,
             ValidateCouponRequest,
         },
     },
@@ -45,6 +45,17 @@ pub async fn update_coupon_status(
     let coupon =
         CouponRepository::update_status(&pool, tenant.restaurant_id, coupon_id, req.is_active)
             .await?;
+    Ok(Json(ApiResponse::success(coupon)))
+}
+
+pub async fn update_coupon(
+    State(pool): State<PgPool>,
+    tenant: TenantContext,
+    Path(coupon_id): Path<Uuid>,
+    Json(req): Json<UpdateCouponRequest>,
+) -> Result<impl IntoResponse, AppError> {
+    let coupon =
+        CouponRepository::update_coupon(&pool, tenant.restaurant_id, coupon_id, req).await?;
     Ok(Json(ApiResponse::success(coupon)))
 }
 

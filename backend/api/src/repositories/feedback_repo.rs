@@ -20,6 +20,7 @@ impl FeedbackRepository {
                    COALESCE(f.customer_phone, c.phone, '') as customer_phone,
                    f.rating, f.comments, f.resolution_note,
                    COALESCE(f.is_resolved, FALSE) as is_resolved,
+                   COALESCE(f.is_public, FALSE) as is_public,
                    f.created_at,
                    COALESCE(f.updated_at, f.created_at) as updated_at
             FROM customer_feedback f
@@ -44,11 +45,13 @@ impl FeedbackRepository {
         let feedback = sqlx::query_as::<_, CustomerFeedback>(
             r#"
             INSERT INTO customer_feedback (
-                restaurant_id, order_id, customer_name, customer_phone, rating, comments
+                restaurant_id, order_id, customer_name, customer_phone, rating, comments, is_public
             )
-            VALUES ($1, $2, $3, $4, $5, $6)
+            VALUES ($1, $2, $3, $4, $5, $6, false)
             RETURNING id, restaurant_id, order_id, customer_name, customer_phone,
-                      rating, comments, resolution_note, is_resolved, created_at, updated_at
+                      rating, comments, resolution_note, is_resolved,
+                      COALESCE(is_public, FALSE) as is_public,
+                      created_at, updated_at
             "#,
         )
         .bind(restaurant_id)
@@ -77,13 +80,70 @@ impl FeedbackRepository {
                 updated_at = NOW()
             WHERE restaurant_id = $1 AND id = $2
             RETURNING id, restaurant_id, order_id, customer_name, customer_phone,
-                      rating, comments, resolution_note, is_resolved, created_at, updated_at
+                      rating, comments, resolution_note, is_resolved,
+                      COALESCE(is_public, FALSE) as is_public,
+                      created_at, updated_at
             "#,
         )
         .bind(restaurant_id)
         .bind(feedback_id)
         .bind(resolution_note)
         .fetch_one(pool)
+        .await?;
+
+        Ok(feedback)
+    }
+
+    pub async fn toggle_visibility(
+        pool: &PgPool,
+        restaurant_id: Uuid,
+        feedback_id: Uuid,
+        is_public: bool,
+    ) -> Result<CustomerFeedback, AppError> {
+        let feedback = sqlx::query_as::<_, CustomerFeedback>(
+            r#"
+            UPDATE customer_feedback
+            SET is_public = $3,
+                updated_at = NOW()
+            WHERE restaurant_id = $1 AND id = $2
+            RETURNING id, restaurant_id, order_id, customer_name, customer_phone,
+                      rating, comments, resolution_note, is_resolved,
+                      COALESCE(is_public, FALSE) as is_public,
+                      created_at, updated_at
+            "#,
+        )
+        .bind(restaurant_id)
+        .bind(feedback_id)
+        .bind(is_public)
+        .fetch_one(pool)
+        .await?;
+
+        Ok(feedback)
+    }
+
+    pub async fn list_public_feedback(
+        pool: &PgPool,
+        restaurant_id: Uuid,
+    ) -> Result<Vec<CustomerFeedback>, AppError> {
+        let feedback = sqlx::query_as::<_, CustomerFeedback>(
+            r#"
+            SELECT f.id, f.restaurant_id, f.order_id,
+                   COALESCE(f.customer_name, c.name, 'Valued Guest') as customer_name,
+                   '' as customer_phone,
+                   f.rating, f.comments, f.resolution_note,
+                   COALESCE(f.is_resolved, FALSE) as is_resolved,
+                   COALESCE(f.is_public, FALSE) as is_public,
+                   f.created_at,
+                   COALESCE(f.updated_at, f.created_at) as updated_at
+            FROM customer_feedback f
+            LEFT JOIN customers c ON f.customer_id = c.id
+            WHERE f.restaurant_id = $1 AND (COALESCE(f.is_public, FALSE) = TRUE OR (f.rating >= 4 AND f.comments IS NOT NULL AND LENGTH(TRIM(f.comments)) > 3))
+            ORDER BY f.created_at DESC
+            LIMIT 20
+            "#,
+        )
+        .bind(restaurant_id)
+        .fetch_all(pool)
         .await?;
 
         Ok(feedback)

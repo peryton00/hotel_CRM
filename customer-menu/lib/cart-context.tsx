@@ -1,6 +1,6 @@
 'use client';
 
-import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import { createContext, useContext, useState, useEffect, useRef, ReactNode } from 'react';
 import type { CartItem, MenuItem } from './types';
 
 interface CartCtx {
@@ -17,21 +17,27 @@ const Ctx = createContext<CartCtx | null>(null);
 
 export function CartProvider({ children }: { children: ReactNode }) {
   const [items, setItems] = useState<CartItem[]>([]);
+  const isLoadedRef = useRef(false);
 
-  // Load from session storage on mount
+  // Load from localStorage on mount (preserves cart across page refreshes)
   useEffect(() => {
     try {
-      const saved = sessionStorage.getItem('customer_cart');
+      const saved = localStorage.getItem('customer_cart');
       if (saved) {
-        setItems(JSON.parse(saved));
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) {
+          setItems(parsed);
+        }
       }
     } catch {}
+    isLoadedRef.current = true;
   }, []);
 
-  // Save to session storage
+  // Save to localStorage on any cart modification (only after initial load has finished)
   useEffect(() => {
+    if (!isLoadedRef.current) return;
     try {
-      sessionStorage.setItem('customer_cart', JSON.stringify(items));
+      localStorage.setItem('customer_cart', JSON.stringify(items));
     } catch {}
   }, [items]);
 
@@ -55,7 +61,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
   const clear = () => {
     setItems([]);
     try {
-      sessionStorage.removeItem('customer_cart');
+      localStorage.removeItem('customer_cart');
     } catch {}
   };
 

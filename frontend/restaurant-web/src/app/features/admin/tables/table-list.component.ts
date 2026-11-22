@@ -20,7 +20,8 @@ import {
   FloorElement,
   FloorElementType,
 } from '../../../core/models/table.model';
-import { Order } from '../../../core/models/order.model';
+import { Reservation, ReservationStatus } from '../../../core/models/reservation.model';
+import { Order, OrderStatus } from '../../../core/models/order.model';
 import { StatusBadgeComponent } from '../../../shared/components/status-badge/status-badge.component';
 import { ConfirmModalComponent } from '../../../shared/components/confirm-modal/confirm-modal.component';
 import { SkeletonLoaderComponent } from '../../../shared/components/loading/skeleton-loader.component';
@@ -160,10 +161,186 @@ import { environment } from '../../../../environments/environment';
       </div>
 
       <!-- ============================================================ -->
+      <!-- RESERVATIONS & BOOKINGS DESK BLOCK                           -->
+      <!-- ============================================================ -->
+      <div class="toolbar-card reservation-desk-card">
+        <div class="reservation-desk-header">
+          <div class="desk-header-left">
+            <div class="desk-icon-wrap">
+              <i class="ph ph-calendar-check"></i>
+            </div>
+            <div>
+              <div class="desk-title-row">
+                <h3 class="desk-title">Floor Reservations &amp; Bookings</h3>
+                @if (pendingReservationsCount() > 0) {
+                  <span
+                    class="live-pill"
+                    [attr.title]="pendingReservationsCount() + ' active bookings'"
+                  >
+                    {{ pendingReservationsCount() }} Incoming
+                  </span>
+                }
+              </div>
+              <p class="desk-subtitle">
+                Manage upcoming table bookings, assign floor tables, and check-in arriving guests.
+              </p>
+            </div>
+          </div>
+
+          <div class="desk-header-actions">
+            <button
+              type="button"
+              class="btn btn-sm btn-ghost toggle-desk-btn"
+              (click)="isReservationsBlockOpen.set(!isReservationsBlockOpen())"
+            >
+              <span>{{
+                isReservationsBlockOpen()
+                  ? 'Hide Desk'
+                  : 'Show Bookings (' + activeFloorReservations().length + ')'
+              }}</span>
+              <i
+                class="ph"
+                [class.ph-caret-up]="isReservationsBlockOpen()"
+                [class.ph-caret-down]="!isReservationsBlockOpen()"
+              ></i>
+            </button>
+            <a
+              routerLink="/admin/reservations"
+              class="btn btn-sm btn-secondary"
+              title="Full Bookings Calendar & Management"
+            >
+              <i class="ph ph-arrow-up-right"></i>
+              <span>Full Bookings</span>
+            </a>
+          </div>
+        </div>
+
+        @if (isReservationsBlockOpen()) {
+          <div class="reservation-desk-body">
+            @if (activeFloorReservations().length === 0) {
+              <div class="empty-reservations-row">
+                <i class="ph ph-calendar-blank"></i>
+                <span
+                  >No active table bookings at the moment. All floor tables are free for walk-in
+                  dining.</span
+                >
+              </div>
+            } @else {
+              <div class="reservation-cards-scroll">
+                @for (res of activeFloorReservations(); track res.id) {
+                  <div class="res-item-card" [class.is-seated]="res.status === 'SEATED'">
+                    <div class="res-item-top">
+                      <div class="res-customer-info">
+                        <strong class="res-name">{{ res.customerName }}</strong>
+                        <span class="res-phone text-muted text-xs">{{ res.customerPhone }}</span>
+                      </div>
+                      <span
+                        class="badge"
+                        [class.badge-success]="res.status === 'SEATED'"
+                        [class.badge-primary]="res.status === 'CONFIRMED'"
+                      >
+                        {{ res.status }}
+                      </span>
+                    </div>
+
+                    <div class="res-item-details">
+                      <div class="res-detail-pill">
+                        <i class="ph ph-calendar text-primary"></i>
+                        <span>{{
+                          res.reservationTime || res.reservationDate | date: 'mediumDate'
+                        }}</span>
+                      </div>
+                      <div class="res-detail-pill">
+                        <i class="ph ph-clock text-primary"></i>
+                        <span class="font-bold">{{
+                          res.reservationTime || res.reservationDate | date: 'shortTime'
+                        }}</span>
+                      </div>
+                      <div class="res-detail-pill">
+                        <i class="ph ph-users"></i>
+                        <span>{{ res.partySize }} Guests</span>
+                      </div>
+                      <div class="res-detail-pill table-assign-pill">
+                        <i class="ph ph-chair"></i>
+                        @if (res.tableNumber) {
+                          <span class="font-bold">Table {{ res.tableNumber }}</span>
+                        } @else {
+                          <span class="text-amber-500 font-bold">Unassigned</span>
+                        }
+                      </div>
+                    </div>
+
+                    @if (res.specialRequests) {
+                      <div class="res-notes text-xs text-muted">
+                        <i class="ph ph-chat-circle-dots"></i>
+                        <span>{{ res.specialRequests }}</span>
+                      </div>
+                    }
+
+                    <div class="res-item-actions">
+                      @if (!res.tableId && res.status !== 'SEATED') {
+                        <div class="quick-assign-wrap">
+                          <select
+                            class="form-select form-select-sm"
+                            #assignSelect
+                            (change)="assignReservationTable(res, assignSelect.value)"
+                          >
+                            <option value="">Assign Table...</option>
+                            @for (tbl of availableTables(); track tbl.id) {
+                              <option [value]="tbl.id">
+                                Table {{ tbl.number }} (Cap: {{ tbl.capacity }}) - {{ tbl.section }}
+                              </option>
+                            }
+                          </select>
+                        </div>
+                      }
+
+                      @if (res.status === 'CONFIRMED' || res.status === 'PENDING') {
+                        <button
+                          type="button"
+                          class="btn btn-sm btn-primary btn-seat"
+                          (click)="seatReservationGuest(res)"
+                          [disabled]="!res.tableId && availableTables().length === 0"
+                          title="Seat guest at table and enable digital QR ordering"
+                        >
+                          <i class="ph ph-check-circle"></i>
+                          <span>Seat Guest</span>
+                        </button>
+                      } @else if (res.status === 'SEATED') {
+                        <button
+                          type="button"
+                          class="btn btn-sm btn-secondary"
+                          (click)="completeReservation(res)"
+                        >
+                          <i class="ph ph-check"></i>
+                          <span>Done</span>
+                        </button>
+                      }
+
+                      @if (res.status !== 'SEATED') {
+                        <button
+                          type="button"
+                          class="btn btn-sm btn-ghost text-crimson"
+                          (click)="cancelReservation(res)"
+                          title="Cancel Booking"
+                        >
+                          <i class="ph ph-x"></i>
+                        </button>
+                      }
+                    </div>
+                  </div>
+                }
+              </div>
+            }
+          </div>
+        }
+      </div>
+
+      <!-- ============================================================ -->
       <!-- VIEW 1: INTERACTIVE RESTAURANT FLOOR PLAN CANVAS             -->
       <!-- ============================================================ -->
       @if (viewMode() === 'CANVAS') {
-        <div class="canvas-workspace-card">
+        <div class="canvas-workspace-card" [class.is-fullscreen]="isCanvasFullscreen()">
           <!-- Canvas Top Controls Toolbar -->
           <div class="canvas-toolbar">
             <div class="toolbar-left">
@@ -256,6 +433,22 @@ import { environment } from '../../../../environments/environment';
                   <span>Auto-Arrange</span>
                 </button>
               }
+
+              <!-- Enlarge Canvas to Whole Window (Fullscreen) -->
+              <button
+                type="button"
+                class="btn btn-secondary btn-xs btn-fullscreen-toggle"
+                [class.btn-active-toggle]="isCanvasFullscreen()"
+                (click)="toggleCanvasFullscreen()"
+                title="Expand floor plan canvas to fill whole window"
+              >
+                <i
+                  class="ph"
+                  [class.ph-arrows-out-simple]="!isCanvasFullscreen()"
+                  [class.ph-arrows-in-simple]="isCanvasFullscreen()"
+                ></i>
+                <span>{{ isCanvasFullscreen() ? 'Exit Full View' : 'Full Window' }}</span>
+              </button>
 
               <!-- Zoom Controls -->
               <div class="zoom-controls">
@@ -827,63 +1020,228 @@ import { environment } from '../../../../environments/environment';
                 }
               </div>
 
-              <!-- Active Dining Order Info -->
-              @if (getActiveOrderByTable(insTbl); as actOrder) {
-                <div class="drawer-section active-order-card">
-                  <div class="active-order-header">
-                    <span class="live-pulse-badge">LIVE DINING</span>
-                    <span class="order-id-chip">#{{ actOrder.orderNumber }}</span>
-                  </div>
-                  <div class="order-details-grid">
-                    <div>
-                      <span class="text-xs text-muted">Customer:</span>
-                      <strong class="d-block">{{
-                        actOrder.customerName || 'Walk-in Guest'
-                      }}</strong>
-                    </div>
-                    <div>
-                      <span class="text-xs text-muted">Amount:</span>
-                      <strong class="d-block text-crimson">₹{{ actOrder.totalAmount }}</strong>
-                    </div>
-                    <div>
-                      <span class="text-xs text-muted">Payment:</span>
-                      <span class="d-block text-xs font-semibold">{{
-                        actOrder.paymentStatus
-                      }}</span>
-                    </div>
-                    <div>
-                      <span class="text-xs text-muted">Status:</span>
-                      <span class="d-block text-xs font-semibold">{{ actOrder.status }}</span>
-                    </div>
-                  </div>
-                  <div class="active-order-actions">
-                    <a [routerLink]="['/admin/orders']" class="btn btn-secondary btn-xs">
-                      <i class="ph ph-receipt"></i> View in Order Queue
-                    </a>
-                    <a
-                      [routerLink]="['/admin/billing', actOrder.id]"
-                      class="btn btn-primary btn-xs"
-                    >
-                      <i class="ph ph-printer"></i> View & Print Bill
-                    </a>
-                  </div>
+              <!-- Active Dining Orders Cockpit & Lifecycle Control -->
+              <div class="drawer-section active-orders-cockpit">
+                <div class="active-orders-top-bar">
+                  <span class="drawer-label" style="margin-bottom: 0;">
+                    <i class="ph ph-receipt"></i> Active Dining Orders
+                  </span>
+                  <span class="order-count-chip">
+                    {{ getActiveOrdersByTable(insTbl).length }} Active
+                  </span>
                 </div>
-              }
 
-              <!-- Staff Assignment -->
-              <div class="drawer-section">
-                <label class="drawer-label" for="drawerServerSelect">Serving Staff Member</label>
-                <select
-                  id="drawerServerSelect"
-                  class="form-select"
-                  [ngModel]="insTbl.assignedStaffId || ''"
-                  (ngModelChange)="onStaffAssign(insTbl.id, $event)"
-                >
-                  <option value="">Unassigned (Dynamic)</option>
-                  @for (s of staffMembers(); track s.id) {
-                    <option [value]="s.id">{{ s.name }} ({{ s.role }})</option>
+                @if (getActiveOrdersByTable(insTbl); as actOrders) {
+                  @if (actOrders.length > 0) {
+                    <div class="orders-accordion-list">
+                      @for (actOrder of actOrders; track actOrder.id; let ordIdx = $index) {
+                        <div
+                          class="active-order-card"
+                          [class.order-ready]="actOrder.status === 'READY'"
+                          [class.order-served]="actOrder.status === 'SERVED'"
+                        >
+                          <div class="active-order-header">
+                            <div class="order-header-left">
+                              <span class="round-badge">Round {{ ordIdx + 1 }}</span>
+                              <span class="order-id-chip">#{{ actOrder.orderNumber }}</span>
+                            </div>
+                            <span
+                              class="status-pill-badge"
+                              [ngClass]="'status-' + actOrder.status.toLowerCase()"
+                            >
+                              {{ actOrder.status }}
+                            </span>
+                          </div>
+
+                          <!-- Order Details Grid -->
+                          <div class="order-details-grid">
+                            <div>
+                              <span class="text-xs text-muted">Customer:</span>
+                              <strong class="d-block">{{
+                                actOrder.customerName || 'Walk-in Guest'
+                              }}</strong>
+                            </div>
+                            <div>
+                              <span class="text-xs text-muted">Amount:</span>
+                              <strong class="d-block text-crimson"
+                                >₹{{ actOrder.totalAmount }}</strong
+                              >
+                            </div>
+                            <div>
+                              <span class="text-xs text-muted">Payment:</span>
+                              <span class="d-block text-xs font-semibold">{{
+                                actOrder.paymentStatus
+                              }}</span>
+                            </div>
+                            <div>
+                              <span class="text-xs text-muted">Dishes:</span>
+                              <span class="d-block text-xs font-semibold"
+                                >{{ actOrder.items.length }} items</span
+                              >
+                            </div>
+                          </div>
+
+                          <!-- Compact Items List -->
+                          <div class="order-items-compact-list">
+                            @for (it of actOrder.items; track it.id) {
+                              <div class="compact-item-row">
+                                <span class="item-qty">{{ it.quantity }}x</span>
+                                <span class="item-name truncate">{{ it.name }}</span>
+                                <span class="item-price">₹{{ it.itemTotal }}</span>
+                              </div>
+                            }
+                          </div>
+
+                          <!-- Serving Staff Assigned INSIDE THIS ORDER COCKPIT BLOCK -->
+                          <div class="drawer-inline-server">
+                            <label class="text-xs text-muted" [attr.for]="'server-' + actOrder.id">
+                              <i class="ph ph-user-check"></i> Serving Staff for this Order:
+                            </label>
+                            @if (isOrderPaid(actOrder)) {
+                              <div class="locked-server-row">
+                                <span class="font-semibold text-xs">
+                                  <i class="ph ph-lock-key text-muted"></i>
+                                  {{ getServerStaffName(actOrder.serverStaffId) || 'Unassigned' }}
+                                </span>
+                                <button
+                                  type="button"
+                                  class="btn-unlock-server"
+                                  (click)="
+                                    promptChangePaidServer(actOrder); $event.stopPropagation()
+                                  "
+                                  title="Change serving staff on paid order"
+                                >
+                                  <i class="ph ph-lock-key"></i>
+                                  <span>Change</span>
+                                </button>
+                              </div>
+                            } @else {
+                              <select
+                                [id]="'server-' + actOrder.id"
+                                class="form-select form-select-xs status-dropdown active-server-select"
+                                [ngModel]="actOrder.serverStaffId || ''"
+                                (ngModelChange)="onAssignActiveOrderServer(actOrder, $event)"
+                                (click)="$event.stopPropagation()"
+                              >
+                                <option value="">Unassigned</option>
+                                @for (s of staffMembers(); track s.id) {
+                                  <option [value]="s.id">{{ s.name }} ({{ s.role }})</option>
+                                }
+                              </select>
+                            }
+                          </div>
+
+                          <!-- Order Lifecycle Control Stepper (Icons) & Quick Action -->
+                          <div class="lifecycle-control-box">
+                            <div class="stepper-track">
+                              <span
+                                class="step-pill"
+                                [class.active]="actOrder.status === 'PENDING'"
+                                [class.passed]="isStagePassed(actOrder.status, 'PENDING')"
+                                title="Pending Order"
+                              >
+                                <i class="ph ph-clock"></i>
+                              </span>
+                              <span class="step-arrow">&rsaquo;</span>
+                              <span
+                                class="step-pill"
+                                [class.active]="actOrder.status === 'ACCEPTED'"
+                                [class.passed]="isStagePassed(actOrder.status, 'ACCEPTED')"
+                                title="Accepted"
+                              >
+                                <i class="ph ph-check-circle"></i>
+                              </span>
+                              <span class="step-arrow">&rsaquo;</span>
+                              <span
+                                class="step-pill"
+                                [class.active]="actOrder.status === 'PREPARING'"
+                                [class.passed]="isStagePassed(actOrder.status, 'PREPARING')"
+                                title="Cooking in Kitchen"
+                              >
+                                <i class="ph ph-cooking-pot"></i>
+                              </span>
+                              <span class="step-arrow">&rsaquo;</span>
+                              <span
+                                class="step-pill"
+                                [class.active]="actOrder.status === 'READY'"
+                                [class.passed]="isStagePassed(actOrder.status, 'READY')"
+                                title="Food Ready to Serve"
+                              >
+                                <i class="ph ph-bell"></i>
+                              </span>
+                              <span class="step-arrow">&rsaquo;</span>
+                              <span
+                                class="step-pill"
+                                [class.active]="actOrder.status === 'SERVED'"
+                                [class.passed]="isStagePassed(actOrder.status, 'SERVED')"
+                                title="Served to Table"
+                              >
+                                <i class="ph ph-bowl-food"></i>
+                              </span>
+                            </div>
+
+                            <!-- Advance Status Button -->
+                            @if (getNextOrderStatus(actOrder.status); as nextSt) {
+                              <button
+                                type="button"
+                                class="btn btn-sm btn-advance-order"
+                                (click)="advanceOrderStatus(actOrder); $event.stopPropagation()"
+                              >
+                                <i class="ph ph-fast-forward"></i>
+                                <span
+                                  >Advance to {{ getNextOrderStatusLabel(actOrder.status) }}</span
+                                >
+                              </button>
+                            }
+                          </div>
+
+                          <!-- Actions: View in Queue, Settle Bill & GATED View & Print Bill -->
+                          <div class="active-order-actions">
+                            <a [routerLink]="['/admin/orders']" class="btn btn-secondary btn-xs">
+                              <i class="ph ph-receipt"></i> View in Queue
+                            </a>
+
+                            <!-- Gated: Only visible/active once lifecycle reaches SERVED or COMPLETED -->
+                            @if (actOrder.status === 'SERVED' || actOrder.status === 'COMPLETED') {
+                              @if (!isOrderPaid(actOrder)) {
+                                <button
+                                  type="button"
+                                  class="btn btn-xs btn-settle-action"
+                                  (click)="
+                                    openCanvasSettleModal(actOrder); $event.stopPropagation()
+                                  "
+                                  title="Settle payment for Table {{ insTbl.number }}"
+                                >
+                                  <i class="ph ph-credit-card"></i> Settle Bill
+                                </button>
+                              }
+                              <a
+                                [routerLink]="['/admin/billing', actOrder.id]"
+                                [queryParams]="{ from: 'canvas' }"
+                                class="btn btn-primary btn-xs btn-bill-ready"
+                              >
+                                <i class="ph ph-printer"></i> View &amp; Print Bill
+                              </a>
+                            } @else {
+                              <div
+                                class="bill-gated-badge"
+                                title="Cooking/Prep in progress. Bill available once food is served to table."
+                              >
+                                <i class="ph ph-lock-key"></i>
+                                <span>Bill Locked (Status: {{ actOrder.status }})</span>
+                              </div>
+                            }
+                          </div>
+                        </div>
+                      }
+                    </div>
+                  } @else {
+                    <div class="no-orders-box">
+                      <i class="ph ph-tray text-muted"></i>
+                      <span>No active food orders for Table {{ insTbl.number }}.</span>
+                    </div>
                   }
-                </select>
+                }
               </div>
 
               <!-- Change Room / Section -->
@@ -901,28 +1259,30 @@ import { environment } from '../../../../environments/environment';
                 </select>
               </div>
 
-              <!-- Table Shape & Customization -->
-              <div class="drawer-section">
-                <label class="drawer-label">Visual Table Shape</label>
-                <div class="shape-toggle-group">
-                  <button
-                    type="button"
-                    class="shape-btn"
-                    [class.active]="getTableShape(insTbl) === 'ROUND'"
-                    (click)="toggleTableShape(insTbl)"
-                  >
-                    <i class="ph ph-circle"></i> Round Table
-                  </button>
-                  <button
-                    type="button"
-                    class="shape-btn"
-                    [class.active]="getTableShape(insTbl) === 'RECT'"
-                    (click)="toggleTableShape(insTbl)"
-                  >
-                    <i class="ph ph-rectangle"></i> Rectangular Table
-                  </button>
+              <!-- Table Shape & Customization (ONLY IN DESIGN MODE) -->
+              @if (isDesignMode()) {
+                <div class="drawer-section">
+                  <label class="drawer-label">Visual Table Shape</label>
+                  <div class="shape-toggle-group">
+                    <button
+                      type="button"
+                      class="shape-btn"
+                      [class.active]="getTableShape(insTbl) === 'ROUND'"
+                      (click)="toggleTableShape(insTbl)"
+                    >
+                      <i class="ph ph-circle"></i> Round Table
+                    </button>
+                    <button
+                      type="button"
+                      class="shape-btn"
+                      [class.active]="getTableShape(insTbl) === 'RECT'"
+                      (click)="toggleTableShape(insTbl)"
+                    >
+                      <i class="ph ph-rectangle"></i> Rectangular Table
+                    </button>
+                  </div>
                 </div>
-              </div>
+              }
 
               <!-- QR Code & Ordering -->
               <div class="drawer-section">
@@ -1402,6 +1762,101 @@ import { environment } from '../../../../environments/environment';
           </div>
         </div>
       }
+
+      <!-- Floor Canvas Quick Settle Modal -->
+      @if (showCanvasSettleModal() && orderToSettle(); as ord) {
+        <div class="modal-overlay" (click)="closeCanvasSettleModal()">
+          <div
+            class="modal-card canvas-settle-card"
+            (click)="$event.stopPropagation()"
+            role="dialog"
+            aria-modal="true"
+          >
+            <div class="modal-header">
+              <div>
+                <h3 class="heading-card">Settle Table Bill</h3>
+                <span class="text-xs text-muted">
+                  Order #{{ ord.orderNumber }} • Table
+                  {{ ord.tableNumber || selectedTableForInspector()?.number }}
+                </span>
+              </div>
+              <button type="button" class="close-btn" (click)="closeCanvasSettleModal()">
+                <i class="ph ph-x"></i>
+              </button>
+            </div>
+
+            <div class="modal-body">
+              <div class="settle-summary-box">
+                <div class="settle-row">
+                  <span>Guest Name:</span>
+                  <strong>{{ ord.customerName || 'Walk-in Guest' }}</strong>
+                </div>
+                <div class="settle-row">
+                  <span>Dishes ({{ ord.items.length }} items):</span>
+                  <span>₹{{ ord.subtotal || ord.totalAmount }}</span>
+                </div>
+                <div class="settle-row">
+                  <span>Taxes (GST):</span>
+                  <span>₹{{ ord.taxAmount || 0 }}</span>
+                </div>
+                <div class="settle-divider"></div>
+                <div class="settle-row total-highlight">
+                  <span>Net Payable Total:</span>
+                  <span class="amount-large text-crimson">₹{{ ord.totalAmount }}</span>
+                </div>
+              </div>
+
+              <div class="settle-payment-section">
+                <label class="drawer-label">Select Payment Method</label>
+                <div class="payment-method-grid">
+                  <button
+                    type="button"
+                    class="pay-choice-btn"
+                    [class.active]="canvasPaymentMethod() === 'CASH'"
+                    (click)="canvasPaymentMethod.set('CASH')"
+                  >
+                    <i class="ph ph-money"></i> Cash
+                  </button>
+                  <button
+                    type="button"
+                    class="pay-choice-btn"
+                    [class.active]="canvasPaymentMethod() === 'UPI'"
+                    (click)="canvasPaymentMethod.set('UPI')"
+                  >
+                    <i class="ph ph-qr-code"></i> UPI / QR
+                  </button>
+                  <button
+                    type="button"
+                    class="pay-choice-btn"
+                    [class.active]="canvasPaymentMethod() === 'CARD'"
+                    (click)="canvasPaymentMethod.set('CARD')"
+                  >
+                    <i class="ph ph-credit-card"></i> Card / POS
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <div class="modal-footer">
+              <a
+                [routerLink]="['/admin/billing', ord.id]"
+                [queryParams]="{ from: 'canvas' }"
+                class="btn btn-secondary btn-sm"
+                (click)="closeCanvasSettleModal()"
+              >
+                <i class="ph ph-printer"></i> View &amp; Print Bill
+              </a>
+              <button
+                type="button"
+                class="btn btn-primary btn-sm btn-confirm-settle"
+                (click)="confirmCanvasSettlement()"
+              >
+                <i class="ph ph-check"></i> Settle &amp; Release Table
+              </button>
+            </div>
+          </div>
+        </div>
+      }
     </div>
   `,
   styles: [
@@ -1629,89 +2084,198 @@ import { environment } from '../../../../environments/environment';
         }
       }
 
-      .theme-dark,
-      [data-theme='dark'] {
-        .places-toolbar {
-          background: #121418;
-          border-color: rgba(255, 255, 255, 0.08);
-        }
+      /* ============================================================ */
+      /* RESERVATIONS & BOOKINGS DESK CARD                            */
+      /* ============================================================ */
+      .reservation-desk-card {
+        background: var(--color-surface, #ffffff);
+        border: 1px solid var(--color-border, #e2e8f0);
+        border-radius: var(--radius-md, 12px);
+        padding: 14px 18px;
+        display: flex;
+        flex-direction: column;
+        gap: 14px;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.03);
+      }
 
-        .view-mode-toggle {
-          background: rgba(255, 255, 255, 0.06);
-          border-color: rgba(255, 255, 255, 0.08);
+      .reservation-desk-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+        flex-wrap: wrap;
 
-          .toggle-btn {
-            color: #94a3b8;
+        .desk-header-left {
+          display: flex;
+          align-items: center;
+          gap: 12px;
 
-            &:hover {
-              color: #f1f5f9;
+          .desk-icon-wrap {
+            width: 38px;
+            height: 38px;
+            border-radius: 10px;
+            background: rgba(16, 185, 129, 0.12);
+            color: #10b981;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.25rem;
+            flex-shrink: 0;
+          }
+
+          .desk-title-row {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+
+            .desk-title {
+              font-size: 1rem;
+              font-weight: 800;
+              color: var(--color-text-primary, #0f172a);
+              margin: 0;
             }
+          }
 
-            &.active {
-              background: #1e222b;
-              color: #f87171;
-            }
+          .desk-subtitle {
+            font-size: 0.75rem;
+            color: var(--color-text-muted, #64748b);
+            margin: 2px 0 0 0;
           }
         }
 
-        .places-label {
-          color: #94a3b8;
+        .desk-header-actions {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+        }
+      }
+
+      .empty-reservations-row {
+        padding: 16px;
+        border-radius: 10px;
+        background: var(--color-bone-light, #f8fafc);
+        border: 1px dashed var(--color-border, #cbd5e1);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        font-size: 0.8125rem;
+        color: var(--color-text-muted, #64748b);
+      }
+
+      .reservation-cards-scroll {
+        display: flex;
+        gap: 12px;
+        overflow-x: auto;
+        padding-bottom: 6px;
+        scrollbar-width: thin;
+
+        &::-webkit-scrollbar {
+          height: 6px;
+        }
+        &::-webkit-scrollbar-thumb {
+          background: rgba(148, 163, 184, 0.3);
+          border-radius: 3px;
         }
 
-        .tab-btn {
-          color: #94a3b8;
-
-          .tab-badge {
-            background: rgba(255, 255, 255, 0.08);
-            color: #94a3b8;
-          }
+        .res-item-card {
+          flex: 0 0 290px;
+          background: var(--color-surface, #ffffff);
+          border: 1px solid var(--color-border, #e2e8f0);
+          border-radius: 12px;
+          padding: 12px 14px;
+          display: flex;
+          flex-direction: column;
+          justify-content: space-between;
+          gap: 10px;
+          box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+          transition:
+            border-color 0.15s ease,
+            transform 0.15s ease;
 
           &:hover {
-            background: rgba(255, 255, 255, 0.06);
-            color: #f1f5f9;
+            border-color: #cbd5e1;
+            transform: translateY(-1px);
           }
 
-          &.active {
-            background: #252b36;
-            color: #f1f5f9;
+          &.is-seated {
+            border-left: 3px solid #10b981;
+          }
 
-            .tab-badge {
-              background: rgba(255, 255, 255, 0.18);
-              color: #ffffff;
+          .res-item-top {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 8px;
+
+            .res-customer-info {
+              display: flex;
+              flex-direction: column;
+
+              .res-name {
+                font-size: 0.875rem;
+                font-weight: 700;
+                color: var(--color-text-primary, #0f172a);
+              }
+              .res-phone {
+                font-size: 0.6875rem;
+              }
             }
           }
 
-          &.add-place-tab-btn {
-            border-color: rgba(255, 255, 255, 0.15);
-            color: #f87171;
+          .res-item-details {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
 
-            &:hover {
-              border-color: #f87171;
-              background: rgba(248, 113, 113, 0.1);
+            .res-detail-pill {
+              display: inline-flex;
+              align-items: center;
+              gap: 4px;
+              font-size: 0.6875rem;
+              background: var(--color-bone-light, #f1f5f9);
+              padding: 3px 7px;
+              border-radius: 6px;
+              color: var(--color-text-secondary, #334155);
+
+              &.table-assign-pill {
+                background: rgba(234, 88, 12, 0.08);
+                color: #ea580c;
+              }
             }
           }
-        }
 
-        .status-pill {
-          &.available {
-            background: rgba(16, 185, 129, 0.14);
-            color: #34d399;
-            border-color: rgba(52, 211, 153, 0.3);
+          .res-notes {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            font-style: italic;
+            background: rgba(245, 158, 11, 0.06);
+            padding: 4px 8px;
+            border-radius: 6px;
           }
-          &.occupied {
-            background: rgba(239, 68, 68, 0.14);
-            color: #f87171;
-            border-color: rgba(248, 113, 113, 0.3);
-          }
-          &.reserved {
-            background: rgba(59, 130, 246, 0.14);
-            color: #60a5fa;
-            border-color: rgba(96, 165, 250, 0.3);
-          }
-          &.dirty {
-            background: rgba(148, 163, 184, 0.12);
-            color: #94a3b8;
-            border-color: rgba(148, 163, 184, 0.25);
+
+          .res-item-actions {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding-top: 6px;
+            border-top: 1px solid var(--color-border, #f1f5f9);
+
+            .quick-assign-wrap {
+              flex: 1;
+
+              .form-select-sm {
+                padding: 4px 8px;
+                font-size: 0.6875rem;
+                border-radius: 6px;
+                width: 100%;
+              }
+            }
+
+            .btn-seat {
+              flex-shrink: 0;
+            }
           }
         }
       }
@@ -1727,6 +2291,30 @@ import { environment } from '../../../../environments/environment';
         display: flex;
         flex-direction: column;
         box-shadow: var(--shadow-sm, 0 1px 3px rgba(0, 0, 0, 0.05));
+        transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+
+        &.is-fullscreen {
+          position: fixed;
+          inset: 0;
+          z-index: 1100;
+          width: 100vw;
+          height: 100vh;
+          max-width: none;
+          border-radius: 0;
+          margin: 0;
+          border: none;
+          box-shadow: none;
+
+          .canvas-toolbar {
+            border-radius: 0;
+            padding: 10px 20px;
+          }
+
+          .canvas-viewport {
+            max-height: calc(100vh - 65px);
+            height: calc(100vh - 65px);
+          }
+        }
       }
 
       .canvas-toolbar {
@@ -1799,6 +2387,33 @@ import { environment } from '../../../../environments/environment';
         display: inline-flex;
         align-items: center;
         gap: 4px;
+
+        &.btn-active-toggle {
+          background: var(--color-onyx, #121212);
+          color: #ffffff;
+          border-color: var(--color-onyx, #121212);
+        }
+      }
+
+      .btn-fullscreen-toggle {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 5px 12px;
+        font-size: 0.75rem;
+        font-weight: 700;
+        border-radius: 6px;
+        border: 1px solid var(--color-border, #d1d5db);
+        background: var(--color-surface, #ffffff);
+        color: var(--color-text-primary, #111827);
+        cursor: pointer;
+        transition: all 0.15s ease;
+
+        &:hover {
+          border-color: var(--color-crimson, #dc2626);
+          color: var(--color-crimson, #dc2626);
+          background: rgba(220, 38, 38, 0.04);
+        }
 
         &.btn-active-toggle {
           background: var(--color-onyx, #121212);
@@ -2536,25 +3151,25 @@ import { environment } from '../../../../environments/environment';
       }
 
       /* ============================================================ */
-      /* TABLE INSPECTOR DRAWER                                       */
+      /* TABLE INSPECTOR DRAWER & ORDER LIFECYCLE COCKPIT            */
       /* ============================================================ */
       .inspector-drawer-backdrop {
         position: fixed;
         inset: 0;
-        background: rgba(0, 0, 0, 0.35);
+        background: rgba(0, 0, 0, 0.45);
         backdrop-filter: blur(2px);
-        z-index: 1000;
+        z-index: 1200;
         display: flex;
         justify-content: flex-end;
       }
 
       .inspector-drawer {
-        width: 380px;
-        max-width: 90vw;
+        width: 440px;
+        max-width: 92vw;
         height: 100%;
         background: var(--color-surface, #ffffff);
         border-left: 1px solid var(--color-border, #e5e7eb);
-        box-shadow: -4px 0 24px rgba(0, 0, 0, 0.15);
+        box-shadow: -6px 0 30px rgba(0, 0, 0, 0.2);
         display: flex;
         flex-direction: column;
         animation: slideInRight 0.2s ease-out;
@@ -2588,12 +3203,32 @@ import { environment } from '../../../../environments/environment';
               margin: 0;
               font-size: 1.125rem;
               font-weight: 800;
+              color: var(--color-text-primary, #0f172a);
             }
 
             .drawer-section-pill {
               font-size: 0.6875rem;
               color: var(--color-text-muted, #6b7280);
               font-weight: 600;
+            }
+          }
+
+          .close-btn {
+            background: transparent;
+            border: none;
+            color: var(--color-text-muted, #94a3b8);
+            font-size: 1.25rem;
+            cursor: pointer;
+            padding: 4px;
+            border-radius: 6px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.15s ease;
+
+            &:hover {
+              color: var(--color-text-primary, #0f172a);
+              background: rgba(0, 0, 0, 0.05);
             }
           }
         }
@@ -2618,6 +3253,9 @@ import { environment } from '../../../../environments/environment';
             text-transform: uppercase;
             letter-spacing: 0.04em;
             color: var(--color-text-muted, #6b7280);
+            display: flex;
+            align-items: center;
+            gap: 6px;
           }
         }
 
@@ -2682,46 +3320,364 @@ import { environment } from '../../../../environments/environment';
           }
         }
 
-        .active-order-card {
-          background: #fef2f2;
-          border: 1px solid rgba(220, 38, 38, 0.25);
-          border-radius: 10px;
+        /* Active Orders Cockpit in Drawer */
+        .active-orders-cockpit {
+          background: #fafafa;
+          border: 1px solid var(--color-border, #e5e7eb);
+          border-radius: 12px;
           padding: 14px;
+
+          .active-orders-top-bar {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 8px;
+
+            .order-count-chip {
+              font-size: 0.6875rem;
+              font-weight: 800;
+              background: rgba(220, 38, 38, 0.12);
+              color: var(--color-crimson, #dc2626);
+              padding: 2px 8px;
+              border-radius: 999px;
+            }
+          }
+        }
+
+        .orders-accordion-list {
+          display: flex;
+          flex-direction: column;
           gap: 12px;
+        }
+
+        .active-order-card {
+          background: var(--color-surface, #ffffff);
+          border: 1px solid var(--color-border, #e5e7eb);
+          border-left: 4px solid var(--color-crimson, #dc2626);
+          border-radius: 10px;
+          padding: 12px 14px;
+          box-shadow: var(--shadow-sm, 0 1px 3px rgba(0, 0, 0, 0.04));
+          display: flex;
+          flex-direction: column;
+          gap: 10px;
+          transition: all 0.15s ease;
+
+          &.order-ready {
+            border-left-color: #10b981;
+            background: #f0fdf4;
+          }
+
+          &.order-served {
+            border-left-color: #3b82f6;
+            background: #f8fafc;
+          }
 
           .active-order-header {
             display: flex;
             align-items: center;
             justify-content: space-between;
 
-            .live-pulse-badge {
-              font-size: 0.625rem;
+            .order-header-left {
+              display: flex;
+              align-items: center;
+              gap: 6px;
+            }
+
+            .round-badge {
+              font-size: 0.6875rem;
               font-weight: 800;
-              color: #dc2626;
-              letter-spacing: 0.05em;
+              color: var(--color-crimson, #dc2626);
+              background: rgba(220, 38, 38, 0.1);
+              padding: 2px 6px;
+              border-radius: 4px;
             }
 
             .order-id-chip {
               font-size: 0.75rem;
               font-weight: 800;
+              color: var(--color-text-primary, #111827);
+            }
+
+            .status-pill-badge {
+              font-size: 0.6875rem;
+              font-weight: 800;
+              letter-spacing: 0.04em;
+              text-transform: uppercase;
               padding: 2px 8px;
-              background: #dc2626;
-              color: #ffffff;
-              border-radius: 4px;
+              border-radius: 999px;
+
+              &.status-pending {
+                background: #fef3c7;
+                color: #b45309;
+              }
+              &.status-accepted {
+                background: #e0e7ff;
+                color: #4338ca;
+              }
+              &.status-preparing {
+                background: #ffedd5;
+                color: #c2410c;
+              }
+              &.status-ready {
+                background: #dcfce7;
+                color: #15803d;
+              }
+              &.status-served {
+                background: #e0f2fe;
+                color: #0369a1;
+              }
+              &.status-completed {
+                background: #f3f4f6;
+                color: #4b5563;
+              }
             }
           }
 
           .order-details-grid {
             display: grid;
             grid-template-columns: 1fr 1fr;
-            gap: 10px;
+            gap: 6px 12px;
+            padding: 8px 10px;
+            background: var(--color-surface-card, #f8fafc);
+            border-radius: 6px;
+            font-size: 0.75rem;
+
+            .text-xs {
+              font-size: 0.6875rem;
+            }
+          }
+
+          .order-items-compact-list {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            padding: 4px 0;
+            border-top: 1px dashed var(--color-border, #e5e7eb);
+            border-bottom: 1px dashed var(--color-border, #e5e7eb);
+
+            .compact-item-row {
+              display: flex;
+              align-items: center;
+              justify-content: space-between;
+              font-size: 0.75rem;
+
+              .item-qty {
+                font-weight: 700;
+                color: var(--color-crimson, #dc2626);
+                min-width: 24px;
+              }
+
+              .item-name {
+                flex: 1;
+                color: var(--color-text-primary, #1e293b);
+                overflow: hidden;
+                text-overflow: ellipsis;
+                white-space: nowrap;
+                padding-right: 8px;
+              }
+
+              .item-price {
+                font-weight: 600;
+                color: var(--color-text-secondary, #4b5563);
+              }
+            }
+          }
+
+          /* Serving Staff inside Order Cockpit Card */
+          .drawer-inline-server {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            background: rgba(241, 245, 249, 0.6);
+            border: 1px solid #e2e8f0;
+            border-radius: 6px;
+            padding: 6px 8px;
+
+            label {
+              display: flex;
+              align-items: center;
+              gap: 4px;
+              font-size: 0.6875rem;
+              font-weight: 600;
+            }
+
+            .active-server-select {
+              width: 100%;
+              font-size: 0.75rem;
+              height: 28px;
+              padding: 2px 8px;
+              border-radius: 4px;
+              border-color: #cbd5e1;
+              background-color: #ffffff;
+            }
+
+            .locked-server-row {
+              display: flex;
+              align-items: center;
+              justify-content: space-between;
+              font-size: 0.75rem;
+
+              .btn-unlock-server {
+                background: #ffffff;
+                border: 1px solid #cbd5e1;
+                font-size: 0.6875rem;
+                font-weight: 600;
+                padding: 2px 6px;
+                border-radius: 4px;
+                cursor: pointer;
+                display: inline-flex;
+                align-items: center;
+                gap: 4px;
+
+                &:hover {
+                  border-color: var(--color-crimson, #dc2626);
+                  color: var(--color-crimson, #dc2626);
+                }
+              }
+            }
+          }
+
+          /* Stepper (Icons) & Advance Action */
+          .lifecycle-control-box {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            background: #fff5f5;
+            border: 1px dashed rgba(220, 38, 38, 0.35);
+            border-radius: 8px;
+            padding: 8px 10px;
+
+            .stepper-track {
+              display: flex;
+              align-items: center;
+              justify-content: space-between;
+              gap: 4px;
+
+              .step-pill {
+                width: 32px;
+                height: 32px;
+                display: inline-flex;
+                align-items: center;
+                justify-content: center;
+                border-radius: 8px;
+                background: #e2e8f0;
+                color: #64748b;
+                font-size: 1rem;
+                cursor: default;
+                transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+
+                &.active {
+                  background: var(--color-crimson, #dc2626);
+                  color: #ffffff;
+                  box-shadow: 0 2px 8px rgba(220, 38, 38, 0.35);
+                  transform: scale(1.08);
+                }
+
+                &.passed {
+                  background: #10b981;
+                  color: #ffffff;
+                }
+              }
+
+              .step-arrow {
+                font-size: 0.75rem;
+                color: #94a3b8;
+                font-weight: 700;
+              }
+            }
+
+            .btn-advance-order {
+              width: 100%;
+              background: var(--color-crimson, #dc2626);
+              color: #ffffff;
+              border: none;
+              border-radius: 6px;
+              padding: 6px 12px;
+              font-size: 0.75rem;
+              font-weight: 700;
+              cursor: pointer;
+              display: flex;
+              align-items: center;
+              justify-content: center;
+              gap: 6px;
+              transition: background 0.15s ease;
+
+              &:hover {
+                background: #b91c1c;
+              }
+            }
           }
 
           .active-order-actions {
             display: flex;
+            align-items: center;
             gap: 8px;
             margin-top: 4px;
+
+            .btn-settle-action {
+              display: inline-flex;
+              align-items: center;
+              gap: 4px;
+              font-size: 0.75rem;
+              font-weight: 700;
+              background: #059669;
+              color: #ffffff;
+              border: none;
+              border-radius: 6px;
+              padding: 4px 10px;
+              cursor: pointer;
+              transition: background 0.15s ease;
+
+              &:hover {
+                background: #047857;
+              }
+            }
+
+            .bill-gated-badge {
+              display: inline-flex;
+              align-items: center;
+              gap: 4px;
+              font-size: 0.6875rem;
+              font-weight: 700;
+              color: #b45309;
+              background: #fef3c7;
+              border: 1px solid #fde68a;
+              border-radius: 6px;
+              padding: 4px 8px;
+              flex: 1;
+            }
+
+            .btn-bill-ready {
+              display: inline-flex;
+              align-items: center;
+              gap: 5px;
+              font-size: 0.75rem;
+              font-weight: 700;
+              background: #059669;
+              color: #ffffff;
+              border: none;
+              border-radius: 6px;
+              padding: 4px 10px;
+              text-decoration: none;
+              transition: background 0.15s ease;
+
+              &:hover {
+                background: #047857;
+              }
+            }
           }
+        }
+
+        .no-orders-box {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          padding: 12px;
+          background: var(--color-surface, #ffffff);
+          border: 1px dashed var(--color-border, #cbd5e1);
+          border-radius: 8px;
+          font-size: 0.75rem;
+          color: var(--color-text-muted, #6b7280);
         }
 
         .shape-toggle-group {
@@ -2819,6 +3775,100 @@ import { environment } from '../../../../environments/environment';
                 border-color: var(--color-crimson, #dc2626);
                 color: var(--color-crimson, #dc2626);
               }
+            }
+          }
+        }
+      }
+
+      /* Floor Canvas Quick Settle Modal */
+      .canvas-settle-card {
+        max-width: 460px;
+        width: 92vw;
+
+        .settle-summary-box {
+          background: var(--color-surface-card, #f8fafc);
+          border: 1px solid var(--color-border, #e5e7eb);
+          border-radius: 8px;
+          padding: 12px 14px;
+          display: flex;
+          flex-direction: column;
+          gap: 8px;
+          font-size: 0.8125rem;
+
+          .settle-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+
+            &.total-highlight {
+              font-size: 0.9375rem;
+              font-weight: 800;
+
+              .amount-large {
+                font-size: 1.125rem;
+              }
+            }
+          }
+
+          .settle-divider {
+            height: 1px;
+            background: var(--color-border, #e5e7eb);
+            margin: 2px 0;
+          }
+        }
+
+        .settle-payment-section {
+          margin-top: 14px;
+          display: flex;
+          flex-direction: column;
+          gap: 8px;
+
+          .payment-method-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 8px;
+
+            .pay-choice-btn {
+              display: flex;
+              flex-direction: column;
+              align-items: center;
+              justify-content: center;
+              gap: 6px;
+              padding: 10px 8px;
+              font-size: 0.75rem;
+              font-weight: 700;
+              border-radius: 8px;
+              border: 1px solid var(--color-border, #e5e7eb);
+              background: var(--color-surface, #ffffff);
+              cursor: pointer;
+              transition: all 0.15s ease;
+
+              i {
+                font-size: 1.25rem;
+              }
+
+              &.active {
+                background: var(--color-onyx, #121212);
+                color: #ffffff;
+                border-color: var(--color-onyx, #121212);
+              }
+            }
+          }
+        }
+
+        .modal-footer {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          padding: 12px 18px;
+
+          .btn-confirm-settle {
+            background: var(--color-crimson, #dc2626);
+            border-color: var(--color-crimson, #dc2626);
+            color: #ffffff;
+
+            &:hover {
+              background: #b91c1c;
             }
           }
         }
@@ -3825,6 +4875,26 @@ export class TableListComponent implements OnInit {
   restaurant = this.mock.restaurant;
   staffMembers = this.dataService.staffMembers;
 
+  // Floor Reservations Desk State
+  readonly isReservationsBlockOpen = signal<boolean>(true);
+  readonly reservations = computed(() => this.mock.reservations());
+  readonly activeFloorReservations = computed(() => {
+    return this.mock
+      .reservations()
+      .filter(
+        (r) =>
+          r.status === 'CONFIRMED' || (r.status as string) === 'PENDING' || r.status === 'SEATED',
+      );
+  });
+  readonly pendingReservationsCount = computed(() => {
+    return this.mock
+      .reservations()
+      .filter((r) => r.status === 'CONFIRMED' || (r.status as string) === 'PENDING').length;
+  });
+  readonly availableTables = computed(() => {
+    return this.mock.tables().filter((t) => t.status === 'AVAILABLE');
+  });
+
   // View & Mode State
   viewMode = signal<'CANVAS' | 'GRID'>('CANVAS');
   isDesignMode = signal<boolean>(false);
@@ -4600,11 +5670,133 @@ export class TableListComponent implements OnInit {
     this.toastService.success('Table staff assignment updated');
   }
 
+  isCanvasFullscreen = signal<boolean>(false);
+
+  toggleCanvasFullscreen(): void {
+    this.isCanvasFullscreen.set(!this.isCanvasFullscreen());
+  }
+
+  showCanvasSettleModal = signal<boolean>(false);
+  orderToSettle = signal<Order | null>(null);
+  canvasPaymentMethod = signal<'CASH' | 'UPI' | 'CARD'>('UPI');
+
+  openCanvasSettleModal(order: Order): void {
+    this.orderToSettle.set(order);
+    this.canvasPaymentMethod.set('UPI');
+    this.showCanvasSettleModal.set(true);
+  }
+
+  closeCanvasSettleModal(): void {
+    this.showCanvasSettleModal.set(false);
+    this.orderToSettle.set(null);
+  }
+
+  confirmCanvasSettlement(): void {
+    const ord = this.orderToSettle();
+    if (!ord) return;
+
+    const method = this.canvasPaymentMethod();
+    const res = this.mock.settleOrder({
+      orderId: ord.id,
+      paymentMethod: method,
+    });
+
+    if (res.success) {
+      this.toastService.success(`Order #${ord.orderNumber} successfully settled via ${method}`);
+      this.closeCanvasSettleModal();
+      if (ord.tableId || ord.tableNumber) {
+        this.mock.recalculateTableStatus(ord.tableId || ord.tableNumber!);
+      }
+    } else {
+      this.toastService.warning(res.error || 'Failed to settle order');
+    }
+  }
+
+  getActiveOrdersByTable(table: Table): Order[] {
+    return this.mock
+      .orders()
+      .filter(
+        (o) =>
+          Boolean(o.id) &&
+          Array.isArray(o.items) &&
+          o.items.length > 0 &&
+          (o.tableId === table.id || o.tableNumber === table.number) &&
+          !['COMPLETED', 'CANCELLED'].includes(o.status),
+      );
+  }
+
+  getNextOrderStatus(current: OrderStatus): OrderStatus | null {
+    switch (current) {
+      case 'PENDING':
+        return 'ACCEPTED';
+      case 'ACCEPTED':
+        return 'PREPARING';
+      case 'PREPARING':
+        return 'READY';
+      case 'READY':
+        return 'SERVED';
+      case 'SERVED':
+        return 'COMPLETED';
+      default:
+        return null;
+    }
+  }
+
+  getNextOrderStatusLabel(current: OrderStatus): string {
+    switch (current) {
+      case 'PENDING':
+        return 'Accept Order';
+      case 'ACCEPTED':
+        return 'Start Cooking';
+      case 'PREPARING':
+        return 'Ready to Serve';
+      case 'READY':
+        return 'Served to Table';
+      case 'SERVED':
+        return 'Completed';
+      default:
+        return '';
+    }
+  }
+
+  isStagePassed(current: OrderStatus, stage: string): boolean {
+    const orderRanks: Record<string, number> = {
+      PENDING: 1,
+      ACCEPTED: 2,
+      PREPARING: 3,
+      READY: 4,
+      DISPATCHED: 4,
+      SERVED: 5,
+      COMPLETED: 6,
+    };
+    return (orderRanks[current] || 0) > (orderRanks[stage] || 0);
+  }
+
+  advanceOrderStatus(order: Order): void {
+    const nextStatus = this.getNextOrderStatus(order.status);
+    if (!nextStatus) return;
+
+    const res = this.mock.updateOrderStatusAtomic(order.id, nextStatus, {
+      note: `Advanced to ${nextStatus} via Floor Canvas Cockpit`,
+    });
+    if (!res.success) {
+      this.toastService.warning(res.error || `Cannot advance order to ${nextStatus}`);
+      return;
+    }
+    this.toastService.success(`Order #${order.orderNumber} advanced to ${nextStatus}`);
+    if (nextStatus === 'COMPLETED' && (order.tableId || order.tableNumber)) {
+      this.mock.recalculateTableStatus(order.tableId || order.tableNumber!);
+    }
+  }
+
   getActiveOrderByTable(table: Table): Order | undefined {
     return this.mock
       .orders()
       .find(
         (o) =>
+          Boolean(o.id) &&
+          Array.isArray(o.items) &&
+          o.items.length > 0 &&
           (o.tableId === table.id || o.tableNumber === table.number) &&
           !['COMPLETED', 'CANCELLED'].includes(o.status),
       );
@@ -4876,10 +6068,10 @@ export class TableListComponent implements OnInit {
         ctx.fillStyle = '#d4af37';
         ctx.fill();
         ctx.fillStyle = '#14161b';
-        ctx.font = 'bold 28px serif';
+        ctx.font = 'bold 24px "Cinzel", Georgia, serif';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
-        ctx.fillText('👑', 400, 110);
+        ctx.fillText('GK', 400, 110);
       }
 
       // Restaurant Brand Header
@@ -4908,7 +6100,7 @@ export class TableListComponent implements OnInit {
 
       ctx.fillStyle = '#ffffff';
       ctx.font = 'bold 15px "Source Sans 3", "Source Sans Pro", sans-serif';
-      ctx.fillText('📷  SCAN WITH CAMERA', 400, 289);
+      ctx.fillText('SCAN WITH CAMERA', 400, 289);
 
       // White Well behind QR Code
       ctx.fillStyle = '#ffffff';
@@ -4987,6 +6179,50 @@ export class TableListComponent implements OnInit {
       window.print();
       setTimeout(cleanup, 2000);
     }, 60);
+  }
+
+  assignReservationTable(res: Reservation, tableId: string): void {
+    if (!tableId) return;
+    const targetTable = this.mock.tables().find((t) => t.id === tableId);
+    if (!targetTable) return;
+    this.mock.assignTableToReservation(res.id, tableId, targetTable.number);
+    this.toastService.success(`Assigned Table ${targetTable.number} to ${res.customerName}`);
+  }
+
+  seatReservationGuest(res: Reservation): void {
+    let targetTableId = res.tableId;
+    if (!targetTableId) {
+      const avail = this.availableTables();
+      if (avail.length === 0) {
+        this.toastService.warning('No available tables on the floor to seat this guest.');
+        return;
+      }
+      targetTableId = avail[0].id;
+      this.assignReservationTable(res, targetTableId);
+    }
+    this.mock.updateReservationStatus(res.id, 'SEATED');
+    this.onStatusChange(targetTableId, 'OCCUPIED');
+    const tbl = this.mock.tables().find((t) => t.id === targetTableId);
+    this.toastService.success(
+      `Seated ${res.customerName} at Table ${tbl?.number || ''}. QR ordering active.`,
+    );
+  }
+
+  completeReservation(res: Reservation): void {
+    this.mock.updateReservationStatus(res.id, 'COMPLETED');
+    this.toastService.info(`Reservation for ${res.customerName} marked completed.`);
+  }
+
+  cancelReservation(res: Reservation): void {
+    if (!confirm(`Cancel reservation for ${res.customerName}?`)) return;
+    this.mock.updateReservationStatus(res.id, 'CANCELLED');
+    if (res.tableId) {
+      const tbl = this.mock.tables().find((t) => t.id === res.tableId);
+      if (tbl && tbl.status === 'RESERVED') {
+        this.onStatusChange(res.tableId, 'AVAILABLE');
+      }
+    }
+    this.toastService.info(`Reservation for ${res.customerName} has been cancelled.`);
   }
 
   onBackdropClick(event: MouseEvent): void {
