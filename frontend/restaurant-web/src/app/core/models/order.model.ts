@@ -60,6 +60,7 @@ export interface Order {
   restaurantSlug: string;
   tableId?: string; // Nullable/optional for takeaway orders
   tableNumber?: string; // Nullable/optional for takeaway orders
+  seatingSessionId?: string; // Stable session identifier for table dining
   customerId?: string; // Stable Customer UUID
   customerName: string;
   customerPhone: string;
@@ -91,4 +92,7 @@ export interface Order {
   settledAt?: string;
   printCount?: number;
   lastPrintedAt?: string;
+  isSessionConsolidated?: boolean;
+  sessionRoundsCount?: number;
+  sessionRounds?: Order[];
 }

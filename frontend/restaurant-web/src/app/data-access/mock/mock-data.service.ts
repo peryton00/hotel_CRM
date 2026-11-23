@@ -300,6 +300,7 @@ export class MockDataService {
 
     if (ev.type === 'ORDER_CREATED' && ev.order) {
       const incoming: Order = ev.order;
+      if (!incoming.id || (incoming.items || []).length === 0) return;
       const current = this.orders();
       if (!current.some((o) => o.id === incoming.id)) {
         this.orders.set([incoming, ...current]);
@@ -1698,7 +1699,32 @@ export class MockDataService {
     const isPrinted = (order.printCount || 0) > 0;
     const nextStatus = isPrinted ? 'COMPLETED' : order.status;
 
-    const grossTotal = Math.round(((order.subtotal || 0) + (order.taxAmount || 0)) * 100) / 100;
+    // Detect if this table has multiple rounds/orders that must be unified into one bill
+    const siblingOrders =
+      (order.tableId || order.tableNumber) && order.orderType !== 'TAKEAWAY'
+        ? this.orders().filter(
+            (o) =>
+              o.id !== order.id &&
+              o.status !== 'CANCELLED' &&
+              o.paymentStatus !== 'PAID' &&
+              ((order.tableId && o.tableId === order.tableId) ||
+                (order.tableNumber && o.tableNumber === order.tableNumber)),
+          )
+        : [];
+
+    const combinedSubtotal =
+      Math.round(
+        (order.subtotal +
+          siblingOrders.reduce((sum, s) => sum + (s.subtotal || 0), 0)) *
+          100,
+      ) / 100;
+    const combinedTax =
+      Math.round(
+        (order.taxAmount +
+          siblingOrders.reduce((sum, s) => sum + (s.taxAmount || 0), 0)) *
+          100,
+      ) / 100;
+    const grossTotal = Math.round((combinedSubtotal + combinedTax) * 100) / 100;
     const finalDiscount = Math.min(
       grossTotal,
       Math.max(
@@ -1710,6 +1736,8 @@ export class MockDataService {
 
     const updatedOrder: Order = {
       ...order,
+      subtotal: combinedSubtotal,
+      taxAmount: combinedTax,
       status: nextStatus,
       paymentStatus: 'PAID',
       paymentMethod: req.paymentMethod,
@@ -1731,19 +1759,44 @@ export class MockDataService {
       ],
     };
 
-    const updatedOrders = this.orders().map((o) => (o.id === order.id ? updatedOrder : o));
+    const siblingIds = new Set(siblingOrders.map((s) => s.id));
+    const updatedOrders = this.orders().map((o) => {
+      if (o.id === order.id) return updatedOrder;
+      if (siblingIds.has(o.id)) {
+        return {
+          ...o,
+          status: 'COMPLETED' as const,
+          paymentStatus: 'PAID' as const,
+          paymentMethod: req.paymentMethod,
+          totalAmount: 0,
+          settledAt: now,
+          updatedAt: now,
+          timeline: [
+            ...o.timeline,
+            {
+              status: 'PAID' as const,
+              timestamp: now,
+              note: `Consolidated & settled under Master Bill #${order.orderNumber} via ${req.paymentMethod}`,
+            },
+          ],
+        };
+      }
+      return o;
+    });
+
     this.orders.set(updatedOrders);
     this.saveLocal('orders', updatedOrders);
     this.broadcastOrderEvent({ type: 'ORDER_UPDATED', order: updatedOrder });
 
-    if (nextStatus === 'COMPLETED' && order.orderType !== 'TAKEAWAY') {
+    if (order.orderType !== 'TAKEAWAY') {
       const tableKey = order.tableId || order.tableNumber;
       if (tableKey) {
         this.recalculateTableStatus(tableKey);
       }
     }
 
-    // Update Invoices
+    // Update Invoices with unified items across all rounds
+    const consolidatedItems = [...order.items, ...siblingOrders.flatMap((s) => s.items)];
     const existingInvoices = this.invoices();
     const existingIndex = existingInvoices.findIndex((inv) => inv.orderId === order.id);
     let updatedInvoices: Invoice[];
@@ -1789,7 +1842,7 @@ export class MockDataService {
         customerName: order.customerName,
         customerPhone: order.customerPhone || '',
         issuedAt: now,
-        items: order.items,
+        items: consolidatedItems,
         subtotal: updatedOrder.subtotal,
         discount: updatedOrder.discountAmount,
         appliedCouponCode: updatedOrder.appliedCouponCode,

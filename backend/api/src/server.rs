@@ -92,9 +92,26 @@ pub async fn start_server(
         let gateway_client = GatewayHeartbeatClient::new(cp.clone(), default_restaurant_id);
         gateway_client.spawn();
     } else {
-        // When running in local-only / standalone mode, pulse heartbeat to local pool
-        let gateway_client = GatewayHeartbeatClient::new(pool.clone(), default_restaurant_id);
-        gateway_client.spawn();
+        let is_local_pos = config.is_offline_first
+            || std::env::var("RUN_LOCAL_POS")
+                .map(|v| v == "true" || v == "1")
+                .unwrap_or(false)
+            || std::env::var("TAURI_ENV").is_ok()
+            || std::env::current_exe()
+                .map(|p| {
+                    p.to_string_lossy()
+                        .to_lowercase()
+                        .contains("hotel_crm_desktop")
+                })
+                .unwrap_or(false);
+
+        if is_local_pos {
+            // When running in local-only / standalone desktop mode, pulse heartbeat to local pool
+            let gateway_client = GatewayHeartbeatClient::new(pool.clone(), default_restaurant_id);
+            gateway_client.spawn();
+        } else {
+            tracing::info!("Cloud Hosted Gateway Mode: POS heartbeat pulses disabled (awaiting live POS pulses).");
+        }
     }
 
     let app_state = AppState {
@@ -256,6 +273,8 @@ pub async fn ensure_schema_and_seed(pool: &sqlx::PgPool) {
         ALTER TABLE staff_members ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW();
         ALTER TABLE tables ADD COLUMN IF NOT EXISTS assigned_staff_id UUID;
         ALTER TABLE tables ADD COLUMN IF NOT EXISTS current_seating_session_id UUID;
+        ALTER TABLE orders ADD COLUMN IF NOT EXISTS seating_session_id UUID;
+        CREATE INDEX IF NOT EXISTS idx_orders_seating_session_id ON orders(seating_session_id);
         CREATE TABLE IF NOT EXISTS restaurant_heartbeats (
             restaurant_id UUID PRIMARY KEY,
             is_online BOOLEAN NOT NULL DEFAULT TRUE,

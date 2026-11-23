@@ -556,3 +556,30 @@ pub async fn get_staff_performance(
 
     Ok(Json(ApiResponse::success(performance_list)))
 }
+
+pub async fn restaurant_heartbeat(
+    State(pool): State<PgPool>,
+    tenant: TenantContext,
+) -> Result<impl IntoResponse, AppError> {
+    sqlx::query(
+        r#"
+        INSERT INTO restaurant_heartbeats (restaurant_id, is_online, last_seen_at, metadata)
+        VALUES ($1, true, NOW(), '{"source": "admin_crm", "version": "1.0.0"}'::jsonb)
+        ON CONFLICT (restaurant_id) DO UPDATE SET
+            is_online = true,
+            last_seen_at = NOW(),
+            metadata = EXCLUDED.metadata
+        "#,
+    )
+    .bind(tenant.restaurant_id)
+    .execute(&pool)
+    .await?;
+
+    crate::ws::broadcast_restaurant_status(tenant.restaurant_id, true);
+
+    Ok(Json(ApiResponse::success(serde_json::json!({
+        "status": "online",
+        "restaurant_id": tenant.restaurant_id,
+        "timestamp": chrono::Utc::now()
+    }))))
+}

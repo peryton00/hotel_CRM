@@ -131,6 +131,8 @@ pub struct Order {
     pub total_amount_paise: i64,
     pub notes: Option<String>,
     pub server_staff_id: Option<Uuid>,
+    #[sqlx(default)]
+    pub seating_session_id: Option<Uuid>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
     pub settled_at: Option<DateTime<Utc>>,
@@ -183,6 +185,7 @@ pub struct CreateOrderRequest {
     pub notes: Option<String>,
     pub discount_paise: Option<i64>,
     pub applied_coupon_code: Option<String>,
+    pub seating_session_id: Option<Uuid>,
 }
 
 #[derive(Debug, Clone, Deserialize)]

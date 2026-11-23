@@ -80,30 +80,89 @@ impl BillingRepository {
             ));
         }
 
+        // Fetch any sibling unpaid orders for the same table session to settle all rounds together into 1 bill
+        let sibling_orders = if let Some(tbl_id) = order.table_id {
+            if let Some(session_id) = order.seating_session_id {
+                sqlx::query_as::<_, Order>(
+                    r#"
+                    SELECT id, restaurant_id, COALESCE(order_number, 'ORD-' || UPPER(SUBSTRING(id::text, 1, 8))) AS order_number, order_type, pickup_reference, status, payment_status, payment_method,
+                           table_id, customer_id, customer_name, customer_phone_e164, subtotal_paise, discount_paise, applied_coupon_code, tax_paise,
+                           cgst_rate::float8 AS cgst_rate, sgst_rate::float8 AS sgst_rate,
+                           service_charge_paise, round_off_paise, total_amount_paise, notes,
+                           server_staff_id, seating_session_id, created_at, updated_at, NULL::timestamptz AS settled_at, cancelled_at,
+                           legacy_unknown_timestamp
+                    FROM orders
+                    WHERE restaurant_id = $1 
+                      AND (seating_session_id = $2 OR (table_id = $3 AND seating_session_id IS NULL))
+                      AND id != $4
+                      AND status NOT IN ('cancelled') 
+                      AND payment_status != 'paid'
+                    FOR UPDATE
+                    "#,
+                )
+                .bind(restaurant_id)
+                .bind(session_id)
+                .bind(tbl_id)
+                .bind(order.id)
+                .fetch_all(&mut *tx)
+                .await?
+            } else {
+                sqlx::query_as::<_, Order>(
+                    r#"
+                    SELECT id, restaurant_id, COALESCE(order_number, 'ORD-' || UPPER(SUBSTRING(id::text, 1, 8))) AS order_number, order_type, pickup_reference, status, payment_status, payment_method,
+                           table_id, customer_id, customer_name, customer_phone_e164, subtotal_paise, discount_paise, applied_coupon_code, tax_paise,
+                           cgst_rate::float8 AS cgst_rate, sgst_rate::float8 AS sgst_rate,
+                           service_charge_paise, round_off_paise, total_amount_paise, notes,
+                           server_staff_id, seating_session_id, created_at, updated_at, NULL::timestamptz AS settled_at, cancelled_at,
+                           legacy_unknown_timestamp
+                    FROM orders
+                    WHERE restaurant_id = $1 
+                      AND table_id = $2 
+                      AND id != $3
+                      AND status NOT IN ('cancelled') 
+                      AND payment_status != 'paid'
+                    FOR UPDATE
+                    "#,
+                )
+                .bind(restaurant_id)
+                .bind(tbl_id)
+                .bind(order.id)
+                .fetch_all(&mut *tx)
+                .await?
+            }
+        } else {
+            Vec::new()
+        };
+
         let now = Utc::now();
 
-        // 3. Deduct discount directly from total bill (not from product prices/subtotal)
+        // 3. Aggregate all rounds into single unified bill & apply coupon on the combined total
+        let combined_subtotal_paise: i64 =
+            order.subtotal_paise + sibling_orders.iter().map(|s| s.subtotal_paise).sum::<i64>();
+        let combined_tax_paise: i64 =
+            order.tax_paise + sibling_orders.iter().map(|s| s.tax_paise).sum::<i64>();
+        let combined_gross_total_paise: i64 = combined_subtotal_paise + combined_tax_paise;
+
         let (final_discount_paise, final_tax_paise, final_total_paise, final_coupon_code) =
             if let Some(disc) = req.discount_paise {
-                let gross_total_paise = order.subtotal_paise + order.tax_paise;
-                let discount = disc.min(gross_total_paise).max(0);
-                let final_total = (gross_total_paise - discount).max(0);
+                let discount = disc.min(combined_gross_total_paise).max(0);
+                let final_total = (combined_gross_total_paise - discount).max(0);
                 (
                     discount,
-                    order.tax_paise,
+                    combined_tax_paise,
                     final_total,
                     req.applied_coupon_code.or(order.applied_coupon_code),
                 )
             } else {
                 (
                     order.discount_paise,
-                    order.tax_paise,
-                    order.total_amount_paise,
+                    combined_tax_paise,
+                    (combined_gross_total_paise - order.discount_paise).max(0),
                     order.applied_coupon_code,
                 )
             };
 
-        let payment_amount = if req.discount_paise.is_some() {
+        let payment_amount = if req.discount_paise.is_some() || !sibling_orders.is_empty() {
             final_total_paise
         } else {
             req.amount_paise
@@ -132,11 +191,12 @@ impl BillingRepository {
         .fetch_one(&mut *tx)
         .await?;
 
-        // 5. Update order payment status, payment method, discount, tax, totals and settlement timestamp
+        // 5. Update primary order and mark ALL sibling orders in the table session as paid
         sqlx::query(
             r#"
             UPDATE orders
             SET payment_status = 'paid',
+                status = 'completed',
                 payment_method = $1,
                 discount_paise = $2,
                 applied_coupon_code = $3,
@@ -156,7 +216,46 @@ impl BillingRepository {
         .execute(&mut *tx)
         .await?;
 
-        // 6. Generate and store invoice (wrapped in a savepoint so best-effort failure never aborts order settlement tx)
+        for sib in &sibling_orders {
+            sqlx::query(
+                r#"
+                UPDATE orders
+                SET payment_status = 'paid',
+                    status = 'completed',
+                    payment_method = $1,
+                    total_amount_paise = 0,
+                    updated_at = NOW()
+                WHERE restaurant_id = $2 AND id = $3
+                "#,
+            )
+            .bind(&req.payment_method)
+            .bind(restaurant_id)
+            .bind(sib.id)
+            .execute(&mut *tx)
+            .await?;
+        }
+
+        // Release table to AVAILABLE and reset session since bill is fully settled
+        if let Some(tbl_id) = order.table_id {
+            let released_info = sqlx::query_as::<_, (Uuid, String)>(
+                r#"
+                UPDATE tables
+                SET status = 'AVAILABLE'::table_status, active_order_id = NULL, current_seating_session_id = NULL, updated_at = NOW()
+                WHERE id = $1 AND restaurant_id = $2
+                RETURNING id, COALESCE(table_number, number)
+                "#,
+            )
+            .bind(tbl_id)
+            .bind(restaurant_id)
+            .fetch_optional(&mut *tx)
+            .await?;
+
+            if let Some((t_id, t_num)) = released_info {
+                crate::ws::broadcast_table_status(t_id, &t_num, "AVAILABLE", true, None);
+            }
+        }
+
+        // 6. Generate and store unified invoice (wrapped in a savepoint)
         let invoice_num = format!("INV-{}", order.order_number);
         let _ = sqlx::query("SAVEPOINT invoice_sp").execute(&mut *tx).await;
         let inv_res = sqlx::query(
@@ -172,7 +271,7 @@ impl BillingRepository {
         .bind(restaurant_id)
         .bind(order.id)
         .bind(&invoice_num)
-        .bind(order.subtotal_paise)
+        .bind(combined_subtotal_paise)
         .bind(final_discount_paise)
         .bind(final_tax_paise)
         .bind(final_total_paise)
@@ -547,15 +646,33 @@ impl BillingRepository {
         .await?
         .ok_or_else(|| AppError::NotFound("Order not found".to_string()))?;
 
+        let all_order_ids: Vec<Uuid> = if let Some(_tbl_id) = order.table_id {
+            if let Some(sid) = order.seating_session_id {
+                sqlx::query_scalar(
+                    "SELECT id FROM orders WHERE restaurant_id = $1 AND seating_session_id = $2",
+                )
+                .bind(restaurant_id)
+                .bind(sid)
+                .fetch_all(pool)
+                .await
+                .unwrap_or_else(|_| vec![order.id])
+            } else {
+                vec![order.id]
+            }
+        } else {
+            vec![order.id]
+        };
+
         let items = sqlx::query_as::<_, OrderItem>(
             r#"
             SELECT id, order_id, menu_item_id, item_name, quantity, unit_price_paise,
                    subtotal_paise, tax_paise, discount_paise, total_paise, notes, status, created_at
             FROM order_items
-            WHERE order_id = $1
+            WHERE order_id = ANY($1)
+            ORDER BY created_at ASC
             "#,
         )
-        .bind(order.id)
+        .bind(&all_order_ids)
         .fetch_all(pool)
         .await?;
 

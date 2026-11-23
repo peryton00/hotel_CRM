@@ -128,7 +128,12 @@ import {
                           }})
                         </span>
                       } @else {
-                        <span class="table-tag">Table {{ ord.tableNumber }}</span>
+                        <span class="table-tag" [class.consolidated-tag]="ord.isSessionConsolidated">
+                          Table {{ ord.tableNumber }}
+                          @if (ord.isSessionConsolidated) {
+                            <span class="rounds-chip">{{ ord.sessionRoundsCount }} Rounds</span>
+                          }
+                        </span>
                       }
                       <span class="order-id-text">{{ ord.orderNumber }}</span>
                       <span class="time-text">{{ ord.createdAt | date: 'shortTime' }}</span>
@@ -142,7 +147,13 @@ import {
                   </td>
                   <td>
                     <div class="items-cell">
-                      {{ ord.items.length }} dishes
+                      @if (ord.isSessionConsolidated) {
+                        <span class="session-items-badge">
+                          <i class="ph ph-receipt"></i> {{ ord.sessionRoundsCount }} Rounds • {{ ord.items.length }} dishes
+                        </span>
+                      } @else {
+                        {{ ord.items.length }} dishes
+                      }
                       <span class="dishes-preview text-muted">
                         ({{ ord.items[0]?.name }}
                         @if (ord.items.length > 1) {
@@ -377,10 +388,16 @@ import {
           <div class="modal-card settle-modal" role="dialog" aria-modal="true">
             <div class="modal-header">
               <div>
-                <h3 class="heading-card">Settle Dining Bill</h3>
-                <span class="text-xs text-muted"
-                  >{{ ord.orderNumber }} • Table {{ ord.tableNumber }}</span
-                >
+                <h3 class="heading-card">
+                  {{ selectedSessionOrders().length > 1 ? 'Settle Consolidated Table Bill' : 'Settle Dining Bill' }}
+                </h3>
+                <span class="text-xs text-muted">
+                  @if (selectedSessionOrders().length > 1) {
+                    Table {{ ord.tableNumber }} • {{ selectedSessionOrders().length }} Dining Rounds Consolidated
+                  } @else {
+                    {{ ord.orderNumber }} • Table {{ ord.tableNumber }}
+                  }
+                </span>
               </div>
               <button class="close-btn" (click)="closeSettleModal()">
                 <i class="ph ph-x"></i>
@@ -388,14 +405,54 @@ import {
             </div>
 
             <div class="modal-body">
+              <!-- When multi-round session, render distinct Apple-styled round breakdown cards -->
+              @if (selectedSessionOrders().length > 1) {
+                <div class="session-rounds-banner">
+                  <div class="rounds-badge-pill">
+                    <i class="ph ph-receipt"></i>
+                    <span>CONSOLIDATED SESSION • {{ selectedSessionOrders().length }} ORDER ROUNDS</span>
+                  </div>
+                  <span class="text-xs text-muted">All orders for Table {{ ord.tableNumber }} combined into 1 bill</span>
+                </div>
+
+                <div class="rounds-container">
+                  @for (rnd of selectedSessionOrders(); track rnd.id; let idx = $index) {
+                    <div class="round-breakdown-card">
+                      <div class="round-card-header">
+                        <div class="round-title-wrap">
+                          <span class="round-number-tag">Order {{ idx + 1 }}</span>
+                          <span class="round-ref-id">{{ rnd.orderNumber }}</span>
+                          <span class="round-time">{{ rnd.createdAt | date: 'shortTime' }}</span>
+                        </div>
+                        <span class="round-subtotal-badge">{{ rnd.subtotal | currencyInr }}</span>
+                      </div>
+                      <div class="round-items-list">
+                        @for (it of rnd.items; track it.id || it.name) {
+                          <div class="round-item-row">
+                            <span class="item-name">{{ it.quantity }}× {{ it.name }}</span>
+                            <span class="item-price">{{ (it.unitPrice || 0) * it.quantity | currencyInr }}</span>
+                          </div>
+                        }
+                      </div>
+                    </div>
+                  }
+                </div>
+              }
+
               <div class="settle-summary-box">
                 <div class="settle-row">
                   <span>Guest Name</span>
                   <strong>{{ ord.customerName }}</strong>
                 </div>
+                @if (selectedSessionOrders().length > 1) {
+                  <div class="settle-row">
+                    <span>Dining Rounds Included</span>
+                    <span class="font-bold text-onyx">{{ selectedSessionOrders().length }} Orders</span>
+                  </div>
+                }
                 <div class="settle-row">
                   <span>Item Subtotal</span>
-                  <span>{{ ord.subtotal | currencyInr }}</span>
+                  <span>{{ getSettlementSubtotal(ord) | currencyInr }}</span>
                 </div>
                 @if (getEffectiveDiscount(ord) > 0) {
                   <div class="settle-row discount">
@@ -1560,6 +1617,137 @@ import {
         }
       }
 
+      .consolidated-tag {
+        background: #fdf2f8 !important;
+        color: #be185d !important;
+        border: 1px solid #fbcfe8 !important;
+      }
+
+      .rounds-chip {
+        display: inline-flex;
+        align-items: center;
+        background: #be185d;
+        color: #ffffff;
+        font-size: 0.625rem;
+        font-weight: 800;
+        padding: 1px 5px;
+        border-radius: 9999px;
+        margin-left: 4px;
+        letter-spacing: 0.02em;
+      }
+
+      .session-items-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        font-weight: 700;
+        color: var(--color-onyx);
+      }
+
+      .session-rounds-banner {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+        padding: 8px 12px;
+        background: #fdf2f8;
+        border: 1px solid #fbcfe8;
+        border-radius: 8px;
+
+        .rounds-badge-pill {
+          display: flex;
+          align-items: center;
+          gap: 6px;
+          font-size: 0.75rem;
+          font-weight: 800;
+          color: #be185d;
+          letter-spacing: 0.03em;
+        }
+      }
+
+      .rounds-container {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        max-height: 220px;
+        overflow-y: auto;
+        padding-right: 2px;
+      }
+
+      .round-breakdown-card {
+        background: var(--color-surface, #ffffff);
+        border: 1px solid var(--color-border, #e2e8f0);
+        border-radius: 8px;
+        padding: 10px 12px;
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+
+        .round-card-header {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          border-bottom: 1px dashed var(--color-border, #e2e8f0);
+          padding-bottom: 6px;
+        }
+
+        .round-title-wrap {
+          display: flex;
+          align-items: center;
+          gap: 6px;
+        }
+
+        .round-number-tag {
+          font-size: 0.6875rem;
+          font-weight: 800;
+          background: #f1f5f9;
+          color: #334155;
+          padding: 1px 6px;
+          border-radius: 4px;
+        }
+
+        .round-ref-id {
+          font-size: 0.75rem;
+          font-family: monospace;
+          font-weight: 600;
+          color: #0f172a;
+        }
+
+        .round-time {
+          font-size: 0.6875rem;
+          color: #64748b;
+        }
+
+        .round-subtotal-badge {
+          font-size: 0.8125rem;
+          font-weight: 700;
+          color: #be185d;
+          font-family: 'SF Mono', Consolas, monospace;
+        }
+
+        .round-items-list {
+          display: flex;
+          flex-direction: column;
+          gap: 3px;
+        }
+
+        .round-item-row {
+          display: flex;
+          justify-content: space-between;
+          font-size: 0.75rem;
+          color: #475569;
+
+          .item-name {
+            font-weight: 500;
+          }
+
+          .item-price {
+            font-weight: 600;
+            color: #0f172a;
+            font-family: 'SF Mono', Consolas, monospace;
+          }
+        }
+      }
+
       .settle-row {
         display: flex;
         justify-content: space-between;
@@ -2197,12 +2385,81 @@ export class BillingQueueComponent {
     return arr;
   }
 
+  selectedSessionOrders = signal<Order[]>([]);
+
+  getSessionOrders(ord: Order | null): Order[] {
+    if (!ord) return [];
+    if (ord.orderType === 'TAKEAWAY' || (!ord.tableId && !ord.tableNumber)) {
+      return [ord];
+    }
+    const siblings = this.orders().filter(
+      (o) =>
+        o.id !== ord.id &&
+        o.status !== 'CANCELLED' &&
+        o.paymentStatus === 'UNPAID' &&
+        ((ord.seatingSessionId && o.seatingSessionId === ord.seatingSessionId) ||
+          ((ord.tableId && o.tableId === ord.tableId) ||
+            (ord.tableNumber && o.tableNumber === ord.tableNumber))),
+    );
+    return [ord, ...siblings].sort(
+      (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
+    );
+  }
+
   filteredOrders = computed(() => {
     let list = this.orders();
     if (this.selectedTab() === 'UNPAID') {
-      list = list.filter((o) => o.paymentStatus === 'UNPAID' && o.status !== 'CANCELLED');
+      const unpaid = list.filter((o) => o.paymentStatus === 'UNPAID' && o.status !== 'CANCELLED');
+      const tableMap = new Map<string, Order[]>();
+      const nonTableOrders: Order[] = [];
+
+      for (const ord of unpaid) {
+        if (ord.orderType !== 'TAKEAWAY' && (ord.tableId || ord.tableNumber)) {
+          const key = (ord.tableId || ord.tableNumber)!;
+          if (!tableMap.has(key)) {
+            tableMap.set(key, []);
+          }
+          tableMap.get(key)!.push(ord);
+        } else {
+          nonTableOrders.push(ord);
+        }
+      }
+
+      const consolidatedList: Order[] = [...nonTableOrders];
+
+      for (const [, ordersGroup] of tableMap.entries()) {
+        if (ordersGroup.length === 1) {
+          consolidatedList.push(ordersGroup[0]);
+        } else {
+          const sorted = [...ordersGroup].sort(
+            (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
+          );
+          const primary = sorted[0];
+          const combinedSubtotal =
+            Math.round(sorted.reduce((sum, r) => sum + (r.subtotal || 0), 0) * 100) / 100;
+          const combinedTax =
+            Math.round(sorted.reduce((sum, r) => sum + (r.taxAmount || 0), 0) * 100) / 100;
+          const combinedTotal = Math.round((combinedSubtotal + combinedTax) * 100) / 100;
+          const allItems = sorted.flatMap((r) => r.items);
+
+          consolidatedList.push({
+            ...primary,
+            items: allItems,
+            subtotal: combinedSubtotal,
+            taxAmount: combinedTax,
+            totalAmount: combinedTotal,
+            isSessionConsolidated: true,
+            sessionRoundsCount: sorted.length,
+            sessionRounds: sorted,
+          });
+        }
+      }
+
+      list = consolidatedList.sort(
+        (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+      );
     } else if (this.selectedTab() === 'PAID') {
-      list = list.filter((o) => o.paymentStatus === 'PAID');
+      list = list.filter((o) => o.paymentStatus === 'PAID' && o.totalAmount > 0);
     }
 
     const q = this.searchQuery().toLowerCase().trim();
@@ -2229,6 +2486,8 @@ export class BillingQueueComponent {
       this.toastService.warning(`Order ${order.orderNumber} is already settled.`);
       return;
     }
+    const rounds = this.getSessionOrders(order);
+    this.selectedSessionOrders.set(rounds);
     this.selectedOrderForSettlement.set(order);
     this.selectedPaymentMethod.set(
       order.paymentMethod === 'CARD' ? 'CARD' : order.paymentMethod === 'UPI' ? 'UPI' : 'CASH',
@@ -2240,9 +2499,29 @@ export class BillingQueueComponent {
     this.showSettleModal.set(true);
   }
 
+  getSettlementSubtotal(ord: Order | null): number {
+    if (!ord) return 0;
+    const rounds = this.selectedSessionOrders();
+    if (rounds.length > 0) {
+      return Math.round(rounds.reduce((sum, r) => sum + (r.subtotal || 0), 0) * 100) / 100;
+    }
+    return ord.subtotal || 0;
+  }
+
+  getSettlementTax(ord: Order | null): number {
+    if (!ord) return 0;
+    const rounds = this.selectedSessionOrders();
+    if (rounds.length > 0) {
+      return Math.round(rounds.reduce((sum, r) => sum + (r.taxAmount || 0), 0) * 100) / 100;
+    }
+    return ord.taxAmount || 0;
+  }
+
   getEffectiveDiscount(ord: Order | null): number {
     if (!ord) return 0;
-    const grossTotal = Math.round(((ord.subtotal || 0) + (ord.taxAmount || 0)) * 100) / 100;
+    const subtotal = this.getSettlementSubtotal(ord);
+    const tax = this.getSettlementTax(ord);
+    const grossTotal = Math.round((subtotal + tax) * 100) / 100;
     if (this.settleDiscountMode() === 'CUSTOM') {
       const disc = Math.max(0, this.customDiscountRupees() || 0);
       return Math.min(grossTotal, Math.round(disc * 100) / 100);
@@ -2251,7 +2530,7 @@ export class BillingQueueComponent {
       if (!code) return 0;
       const coup = this.activeCoupons().find((c) => c.code.toUpperCase() === code.toUpperCase());
       if (!coup) return 0;
-      if (coup.minOrderValue && ord.subtotal < coup.minOrderValue) return 0;
+      if (coup.minOrderValue && subtotal < coup.minOrderValue) return 0;
 
       let disc = 0;
       if (coup.discountType === 'PERCENTAGE') {
@@ -2266,14 +2545,11 @@ export class BillingQueueComponent {
     }
   }
 
-  getSettlementTax(ord: Order | null): number {
-    if (!ord) return 0;
-    return ord.taxAmount;
-  }
-
   getSettlementTotal(ord: Order | null): number {
     if (!ord) return 0;
-    const grossTotal = Math.round(((ord.subtotal || 0) + (ord.taxAmount || 0)) * 100) / 100;
+    const subtotal = this.getSettlementSubtotal(ord);
+    const tax = this.getSettlementTax(ord);
+    const grossTotal = Math.round((subtotal + tax) * 100) / 100;
     const effectiveDisc = this.getEffectiveDiscount(ord);
     return Math.max(0, Math.round((grossTotal - effectiveDisc) * 100) / 100);
   }
@@ -2296,7 +2572,9 @@ export class BillingQueueComponent {
 
   applyRoundOffDiscount(ord: Order): void {
     this.settleDiscountMode.set('CUSTOM');
-    const grossTotal = Math.round(((ord.subtotal || 0) + (ord.taxAmount || 0)) * 100) / 100;
+    const subtotal = this.getSettlementSubtotal(ord);
+    const tax = this.getSettlementTax(ord);
+    const grossTotal = Math.round((subtotal + tax) * 100) / 100;
     const roundedDown = Math.floor(grossTotal / 10) * 10;
     const neededOff = Math.max(0, Math.round((grossTotal - roundedDown) * 100) / 100);
     this.customDiscountRupees.set(neededOff);
@@ -2318,6 +2596,7 @@ export class BillingQueueComponent {
   closeSettleModal(): void {
     this.showSettleModal.set(false);
     this.selectedOrderForSettlement.set(null);
+    this.selectedSessionOrders.set([]);
     this.isSettling.set(false);
   }
 
@@ -2339,7 +2618,12 @@ export class BillingQueueComponent {
 
     this.isSettling.set(false);
     if (res.success) {
-      this.toastService.success(`Order ${ord.orderNumber} successfully settled via ${method}`);
+      const roundsCount = this.selectedSessionOrders().length;
+      const msg =
+        roundsCount > 1
+          ? `Table ${ord.tableNumber || ''} (${roundsCount} orders) successfully settled via ${method}`
+          : `Order ${ord.orderNumber} successfully settled via ${method}`;
+      this.toastService.success(msg);
       this.closeSettleModal();
       this.router.navigate(['/admin/billing', ord.id]);
     } else {

@@ -49,6 +49,7 @@ export default function MenuClient({
   const [tableStatus, setTableStatus] = useState<string>(
     (table.status || "AVAILABLE").toUpperCase(),
   );
+  const [isPosOnline, setIsPosOnline] = useState<boolean>(table.is_pos_online ?? true);
   const [seatingSessionId, setSeatingSessionId] = useState<string | undefined>(
     table.current_seating_session_id,
   );
@@ -69,6 +70,9 @@ export default function MenuClient({
     setIsCheckingTable(true);
     try {
       const res = await getTable(token);
+      if (res?.data?.is_pos_online !== undefined) {
+        setIsPosOnline(Boolean(res.data.is_pos_online));
+      }
       const newStatus = res?.data?.status ? res.data.status.toUpperCase() : undefined;
       if (res?.data?.current_seating_session_id) {
         setSeatingSessionId(res.data.current_seating_session_id);
@@ -109,6 +113,10 @@ export default function MenuClient({
     const handleEventData = (rawText: string) => {
       try {
         const data = JSON.parse(rawText);
+        if (data.event === "RESTAURANT_STATUS_CHANGED" || data.type === "RESTAURANT_STATUS_CHANGED") {
+          setIsPosOnline(Boolean(data.is_online));
+          return;
+        }
         if (data.event === "TABLE_STATUS_CHANGED") {
           const dataTableNum = String(data.table_number || '').toLowerCase();
           const currentTableNum = String(table.table_number || '').toLowerCase();
@@ -198,12 +206,11 @@ export default function MenuClient({
     };
   }, [table.id, table.table_number]);
 
-  // Fallback auto-poll table status every 7 seconds when unseated
+  // Auto-poll table & POS online status
   useEffect(() => {
-    if (tableStatus === "OCCUPIED") return;
     const interval = setInterval(() => {
       checkStatusNow(true);
-    }, 7000);
+    }, tableStatus === "OCCUPIED" ? 12000 : 6000);
     return () => clearInterval(interval);
   }, [tableStatus, token]);
 
@@ -316,12 +323,12 @@ export default function MenuClient({
                 </h1>
                 <span
                   className={`w-1.5 h-1.5 rounded-full ${
-                    table.is_pos_online === false
+                    !isPosOnline
                       ? "bg-amber-500"
                       : "bg-emerald-500"
                   } animate-pulse`}
                   title={
-                    table.is_pos_online === false
+                    !isPosOnline
                       ? "Kitchen System Offline"
                       : "Kitchen System Online"
                   }
@@ -335,7 +342,7 @@ export default function MenuClient({
                 <span className="text-neutral-600 dark:text-neutral-400 font-medium">
                   {table.section}
                 </span>
-                {table.is_pos_online === false && (
+                {!isPosOnline && (
                   <>
                     <span>•</span>
                     <span className="text-[10px] font-bold text-amber-600 dark:text-amber-400 uppercase tracking-wider">
@@ -408,7 +415,7 @@ export default function MenuClient({
         </div>
 
         {/* Offline Restaurant Banner */}
-        {table.is_pos_online === false && (
+        {!isPosOnline && (
           <div className="mt-2.5 px-3 py-2 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200/80 dark:border-amber-800/40 flex items-start gap-2.5 text-xs">
             <span className="w-2 h-2 rounded-full bg-amber-500 mt-1 shrink-0 animate-pulse" />
             <div className="flex-1 min-w-0">
@@ -416,8 +423,7 @@ export default function MenuClient({
                 Digital Ordering Paused (Kitchen Offline)
               </div>
               <p className="text-[11px] text-amber-800/90 dark:text-amber-300/80 leading-relaxed mt-0.5">
-                Our kitchen terminal is currently offline. Please browse dishes
-                and call your waiter to place your order.
+                Our restaurant kitchen system is currently offline. Please call staff to place your order directly.
               </p>
             </div>
             {table.restaurant_phone ? (

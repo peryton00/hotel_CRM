@@ -11,6 +11,7 @@ import { dynaura } from 'dynaura';
 import {
   ShoppingCart,
   ArrowLeft,
+  ArrowRight,
   Armchair,
   ChefHat,
   Phone,
@@ -47,7 +48,7 @@ function CheckoutContent() {
   const [phoneInput, setPhoneInput] = useState('');
   const [isEditingPhone, setIsEditingPhone] = useState(false);
   const [accountOpen, setAccountOpen] = useState(false);
-  const [pastOrdersPage, setPastOrdersPage] = useState(1);
+  const [accountInitialTab, setAccountInitialTab] = useState<'active' | 'my-orders' | 'coupons'>('active');
   const [lookupMessage, setLookupMessage] = useState('');
   const [isLookingUp, setIsLookingUp] = useState(false);
   const [notes, setNotes] = useState('');
@@ -272,7 +273,7 @@ function CheckoutContent() {
       const [res, loyaltyRes, couponsRes] = await Promise.all([
         getCustomerOrders(clean, activeTableId),
         clean.length >= 10 ? getCustomerLoyalty(clean) : Promise.resolve(null),
-        getCoupons(),
+        clean.length >= 10 ? getCoupons(clean) : Promise.resolve({ data: [] }),
       ]);
 
       if (res && Array.isArray(res.data)) {
@@ -544,6 +545,10 @@ function CheckoutContent() {
           const freshTable = await getTable(token);
           if (freshTable?.data) {
             setTableInfo((prev: any) => ({ ...prev, ...freshTable.data, token }));
+            if (freshTable.data.is_pos_online === false) {
+              setShowOfflineWaiterModal(true);
+              return;
+            }
             if (freshTable.data.status !== 'OCCUPIED') {
               setError(`Table ${freshTable.data.table_number || ''} is unseated. Please ask floor staff to seat you before placing your order.`);
               dynaura.warning({
@@ -851,23 +856,31 @@ function CheckoutContent() {
 
         {/* Table Banner Card (Pattern 3: Host-Seated State Machine) */}
         {isTableSeated ? (
-          <div className="bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200/70 dark:border-emerald-800/40 rounded-2xl p-3 flex items-center justify-between shadow-xs">
-            <div className="flex items-center gap-2.5">
-              <div className="text-emerald-700 dark:text-emerald-400">
-                <Armchair size={22} weight="duotone" />
-              </div>
-              <div>
-                <div className="font-bold text-emerald-950 dark:text-emerald-200 text-xs">
-                  Dine-in at Table {tableInfo.table_number || 'Dining'}
+          <div className="bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200/70 dark:border-emerald-800/40 rounded-2xl p-3 shadow-xs">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <div className="text-emerald-700 dark:text-emerald-400">
+                  <Armchair size={22} weight="duotone" />
                 </div>
-                <div className="text-[10px] text-emerald-700 dark:text-emerald-400 mt-0.5">
-                  Instant Kitchen Dispatch • Live Table Sync
+                <div>
+                  <div className="font-bold text-emerald-950 dark:text-emerald-200 text-xs">
+                    Dine-in at Table {tableInfo.table_number || 'Dining'}
+                  </div>
+                  <div className="text-[10px] text-emerald-700 dark:text-emerald-400 mt-0.5">
+                    Instant Kitchen Dispatch • Live Table Sync
+                  </div>
                 </div>
               </div>
+              <span className="text-[10px] bg-emerald-600 text-white font-bold px-2 py-0.5 rounded-full">
+                Active
+              </span>
             </div>
-            <span className="text-[10px] bg-emerald-600 text-white font-bold px-2 py-0.5 rounded-full">
-              Active
-            </span>
+            {pastOrders.some((p) => p.status !== 'cancelled' && p.payment_status !== 'paid') && (
+              <div className="mt-2.5 pt-2 border-t border-emerald-200/60 dark:border-emerald-800/40 text-[11px] text-emerald-900 dark:text-emerald-200 flex items-center gap-1.5 font-medium">
+                <ChefHat size={14} weight="bold" className="shrink-0 text-emerald-600 dark:text-emerald-400" />
+                <span>Additional Dining Round: Items will be dispatched to the kitchen and consolidated into your single table bill.</span>
+              </div>
+            )}
           </div>
         ) : (
           <div className="bg-gradient-to-r from-amber-50 to-orange-50 dark:from-amber-950/50 dark:to-orange-950/30 border border-amber-300/80 dark:border-amber-700/60 rounded-2xl p-3 flex items-center justify-between shadow-xs">
@@ -1109,132 +1122,25 @@ function CheckoutContent() {
           </div>
         )}
 
-        {/* DELIVERED & PAST ORDERS */}
-        {phone && (
-          loadingPastOrders ? (
-            <div className="p-5 text-center text-xs text-neutral-400 bg-white dark:bg-[#16181e] rounded-3xl border border-neutral-200/70 dark:border-white/10 flex items-center justify-center gap-2">
-              <span className="w-4 h-4 border-2 border-neutral-400/30 border-t-neutral-600 rounded-full animate-spin" />
-              <span>Fetching your order history...</span>
+        {/* Completed Orders Link (Only Active Orders shown in Cart; Completed orders viewed in My Orders) */}
+        {phone && completedOrders.length > 0 && (
+          <div className="flex items-center justify-between p-3.5 bg-neutral-50 dark:bg-white/5 rounded-2xl border border-neutral-200/70 dark:border-white/5 text-xs">
+            <div className="flex items-center gap-2 text-neutral-600 dark:text-neutral-400">
+              <Receipt size={16} weight="bold" className="text-neutral-500" />
+              <span>You have <strong>{completedOrders.length}</strong> completed {completedOrders.length === 1 ? 'order' : 'orders'}</span>
             </div>
-          ) : completedOrders.length > 0 ? (
-            <div className="space-y-3 animate-fade-in-up stagger-2">
-              <div className="flex items-center justify-between px-1">
-                <div className="flex items-center gap-1.5 text-xs font-black font-display text-neutral-900 dark:text-neutral-100 uppercase tracking-wide">
-                  <Receipt size={16} weight="bold" className="text-emerald-600 dark:text-emerald-400" />
-                  <span>Delivered Orders ({completedOrders.length})</span>
-                </div>
-                <span className="text-[10px] font-bold bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400 border border-emerald-200/60 dark:border-emerald-800/40 px-2 py-0.5 rounded-full flex items-center gap-1">
-                  <CheckCircle size={12} weight="fill" />
-                  Served & Delivered
-                </span>
-              </div>
-
-              <div className="space-y-3">
-                {completedOrders
-                  .slice((pastOrdersPage - 1) * 4, pastOrdersPage * 4)
-                  .map((po, idx) => {
-                  const orderId = po.id || po.order?.id || idx;
-                  const orderNum = po.order_number || po.order?.order_number || 'ORD';
-                  const orderTotal = po.total_amount_paise ?? po.order?.total_amount_paise ?? 0;
-                  const orderItems = po.items || [];
-                  const orderDate = new Date(po.created_at || po.order?.created_at || Date.now());
-
-                  return (
-                    <div
-                      key={orderId}
-                      onClick={() => setSelectedOrderForBill(po)}
-                      className="bg-white dark:bg-[#16181e] rounded-2xl p-4 border border-neutral-200/80 dark:border-white/10 shadow-xs hover:border-neutral-300 dark:hover:border-white/20 active:scale-[0.99] transition-all cursor-pointer space-y-3"
-                    >
-                      <div className="flex items-center justify-between gap-2">
-                        <div className="flex items-center gap-2">
-                          <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0" />
-                          <span className="font-extrabold text-xs text-neutral-900 dark:text-neutral-100">
-                            Delivered
-                          </span>
-                          <span className="text-neutral-300 dark:text-neutral-700">•</span>
-                          <span className="text-[11px] font-medium text-neutral-500 dark:text-neutral-400">
-                            {orderDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                          </span>
-                        </div>
-                        <span className="text-xs font-black text-neutral-900 dark:text-neutral-100 tabular-nums">
-                          {fmt(orderTotal)}
-                        </span>
-                      </div>
-
-                      <div className="space-y-1.5 text-xs">
-                        {orderItems.map((pi) => (
-                          <div key={pi.id} className="flex items-center justify-between text-neutral-600 dark:text-neutral-300">
-                            <div className="flex items-center gap-2 min-w-0">
-                              <span className="font-bold text-neutral-900 dark:text-neutral-100 tabular-nums text-[11px] shrink-0">
-                                {pi.quantity} ×
-                              </span>
-                              <span className="truncate text-xs font-medium text-neutral-800 dark:text-neutral-200">
-                                {pi.item_name}
-                              </span>
-                            </div>
-                            <span className="text-[11px] font-medium tabular-nums text-neutral-500 dark:text-neutral-400 shrink-0 ml-2">
-                              {fmt(pi.unit_price_paise * pi.quantity)}
-                            </span>
-                          </div>
-                        ))}
-                      </div>
-
-                      <div className="pt-2.5 flex items-center justify-between text-xs border-t border-neutral-100 dark:border-white/5">
-                        <span className="font-mono text-[10px] text-neutral-400 dark:text-neutral-500">
-                          #{orderNum}
-                        </span>
-                        <div className="inline-flex items-center gap-1 text-[11px] font-bold text-[#c21807] dark:text-orange-400 hover:underline">
-                          <Receipt size={13} weight="bold" />
-                          <span>View Bill</span>
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
-
-                {/* Pagination Controls for Delivered Orders */}
-                {completedOrders.length > 4 && (
-                  <div className="pt-2 flex items-center justify-between text-xs">
-                    <button
-                      type="button"
-                      disabled={pastOrdersPage <= 1}
-                      onClick={() => setPastOrdersPage((p) => Math.max(1, p - 1))}
-                      className="px-3 py-1.5 rounded-xl border border-neutral-200 dark:border-white/10 bg-white dark:bg-white/5 text-neutral-700 dark:text-neutral-300 font-bold disabled:opacity-40 disabled:cursor-not-allowed hover:bg-neutral-50 dark:hover:bg-white/10 transition-colors flex items-center gap-1 cursor-pointer"
-                    >
-                      <CaretLeft size={14} weight="bold" />
-                      <span>Prev</span>
-                    </button>
-
-                    <span className="text-[11px] font-bold text-neutral-500 dark:text-neutral-400">
-                      Page {pastOrdersPage} of {Math.ceil(completedOrders.length / 4)}
-                    </span>
-
-                    <button
-                      type="button"
-                      disabled={pastOrdersPage >= Math.ceil(completedOrders.length / 4)}
-                      onClick={() => setPastOrdersPage((p) => Math.min(Math.ceil(completedOrders.length / 4), p + 1))}
-                      className="px-3 py-1.5 rounded-xl border border-neutral-200 dark:border-white/10 bg-white dark:bg-white/5 text-neutral-700 dark:text-neutral-300 font-bold disabled:opacity-40 disabled:cursor-not-allowed hover:bg-neutral-50 dark:hover:bg-white/10 transition-colors flex items-center gap-1 cursor-pointer"
-                    >
-                      <span>Next</span>
-                      <CaretRight size={14} weight="bold" />
-                    </button>
-                  </div>
-                )}
-              </div>
-            </div>
-          ) : activeOrders.length === 0 ? (
-            <section className="bg-white dark:bg-[#16181e] rounded-3xl border border-neutral-200/70 dark:border-white/10 p-5 text-center shadow-xs space-y-1 transition-colors duration-200">
-              <div className="w-10 h-10 bg-neutral-100 dark:bg-white/10 text-neutral-400 rounded-full flex items-center justify-center mx-auto mb-1">
-                <Receipt size={20} weight="duotone" />
-              </div>
-              <div className="font-extrabold text-xs text-neutral-800 dark:text-neutral-200">
-                No Order History Found
-              </div>
-              <p className="text-[11px] text-neutral-400 dark:text-neutral-500">
-                No previous orders found for mobile +91 {phone} at this table.
-              </p>
-            </section>
-          ) : null
+            <button
+              type="button"
+              onClick={() => {
+                setAccountInitialTab('my-orders');
+                setAccountOpen(true);
+              }}
+              className="font-bold text-[#c21807] dark:text-orange-400 hover:underline inline-flex items-center gap-1 cursor-pointer"
+            >
+              <span>View in My Orders</span>
+              <ArrowRight size={13} weight="bold" />
+            </button>
+          </div>
         )}
 
         {/* Coupon & Discount Offers Card */}
@@ -1307,41 +1213,34 @@ function CheckoutContent() {
                   </p>
                 )}
 
-                {/* Available Quick Suggestion Chips */}
-                <div className="flex items-center gap-1.5 pt-1 overflow-x-auto no-scrollbar">
-                  <span className="text-[10px] font-bold text-neutral-400 dark:text-neutral-500 uppercase tracking-wider shrink-0">
-                    Offers:
-                  </span>
-                  {loyaltyData?.milestone_unlocked && (
-                    <button
-                      type="button"
-                      onClick={() => applyCouponCode(loyaltyData.eligible_coupon_code)}
-                      className="text-[10px] font-bold bg-amber-100 dark:bg-amber-950/70 text-amber-800 dark:text-amber-300 border border-amber-300 dark:border-amber-700/60 px-2.5 py-1 rounded-full shrink-0 hover:bg-amber-200 transition-colors cursor-pointer flex items-center gap-1"
-                    >
-                      <Sparkle size={10} weight="fill" />
-                      <span>{loyaltyData.eligible_coupon_code} (7th Visit)</span>
-                    </button>
-                  )}
-                  {availableCoupons.map((c) => (
-                    <button
-                      key={c.id || c.code}
-                      type="button"
-                      onClick={() => applyCouponCode(c.code)}
-                      className="text-[10px] font-bold bg-neutral-100 dark:bg-white/10 hover:bg-neutral-200 dark:hover:bg-white/15 text-neutral-700 dark:text-neutral-300 px-2.5 py-1 rounded-full shrink-0 transition-colors cursor-pointer border border-neutral-200/70 dark:border-white/10"
-                    >
-                      {c.code}
-                    </button>
-                  ))}
-                  {!availableCoupons.some((c) => c.code === 'DESI100') && (
-                    <button
-                      type="button"
-                      onClick={() => applyCouponCode('DESI100')}
-                      className="text-[10px] font-bold bg-neutral-100 dark:bg-white/10 hover:bg-neutral-200 dark:hover:bg-white/15 text-neutral-700 dark:text-neutral-300 px-2.5 py-1 rounded-full shrink-0 transition-colors cursor-pointer border border-neutral-200/70 dark:border-white/10"
-                    >
-                      DESI100
-                    </button>
-                  )}
-                </div>
+                {/* Customer Account Held Coupon Suggestion Chips */}
+                {(loyaltyData?.milestone_unlocked || availableCoupons.length > 0) && (
+                  <div className="flex items-center gap-1.5 pt-1 overflow-x-auto no-scrollbar">
+                    <span className="text-[10px] font-bold text-neutral-400 dark:text-neutral-500 uppercase tracking-wider shrink-0">
+                      Your Coupons:
+                    </span>
+                    {loyaltyData?.milestone_unlocked && (
+                      <button
+                        type="button"
+                        onClick={() => applyCouponCode(loyaltyData.eligible_coupon_code)}
+                        className="text-[10px] font-bold bg-amber-100 dark:bg-amber-950/70 text-amber-800 dark:text-amber-300 border border-amber-300 dark:border-amber-700/60 px-2.5 py-1 rounded-full shrink-0 hover:bg-amber-200 transition-colors cursor-pointer flex items-center gap-1"
+                      >
+                        <Sparkle size={10} weight="fill" />
+                        <span>{loyaltyData.eligible_coupon_code} (7th Visit Reward)</span>
+                      </button>
+                    )}
+                    {availableCoupons.map((c) => (
+                      <button
+                        key={c.id || c.code}
+                        type="button"
+                        onClick={() => applyCouponCode(c.code)}
+                        className="text-[10px] font-bold bg-emerald-50 dark:bg-emerald-950/60 hover:bg-emerald-100 dark:hover:bg-emerald-900/60 text-emerald-800 dark:text-emerald-300 px-2.5 py-1 rounded-full shrink-0 transition-colors cursor-pointer border border-emerald-300/70 dark:border-emerald-700/60"
+                      >
+                        {c.code}
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
             )}
           </section>
@@ -1720,6 +1619,7 @@ function CheckoutContent() {
         tableId={tableInfo?.id}
         tableNumber={tableInfo?.table_number}
         onApplyCoupon={(code) => applyCouponCode(code)}
+        initialTab={accountInitialTab}
       />
     </div>
   );

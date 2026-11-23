@@ -17,6 +17,8 @@ import {
   CaretLeft,
   CaretRight,
   Copy,
+  Clock,
+  CheckCircle,
 } from '@phosphor-icons/react';
 import { getCustomerOrders, getCustomerLoyalty, getCoupons, updateCustomerProfile } from '@/lib/api';
 import { CustomerPastOrder, Coupon } from '@/lib/types';
@@ -36,7 +38,7 @@ export function AccountButton({
       onClick={onClick}
       className="relative w-8 h-8 rounded-full bg-neutral-100 dark:bg-white/10 text-neutral-700 dark:text-neutral-300 flex items-center justify-center hover:bg-neutral-200 dark:hover:bg-white/15 transition-colors cursor-pointer shrink-0"
       aria-label="Open Account"
-      title="My Account, Orders & Coupons"
+      title="My Account, My Orders & Coupons"
     >
       <User size={17} weight="bold" />
       {activeOrderCount > 0 && (
@@ -56,6 +58,7 @@ interface CustomerAccountDrawerProps {
   tableId?: string;
   tableNumber?: string;
   onApplyCoupon?: (code: string) => void;
+  initialTab?: 'active' | 'my-orders' | 'coupons';
 }
 
 export function CustomerAccountDrawer({
@@ -65,6 +68,7 @@ export function CustomerAccountDrawer({
   tableId,
   tableNumber,
   onApplyCoupon,
+  initialTab = 'active',
 }: CustomerAccountDrawerProps) {
   const [phone, setPhone] = useState('');
   const [name, setName] = useState('');
@@ -91,12 +95,19 @@ export function CustomerAccountDrawer({
   const [copiedCode, setCopiedCode] = useState<string | null>(null);
   const [selectedReceipt, setSelectedReceipt] = useState<CustomerPastOrder | null>(null);
 
-  // Pagination for previous orders
+  // Pagination for My Orders (completed orders)
   const [currentPage, setCurrentPage] = useState(1);
   const ordersPerPage = 4;
 
-  // Active tab inside the drawer
-  const [activeTab, setActiveTab] = useState<'all' | 'active' | 'coupons' | 'history'>('all');
+  // Active tab inside drawer: 'active' (priority), 'my-orders', 'coupons'
+  const [activeTab, setActiveTab] = useState<'active' | 'my-orders' | 'coupons'>(initialTab);
+
+  // Sync tab when initialTab prop changes
+  useEffect(() => {
+    if (initialTab) {
+      setActiveTab(initialTab);
+    }
+  }, [initialTab]);
 
   // Load stored customer details on mount
   useEffect(() => {
@@ -114,7 +125,7 @@ export function CustomerAccountDrawer({
     } catch {}
   }, []);
 
-  // Fetch orders, coupons, loyalty when drawer opens or phone changes
+  // Fetch orders, customer-held coupons, and loyalty when drawer opens or phone changes
   useEffect(() => {
     if (!isOpen) return;
 
@@ -124,23 +135,9 @@ export function CustomerAccountDrawer({
       refreshCustomerData(currentPhone);
     } else {
       setIsEditingPhone(true);
-      fetchCoupons();
+      setCoupons([]);
     }
   }, [isOpen, phone]);
-
-  const fetchCoupons = async () => {
-    setLoadingCoupons(true);
-    try {
-      const res = await getCoupons();
-      if (res?.data && Array.isArray(res.data)) {
-        setCoupons(res.data.filter((c: Coupon) => c.is_active));
-      }
-    } catch {
-      setCoupons([]);
-    } finally {
-      setLoadingCoupons(false);
-    }
-  };
 
   const refreshCustomerData = async (userPhone: string) => {
     const clean = userPhone.replace(/\D/g, '');
@@ -153,7 +150,7 @@ export function CustomerAccountDrawer({
       const [ordersRes, loyaltyRes, couponsRes] = await Promise.all([
         getCustomerOrders(clean, tableId),
         getCustomerLoyalty(clean),
-        getCoupons(),
+        getCoupons(clean), // Only request coupons held by this customer account
       ]);
 
       if (ordersRes?.data && Array.isArray(ordersRes.data)) {
@@ -175,9 +172,12 @@ export function CustomerAccountDrawer({
 
       if (couponsRes?.data && Array.isArray(couponsRes.data)) {
         setCoupons(couponsRes.data.filter((c: Coupon) => c.is_active));
+      } else {
+        setCoupons([]);
       }
     } catch {
       setPastOrders([]);
+      setCoupons([]);
     } finally {
       setLoadingOrders(false);
       setLoadingCoupons(false);
@@ -196,9 +196,9 @@ export function CustomerAccountDrawer({
         const info = await getCustomerLoyalty(clean);
         if (info?.name) {
           setNameInput(info.name);
-          setLookupMessage(`Found existing customer: ${info.name} 🎉`);
+          setLookupMessage(`Found existing diner: ${info.name} 🎉`);
         } else {
-          setLookupMessage('New diner! Enter your name below to register.');
+          setLookupMessage('New diner! Enter your name below to link your account.');
         }
       } catch {
         setLookupMessage('');
@@ -241,6 +241,7 @@ export function CustomerAccountDrawer({
     setPhoneInput('');
     setNameInput('');
     setPastOrders([]);
+    setCoupons([]);
     setLoyaltyData(null);
     setIsEditingPhone(true);
   };
@@ -260,7 +261,7 @@ export function CustomerAccountDrawer({
     });
   }, [pastOrders]);
 
-  // Separate active kitchen orders from delivered/settled orders
+  // Separate active kitchen orders from completed/delivered orders
   const { activeOrders, completedOrders } = useMemo(() => {
     const active: CustomerPastOrder[] = [];
     const completed: CustomerPastOrder[] = [];
@@ -278,7 +279,62 @@ export function CustomerAccountDrawer({
     return { activeOrders: active, completedOrders: completed };
   }, [sortedOrders]);
 
-  // Pagination calculations for completed orders
+  // Automatic priority tab selection: default to 'active' if active orders exist
+  useEffect(() => {
+    if (isOpen && !initialTab) {
+      if (activeOrders.length > 0) {
+        setActiveTab('active');
+      } else if (completedOrders.length > 0) {
+        setActiveTab('my-orders');
+      }
+    }
+  }, [isOpen, activeOrders.length, completedOrders.length, initialTab]);
+
+  // Calculate coupons held specifically by this customer account
+  const customerHeldCoupons = useMemo(() => {
+    const list: {
+      code: string;
+      title: string;
+      description?: string;
+      discountText: string;
+      minOrderText?: string;
+      isMilestone?: boolean;
+    }[] = [];
+
+    // 1. Customer Loyalty Milestone Reward (if unlocked)
+    if (loyaltyData?.milestone_unlocked) {
+      list.push({
+        code: loyaltyData.eligible_coupon_code || 'VISIT7FREE',
+        title: loyaltyData.reward_title || '7th Visit Celebration Reward',
+        description: loyaltyData.reward_description || '50% OFF your bill (up to ₹500) celebration reward',
+        discountText: '50% OFF',
+        isMilestone: true,
+      });
+    }
+
+    // 2. Explicitly assigned coupons for this customer account
+    for (const c of coupons) {
+      // Avoid duplicate if milestone code is already added
+      if (list.some((item) => item.code.toUpperCase() === c.code.toUpperCase())) continue;
+
+      const isPercentage = c.discount_type === 'PERCENTAGE';
+      const discountText = isPercentage
+        ? `${c.discount_value}% OFF`
+        : `₹${(c.discount_value / 100).toFixed(0)} FLAT OFF`;
+
+      list.push({
+        code: c.code,
+        title: c.title || c.code,
+        description: c.description || 'Special exclusive coupon assigned to your account',
+        discountText,
+        minOrderText: c.min_order_amount_paise ? fmt(c.min_order_amount_paise) : undefined,
+      });
+    }
+
+    return list;
+  }, [loyaltyData, coupons]);
+
+  // Pagination calculations for My Orders (completed orders)
   const totalCompletedPages = Math.max(1, Math.ceil(completedOrders.length / ordersPerPage));
   const paginatedCompletedOrders = useMemo(() => {
     const start = (currentPage - 1) * ordersPerPage;
@@ -340,14 +396,14 @@ export function CustomerAccountDrawer({
                   <button
                     type="button"
                     onClick={() => setIsEditingPhone(false)}
-                    className="text-[11px] font-bold text-neutral-500 hover:underline"
+                    className="text-[11px] font-bold text-neutral-500 hover:underline cursor-pointer"
                   >
                     Cancel
                   </button>
                 )}
               </div>
               <p className="text-[11px] text-neutral-600 dark:text-neutral-400">
-                Enter your mobile number to view live cooking progress, saved coupons, and unlocked dining rewards.
+                Enter your mobile number to view your active kitchen orders, completed order history in My Orders, and your account coupons.
               </p>
 
               <div className="space-y-2">
@@ -393,7 +449,7 @@ export function CustomerAccountDrawer({
                   onClick={handleSaveProfile}
                   className="w-full bg-[#c21807] hover:bg-[#a91c12] disabled:opacity-50 text-white text-xs font-extrabold py-2.5 rounded-xl transition-all cursor-pointer shadow-xs flex items-center justify-center gap-1.5"
                 >
-                  <span>Save &amp; View My Account</span>
+                  <span>Save &amp; View My Orders</span>
                   <ArrowRight size={14} weight="bold" />
                 </button>
               </div>
@@ -451,75 +507,67 @@ export function CustomerAccountDrawer({
                 </div>
                 <p className="text-[10px] text-amber-800/80 dark:text-amber-300/80">
                   {loyaltyData?.milestone_unlocked
-                    ? '🎉 7th Visit Milestone Unlocked! Use code VISIT7FREE for 50% off.'
+                    ? '🎉 Milestone Reward Unlocked! Check My Coupons tab to apply.'
                     : `${Math.max(0, (loyaltyData?.target_visits || 7) - (loyaltyData?.visit_count || 0))} more visits to unlock your 50% discount.`}
                 </p>
               </div>
             </div>
           )}
 
-          {/* Tab Filter Pills (Swiggy/Zomato style) */}
-          <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-1">
-            <button
-              type="button"
-              onClick={() => setActiveTab('all')}
-              className={`px-3 py-1.5 rounded-full text-xs font-extrabold whitespace-nowrap transition-all cursor-pointer ${
-                activeTab === 'all'
-                  ? 'bg-neutral-900 dark:bg-white text-white dark:text-neutral-900 shadow-xs'
-                  : 'bg-neutral-100 dark:bg-white/10 text-neutral-600 dark:text-neutral-400 hover:bg-neutral-200'
-              }`}
-            >
-              Overview
-            </button>
+          {/* Tab Navigation: Active Orders (Priority), My Orders, My Coupons */}
+          <div className="grid grid-cols-3 gap-1.5 p-1 bg-neutral-100 dark:bg-white/5 rounded-2xl border border-neutral-200/60 dark:border-white/5">
             <button
               type="button"
               onClick={() => setActiveTab('active')}
-              className={`px-3 py-1.5 rounded-full text-xs font-extrabold whitespace-nowrap transition-all cursor-pointer flex items-center gap-1.5 ${
+              className={`py-2 px-2 rounded-xl text-xs font-extrabold transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
                 activeTab === 'active'
                   ? 'bg-amber-600 text-white shadow-xs'
-                  : 'bg-neutral-100 dark:bg-white/10 text-neutral-600 dark:text-neutral-400 hover:bg-neutral-200'
+                  : 'text-neutral-600 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-neutral-100'
               }`}
             >
               <Fire size={13} weight="fill" className={activeOrders.length > 0 ? 'text-amber-200 animate-pulse' : ''} />
-              <span>Live Orders ({activeOrders.length})</span>
+              <span>Active {activeOrders.length > 0 ? `(${activeOrders.length})` : ''}</span>
             </button>
+
             <button
               type="button"
-              onClick={() => setActiveTab('coupons')}
-              className={`px-3 py-1.5 rounded-full text-xs font-extrabold whitespace-nowrap transition-all cursor-pointer flex items-center gap-1.5 ${
-                activeTab === 'coupons'
-                  ? 'bg-emerald-600 text-white shadow-xs'
-                  : 'bg-neutral-100 dark:bg-white/10 text-neutral-600 dark:text-neutral-400 hover:bg-neutral-200'
-              }`}
-            >
-              <Ticket size={13} weight="fill" />
-              <span>Coupons ({coupons.length})</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => setActiveTab('history')}
-              className={`px-3 py-1.5 rounded-full text-xs font-extrabold whitespace-nowrap transition-all cursor-pointer flex items-center gap-1.5 ${
-                activeTab === 'history'
+              onClick={() => setActiveTab('my-orders')}
+              className={`py-2 px-2 rounded-xl text-xs font-extrabold transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
+                activeTab === 'my-orders'
                   ? 'bg-neutral-900 dark:bg-white text-white dark:text-neutral-900 shadow-xs'
-                  : 'bg-neutral-100 dark:bg-white/10 text-neutral-600 dark:text-neutral-400 hover:bg-neutral-200'
+                  : 'text-neutral-600 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-neutral-100'
               }`}
             >
               <Receipt size={13} weight="fill" />
-              <span>History ({completedOrders.length})</span>
+              <span>My Orders {completedOrders.length > 0 ? `(${completedOrders.length})` : ''}</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setActiveTab('coupons')}
+              className={`py-2 px-2 rounded-xl text-xs font-extrabold transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
+                activeTab === 'coupons'
+                  ? 'bg-emerald-600 text-white shadow-xs'
+                  : 'text-neutral-600 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-neutral-100'
+              }`}
+            >
+              <Ticket size={13} weight="fill" />
+              <span>Coupons {customerHeldCoupons.length > 0 ? `(${customerHeldCoupons.length})` : ''}</span>
             </button>
           </div>
 
-          {/* PRIORITY 1: ACTIVE LIVE ORDERS */}
-          {(activeTab === 'all' || activeTab === 'active') && (
+          {/* TAB 1: ACTIVE LIVE ORDERS (Priority View) */}
+          {activeTab === 'active' && (
             <section className="space-y-3">
               <div className="flex items-center justify-between px-1">
                 <div className="flex items-center gap-1.5 text-xs font-black font-display text-neutral-900 dark:text-neutral-100 uppercase tracking-wide">
                   <ChefHat size={16} weight="bold" className="text-amber-500" />
-                  <span>Active Live Orders ({activeOrders.length})</span>
+                  <span>Active Kitchen Orders ({activeOrders.length})</span>
                 </div>
                 {activeOrders.length > 0 && (
-                  <span className="text-[10px] font-black bg-amber-500/20 text-amber-700 dark:text-amber-300 border border-amber-500/40 px-2 py-0.5 rounded-full animate-pulse">
-                    Cooking Now
+                  <span className="text-[10px] font-black bg-amber-500/20 text-amber-700 dark:text-amber-300 border border-amber-500/40 px-2 py-0.5 rounded-full animate-pulse flex items-center gap-1">
+                    <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-ping" />
+                    Live in Kitchen
                   </span>
                 )}
               </div>
@@ -554,7 +602,8 @@ export function CustomerAccountDrawer({
 
                         <div className="text-[11px] text-neutral-500 dark:text-neutral-400 flex items-center justify-between">
                           <span>Order #{orderNum}</span>
-                          <span>
+                          <span className="flex items-center gap-1">
+                            <Clock size={12} weight="bold" />
                             {orderDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                           </span>
                         </div>
@@ -585,162 +634,38 @@ export function CustomerAccountDrawer({
                   })}
                 </div>
               ) : (
-                <div className="bg-neutral-50 dark:bg-white/5 rounded-2xl p-4 text-center border border-neutral-200/60 dark:border-white/5 space-y-1">
-                  <p className="text-xs font-extrabold text-neutral-700 dark:text-neutral-300">
-                    No active kitchen orders
-                  </p>
-                  <p className="text-[11px] text-neutral-400">
-                    Dishes you send to kitchen will appear live here.
-                  </p>
-                </div>
-              )}
-            </section>
-          )}
-
-          {/* PRIORITY 2: AVAILABLE RESTAURANT COUPONS & OFFERS */}
-          {(activeTab === 'all' || activeTab === 'coupons') && (
-            <section className="space-y-3">
-              <div className="flex items-center justify-between px-1">
-                <div className="flex items-center gap-1.5 text-xs font-black font-display text-neutral-900 dark:text-neutral-100 uppercase tracking-wide">
-                  <Ticket size={16} weight="bold" className="text-emerald-500" />
-                  <span>Available Coupons &amp; Offers</span>
-                </div>
-                <span className="text-[10px] text-neutral-400">Tap to copy code</span>
-              </div>
-
-              {/* Milestone Unlocked Coupon Banner */}
-              {loyaltyData?.milestone_unlocked && (
-                <div className="bg-gradient-to-r from-amber-500/15 via-orange-500/15 to-emerald-500/15 border-2 border-dashed border-amber-400 dark:border-amber-600 rounded-3xl p-3.5 flex items-center justify-between gap-3 shadow-xs">
-                  <div className="space-y-0.5 min-w-0">
-                    <span className="text-[9px] font-black uppercase tracking-wider bg-amber-500 text-white px-2 py-0.5 rounded-full">
-                      Loyalty Milestone Unlocked
-                    </span>
-                    <div className="font-extrabold text-xs text-neutral-900 dark:text-neutral-100 pt-1">
-                      {loyaltyData.reward_title}
-                    </div>
-                    <div className="text-[10px] text-emerald-700 dark:text-emerald-400 font-bold">
-                      Code: <span className="font-mono">{loyaltyData.eligible_coupon_code}</span> • 50% OFF up to ₹500
-                    </div>
+                <div className="bg-neutral-50 dark:bg-white/5 rounded-3xl p-6 text-center border border-neutral-200/60 dark:border-white/5 space-y-2">
+                  <div className="w-10 h-10 rounded-full bg-amber-100 dark:bg-white/10 text-amber-600 dark:text-amber-400 flex items-center justify-center mx-auto">
+                    <ChefHat size={20} weight="bold" />
                   </div>
-                  <div className="flex flex-col gap-1.5 shrink-0">
+                  <p className="text-xs font-extrabold text-neutral-800 dark:text-neutral-200">
+                    No Active Kitchen Orders
+                  </p>
+                  <p className="text-[11px] text-neutral-500 dark:text-neutral-400 max-w-xs mx-auto">
+                    Orders currently cooking or being served will show live here in top priority.
+                  </p>
+                  {completedOrders.length > 0 && (
                     <button
                       type="button"
-                      onClick={() => copyToClipboard(loyaltyData.eligible_coupon_code)}
-                      className="px-3 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-xs font-black transition-all flex items-center gap-1 cursor-pointer shadow-xs active:scale-95"
+                      onClick={() => setActiveTab('my-orders')}
+                      className="mt-2 text-xs font-bold text-[#c21807] dark:text-orange-400 hover:underline inline-flex items-center gap-1 cursor-pointer"
                     >
-                      {copiedCode === loyaltyData.eligible_coupon_code ? (
-                        <>
-                          <Check size={13} weight="bold" />
-                          <span>Copied</span>
-                        </>
-                      ) : (
-                        <>
-                          <Copy size={13} weight="bold" />
-                          <span>Copy</span>
-                        </>
-                      )}
+                      <span>View your {completedOrders.length} completed orders in My Orders</span>
+                      <ArrowRight size={13} weight="bold" />
                     </button>
-                    {onApplyCoupon && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          onApplyCoupon(loyaltyData.eligible_coupon_code);
-                          onClose();
-                        }}
-                        className="text-[10px] font-bold text-amber-700 dark:text-amber-400 hover:underline text-center"
-                      >
-                        Apply to Cart
-                      </button>
-                    )}
-                  </div>
-                </div>
-              )}
-
-              {/* List of Coupons */}
-              {loadingCoupons ? (
-                <div className="p-4 text-center text-xs text-neutral-400">Loading coupons...</div>
-              ) : coupons.length > 0 ? (
-                <div className="space-y-2.5">
-                  {coupons.map((coupon) => {
-                    const isPercentage = coupon.discount_type === 'PERCENTAGE';
-                    const discountText = isPercentage
-                      ? `${coupon.discount_value}% OFF`
-                      : `₹${(coupon.discount_value / 100).toFixed(0)} FLAT OFF`;
-
-                    return (
-                      <div
-                        key={coupon.id}
-                        className="bg-white dark:bg-[#16181e] border border-dashed border-emerald-300 dark:border-emerald-700/60 rounded-2xl p-3 flex items-center justify-between gap-3 shadow-xs hover:border-emerald-500 transition-colors"
-                      >
-                        <div className="min-w-0 space-y-0.5">
-                          <div className="flex items-center gap-2">
-                            <span className="font-mono font-black text-xs text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/60 px-2 py-0.5 rounded-lg border border-emerald-200 dark:border-emerald-800/40">
-                              {coupon.code}
-                            </span>
-                            <span className="text-[11px] font-extrabold text-neutral-900 dark:text-neutral-100">
-                              {discountText}
-                            </span>
-                          </div>
-                          <p className="text-[10px] text-neutral-500 dark:text-neutral-400 truncate">
-                            {coupon.description || coupon.title || 'Special discount on your meal'}
-                          </p>
-                          {coupon.min_order_amount_paise ? (
-                            <p className="text-[9px] text-neutral-400">
-                              Min order: {fmt(coupon.min_order_amount_paise)}
-                            </p>
-                          ) : null}
-                        </div>
-
-                        <div className="flex flex-col gap-1 shrink-0">
-                          <button
-                            type="button"
-                            onClick={() => copyToClipboard(coupon.code)}
-                            className="px-2.5 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition-all flex items-center gap-1 cursor-pointer shadow-xs active:scale-95"
-                          >
-                            {copiedCode === coupon.code ? (
-                              <>
-                                <Check size={12} weight="bold" />
-                                <span>Copied</span>
-                              </>
-                            ) : (
-                              <>
-                                <Copy size={12} weight="bold" />
-                                <span>Copy</span>
-                              </>
-                            )}
-                          </button>
-                          {onApplyCoupon && (
-                            <button
-                              type="button"
-                              onClick={() => {
-                                onApplyCoupon(coupon.code);
-                                onClose();
-                              }}
-                              className="text-[9px] font-bold text-emerald-700 dark:text-emerald-400 hover:underline text-center"
-                            >
-                              Apply
-                            </button>
-                          )}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              ) : (
-                <div className="bg-neutral-50 dark:bg-white/5 rounded-2xl p-4 text-center border border-neutral-200/60 dark:border-white/5 text-xs text-neutral-400">
-                  No active coupon promotions currently. Check back soon!
+                  )}
                 </div>
               )}
             </section>
           )}
 
-          {/* PRIORITY 3: PREVIOUS ORDERS & DINING HISTORY (WITH PAGINATION) */}
-          {(activeTab === 'all' || activeTab === 'history') && (
+          {/* TAB 2: MY ORDERS (All Completed Orders Shown Here) */}
+          {activeTab === 'my-orders' && (
             <section className="space-y-3">
               <div className="flex items-center justify-between px-1">
                 <div className="flex items-center gap-1.5 text-xs font-black font-display text-neutral-900 dark:text-neutral-100 uppercase tracking-wide">
                   <Receipt size={16} weight="bold" className="text-neutral-700 dark:text-neutral-300" />
-                  <span>Previous Orders ({completedOrders.length})</span>
+                  <span>My Orders ({completedOrders.length})</span>
                 </div>
                 {completedOrders.length > 0 && (
                   <span className="text-[10px] text-neutral-400 font-mono">
@@ -750,9 +675,9 @@ export function CustomerAccountDrawer({
               </div>
 
               {loadingOrders ? (
-                <div className="p-4 text-center text-xs text-neutral-400 flex items-center justify-center gap-2">
+                <div className="p-6 text-center text-xs text-neutral-400 flex items-center justify-center gap-2 bg-neutral-50 dark:bg-white/5 rounded-2xl">
                   <span className="w-3.5 h-3.5 border-2 border-neutral-400 border-t-transparent rounded-full animate-spin" />
-                  <span>Fetching dining history...</span>
+                  <span>Fetching your orders...</span>
                 </div>
               ) : completedOrders.length > 0 ? (
                 <div className="space-y-3">
@@ -771,9 +696,9 @@ export function CustomerAccountDrawer({
                       >
                         <div className="flex items-center justify-between">
                           <div className="flex items-center gap-2">
-                            <span className="w-2 h-2 rounded-full bg-emerald-500" />
+                            <CheckCircle size={14} weight="fill" className="text-emerald-500" />
                             <span className="font-extrabold text-xs text-neutral-900 dark:text-neutral-100">
-                              Delivered &amp; Settled
+                              Completed &amp; Settled
                             </span>
                           </div>
                           <span className="text-xs font-black text-neutral-900 dark:text-neutral-100 tabular-nums">
@@ -852,8 +777,114 @@ export function CustomerAccountDrawer({
                   )}
                 </div>
               ) : (
-                <div className="bg-neutral-50 dark:bg-white/5 rounded-2xl p-4 text-center border border-neutral-200/60 dark:border-white/5 text-xs text-neutral-400">
-                  No past orders found under this phone number.
+                <div className="bg-neutral-50 dark:bg-white/5 rounded-3xl p-6 text-center border border-neutral-200/60 dark:border-white/5 space-y-2">
+                  <div className="w-10 h-10 rounded-full bg-neutral-200/60 dark:bg-white/10 text-neutral-600 dark:text-neutral-400 flex items-center justify-center mx-auto">
+                    <Receipt size={20} weight="bold" />
+                  </div>
+                  <p className="text-xs font-extrabold text-neutral-800 dark:text-neutral-200">
+                    No Completed Orders
+                  </p>
+                  <p className="text-[11px] text-neutral-500 dark:text-neutral-400 max-w-xs mx-auto">
+                    All completed and settled dining orders will be archived safely here in My Orders.
+                  </p>
+                </div>
+              )}
+            </section>
+          )}
+
+          {/* TAB 3: COUPONS (ONLY SHOW COUPONS HELD BY CUSTOMER ACCOUNT) */}
+          {activeTab === 'coupons' && (
+            <section className="space-y-3">
+              <div className="flex items-center justify-between px-1">
+                <div className="flex items-center gap-1.5 text-xs font-black font-display text-neutral-900 dark:text-neutral-100 uppercase tracking-wide">
+                  <Ticket size={16} weight="bold" className="text-emerald-500" />
+                  <span>My Held Coupons ({customerHeldCoupons.length})</span>
+                </div>
+                {customerHeldCoupons.length > 0 && (
+                  <span className="text-[10px] text-neutral-400">Tap to copy code</span>
+                )}
+              </div>
+
+              {loadingCoupons ? (
+                <div className="p-6 text-center text-xs text-neutral-400 flex items-center justify-center gap-2 bg-neutral-50 dark:bg-white/5 rounded-2xl">
+                  <span className="w-3.5 h-3.5 border-2 border-neutral-400 border-t-transparent rounded-full animate-spin" />
+                  <span>Checking your account coupons...</span>
+                </div>
+              ) : customerHeldCoupons.length > 0 ? (
+                <div className="space-y-2.5">
+                  {customerHeldCoupons.map((coupon) => (
+                    <div
+                      key={coupon.code}
+                      className={`rounded-2xl p-3 flex items-center justify-between gap-3 shadow-xs border transition-colors ${
+                        coupon.isMilestone
+                          ? 'bg-gradient-to-r from-amber-500/10 via-orange-500/10 to-emerald-500/10 border-amber-400 dark:border-amber-600'
+                          : 'bg-white dark:bg-[#16181e] border-dashed border-emerald-300 dark:border-emerald-700/60 hover:border-emerald-500'
+                      }`}
+                    >
+                      <div className="min-w-0 space-y-0.5">
+                        <div className="flex items-center gap-2">
+                          <span className="font-mono font-black text-xs text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/60 px-2 py-0.5 rounded-lg border border-emerald-200 dark:border-emerald-800/40">
+                            {coupon.code}
+                          </span>
+                          <span className="text-[11px] font-extrabold text-neutral-900 dark:text-neutral-100">
+                            {coupon.discountText}
+                          </span>
+                        </div>
+                        <p className="text-[10px] text-neutral-500 dark:text-neutral-400 truncate">
+                          {coupon.title} • {coupon.description}
+                        </p>
+                        {coupon.minOrderText ? (
+                          <p className="text-[9px] text-neutral-400">
+                            Min order: {coupon.minOrderText}
+                          </p>
+                        ) : null}
+                      </div>
+
+                      <div className="flex flex-col gap-1 shrink-0">
+                        <button
+                          type="button"
+                          onClick={() => copyToClipboard(coupon.code)}
+                          className="px-2.5 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition-all flex items-center gap-1 cursor-pointer shadow-xs active:scale-95"
+                        >
+                          {copiedCode === coupon.code ? (
+                            <>
+                              <Check size={12} weight="bold" />
+                              <span>Copied</span>
+                            </>
+                          ) : (
+                            <>
+                              <Copy size={12} weight="bold" />
+                              <span>Copy</span>
+                            </>
+                          )}
+                        </button>
+                        {onApplyCoupon && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              onApplyCoupon(coupon.code);
+                              onClose();
+                            }}
+                            className="text-[9px] font-bold text-emerald-700 dark:text-emerald-400 hover:underline text-center cursor-pointer"
+                          >
+                            Apply
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="bg-neutral-50 dark:bg-white/5 rounded-3xl p-6 text-center border border-neutral-200/60 dark:border-white/5 space-y-2">
+                  <div className="w-10 h-10 rounded-full bg-emerald-50 dark:bg-white/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center mx-auto">
+                    <Ticket size={20} weight="bold" />
+                  </div>
+                  <p className="text-xs font-extrabold text-neutral-800 dark:text-neutral-200">
+                    No Coupons Held
+                  </p>
+                  <p className="text-[11px] text-neutral-500 dark:text-neutral-400 max-w-xs mx-auto">
+                    Your account does not hold any active coupons right now. Dine with us to unlock milestone loyalty rewards and exclusive promo codes!
+                  </p>
                 </div>
               )}
             </section>

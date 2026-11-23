@@ -52,6 +52,8 @@ pub async fn create_order(
         OrderRepository::create_order(&pool, tenant.restaurant_id, Some(tenant.user.user_id), req)
             .await?;
 
+    crate::ws::broadcast_new_order(&order);
+
     Ok(Json(ApiResponse::success(order)))
 }
 

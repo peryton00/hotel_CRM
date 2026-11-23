@@ -934,7 +934,9 @@ export class RestaurantDataService {
     this.api.get<any>('/orders').subscribe({
       next: (res) => {
         const rawOrders = Array.isArray(res) ? res : res?.items || [];
-        const mapped = rawOrders.map((o: any) => this.mapApiOrder(o));
+        const mapped = rawOrders
+          .map((o: any) => this.mapApiOrder(o))
+          .filter((m: any) => m.id && (m.items || []).length > 0);
         // Preserve any pending offline orders that haven't synced yet
         const pendingOutbox = this.offlineOutbox();
         const pendingLocalOrders = this.orders().filter((localOrd) =>
@@ -1193,7 +1195,9 @@ export class RestaurantDataService {
     this.api.get<any>('/orders').subscribe({
       next: (res) => {
         const rawOrders = Array.isArray(res) ? res : res?.items || [];
-        const mapped = rawOrders.map((o: any) => this.mapApiOrder(o));
+        const mapped = rawOrders
+          .map((o: any) => this.mapApiOrder(o))
+          .filter((m: any) => m.id && (m.items || []).length > 0);
         const current = this.orders();
         const pendingOutbox = this.offlineOutbox();
         const pendingLocalOrders = current.filter(
@@ -1325,49 +1329,80 @@ export class RestaurantDataService {
   }
 
   private mapApiOrder(o: any): Order {
-    const tbl = this.tables().find((t) => t.id === o.table_id);
-    const tableNumber = o.table_number || (tbl ? tbl.number : '');
+    if (!o) return {} as any;
+    // Seamlessly unwrap backend OrderWithItems { order: Order, items: OrderItem[] } or flat Order
+    const base = o.order && typeof o.order === 'object' ? o.order : o;
+    const itemsRaw: any[] = Array.isArray(o.items)
+      ? o.items
+      : Array.isArray(base.items)
+        ? base.items
+        : [];
+
+    const tbl = this.tables().find((t) => t.id === (base.table_id || base.tableId));
+    const tableNumber = base.table_number || base.tableNumber || (tbl ? tbl.number : '');
+
+    const subtotalPaise =
+      base.subtotal_paise !== undefined && base.subtotal_paise !== null
+        ? Number(base.subtotal_paise)
+        : base.subtotal !== undefined
+          ? Math.round(Number(base.subtotal) * 100)
+          : 0;
+    const taxPaise =
+      base.tax_paise !== undefined && base.tax_paise !== null
+        ? Number(base.tax_paise)
+        : base.taxAmount !== undefined
+          ? Math.round(Number(base.taxAmount) * 100)
+          : 0;
+    const totalAmountPaise =
+      base.total_amount_paise !== undefined && base.total_amount_paise !== null
+        ? Number(base.total_amount_paise)
+        : base.totalAmount !== undefined
+          ? Math.round(Number(base.totalAmount) * 100)
+          : subtotalPaise + taxPaise;
 
     const orderCgstRate =
-      o.cgst_rate !== undefined && o.cgst_rate !== null
-        ? Number(o.cgst_rate)
-        : o.subtotal_paise && o.tax_paise
-          ? Math.round((o.tax_paise / o.subtotal_paise) * 50.0 * 10) / 10
+      base.cgst_rate !== undefined && base.cgst_rate !== null
+        ? Number(base.cgst_rate)
+        : subtotalPaise > 0 && taxPaise > 0
+          ? Math.round((taxPaise / subtotalPaise) * 50.0 * 10) / 10
           : 2.5;
     const orderSgstRate =
-      o.sgst_rate !== undefined && o.sgst_rate !== null
-        ? Number(o.sgst_rate)
-        : o.subtotal_paise && o.tax_paise
-          ? Math.round((o.tax_paise / o.subtotal_paise) * 50.0 * 10) / 10
+      base.sgst_rate !== undefined && base.sgst_rate !== null
+        ? Number(base.sgst_rate)
+        : subtotalPaise > 0 && taxPaise > 0
+          ? Math.round((taxPaise / subtotalPaise) * 50.0 * 10) / 10
           : 2.5;
-    const totalTax = (o.tax_paise || 0) / 100;
+    const totalTax = taxPaise / 100;
     const rateSum = orderCgstRate + orderSgstRate;
     const calculatedCgst =
       rateSum > 0 ? Math.round(totalTax * (orderCgstRate / rateSum) * 100) / 100 : totalTax / 2;
     const calculatedSgst = Math.round((totalTax - calculatedCgst) * 100) / 100;
 
     return {
-      id: o.id,
-      orderNumber: o.order_number,
-      orderType: (o.order_type || 'DINE_IN').toUpperCase() as any,
-      pickupReference: o.pickup_reference || o.pickupReference || undefined,
-      tableId: o.table_id,
+      id: base.id,
+      orderNumber:
+        base.order_number ||
+        base.orderNumber ||
+        (base.id ? `ORD-${base.id.substring(0, 8).toUpperCase()}` : ''),
+      orderType: (base.order_type || base.orderType || 'DINE_IN').toUpperCase() as any,
+      pickupReference: base.pickup_reference || base.pickupReference || undefined,
+      tableId: base.table_id || base.tableId,
       tableNumber,
       restaurantSlug: 'restaurant',
-      customerName: o.customer_name || o.customerName || 'Walk-in Guest',
-      customerPhone: o.customer_phone || o.customer_phone_e164 || o.customerPhone || '',
-      customerPhoneE164: o.customer_phone_e164 || o.customer_phone || o.customerPhone || '',
-      status: this.mapApiStatus(o.status),
-      paymentStatus: ((o.payment_status || '').toUpperCase() === 'PAID' ||
-      (o.payment_status || '').toUpperCase() === 'COMPLETED' ||
-      (o.status || '').toUpperCase() === 'COMPLETED' ||
-      !!o.settled_at
+      customerName: base.customer_name || base.customerName || 'Walk-in Guest',
+      customerPhone: base.customer_phone || base.customer_phone_e164 || base.customerPhone || '',
+      customerPhoneE164: base.customer_phone_e164 || base.customer_phone || base.customerPhone || '',
+      status: this.mapApiStatus(base.status),
+      paymentStatus: ((base.payment_status || '').toUpperCase() === 'PAID' ||
+      (base.payment_status || '').toUpperCase() === 'COMPLETED' ||
+      (base.status || '').toUpperCase() === 'COMPLETED' ||
+      !!base.settled_at
         ? 'PAID'
         : 'UNPAID') as PaymentStatus,
-      paymentMethod: (o.payment_method?.toUpperCase() ||
-        this.orders().find((ord) => ord.id === o.id)?.paymentMethod ||
+      paymentMethod: (base.payment_method?.toUpperCase() ||
+        this.orders().find((ord) => ord.id === base.id)?.paymentMethod ||
         undefined) as any,
-      items: (o.items || []).map((it: any) => {
+      items: itemsRaw.map((it: any) => {
         const unitPrice =
           (it.unit_price_paise || it.unitPrice || 0) > 1000
             ? (it.unit_price_paise || 0) / 100
@@ -1388,21 +1423,21 @@ export class RestaurantDataService {
           specialInstructions: it.specialInstructions || it.notes || '',
         };
       }),
-      subtotal: (o.subtotal_paise || 0) / 100,
+      subtotal: subtotalPaise / 100,
       taxAmount: totalTax,
       cgstRate: orderCgstRate,
       sgstRate: orderSgstRate,
       cgstAmount: calculatedCgst,
       sgstAmount: calculatedSgst,
-      discountAmount: (o.discount_paise || 0) / 100,
-      appliedCouponCode: o.applied_coupon_code || o.appliedCouponCode || undefined,
-      totalAmount: (o.total_amount_paise || 0) / 100,
-      notes: o.notes || '',
-      serverStaffId: o.server_staff_id,
-      createdAt: o.created_at,
-      updatedAt: o.updated_at,
-      settledAt: o.settled_at,
-      timeline: o.timeline || [],
+      discountAmount: (base.discount_paise || base.discountAmount || 0) / 100,
+      appliedCouponCode: base.applied_coupon_code || base.appliedCouponCode || undefined,
+      totalAmount: totalAmountPaise / 100,
+      notes: base.notes || '',
+      serverStaffId: base.server_staff_id || base.serverStaffId,
+      createdAt: base.created_at || base.createdAt || new Date().toISOString(),
+      updatedAt: base.updated_at || base.updatedAt || new Date().toISOString(),
+      settledAt: base.settled_at || base.settledAt,
+      timeline: base.timeline || [],
     };
   }
 
@@ -2603,6 +2638,17 @@ export class RestaurantDataService {
     // Connect to WebSocket backend for cross-origin customer site orders
     this.connectOrderWebSocket();
 
+    if (typeof window !== 'undefined' && typeof setInterval !== 'undefined') {
+      // 15s pulse to keep restaurant POS online status fresh in cloud gateway
+      setInterval(() => {
+        if (this.isOnline()) {
+          this.api.post('/restaurants/heartbeat', {}).subscribe({
+            error: () => {},
+          });
+        }
+      }, 15000);
+    }
+
     window.addEventListener('storage', (e: StorageEvent) => {
       if (e.key === 'royal_spice_order_stream_event' && e.newValue) {
         try {
@@ -2622,7 +2668,10 @@ export class RestaurantDataService {
     ) {
       return;
     }
-    const wsUrl = environment.wsOrdersUrl || 'ws://localhost:3000/ws/orders';
+    const rawWsUrl = environment.wsOrdersUrl || 'ws://localhost:3000/ws/orders';
+    const wsUrl = rawWsUrl.includes('?')
+      ? `${rawWsUrl}&client_type=crm`
+      : `${rawWsUrl}?client_type=crm`;
 
     try {
       this.orderWs = new WebSocket(wsUrl);
@@ -2640,10 +2689,26 @@ export class RestaurantDataService {
             this.handleIncomingReservation(resData);
             return;
           }
-          if (raw.event === 'TABLE_STATUS_CHANGED') {
+          if (
+            raw.event === 'TABLE_STATUS_CHANGED' ||
+            raw.event === 'RESTAURANT_STATUS_CHANGED' ||
+            raw.event === 'PING' ||
+            raw.event === 'PONG'
+          ) {
             return;
           }
-          const mapped = this.mapApiOrder(raw.order || raw);
+
+          // Guard against non-order payloads: must contain an order object or order ID
+          const orderPayload = raw.order || raw;
+          if (!orderPayload || (!orderPayload.id && !raw.id)) {
+            return;
+          }
+
+          // Map full payload (retaining both base order fields and items array)
+          const mapped = this.mapApiOrder(raw);
+          if (!mapped.id || (mapped.items || []).length === 0) {
+            return;
+          }
           this.handleIncomingSyncEvent({ type: 'ORDER_CREATED', order: mapped });
         } catch (e) {
           console.warn('[RestaurantDataService] WS parse error:', e);
@@ -2671,6 +2736,9 @@ export class RestaurantDataService {
 
     if (ev.type === 'ORDER_CREATED' && ev.order) {
       const incoming: Order = ev.order;
+      if (!incoming.id || (incoming.items || []).length === 0) {
+        return;
+      }
       const current = this.orders();
       if (!current.some((o) => o.id === incoming.id)) {
         this.orders.set([incoming, ...current]);
@@ -2680,6 +2748,7 @@ export class RestaurantDataService {
       }
     } else if (ev.type === 'ORDER_UPDATED' && ev.order) {
       const incoming: Order = ev.order;
+      if (!incoming.id) return;
       const current = this.orders();
       const updated = current.map((o) => (o.id === incoming.id ? { ...o, ...incoming } : o));
       this.orders.set(updated);
@@ -2750,7 +2819,9 @@ export class RestaurantDataService {
 
           const currentOrders = this.orders();
           const currentIds = new Set(currentOrders.map((o) => o.id));
-          const mappedOrders = rawOrders.map((o: any) => this.mapApiOrder(o));
+          const mappedOrders = rawOrders
+            .map((o: any) => this.mapApiOrder(o))
+            .filter((m: any) => m.id && (m.items || []).length > 0);
 
           // Detect brand new orders arrived from external devices/customers
           const newOrders = mappedOrders.filter((m: any) => !currentIds.has(m.id));
@@ -2984,7 +3055,32 @@ export class RestaurantDataService {
     const isPrinted = (order.printCount || 0) > 0;
     const targetStatus = isPrinted ? 'COMPLETED' : order.status;
 
-    const grossTotal = Math.round(((order.subtotal || 0) + (order.taxAmount || 0)) * 100) / 100;
+    // Detect if this table has multiple rounds/orders that must be unified into one bill
+    const siblingOrders =
+      (order.tableId || order.tableNumber) && order.orderType !== 'TAKEAWAY'
+        ? this.orders().filter(
+            (o) =>
+              o.id !== order.id &&
+              o.status !== 'CANCELLED' &&
+              o.paymentStatus !== 'PAID' &&
+              ((order.tableId && o.tableId === order.tableId) ||
+                (order.tableNumber && o.tableNumber === order.tableNumber)),
+          )
+        : [];
+
+    const combinedSubtotal =
+      Math.round(
+        (order.subtotal +
+          siblingOrders.reduce((sum, s) => sum + (s.subtotal || 0), 0)) *
+          100,
+      ) / 100;
+    const combinedTax =
+      Math.round(
+        (order.taxAmount +
+          siblingOrders.reduce((sum, s) => sum + (s.taxAmount || 0), 0)) *
+          100,
+      ) / 100;
+    const grossTotal = Math.round((combinedSubtotal + combinedTax) * 100) / 100;
     const finalDiscount = Math.min(
       grossTotal,
       Math.max(
@@ -2994,8 +3090,11 @@ export class RestaurantDataService {
     );
     const totalAmount = Math.max(0, Math.round((grossTotal - finalDiscount) * 100) / 100);
 
+    const now = new Date().toISOString();
     const settledOrder: Order = {
       ...order,
+      subtotal: combinedSubtotal,
+      taxAmount: combinedTax,
       status: targetStatus,
       paymentStatus: 'PAID' as PaymentStatus,
       paymentMethod: req.paymentMethod,
@@ -3003,10 +3102,24 @@ export class RestaurantDataService {
       appliedCouponCode:
         req.appliedCouponCode !== undefined ? req.appliedCouponCode : order.appliedCouponCode,
       totalAmount,
-      settledAt: new Date().toISOString(),
+      settledAt: now,
     };
 
-    const updatedOrders = this.orders().map((o) => (o.id === req.orderId ? settledOrder : o));
+    const siblingIds = new Set(siblingOrders.map((s) => s.id));
+    const updatedOrders = this.orders().map((o) => {
+      if (o.id === req.orderId) return settledOrder;
+      if (siblingIds.has(o.id)) {
+        return {
+          ...o,
+          status: 'COMPLETED' as const,
+          paymentStatus: 'PAID' as PaymentStatus,
+          paymentMethod: req.paymentMethod,
+          totalAmount: 0,
+          settledAt: now,
+        };
+      }
+      return o;
+    });
     this.orders.set(updatedOrders);
     this.saveLocal('orders', updatedOrders);
 

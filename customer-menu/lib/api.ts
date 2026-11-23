@@ -115,10 +115,15 @@ export async function getCustomerOrders(phone?: string, tableId?: string) {
   }
 }
 
-export async function getCoupons() {
+export async function getCoupons(phone?: string) {
   try {
-    const res = await fetch(`${BASE}/public/coupons?rid=${RID}`, {
-      next: { revalidate: 60 },
+    let url = `${BASE}/public/coupons?rid=${RID}`;
+    if (phone && phone.trim().length >= 10) {
+      const clean = phone.replace(/\D/g, '');
+      url += `&phone=${encodeURIComponent(clean)}`;
+    }
+    const res = await fetch(url, {
+      cache: 'no-store',
     });
     if (!res.ok) return { data: [] };
     return res.json();

@@ -33,7 +33,7 @@ import {
     ThermalReceiptModalComponent,
   ],
   template: `
-    @if (order(); as ord) {
+    @if (effectiveOrder(); as ord) {
       <div class="invoice-page">
         <!-- Action Bar (Screen Only Command Toolbar) -->
         <nav class="action-bar no-print" aria-label="Invoice navigation and actions">
@@ -544,36 +544,82 @@ import {
                   </tr>
                 </thead>
                 <tbody>
-                  @for (item of ord.items; track item.id; let i = $index) {
-                    <tr>
-                      <td class="col-num">{{ i + 1 }}</td>
-                      <td class="col-desc">
-                        <div class="item-primary-name">{{ item.name }}</div>
-                        @if (item.selectedPortion) {
-                          <span class="item-micro-spec portion"
-                            >Portion: {{ item.selectedPortion.label }}</span
-                          >
-                        }
-                        @if (item.selectedVariants && item.selectedVariants.length > 0) {
-                          <div class="item-variants-list">
-                            @for (v of item.selectedVariants; track v.optionName) {
-                              <span class="item-micro-spec variant">{{ v.optionName }}</span>
-                            }
+                  @if (sessionRounds().length > 1) {
+                    @for (rnd of sessionRounds(); track rnd.order.id) {
+                      <tr class="round-separator-row">
+                        <td colspan="6">
+                          <div class="invoice-round-header">
+                            <span class="rnd-tag">ORDER {{ rnd.roundIndex }}</span>
+                            <span class="rnd-ord-no">{{ rnd.order.orderNumber }}</span>
+                            <span class="rnd-time">{{ rnd.order.createdAt | date: 'shortTime' }}</span>
+                            <span class="rnd-subtotal">Round Subtotal: {{ rnd.order.subtotal | currencyInr }}</span>
                           </div>
-                        }
-                        @if (item.specialInstructions) {
-                          <span class="item-micro-spec notes"
-                            >Note: {{ item.specialInstructions }}</span
-                          >
-                        }
-                      </td>
-                      <td class="col-hsn">996331</td>
-                      <td class="col-qty font-bold">{{ item.quantity }}</td>
-                      <td class="col-rate">{{ item.unitPrice | number: '1.2-2' }}</td>
-                      <td class="col-amt font-bold">
-                        {{ item.quantity * item.unitPrice | number: '1.2-2' }}
-                      </td>
-                    </tr>
+                        </td>
+                      </tr>
+                      @for (item of rnd.order.items; track item.id; let i = $index) {
+                        <tr>
+                          <td class="col-num">{{ i + 1 }}</td>
+                          <td class="col-desc">
+                            <div class="item-primary-name">{{ item.name }}</div>
+                            @if (item.selectedPortion) {
+                              <span class="item-micro-spec portion"
+                                >Portion: {{ item.selectedPortion.label }}</span
+                              >
+                            }
+                            @if (item.selectedVariants && item.selectedVariants.length > 0) {
+                              <div class="item-variants-list">
+                                @for (v of item.selectedVariants; track v.optionName) {
+                                  <span class="item-micro-spec variant">{{ v.optionName }}</span>
+                                }
+                              </div>
+                            }
+                            @if (item.specialInstructions) {
+                              <span class="item-micro-spec notes"
+                                >Note: {{ item.specialInstructions }}</span
+                              >
+                            }
+                          </td>
+                          <td class="col-hsn">996331</td>
+                          <td class="col-qty font-bold">{{ item.quantity }}</td>
+                          <td class="col-rate">{{ (item.unitPrice || 0) | number: '1.2-2' }}</td>
+                          <td class="col-amt font-bold">
+                            {{ item.quantity * (item.unitPrice || 0) | number: '1.2-2' }}
+                          </td>
+                        </tr>
+                      }
+                    }
+                  } @else {
+                    @for (item of ord.items; track item.id; let i = $index) {
+                      <tr>
+                        <td class="col-num">{{ i + 1 }}</td>
+                        <td class="col-desc">
+                          <div class="item-primary-name">{{ item.name }}</div>
+                          @if (item.selectedPortion) {
+                            <span class="item-micro-spec portion"
+                              >Portion: {{ item.selectedPortion.label }}</span
+                            >
+                          }
+                          @if (item.selectedVariants && item.selectedVariants.length > 0) {
+                            <div class="item-variants-list">
+                              @for (v of item.selectedVariants; track v.optionName) {
+                                <span class="item-micro-spec variant">{{ v.optionName }}</span>
+                              }
+                            </div>
+                          }
+                          @if (item.specialInstructions) {
+                            <span class="item-micro-spec notes"
+                              >Note: {{ item.specialInstructions }}</span
+                            >
+                          }
+                        </td>
+                        <td class="col-hsn">996331</td>
+                        <td class="col-qty font-bold">{{ item.quantity }}</td>
+                        <td class="col-rate">{{ item.unitPrice | number: '1.2-2' }}</td>
+                        <td class="col-amt font-bold">
+                          {{ item.quantity * item.unitPrice | number: '1.2-2' }}
+                        </td>
+                      </tr>
+                    }
                   }
                 </tbody>
               </table>
@@ -1483,6 +1529,51 @@ import {
           background: #fafafa;
         }
 
+        .round-separator-row {
+          background: #f8fafc !important;
+          border-top: 2px solid #cbd5e1;
+          border-bottom: 1px solid #e2e8f0;
+
+          td {
+            padding: 6px 8px !important;
+          }
+
+          .invoice-round-header {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 0.75rem;
+
+            .rnd-tag {
+              background: #0f172a;
+              color: #ffffff;
+              font-weight: 800;
+              font-size: 0.625rem;
+              padding: 2px 6px;
+              border-radius: 4px;
+              letter-spacing: 0.04em;
+            }
+
+            .rnd-ord-no {
+              font-family: monospace;
+              font-weight: 700;
+              color: #0f172a;
+            }
+
+            .rnd-time {
+              color: #64748b;
+              font-size: 0.6875rem;
+            }
+
+            .rnd-subtotal {
+              margin-left: auto;
+              font-weight: 700;
+              color: #be185d;
+              font-family: 'SF Mono', Consolas, monospace;
+            }
+          }
+        }
+
         .col-num {
           width: 5%;
           text-align: center;
@@ -2242,6 +2333,67 @@ export class InvoicePreviewComponent implements OnInit {
       this.mock.orders().find((o) => o.id === this.orderId() || o.orderNumber === this.orderId()) ||
       null
     );
+  });
+
+  effectiveOrder = computed(() => {
+    const raw = this.order();
+    if (!raw) return null;
+    if (raw.orderType === 'TAKEAWAY' || (!raw.tableId && !raw.tableNumber)) return raw;
+
+    // Detect multi-round session orders for this table
+    const siblings = this.mock.orders().filter(
+      (o) =>
+        o.id !== raw.id &&
+        o.status !== 'CANCELLED' &&
+        ((raw.seatingSessionId && o.seatingSessionId === raw.seatingSessionId) ||
+          (raw.paymentStatus === 'UNPAID' &&
+            o.paymentStatus === 'UNPAID' &&
+            ((raw.tableId && o.tableId === raw.tableId) ||
+              (raw.tableNumber && o.tableNumber === raw.tableNumber)))),
+    );
+
+    if (siblings.length === 0) return raw;
+
+    const allItems = [...raw.items, ...siblings.flatMap((s) => s.items)];
+    const subtotal =
+      Math.round(
+        (raw.subtotal + siblings.reduce((sum, s) => sum + (s.subtotal || 0), 0)) * 100,
+      ) / 100;
+    const taxAmount =
+      Math.round(
+        (raw.taxAmount + siblings.reduce((sum, s) => sum + (s.taxAmount || 0), 0)) * 100,
+      ) / 100;
+    const gross = Math.round((subtotal + taxAmount) * 100) / 100;
+    const discountAmount = raw.discountAmount || 0;
+    const totalAmount = Math.max(0, Math.round((gross - discountAmount) * 100) / 100);
+
+    return {
+      ...raw,
+      items: allItems,
+      subtotal,
+      taxAmount,
+      totalAmount,
+    };
+  });
+
+  sessionRounds = computed<{ roundIndex: number; order: Order }[]>(() => {
+    const raw = this.order();
+    if (!raw) return [];
+    if (raw.orderType === 'TAKEAWAY' || (!raw.tableId && !raw.tableNumber)) {
+      return [{ roundIndex: 1, order: raw }];
+    }
+    const siblings = this.mock.orders().filter(
+      (o) =>
+        o.id !== raw.id &&
+        o.status !== 'CANCELLED' &&
+        ((raw.seatingSessionId && o.seatingSessionId === raw.seatingSessionId) ||
+          ((raw.tableId && o.tableId === raw.tableId) ||
+            (raw.tableNumber && o.tableNumber === raw.tableNumber))),
+    );
+    const all = [raw, ...siblings].sort(
+      (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
+    );
+    return all.map((ord, idx) => ({ roundIndex: idx + 1, order: ord }));
   });
 
   splitBill = computed(() => {

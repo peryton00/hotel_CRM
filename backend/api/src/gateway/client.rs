@@ -58,11 +58,11 @@ impl GatewayHeartbeatClient {
         });
     }
 
-    /// Checks whether a restaurant is currently online within a 30-second window
+    /// Checks whether a restaurant is currently online within a 35-second window
     pub async fn is_restaurant_online(pool: &PgPool, restaurant_id: Uuid) -> bool {
         let row: Option<(bool,)> = sqlx::query_as(
             r#"
-            SELECT (last_seen_at >= NOW() - INTERVAL '30 SECONDS') AND is_online
+            SELECT (last_seen_at >= NOW() - INTERVAL '35 SECONDS') AND is_online
             FROM restaurant_heartbeats
             WHERE restaurant_id = $1
             "#,

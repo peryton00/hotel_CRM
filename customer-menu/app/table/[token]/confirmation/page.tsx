@@ -2,7 +2,7 @@
 
 import { useState, useEffect, Suspense } from 'react';
 import { useRouter, useParams } from 'next/navigation';
-import { Check, ForkKnife, Printer, Receipt, CheckCircle, ArrowLeft, X } from '@phosphor-icons/react';
+import { Check, ForkKnife, Printer, Receipt, CheckCircle, ArrowLeft, ArrowRight, X } from '@phosphor-icons/react';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { CustomerAccountDrawer, AccountButton } from '@/components/CustomerAccountDrawer';
 import { getCustomerOrders } from '@/lib/api';
@@ -45,6 +45,7 @@ function ConfirmationContent() {
   const [selectedOrderForBill, setSelectedOrderForBill] = useState<CustomerPastOrder | null>(null);
   const [tableInfo, setTableInfo] = useState<TableInfo | null>(null);
   const [accountOpen, setAccountOpen] = useState(false);
+  const [accountInitialTab, setAccountInitialTab] = useState<'active' | 'my-orders' | 'coupons'>('active');
 
   useEffect(() => {
     try {
@@ -74,6 +75,21 @@ function ConfirmationContent() {
     : (order?.subtotal_paise && order?.sgst_paise
         ? Math.round((order.sgst_paise / order.subtotal_paise) * 1000) / 10
         : sgstRate);
+
+  const earlierActiveRounds = pastOrders.filter((po) => {
+    const st = (po.status || po.order?.status || '').toUpperCase();
+    const ps = (po.payment_status || po.order?.payment_status || '').toUpperCase();
+    const poTableId = po.table_id || po.order?.table_id;
+    const currentTableId = tableInfo?.id;
+    return st !== 'CANCELLED' && ps !== 'PAID' && (!currentTableId || !poTableId || poTableId === currentTableId);
+  });
+
+  const cumulativeGrandTotal =
+    (order?.grand_total_paise || 0) +
+    earlierActiveRounds.reduce(
+      (sum, po) => sum + (po.total_amount_paise ?? (po.order?.total_amount_paise || 0)),
+      0
+    );
 
   useEffect(() => {
     try {
@@ -155,6 +171,29 @@ function ConfirmationContent() {
             </span>
           </div>
         </div>
+
+        {/* Multi-Round Dining Session Cumulative Running Bill */}
+        {earlierActiveRounds.length > 0 && (
+          <div className="bg-amber-50 dark:bg-amber-950/30 border border-amber-200/80 dark:border-amber-800/40 rounded-2xl p-4 flex items-center justify-between text-xs animate-fade-in-up">
+            <div className="space-y-0.5">
+              <div className="font-extrabold text-amber-900 dark:text-amber-200 flex items-center gap-1.5">
+                <Receipt size={14} weight="bold" />
+                <span>Cumulative Dining Total ({earlierActiveRounds.length + 1} Rounds)</span>
+              </div>
+              <div className="text-[10px] text-amber-700/80 dark:text-amber-400/80">
+                Current order #{order.order_number} + {earlierActiveRounds.length} earlier active round{earlierActiveRounds.length > 1 ? 's' : ''}
+              </div>
+            </div>
+            <div className="text-right">
+              <div className="text-sm font-black text-amber-950 dark:text-amber-100 tabular-nums">
+                {fmt(cumulativeGrandTotal)}
+              </div>
+              <div className="text-[9px] text-amber-700 dark:text-amber-400 font-bold">
+                Combined Bill at Checkout
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Itemized Digital Bill Card */}
         <div className="bg-white dark:bg-[#16181e] rounded-3xl border border-neutral-200/80 dark:border-white/10 p-5 shadow-xs text-xs double-bezel animate-fade-in-up stagger-2 transition-colors duration-200">
@@ -239,81 +278,24 @@ function ConfirmationContent() {
           </div>
         </div>
 
-        {/* Earlier Rounds Delivered */}
+        {/* Link to My Orders for completed/earlier dining rounds */}
         {pastOrders.length > 0 && (
-          <div className="space-y-3 pt-1 animate-fade-in-up stagger-3">
-            <div className="flex items-center justify-between px-1">
-              <div className="flex items-center gap-1.5 font-black text-xs font-display text-neutral-900 dark:text-neutral-100 uppercase tracking-wide">
-                <Receipt size={16} weight="bold" className="text-emerald-600 dark:text-emerald-400" />
-                <span>Earlier Rounds Delivered ({pastOrders.length})</span>
-              </div>
-              <span className="text-[10px] font-bold bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400 border border-emerald-200/60 dark:border-emerald-800/40 px-2 py-0.5 rounded-full flex items-center gap-1">
-                <CheckCircle size={12} weight="fill" />
-                Delivered
-              </span>
+          <div className="flex items-center justify-between p-3.5 bg-neutral-50 dark:bg-white/5 rounded-2xl border border-neutral-200/70 dark:border-white/10 text-xs">
+            <div className="flex items-center gap-2 text-neutral-600 dark:text-neutral-400">
+              <Receipt size={16} weight="bold" className="text-neutral-500" />
+              <span>You have <strong>{pastOrders.length}</strong> previous {pastOrders.length === 1 ? 'round' : 'rounds'}</span>
             </div>
-
-            <div className="space-y-3">
-              {pastOrders.map((po, idx) => {
-                const orderId = po.id || po.order?.id || idx;
-                const orderNum = po.order_number || po.order?.order_number || 'ORD';
-                const orderTotal = po.total_amount_paise ?? po.order?.total_amount_paise ?? 0;
-                const orderItems = po.items || [];
-                const orderDate = new Date(po.created_at || po.order?.created_at || Date.now());
-
-                return (
-                  <div
-                    key={orderId}
-                    onClick={() => setSelectedOrderForBill(po)}
-                    className="bg-white dark:bg-[#16181e] rounded-2xl p-4 border border-neutral-200/80 dark:border-white/10 shadow-xs hover:border-neutral-300 dark:hover:border-white/20 active:scale-[0.99] transition-all cursor-pointer space-y-3"
-                  >
-                    <div className="flex items-center justify-between gap-2">
-                      <div className="flex items-center gap-2">
-                        <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0" />
-                        <span className="font-extrabold text-xs text-neutral-900 dark:text-neutral-100">
-                          Round #{idx + 1}
-                        </span>
-                        <span className="text-neutral-300 dark:text-neutral-700">•</span>
-                        <span className="text-[11px] font-medium text-neutral-500 dark:text-neutral-400">
-                          {orderDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                        </span>
-                      </div>
-                      <span className="text-xs font-black text-neutral-900 dark:text-neutral-100 tabular-nums">
-                        {fmt(orderTotal)}
-                      </span>
-                    </div>
-
-                    <div className="space-y-1.5 text-xs">
-                      {orderItems.map((pi) => (
-                        <div key={pi.id} className="flex items-center justify-between text-neutral-600 dark:text-neutral-300">
-                          <div className="flex items-center gap-2 min-w-0">
-                            <span className="font-bold text-neutral-900 dark:text-neutral-100 tabular-nums text-[11px] shrink-0">
-                              {pi.quantity} ×
-                            </span>
-                            <span className="truncate text-xs font-medium text-neutral-800 dark:text-neutral-200">
-                              {pi.item_name}
-                            </span>
-                          </div>
-                          <span className="text-[11px] font-medium tabular-nums text-neutral-500 dark:text-neutral-400 shrink-0 ml-2">
-                            {fmt(pi.unit_price_paise * pi.quantity)}
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-
-                    <div className="pt-2.5 flex items-center justify-between text-xs border-t border-neutral-100 dark:border-white/5">
-                      <span className="font-mono text-[10px] text-neutral-400 dark:text-neutral-500">
-                        #{orderNum}
-                      </span>
-                      <div className="inline-flex items-center gap-1 text-[11px] font-bold text-[#c21807] dark:text-orange-400 hover:underline">
-                        <Receipt size={13} weight="bold" />
-                        <span>View Bill</span>
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
+            <button
+              type="button"
+              onClick={() => {
+                setAccountInitialTab('my-orders');
+                setAccountOpen(true);
+              }}
+              className="font-bold text-[#c21807] dark:text-orange-400 hover:underline inline-flex items-center gap-1 cursor-pointer"
+            >
+              <span>View in My Orders</span>
+              <ArrowRight size={13} weight="bold" />
+            </button>
           </div>
         )}
 
@@ -454,6 +436,7 @@ function ConfirmationContent() {
         tableToken={token}
         tableId={tableInfo?.id}
         tableNumber={tableInfo?.table_number}
+        initialTab={accountInitialTab}
       />
     </div>
   );

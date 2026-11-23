@@ -14,7 +14,7 @@ use crate::{
         order::{CreateOrderItemInput, CreateOrderRequest},
     },
     repositories::{
-        coupon_repo::CouponRepository, customer_repo::CustomerRepository,
+        customer_repo::CustomerRepository,
         feedback_repo::FeedbackRepository, menu_repo::MenuRepository, order_repo::OrderRepository,
     },
 };
@@ -396,6 +396,7 @@ pub async fn create_public_order(
         applied_coupon_code: req.coupon_code,
         pickup_reference: None,
         customer_id: None,
+        seating_session_id: req.seating_session_id,
     };
 
     let order = OrderRepository::create_order(&pool, req.restaurant_id, None, create_req).await?;
@@ -643,13 +644,53 @@ pub async fn get_public_feedback(
 
 // ─── Handler 7: Public Active Offers/Coupons ─────────────────────────────────
 
+#[derive(Debug, Deserialize)]
+pub struct PublicCouponsQuery {
+    pub rid: Uuid,
+    pub phone: Option<String>,
+}
+
 pub async fn get_public_coupons(
     State(pool): State<PgPool>,
-    Query(q): Query<RestaurantIdQuery>,
+    Query(q): Query<PublicCouponsQuery>,
 ) -> Result<Json<ApiResponse<Vec<crate::models::coupon::Coupon>>>, AppError> {
-    let coupons = CouponRepository::list_coupons(&pool, q.rid).await?;
-    let active_coupons: Vec<_> = coupons.into_iter().filter(|c| c.is_active).collect();
-    Ok(Json(ApiResponse::success(active_coupons)))
+    let clean_phone = q.phone.as_deref()
+        .map(|p| p.chars().filter(|c| c.is_ascii_digit()).collect::<String>())
+        .filter(|p| p.len() >= 10);
+
+    let Some(phone_num) = clean_phone else {
+        // Without a valid linked customer phone, return no coupons (only customer-held coupons are shown)
+        return Ok(Json(ApiResponse::success(vec![])));
+    };
+
+    // Query coupons specifically assigned to this customer via coupon_assignments
+    let coupons = sqlx::query_as::<_, crate::models::coupon::Coupon>(
+        r#"
+        SELECT c.id, c.restaurant_id, c.code, c.description,
+               c.discount_type::text AS discount_type,
+               c.discount_value::float8 AS discount_value,
+               c.min_order_amount_paise, c.max_discount_amount_paise, c.one_time_per_customer,
+               c.is_active, c.start_date, c.end_date, c.created_at, c.updated_at
+        FROM coupons c
+        INNER JOIN coupon_assignments ca ON ca.coupon_id = c.id
+        INNER JOIN customers cust ON cust.id = ca.customer_id
+        WHERE c.restaurant_id = $1
+          AND c.is_active = true
+          AND (
+            cust.phone = $2
+            OR cust.phone_e164 = $2
+            OR RIGHT(cust.phone, 10) = RIGHT($2, 10)
+          )
+        ORDER BY c.created_at DESC
+        "#,
+    )
+    .bind(q.rid)
+    .bind(&phone_num)
+    .fetch_all(&pool)
+    .await
+    .unwrap_or_default();
+
+    Ok(Json(ApiResponse::success(coupons)))
 }
 
 // ─── Handler 8: Public Restaurant Info & Metadata ────────────────────────────

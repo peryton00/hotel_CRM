@@ -121,24 +121,73 @@ impl OrderRepository {
             .fetch_optional(&mut *tx)
             .await?;
 
-            if let Some(cid) = existing_id {
-                let _ = sqlx::query(
-                    r#"
-                    UPDATE customers
-                    SET total_orders = COALESCE(total_orders, 0) + 1,
-                        visit_count = COALESCE(visit_count, 0) + 1,
-                        total_spend_paise = COALESCE(total_spend_paise, 0) + $2,
-                        total_spent_paise = COALESCE(total_spent_paise, 0) + $2,
-                        name = CASE WHEN name = 'Walk-in Guest' OR name = '' THEN $3 ELSE name END,
-                        updated_at = NOW()
-                    WHERE id = $1
-                    "#,
+            // Session check: If this customer already has an order in this table session, do NOT increment total_orders/visit_count
+            let resolved_seating_session_id = if req.seating_session_id.is_some() {
+                req.seating_session_id
+            } else if let Some(tbl_id) = req.table_id {
+                sqlx::query_scalar::<_, Option<Uuid>>(
+                    "SELECT current_seating_session_id FROM tables WHERE id = $1 AND restaurant_id = $2",
                 )
-                .bind(cid)
-                .bind(breakdown.final_amount_paise)
-                .bind(cust_name)
-                .execute(&mut *tx)
-                .await;
+                .bind(tbl_id)
+                .bind(restaurant_id)
+                .fetch_optional(&mut *tx)
+                .await?
+                .flatten()
+            } else {
+                None
+            };
+
+            let is_repeat_in_session: bool = if let Some(sid) = resolved_seating_session_id {
+                sqlx::query_scalar::<_, bool>(
+                    "SELECT EXISTS(SELECT 1 FROM orders WHERE restaurant_id = $1 AND seating_session_id = $2 LIMIT 1)",
+                )
+                .bind(restaurant_id)
+                .bind(sid)
+                .fetch_one(&mut *tx)
+                .await
+                .unwrap_or(false)
+            } else {
+                false
+            };
+
+            if let Some(cid) = existing_id {
+                if is_repeat_in_session {
+                    // Subsequent round in existing dining session: add spend only, loyalty visits stays at 1
+                    let _ = sqlx::query(
+                        r#"
+                        UPDATE customers
+                        SET total_spend_paise = COALESCE(total_spend_paise, 0) + $2,
+                            total_spent_paise = COALESCE(total_spent_paise, 0) + $2,
+                            name = CASE WHEN name = 'Walk-in Guest' OR name = '' THEN $3 ELSE name END,
+                            updated_at = NOW()
+                        WHERE id = $1
+                        "#,
+                    )
+                    .bind(cid)
+                    .bind(breakdown.final_amount_paise)
+                    .bind(cust_name)
+                    .execute(&mut *tx)
+                    .await;
+                } else {
+                    // First order of session: increment total_orders and visit_count by 1
+                    let _ = sqlx::query(
+                        r#"
+                        UPDATE customers
+                        SET total_orders = COALESCE(total_orders, 0) + 1,
+                            visit_count = COALESCE(visit_count, 0) + 1,
+                            total_spend_paise = COALESCE(total_spend_paise, 0) + $2,
+                            total_spent_paise = COALESCE(total_spent_paise, 0) + $2,
+                            name = CASE WHEN name = 'Walk-in Guest' OR name = '' THEN $3 ELSE name END,
+                            updated_at = NOW()
+                        WHERE id = $1
+                        "#,
+                    )
+                    .bind(cid)
+                    .bind(breakdown.final_amount_paise)
+                    .bind(cust_name)
+                    .execute(&mut *tx)
+                    .await;
+                }
 
                 Some(cid)
             } else {
@@ -162,6 +211,22 @@ impl OrderRepository {
             req.customer_id
         };
 
+        // Resolve seating_session_id for the order record
+        let order_seating_session_id = if req.seating_session_id.is_some() {
+            req.seating_session_id
+        } else if let Some(tbl_id) = req.table_id {
+            sqlx::query_scalar::<_, Option<Uuid>>(
+                "SELECT current_seating_session_id FROM tables WHERE id = $1 AND restaurant_id = $2",
+            )
+            .bind(tbl_id)
+            .bind(restaurant_id)
+            .fetch_optional(&mut *tx)
+            .await?
+            .flatten()
+        } else {
+            None
+        };
+
         // 3. Insert order
         let generated_order_number =
             format!("ORD-{}", Uuid::new_v4().to_string()[..8].to_uppercase());
@@ -173,14 +238,14 @@ impl OrderRepository {
                 subtotal_paise, discount_paise, applied_coupon_code, tax_paise,
                 cgst_rate, sgst_rate,
                 service_charge_paise, round_off_paise, total_amount_paise, notes,
-                server_staff_id, legacy_unknown_timestamp
+                server_staff_id, seating_session_id, legacy_unknown_timestamp
             )
-            VALUES ($1, $2, $3, $4, 'confirmed', 'pending', $5, $6, $7, $8, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, false)
+            VALUES ($1, $2, $3, $4, 'confirmed', 'pending', $5, $6, $7, $8, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, false)
             RETURNING id, restaurant_id, order_number, order_type, pickup_reference, status, payment_status, payment_method,
                       table_id, customer_id, customer_name, customer_phone_e164, subtotal_paise, discount_paise, applied_coupon_code, tax_paise,
                       cgst_rate::float8 AS cgst_rate, sgst_rate::float8 AS sgst_rate,
                       service_charge_paise, round_off_paise, total_amount_paise, notes,
-                      server_staff_id, created_at, updated_at, NULL::timestamptz AS settled_at, cancelled_at,
+                      server_staff_id, seating_session_id, created_at, updated_at, NULL::timestamptz AS settled_at, cancelled_at,
                       legacy_unknown_timestamp
             "#,
         )
@@ -203,6 +268,7 @@ impl OrderRepository {
         .bind(breakdown.final_amount_paise)
         .bind(&req.notes)
         .bind(valid_staff_id)
+        .bind(order_seating_session_id)
         .fetch_one(&mut *tx)
         .await?;
 
@@ -608,23 +674,42 @@ impl OrderRepository {
         .fetch_one(&mut *tx)
         .await?;
 
-        // If completed or cancelled and table was occupied, release table to available & wipe session
+        // If completed or cancelled and table was occupied, release table to available & wipe session ONLY if no other active/unsettled orders remain
         let mut released_table_info: Option<(Uuid, String)> = None;
-        if (new_status == "completed" || new_status == "cancelled")
-            && current_order.table_id.is_some()
-        {
-            released_table_info = sqlx::query_as::<_, (Uuid, String)>(
-                r#"
-                UPDATE tables
-                SET status = 'AVAILABLE'::table_status, active_order_id = NULL, current_seating_session_id = NULL, updated_at = NOW()
-                WHERE id = $1 AND restaurant_id = $2
-                RETURNING id, COALESCE(table_number, number)
-                "#,
-            )
-            .bind(current_order.table_id)
-            .bind(restaurant_id)
-            .fetch_optional(&mut *tx)
-            .await?;
+        if new_status == "completed" || new_status == "cancelled" {
+            if let Some(tbl_id) = current_order.table_id {
+                let other_active_orders_count: i64 = sqlx::query_scalar(
+                    r#"
+                    SELECT COUNT(*) FROM orders 
+                    WHERE table_id = $1 
+                      AND restaurant_id = $2 
+                      AND id != $3 
+                      AND status NOT IN ('completed', 'cancelled')
+                      AND payment_status != 'paid'
+                    "#,
+                )
+                .bind(tbl_id)
+                .bind(restaurant_id)
+                .bind(order_id)
+                .fetch_one(&mut *tx)
+                .await
+                .unwrap_or(0);
+
+                if other_active_orders_count == 0 {
+                    released_table_info = sqlx::query_as::<_, (Uuid, String)>(
+                        r#"
+                        UPDATE tables
+                        SET status = 'AVAILABLE'::table_status, active_order_id = NULL, current_seating_session_id = NULL, updated_at = NOW()
+                        WHERE id = $1 AND restaurant_id = $2
+                        RETURNING id, COALESCE(table_number, number)
+                        "#,
+                    )
+                    .bind(tbl_id)
+                    .bind(restaurant_id)
+                    .fetch_optional(&mut *tx)
+                    .await?;
+                }
+            }
         }
 
         let valid_staff_id = match staff_id {

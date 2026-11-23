@@ -1,6 +1,11 @@
-use axum::extract::ws::{Message, WebSocket, WebSocketUpgrade};
+use axum::extract::{
+    ws::{Message, WebSocket, WebSocketUpgrade},
+    Query,
+};
 use axum::response::sse::{Event, KeepAlive, Sse};
 use axum::response::IntoResponse;
+use serde::Deserialize;
+use std::collections::HashMap;
 use std::convert::Infallible;
 use std::sync::{Arc, Mutex, OnceLock};
 use tokio::sync::mpsc;
@@ -9,14 +14,19 @@ use tokio_stream::StreamExt as _;
 use uuid::Uuid;
 
 static WS_CLIENTS: OnceLock<Arc<Mutex<Vec<mpsc::UnboundedSender<String>>>>> = OnceLock::new();
+static CRM_CLIENTS: OnceLock<Arc<Mutex<Vec<mpsc::UnboundedSender<String>>>>> = OnceLock::new();
 
 fn clients() -> &'static Arc<Mutex<Vec<mpsc::UnboundedSender<String>>>> {
     WS_CLIENTS.get_or_init(|| Arc::new(Mutex::new(Vec::new())))
 }
 
+fn crm_clients() -> &'static Arc<Mutex<Vec<mpsc::UnboundedSender<String>>>> {
+    CRM_CLIENTS.get_or_init(|| Arc::new(Mutex::new(Vec::new())))
+}
+
 /// Checks if any CRM / POS terminal or client is actively connected over WebSocket or SSE
 pub fn has_active_crm_clients() -> bool {
-    let mut list = clients().lock().unwrap();
+    let mut list = crm_clients().lock().unwrap();
     list.retain(|tx| !tx.is_closed());
     !list.is_empty()
 }
@@ -62,6 +72,26 @@ pub fn broadcast_table_status(
 }
 
 #[derive(Debug, Clone, serde::Serialize)]
+pub struct RestaurantStatusBroadcast {
+    pub event: &'static str,
+    pub restaurant_id: Uuid,
+    pub is_online: bool,
+    pub status: &'static str,
+}
+
+pub fn broadcast_restaurant_status(restaurant_id: Uuid, is_online: bool) {
+    let payload = RestaurantStatusBroadcast {
+        event: "RESTAURANT_STATUS_CHANGED",
+        restaurant_id,
+        is_online,
+        status: if is_online { "ONLINE" } else { "OFFLINE" },
+    };
+    if let Ok(json) = serde_json::to_string(&payload) {
+        broadcast_str(&json);
+    }
+}
+
+#[derive(Debug, Clone, serde::Serialize)]
 pub struct ReservationBroadcast {
     pub event: &'static str,
     pub reservation: crate::models::customer::Reservation,
@@ -83,13 +113,36 @@ fn broadcast_str(order_json: &str) {
     list.retain(|tx| tx.send(order_json.to_string()).is_ok());
 }
 
-pub async fn ws_handler(ws: WebSocketUpgrade) -> impl IntoResponse {
-    ws.on_upgrade(handle_socket)
+#[derive(Debug, Deserialize, Default)]
+pub struct SocketQuery {
+    pub client_type: Option<String>,
+    pub role: Option<String>,
 }
 
-async fn handle_socket(mut socket: WebSocket) {
+pub async fn ws_handler(
+    ws: WebSocketUpgrade,
+    Query(params): Query<HashMap<String, String>>,
+) -> impl IntoResponse {
+    let is_crm = params
+        .get("client_type")
+        .map(|v| {
+            v.to_lowercase() == "crm" || v.to_lowercase() == "pos" || v.to_lowercase() == "admin"
+        })
+        .unwrap_or(false)
+        || params
+            .get("role")
+            .map(|v| v.to_lowercase() == "admin" || v.to_lowercase() == "staff")
+            .unwrap_or(false);
+
+    ws.on_upgrade(move |socket| handle_socket(socket, is_crm))
+}
+
+async fn handle_socket(mut socket: WebSocket, is_crm: bool) {
     let (tx, mut rx) = mpsc::unbounded_channel::<String>();
-    clients().lock().unwrap().push(tx);
+    clients().lock().unwrap().push(tx.clone());
+    if is_crm {
+        crm_clients().lock().unwrap().push(tx);
+    }
 
     loop {
         tokio::select! {
@@ -114,9 +167,21 @@ async fn handle_socket(mut socket: WebSocket) {
 }
 
 /// SSE handler allowing clients or browsers with `EventSource` to receive live events
-pub async fn sse_handler() -> Sse<impl tokio_stream::Stream<Item = Result<Event, Infallible>>> {
+pub async fn sse_handler(
+    Query(params): Query<HashMap<String, String>>,
+) -> Sse<impl tokio_stream::Stream<Item = Result<Event, Infallible>>> {
+    let is_crm = params
+        .get("client_type")
+        .map(|v| {
+            v.to_lowercase() == "crm" || v.to_lowercase() == "pos" || v.to_lowercase() == "admin"
+        })
+        .unwrap_or(false);
+
     let (tx, rx) = mpsc::unbounded_channel::<String>();
-    clients().lock().unwrap().push(tx);
+    clients().lock().unwrap().push(tx.clone());
+    if is_crm {
+        crm_clients().lock().unwrap().push(tx);
+    }
 
     let stream = UnboundedReceiverStream::new(rx).map(|msg| Ok(Event::default().data(msg)));
 

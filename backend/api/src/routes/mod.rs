@@ -47,6 +47,10 @@ pub fn create_router(state: AppState) -> Router {
             put(restaurant_routes::update_current_restaurant),
         )
         .route(
+            "/restaurants/heartbeat",
+            post(restaurant_routes::restaurant_heartbeat),
+        )
+        .route(
             "/restaurants/staff",
             get(restaurant_routes::list_staff_members).post(restaurant_routes::create_staff_member),
         )

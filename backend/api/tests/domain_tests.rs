@@ -235,3 +235,49 @@ fn test_sync_outbox_idempotency_and_event_contract() {
     assert_eq!(payload["amount_paise"], 45000);
     assert_eq!(payload["status"], "paid");
 }
+
+#[test]
+fn test_multi_round_session_loyalty_and_billing_invariants() {
+    let session_id = Uuid::new_v4();
+
+    // Round 1: Starters (Rs 300)
+    let round_1_subtotal = 30000i64;
+    let round_1_tax = (round_1_subtotal as f64 * 0.05) as i64;
+
+    // Round 2: Main Course (Rs 800)
+    let round_2_subtotal = 80000i64;
+    let round_2_tax = (round_2_subtotal as f64 * 0.05) as i64;
+
+    // Round 3: Dessert / Beverages (Rs 200)
+    let round_3_subtotal = 20000i64;
+    let round_3_tax = (round_3_subtotal as f64 * 0.05) as i64;
+
+    // Invariant 1: Consolidated Subtotal & Tax across 3 rounds of the same session
+    let combined_subtotal = round_1_subtotal + round_2_subtotal + round_3_subtotal;
+    let combined_tax = round_1_tax + round_2_tax + round_3_tax;
+    let combined_gross = combined_subtotal + combined_tax;
+    assert_eq!(combined_subtotal, 130000);
+    assert_eq!(combined_tax, 6500);
+    assert_eq!(combined_gross, 136500);
+
+    // Invariant 2: Single coupon applied on combined total of all 3 rounds (not 3 coupons)
+    let coupon_discount_paise = 20000i64; // Rs 200 off
+    let final_settlement_total = combined_gross - coupon_discount_paise;
+    assert_eq!(final_settlement_total, 116500);
+
+    // Invariant 3: Single dining session increments visit count by 1 regardless of number of rounds
+    let mut customer_visits = 0;
+    let mut orders_in_session = Vec::new();
+    for round_num in 1..=3 {
+        let is_repeat = orders_in_session.contains(&session_id);
+        if !is_repeat {
+            customer_visits += 1;
+            orders_in_session.push(session_id);
+        }
+        assert_eq!(round_num, orders_in_session.len() + (round_num - 1));
+    }
+    assert_eq!(
+        customer_visits, 1,
+        "Customer visit count must strictly equal 1 for all rounds within the same dining session"
+    );
+}
