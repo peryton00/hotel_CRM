@@ -1714,15 +1714,11 @@ export class MockDataService {
 
     const combinedSubtotal =
       Math.round(
-        (order.subtotal +
-          siblingOrders.reduce((sum, s) => sum + (s.subtotal || 0), 0)) *
-          100,
+        (order.subtotal + siblingOrders.reduce((sum, s) => sum + (s.subtotal || 0), 0)) * 100,
       ) / 100;
     const combinedTax =
       Math.round(
-        (order.taxAmount +
-          siblingOrders.reduce((sum, s) => sum + (s.taxAmount || 0), 0)) *
-          100,
+        (order.taxAmount + siblingOrders.reduce((sum, s) => sum + (s.taxAmount || 0), 0)) * 100,
       ) / 100;
     const grossTotal = Math.round((combinedSubtotal + combinedTax) * 100) / 100;
     const finalDiscount = Math.min(

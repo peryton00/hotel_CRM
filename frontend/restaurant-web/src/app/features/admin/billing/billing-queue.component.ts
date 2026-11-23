@@ -128,7 +128,10 @@ import {
                           }})
                         </span>
                       } @else {
-                        <span class="table-tag" [class.consolidated-tag]="ord.isSessionConsolidated">
+                        <span
+                          class="table-tag"
+                          [class.consolidated-tag]="ord.isSessionConsolidated"
+                        >
                           Table {{ ord.tableNumber }}
                           @if (ord.isSessionConsolidated) {
                             <span class="rounds-chip">{{ ord.sessionRoundsCount }} Rounds</span>
@@ -149,7 +152,8 @@ import {
                     <div class="items-cell">
                       @if (ord.isSessionConsolidated) {
                         <span class="session-items-badge">
-                          <i class="ph ph-receipt"></i> {{ ord.sessionRoundsCount }} Rounds • {{ ord.items.length }} dishes
+                          <i class="ph ph-receipt"></i> {{ ord.sessionRoundsCount }} Rounds •
+                          {{ ord.items.length }} dishes
                         </span>
                       } @else {
                         {{ ord.items.length }} dishes
@@ -389,11 +393,16 @@ import {
             <div class="modal-header">
               <div>
                 <h3 class="heading-card">
-                  {{ selectedSessionOrders().length > 1 ? 'Settle Consolidated Table Bill' : 'Settle Dining Bill' }}
+                  {{
+                    selectedSessionOrders().length > 1
+                      ? 'Settle Consolidated Table Bill'
+                      : 'Settle Dining Bill'
+                  }}
                 </h3>
                 <span class="text-xs text-muted">
                   @if (selectedSessionOrders().length > 1) {
-                    Table {{ ord.tableNumber }} • {{ selectedSessionOrders().length }} Dining Rounds Consolidated
+                    Table {{ ord.tableNumber }} • {{ selectedSessionOrders().length }} Dining Rounds
+                    Consolidated
                   } @else {
                     {{ ord.orderNumber }} • Table {{ ord.tableNumber }}
                   }
@@ -410,9 +419,14 @@ import {
                 <div class="session-rounds-banner">
                   <div class="rounds-badge-pill">
                     <i class="ph ph-receipt"></i>
-                    <span>CONSOLIDATED SESSION • {{ selectedSessionOrders().length }} ORDER ROUNDS</span>
+                    <span
+                      >CONSOLIDATED SESSION • {{ selectedSessionOrders().length }} ORDER
+                      ROUNDS</span
+                    >
                   </div>
-                  <span class="text-xs text-muted">All orders for Table {{ ord.tableNumber }} combined into 1 bill</span>
+                  <span class="text-xs text-muted"
+                    >All orders for Table {{ ord.tableNumber }} combined into 1 bill</span
+                  >
                 </div>
 
                 <div class="rounds-container">
@@ -430,7 +444,9 @@ import {
                         @for (it of rnd.items; track it.id || it.name) {
                           <div class="round-item-row">
                             <span class="item-name">{{ it.quantity }}× {{ it.name }}</span>
-                            <span class="item-price">{{ (it.unitPrice || 0) * it.quantity | currencyInr }}</span>
+                            <span class="item-price">{{
+                              (it.unitPrice || 0) * it.quantity | currencyInr
+                            }}</span>
                           </div>
                         }
                       </div>
@@ -447,7 +463,9 @@ import {
                 @if (selectedSessionOrders().length > 1) {
                   <div class="settle-row">
                     <span>Dining Rounds Included</span>
-                    <span class="font-bold text-onyx">{{ selectedSessionOrders().length }} Orders</span>
+                    <span class="font-bold text-onyx"
+                      >{{ selectedSessionOrders().length }} Orders</span
+                    >
                   </div>
                 }
                 <div class="settle-row">
@@ -2398,8 +2416,8 @@ export class BillingQueueComponent {
         o.status !== 'CANCELLED' &&
         o.paymentStatus === 'UNPAID' &&
         ((ord.seatingSessionId && o.seatingSessionId === ord.seatingSessionId) ||
-          ((ord.tableId && o.tableId === ord.tableId) ||
-            (ord.tableNumber && o.tableNumber === ord.tableNumber))),
+          (ord.tableId && o.tableId === ord.tableId) ||
+          (ord.tableNumber && o.tableNumber === ord.tableNumber)),
     );
     return [ord, ...siblings].sort(
       (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),

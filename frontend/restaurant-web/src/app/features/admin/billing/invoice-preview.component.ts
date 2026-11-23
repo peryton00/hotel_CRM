@@ -551,8 +551,12 @@ import {
                           <div class="invoice-round-header">
                             <span class="rnd-tag">ORDER {{ rnd.roundIndex }}</span>
                             <span class="rnd-ord-no">{{ rnd.order.orderNumber }}</span>
-                            <span class="rnd-time">{{ rnd.order.createdAt | date: 'shortTime' }}</span>
-                            <span class="rnd-subtotal">Round Subtotal: {{ rnd.order.subtotal | currencyInr }}</span>
+                            <span class="rnd-time">{{
+                              rnd.order.createdAt | date: 'shortTime'
+                            }}</span>
+                            <span class="rnd-subtotal"
+                              >Round Subtotal: {{ rnd.order.subtotal | currencyInr }}</span
+                            >
                           </div>
                         </td>
                       </tr>
@@ -581,7 +585,7 @@ import {
                           </td>
                           <td class="col-hsn">996331</td>
                           <td class="col-qty font-bold">{{ item.quantity }}</td>
-                          <td class="col-rate">{{ (item.unitPrice || 0) | number: '1.2-2' }}</td>
+                          <td class="col-rate">{{ item.unitPrice || 0 | number: '1.2-2' }}</td>
                           <td class="col-amt font-bold">
                             {{ item.quantity * (item.unitPrice || 0) | number: '1.2-2' }}
                           </td>
@@ -2341,28 +2345,28 @@ export class InvoicePreviewComponent implements OnInit {
     if (raw.orderType === 'TAKEAWAY' || (!raw.tableId && !raw.tableNumber)) return raw;
 
     // Detect multi-round session orders for this table
-    const siblings = this.mock.orders().filter(
-      (o) =>
-        o.id !== raw.id &&
-        o.status !== 'CANCELLED' &&
-        ((raw.seatingSessionId && o.seatingSessionId === raw.seatingSessionId) ||
-          (raw.paymentStatus === 'UNPAID' &&
-            o.paymentStatus === 'UNPAID' &&
-            ((raw.tableId && o.tableId === raw.tableId) ||
-              (raw.tableNumber && o.tableNumber === raw.tableNumber)))),
-    );
+    const siblings = this.mock
+      .orders()
+      .filter(
+        (o) =>
+          o.id !== raw.id &&
+          o.status !== 'CANCELLED' &&
+          ((raw.seatingSessionId && o.seatingSessionId === raw.seatingSessionId) ||
+            (raw.paymentStatus === 'UNPAID' &&
+              o.paymentStatus === 'UNPAID' &&
+              ((raw.tableId && o.tableId === raw.tableId) ||
+                (raw.tableNumber && o.tableNumber === raw.tableNumber)))),
+      );
 
     if (siblings.length === 0) return raw;
 
     const allItems = [...raw.items, ...siblings.flatMap((s) => s.items)];
     const subtotal =
-      Math.round(
-        (raw.subtotal + siblings.reduce((sum, s) => sum + (s.subtotal || 0), 0)) * 100,
-      ) / 100;
+      Math.round((raw.subtotal + siblings.reduce((sum, s) => sum + (s.subtotal || 0), 0)) * 100) /
+      100;
     const taxAmount =
-      Math.round(
-        (raw.taxAmount + siblings.reduce((sum, s) => sum + (s.taxAmount || 0), 0)) * 100,
-      ) / 100;
+      Math.round((raw.taxAmount + siblings.reduce((sum, s) => sum + (s.taxAmount || 0), 0)) * 100) /
+      100;
     const gross = Math.round((subtotal + taxAmount) * 100) / 100;
     const discountAmount = raw.discountAmount || 0;
     const totalAmount = Math.max(0, Math.round((gross - discountAmount) * 100) / 100);
@@ -2382,14 +2386,16 @@ export class InvoicePreviewComponent implements OnInit {
     if (raw.orderType === 'TAKEAWAY' || (!raw.tableId && !raw.tableNumber)) {
       return [{ roundIndex: 1, order: raw }];
     }
-    const siblings = this.mock.orders().filter(
-      (o) =>
-        o.id !== raw.id &&
-        o.status !== 'CANCELLED' &&
-        ((raw.seatingSessionId && o.seatingSessionId === raw.seatingSessionId) ||
-          ((raw.tableId && o.tableId === raw.tableId) ||
-            (raw.tableNumber && o.tableNumber === raw.tableNumber))),
-    );
+    const siblings = this.mock
+      .orders()
+      .filter(
+        (o) =>
+          o.id !== raw.id &&
+          o.status !== 'CANCELLED' &&
+          ((raw.seatingSessionId && o.seatingSessionId === raw.seatingSessionId) ||
+            (raw.tableId && o.tableId === raw.tableId) ||
+            (raw.tableNumber && o.tableNumber === raw.tableNumber)),
+      );
     const all = [raw, ...siblings].sort(
       (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
     );

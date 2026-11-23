@@ -14,8 +14,8 @@ use crate::{
         order::{CreateOrderItemInput, CreateOrderRequest},
     },
     repositories::{
-        customer_repo::CustomerRepository,
-        feedback_repo::FeedbackRepository, menu_repo::MenuRepository, order_repo::OrderRepository,
+        customer_repo::CustomerRepository, feedback_repo::FeedbackRepository,
+        menu_repo::MenuRepository, order_repo::OrderRepository,
     },
 };
 
@@ -654,7 +654,9 @@ pub async fn get_public_coupons(
     State(pool): State<PgPool>,
     Query(q): Query<PublicCouponsQuery>,
 ) -> Result<Json<ApiResponse<Vec<crate::models::coupon::Coupon>>>, AppError> {
-    let clean_phone = q.phone.as_deref()
+    let clean_phone = q
+        .phone
+        .as_deref()
         .map(|p| p.chars().filter(|c| c.is_ascii_digit()).collect::<String>())
         .filter(|p| p.len() >= 10);
 
