@@ -42,6 +42,16 @@ pub async fn create_category(
     Ok(Json(ApiResponse::success(category)))
 }
 
+pub async fn update_category(
+    State(pool): State<PgPool>,
+    tenant: TenantContext,
+    Path(category_id): Path<Uuid>,
+    Json(req): Json<crate::models::menu::UpdateMenuCategoryRequest>,
+) -> Result<impl IntoResponse, AppError> {
+    let category = MenuRepository::update_category(&pool, tenant.restaurant_id, category_id, req).await?;
+    Ok(Json(ApiResponse::success(category)))
+}
+
 pub async fn delete_category(
     State(pool): State<PgPool>,
     tenant: TenantContext,
@@ -103,6 +113,8 @@ pub async fn update_availability(
     let item =
         MenuRepository::update_availability(&pool, tenant.restaurant_id, item_id, req.is_available)
             .await?;
+
+    crate::ws::broadcast_menu_availability(item.id, item.is_available);
 
     Ok(Json(ApiResponse::success(item)))
 }

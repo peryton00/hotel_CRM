@@ -149,12 +149,7 @@ export class ApiClientService {
             const fallback = this.fallbackSupabasePost<T>(endpoint, body);
             if (
               fallback &&
-              (err.status === 0 ||
-                err.status === 401 ||
-                err.status === 500 ||
-                err.status === 502 ||
-                err.status === 503 ||
-                err.status === 404)
+              (err.status === 0 || err.status === 502 || err.status === 503)
             ) {
               return fallback;
             }
@@ -175,7 +170,7 @@ export class ApiClientService {
           const fallback = this.fallbackSupabasePut<T>(endpoint, body);
           if (
             fallback &&
-            (err.status === 0 || err.status === 502 || err.status === 503 || err.status === 404)
+            (err.status === 0 || err.status === 502 || err.status === 503)
           ) {
             return fallback;
           }
@@ -348,7 +343,6 @@ export class ApiClientService {
       const payload = {
         restaurant_id: restaurantId,
         number: body.table_number,
-        table_number: body.table_number,
         capacity: body.capacity || 4,
         section: body.section || 'Main Dining',
         qr_token: token,
@@ -364,11 +358,10 @@ export class ApiClientService {
     if (clean === 'reservations') {
       const payload = {
         restaurant_id: restaurantId,
-        assigned_table_id: body.table_id,
+        table_id: body.table_id || null,
         customer_name: body.customer_name,
         customer_phone: body.customer_phone,
         customer_phone_e164: body.customer_phone,
-        guest_count: body.guest_count || 2,
         party_size: body.guest_count || 2,
         reservation_time: body.reservation_time,
         special_requests: body.special_requests,
@@ -427,20 +420,26 @@ export class ApiClientService {
 
     if (clean === 'orders') {
       const orderPayload: any = {
+        id: body.id || undefined,
         restaurant_id: restaurantId,
+        order_number:
+          body.order_number ||
+          `ORD-${(body.id || Math.random().toString(36).substring(2, 10)).substring(0, 8).toUpperCase()}`,
         table_id: body.table_id || null,
         customer_id: body.customer_id || null,
         customer_name: body.customer_name || 'Walk-in Guest',
+        customer_phone: body.customer_phone || null,
         customer_phone_e164: body.customer_phone || body.customer_phone_e164 || null,
-        order_type: body.order_type || 'DINE_IN',
-        status: (body.status || 'PENDING').toUpperCase(),
-        payment_status: (body.payment_status || 'UNPAID').toUpperCase(),
+        order_type: (body.order_type || 'DINE_IN').toUpperCase(),
+        status: (body.status || 'CONFIRMED').toUpperCase(),
+        payment_status: (body.payment_status || 'PENDING').toUpperCase(),
         subtotal_paise: body.subtotal_paise || 0,
         discount_paise: body.discount_paise || 0,
         tax_paise: body.tax_paise || 0,
         total_amount_paise: body.total_amount_paise || 0,
         notes: body.notes || '',
       };
+      if (body.seating_session_id) orderPayload.seating_session_id = body.seating_session_id;
       if (body.server_staff_id) orderPayload.server_staff_id = body.server_staff_id;
 
       return this.http
@@ -452,9 +451,12 @@ export class ApiClientService {
               const itemRows = body.items.map((it: any) => ({
                 order_id: created.id,
                 menu_item_id: it.menu_item_id || null,
+                name: it.item_name || it.name || 'Dish Item',
                 quantity: it.quantity || 1,
                 unit_price_paise: it.unit_price_paise || 0,
-                total_price_paise: (it.unit_price_paise || 0) * (it.quantity || 1),
+                item_total_paise: (it.unit_price_paise || 0) * (it.quantity || 1),
+                total_paise: (it.unit_price_paise || 0) * (it.quantity || 1),
+                subtotal_paise: (it.unit_price_paise || 0) * (it.quantity || 1),
                 notes: it.notes || '',
               }));
               this.http
@@ -480,7 +482,7 @@ export class ApiClientService {
           const fallback = this.fallbackSupabaseDelete<T>(endpoint);
           if (
             fallback &&
-            (err.status === 0 || err.status === 502 || err.status === 503 || err.status === 404)
+            (err.status === 0 || err.status === 502 || err.status === 503)
           ) {
             return fallback;
           }

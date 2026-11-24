@@ -522,19 +522,35 @@ import { EmptyStateComponent } from '../../../shared/components/empty-state/empt
 
         i.search-icon {
           position: absolute;
-          left: 10px;
+          left: 14px;
           top: 50%;
           transform: translateY(-50%);
-          color: var(--color-text-muted, #64748b);
-          font-size: 0.875rem;
+          color: var(--color-text-muted);
+          font-size: 1.125rem;
           pointer-events: none;
         }
 
         .form-input {
-          height: 32px;
-          padding: 6px 26px 6px 28px;
-          font-size: 0.8125rem;
-          border-radius: var(--radius-sm, 8px);
+          height: 44px;
+          padding-left: 42px;
+          padding-right: 32px;
+          font-size: 0.875rem;
+          border-radius: var(--radius-md, 10px);
+          background: var(--color-surface);
+          border: 1px solid var(--color-border);
+          color: var(--color-text-primary);
+          transition: all var(--transition-fast, 0.15s ease);
+          box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
+
+          &:focus {
+            border-color: var(--color-primary);
+            box-shadow: 0 0 0 3px rgba(194, 65, 12, 0.12);
+            outline: none;
+          }
+
+          &::placeholder {
+            color: var(--color-text-muted);
+          }
         }
 
         .btn-clear-search {

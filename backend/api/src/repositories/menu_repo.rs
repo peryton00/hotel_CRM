@@ -266,6 +266,36 @@ impl MenuRepository {
         Ok(category)
     }
 
+    pub async fn update_category(
+        pool: &PgPool,
+        restaurant_id: Uuid,
+        category_id: Uuid,
+        req: crate::models::menu::UpdateMenuCategoryRequest,
+    ) -> Result<MenuCategory, AppError> {
+        let category = sqlx::query_as::<_, MenuCategory>(
+            r#"
+            UPDATE menu_categories
+            SET name = COALESCE($3, name),
+                slug = COALESCE($4, slug),
+                display_order = COALESCE($5, display_order),
+                is_active = COALESCE($6, is_active),
+                updated_at = NOW()
+            WHERE restaurant_id = $1 AND id = $2
+            RETURNING id, restaurant_id, name, description, display_order, is_active, created_at, updated_at
+            "#,
+        )
+        .bind(restaurant_id)
+        .bind(category_id)
+        .bind(req.name)
+        .bind(req.slug)
+        .bind(req.display_order)
+        .bind(req.is_active)
+        .fetch_one(pool)
+        .await?;
+
+        Ok(category)
+    }
+
     pub async fn delete_category(
         pool: &PgPool,
         restaurant_id: Uuid,

@@ -66,9 +66,12 @@
 
   // Admin Topbar
   .admin-topbar {
-    background: #111317;
+    background: rgba(17, 19, 23, 0.95) !important;
+    backdrop-filter: blur(12px) !important;
+    -webkit-backdrop-filter: blur(12px) !important;
     border-bottom: 1px solid rgba(255, 255, 255, 0.08);
     box-shadow: 0 4px 20px rgba(0, 0, 0, 0.35);
+    z-index: 850 !important;
   }
 
   // Admin Sidebar
@@ -135,6 +138,26 @@
     div,
     label {
       color: inherit;
+    }
+
+    .close-btn {
+      color: #64748b !important;
+      background: transparent !important;
+
+      i,
+      .ph {
+        color: #64748b !important;
+      }
+
+      &:hover {
+        background: #f1f5f9 !important;
+        color: #0f172a !important;
+
+        i,
+        .ph {
+          color: #0f172a !important;
+        }
+      }
     }
   }
 
@@ -527,6 +550,52 @@
     }
   }
 
+  .wa-template-textarea {
+    background: #15181d !important;
+    color: #f2f4f8 !important;
+    border-color: rgba(255, 255, 255, 0.12) !important;
+
+    &:focus {
+      border-color: #22c55e !important;
+      box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.2) !important;
+    }
+
+    &::placeholder {
+      color: #6b7280 !important;
+    }
+  }
+
+  .wa-token-chips-wrapper {
+    background: #15181d;
+    border-color: rgba(255, 255, 255, 0.12);
+  }
+
+  .wa-token-chip {
+    background: rgba(139, 92, 246, 0.18);
+    border-color: rgba(139, 92, 246, 0.35);
+    color: #c4b5fd;
+
+    &.highlight-chip {
+      background: rgba(16, 185, 129, 0.18);
+      border-color: rgba(16, 185, 129, 0.35);
+      color: #6ee7b7;
+    }
+  }
+
+  .wa-template-tabs {
+    background: #121418;
+    border-color: rgba(255, 255, 255, 0.08);
+
+    .wa-tpl-tab-btn {
+      color: #9aa2ae;
+
+      &.active {
+        background: #1e222b;
+        color: #f2f4f8;
+      }
+    }
+  }
+
   .form-label {
     color: var(--color-text-primary);
   }
@@ -583,6 +652,470 @@
     }
   }
 
+  /* Settings: System & Reset Tab (Luxury Dark Mode) */
+  .system-overview-banner {
+    background: linear-gradient(135deg, #131519 0%, #171a20 100%);
+    border-color: rgba(255, 255, 255, 0.08);
+
+    .system-hero-info .system-brand-mark {
+      background: rgba(239, 68, 68, 0.12);
+      border-color: rgba(239, 68, 68, 0.25);
+    }
+
+    .system-version-pill {
+      background: #1e222b !important;
+      border-color: rgba(255, 255, 255, 0.1) !important;
+      color: #94a3b8 !important;
+    }
+  }
+
+  .system-status-card {
+    background: #131519;
+    border-color: rgba(255, 255, 255, 0.08);
+
+    &:hover {
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+    }
+
+    .system-endpoint-row code {
+      background: #1a1e27;
+      color: #e2e8f0;
+    }
+  }
+
+  .recovery-center-panel {
+    border-color: rgba(239, 68, 68, 0.25);
+  }
+
+  .recovery-action-card {
+    background: #131519;
+    border-color: rgba(255, 255, 255, 0.08);
+
+    &:hover {
+      border-color: rgba(255, 255, 255, 0.2);
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
+    }
+
+    &.tier-danger {
+      background: rgba(239, 68, 68, 0.04);
+      border-color: rgba(239, 68, 68, 0.25);
+
+      &:hover {
+        border-color: #ef4444;
+        box-shadow: 0 4px 18px rgba(239, 68, 68, 0.15);
+      }
+    }
+
+    .recovery-card-top .recovery-icon-circle {
+      &.soft {
+        background: rgba(59, 130, 246, 0.14);
+        border-color: rgba(59, 130, 246, 0.25);
+      }
+      &.cache {
+        background: rgba(16, 185, 129, 0.14);
+        border-color: rgba(16, 185, 129, 0.25);
+      }
+      &.shift {
+        background: rgba(168, 85, 247, 0.14);
+        border-color: rgba(168, 85, 247, 0.25);
+      }
+      &.danger {
+        background: rgba(239, 68, 68, 0.14);
+        border-color: rgba(239, 68, 68, 0.25);
+      }
+    }
+
+    .recovery-impact-row {
+      background: #0f1115;
+      border-color: rgba(255, 255, 255, 0.06);
+
+      &.danger-impact {
+        background: rgba(239, 68, 68, 0.08);
+        border-color: rgba(239, 68, 68, 0.2);
+        color: #fca5a5;
+
+        .impact-label {
+          color: #f87171;
+        }
+      }
+    }
+  }
+
+  .recovery-disclosure-card {
+    background: #131519;
+    border-color: rgba(255, 255, 255, 0.08);
+
+    .disclosure-header {
+      border-bottom-color: rgba(255, 255, 255, 0.08);
+    }
+  }
+
+  .system-reset-callout-card {
+    background: linear-gradient(135deg, rgba(239, 68, 68, 0.08) 0%, rgba(245, 158, 11, 0.06) 100%);
+    border-color: rgba(239, 68, 68, 0.3);
+
+    .callout-left .callout-icon-box {
+      background: rgba(239, 68, 68, 0.16);
+      color: #f87171;
+    }
+  }
+
+  // Unified Search Inputs
+  .search-input-wrap,
+  .search-wrap,
+  .table-search-box,
+  .search-box,
+  .catalog-search-wrap,
+  .drawer-search-bar .search-input-wrap {
+    .form-input,
+    .search-input,
+    .catalog-search-input,
+    input[type='text'],
+    input[type='search'] {
+      background: var(--color-surface, #1e222d);
+      border-color: var(--color-border, rgba(255, 255, 255, 0.08));
+      color: var(--color-text-primary, #f2f4f8);
+      box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+
+      &:focus {
+        border-color: var(--color-primary, #e25822);
+        box-shadow: 0 0 0 3px rgba(226, 88, 34, 0.2);
+      }
+
+      &::placeholder {
+        color: var(--color-text-muted, #7c879d);
+      }
+    }
+  }
+
+  .settings-sidebar {
+    background: #131519 !important;
+    border-color: rgba(255, 255, 255, 0.08) !important;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4) !important;
+    top: calc(var(--topbar-height, 68px) + 20px) !important;
+    z-index: 40 !important;
+
+    .sidebar-category-group:not(:last-child) {
+      border-bottom-color: rgba(255, 255, 255, 0.06) !important;
+    }
+  }
+
+  .sidebar-nav-btn {
+    &:hover {
+      background: rgba(255, 255, 255, 0.04);
+    }
+
+    &[data-tab="general"] .nav-btn-icon-box { background: rgba(249, 115, 22, 0.2); color: #fb923c; }
+    &[data-tab="tax"] .nav-btn-icon-box { background: rgba(16, 185, 129, 0.2); color: #34d399; }
+    &[data-tab="printer"] .nav-btn-icon-box { background: rgba(139, 92, 246, 0.2); color: #a78bfa; }
+    &[data-tab="whatsapp"] .nav-btn-icon-box { background: rgba(34, 197, 94, 0.2); color: #4ade80; }
+    &[data-tab="service"] .nav-btn-icon-box { background: rgba(245, 158, 11, 0.2); color: #fbbf24; }
+    &[data-tab="maintenance"] .nav-btn-icon-box { background: rgba(14, 165, 233, 0.2); color: #38bdf8; }
+    &[data-tab="reset"] .nav-btn-icon-box { background: rgba(239, 68, 68, 0.2); color: #f87171; }
+    &[data-tab="security"] .nav-btn-icon-box { background: rgba(99, 102, 241, 0.2); color: #818cf8; }
+
+    &.active {
+      background: rgba(234, 88, 12, 0.15) !important;
+      border-color: rgba(234, 88, 12, 0.35) !important;
+
+      .nav-btn-label {
+        color: #fb923c !important;
+      }
+
+      .nav-chevron {
+        color: #fb923c !important;
+      }
+    }
+
+    .tab-chip {
+      background: rgba(255, 255, 255, 0.06);
+
+      &.badge-live {
+        background: rgba(14, 165, 233, 0.2);
+        color: #38bdf8;
+        border-color: rgba(14, 165, 233, 0.35);
+      }
+
+      &.badge-free {
+        background: rgba(34, 197, 94, 0.2);
+        color: #4ade80;
+        border-color: rgba(34, 197, 94, 0.35);
+      }
+
+      &.badge-reset {
+        background: rgba(239, 68, 68, 0.2);
+        color: #f87171;
+        border-color: rgba(239, 68, 68, 0.35);
+      }
+
+      &.badge-escpos {
+        background: rgba(139, 92, 246, 0.2);
+        color: #c084fc;
+        border-color: rgba(139, 92, 246, 0.35);
+      }
+    }
+  }
+
+  .apple-card {
+    background: #131519;
+    border-color: rgba(255, 255, 255, 0.08);
+  }
+
+  .apple-action-pill {
+    background: rgba(255, 255, 255, 0.05);
+    border-color: rgba(255, 255, 255, 0.1);
+    color: var(--color-text-primary);
+
+    &:hover {
+      background: rgba(255, 255, 255, 0.1);
+      border-color: rgba(255, 255, 255, 0.2);
+    }
+  }
+
+  .apple-callout-guide {
+    background: linear-gradient(135deg, rgba(245, 158, 11, 0.08) 0%, rgba(245, 158, 11, 0.02) 100%) !important;
+    border-color: rgba(245, 158, 11, 0.22) !important;
+
+    .guide-lead {
+      .guide-badge-icon {
+        background: rgba(245, 158, 11, 0.18) !important;
+        color: #fbbf24 !important;
+      }
+
+      .guide-text-wrap {
+        .guide-title-line {
+          .guide-badge-subtle {
+            background: rgba(245, 158, 11, 0.2) !important;
+            color: #fbbf24 !important;
+          }
+        }
+
+        .guide-flow-inline {
+          color: #94a3b8 !important;
+
+          .flow-arrow {
+            color: #64748b !important;
+          }
+        }
+      }
+    }
+  }
+
+  .apple-presets-strip {
+    background: #0f1115;
+    border-color: rgba(255, 255, 255, 0.08);
+
+    .preset-pill {
+      background: #16191f;
+      border-color: rgba(255, 255, 255, 0.1);
+      color: var(--color-text-secondary);
+
+      &:hover {
+        border-color: rgba(16, 185, 129, 0.5);
+        color: var(--color-text-primary);
+      }
+
+      &.active {
+        background: #059669;
+        border-color: #059669;
+        color: #ffffff;
+      }
+    }
+  }
+
+  .tax-math-callout {
+    background: linear-gradient(135deg, rgba(16, 185, 129, 0.08) 0%, rgba(16, 185, 129, 0.02) 100%);
+    border-color: rgba(16, 185, 129, 0.25);
+
+    .math-breakdown-row .math-chip {
+      background: #131519;
+      border-color: rgba(255, 255, 255, 0.08);
+
+      &.highlight-chip {
+        background: rgba(194, 65, 12, 0.1);
+        border-color: rgba(194, 65, 12, 0.3);
+      }
+    }
+  }
+
+  .footer-presets-row .insert-pill {
+    background: #16191f;
+    border-color: rgba(255, 255, 255, 0.08);
+    color: var(--color-text-secondary);
+
+    &:hover {
+      background: #1f242d;
+      color: var(--color-primary);
+      border-color: var(--color-primary);
+    }
+  }
+
+  .thermal-bill-preview .bill-paper-tape,
+  .tape-emulation-box .bill-paper-tape {
+    background: #0d0f12 !important;
+    border-color: rgba(255, 255, 255, 0.12) !important;
+    color: #cbd5e1 !important;
+
+    .dashed-line {
+      color: #475569 !important;
+    }
+
+    .tape-center.italic-msg {
+      color: #34d399 !important;
+    }
+  }
+
+  .tape-emulation-box {
+    background: #131519 !important;
+    border-color: rgba(255, 255, 255, 0.08) !important;
+
+    .bill-preview-header {
+      border-bottom-color: rgba(255, 255, 255, 0.08) !important;
+    }
+  }
+
+  .apple-radio-card {
+    background: #16191f !important;
+    border-color: rgba(255, 255, 255, 0.08) !important;
+
+    &:hover {
+      border-color: rgba(255, 255, 255, 0.18) !important;
+      background: #1a1e26 !important;
+    }
+
+    &.selected {
+      background: rgba(194, 65, 12, 0.08) !important;
+      border-color: var(--color-primary) !important;
+    }
+  }
+
+  .printer-device-box,
+  .apple-test-slate,
+  .apple-impact-slate {
+    background: #101216 !important;
+    border-color: rgba(255, 255, 255, 0.08) !important;
+  }
+
+  .printer-device-box {
+    &.apple-hardware-card {
+      background: #101216 !important;
+
+      .printer-label-wrap .device-icon-disc {
+        background: rgba(194, 65, 12, 0.16) !important;
+      }
+
+      .printer-hardware-telemetry {
+        .telemetry-left .status-summary {
+          color: #e2e8f0 !important;
+        }
+
+        .telemetry-right {
+          color: #94a3b8 !important;
+
+          strong {
+            color: #e2e8f0 !important;
+          }
+        }
+      }
+    }
+  }
+
+  .apple-segmented-control {
+    background: #0d0f12 !important;
+    border-color: rgba(255, 255, 255, 0.08) !important;
+
+    button.active {
+      background: #1a1e26 !important;
+      color: var(--color-text-primary) !important;
+      box-shadow: 0 1px 4px rgba(0, 0, 0, 0.4) !important;
+    }
+  }
+
+  .apple-switch-tile {
+    background: #16191f !important;
+    border-color: rgba(255, 255, 255, 0.08) !important;
+
+    &:hover {
+      border-color: rgba(255, 255, 255, 0.18) !important;
+    }
+
+    .tile-icon-box {
+      background: rgba(255, 255, 255, 0.05) !important;
+    }
+
+    .hex-badge {
+      background: rgba(255, 255, 255, 0.08) !important;
+      color: #cbd5e1 !important;
+    }
+  }
+
+  .apple-switch .switch-slider {
+    background-color: #334155 !important;
+  }
+
+  .apple-channel-card {
+    background: #16191f !important;
+    border-color: rgba(255, 255, 255, 0.08) !important;
+
+    &.is-enabled {
+      background: rgba(34, 197, 94, 0.05) !important;
+      border-color: rgba(34, 197, 94, 0.3) !important;
+    }
+  }
+
+  .quick-preset-chips .preset-chip {
+    background: #16191f !important;
+    border-color: rgba(255, 255, 255, 0.1) !important;
+    color: var(--color-text-secondary) !important;
+
+    &:hover {
+      background: #202530 !important;
+      color: var(--color-text-primary) !important;
+    }
+
+    &.active {
+      background: var(--color-primary) !important;
+      color: #ffffff !important;
+      border-color: var(--color-primary) !important;
+    }
+  }
+
+  .apple-status-card {
+    background: #16191f !important;
+    border-color: rgba(255, 255, 255, 0.08) !important;
+
+    &:hover {
+      border-color: rgba(255, 255, 255, 0.18) !important;
+      box-shadow: 0 6px 20px rgba(0, 0, 0, 0.4) !important;
+    }
+
+    .latency-gauge-track {
+      background: rgba(255, 255, 255, 0.08) !important;
+    }
+  }
+
+  .apple-metric-card {
+    background: #16191f !important;
+    border-color: rgba(255, 255, 255, 0.08) !important;
+
+    &:hover {
+      border-color: rgba(255, 255, 255, 0.18) !important;
+    }
+
+    .metric-icon-disc {
+      background: rgba(255, 255, 255, 0.05) !important;
+    }
+  }
+
+  .apple-audit-row:hover {
+    background: #1a1e26 !important;
+  }
+
+  .apple-reset-callout {
+    background: rgba(245, 158, 11, 0.06) !important;
+    border-color: rgba(245, 158, 11, 0.3) !important;
+  }
+
   // Modals & Panels
   .modal-card {
     background: #131519;
@@ -632,6 +1165,226 @@
           box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3) !important;
         }
       }
+    }
+  }
+
+  // Canvas Manual Dining Order Modal (Luxury Dark Mode)
+  .modal-card.manual-order-modal-canvas {
+    background: #121418;
+    border-color: rgba(255, 255, 255, 0.1);
+
+    .modal-header {
+      background: #121418;
+      border-bottom-color: rgba(255, 255, 255, 0.08);
+
+      .icon-circle {
+        background: #1b1e25;
+        border-color: rgba(255, 255, 255, 0.1);
+        color: #ef4444;
+      }
+
+      .close-btn {
+        background: #161920;
+        border-color: rgba(255, 255, 255, 0.1);
+        color: var(--color-text-muted);
+
+        &:hover {
+          background: #1f232c;
+          color: #f2f4f8;
+        }
+      }
+    }
+
+    .pos-dish-catalog-panel {
+      border-right-color: rgba(255, 255, 255, 0.08);
+
+      .catalog-search-input {
+        background: #161920;
+        border-color: rgba(255, 255, 255, 0.1);
+        color: #f2f4f8;
+
+        &:focus {
+          border-color: #ef4444;
+          box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.18);
+        }
+      }
+
+      .cat-chip {
+        background: #161920;
+        border-color: rgba(255, 255, 255, 0.1);
+        color: #94a3b8;
+
+        &:hover {
+          color: #f1f5f9;
+          border-color: rgba(255, 255, 255, 0.2);
+        }
+
+        &.active {
+          background: #dc2626;
+          color: #ffffff;
+          border-color: #dc2626;
+        }
+      }
+
+      .diet-filter-pill {
+        background: #161920;
+        border-color: rgba(255, 255, 255, 0.1);
+        color: #94a3b8;
+
+        &.active {
+          background: #20242e;
+          border-color: rgba(255, 255, 255, 0.25);
+          color: #ffffff;
+        }
+      }
+
+      .pos-dish-card {
+        background: #161920;
+        border-color: rgba(255, 255, 255, 0.08);
+
+        &:hover {
+          border-color: #ef4444;
+          background: #1a1e27;
+        }
+
+        &.in-tray {
+          background: rgba(16, 185, 129, 0.1);
+          border-color: #10b981;
+        }
+
+        .dish-title {
+          color: #f2f4f8;
+        }
+
+        .dish-cost {
+          color: #94a3b8;
+        }
+
+        .quick-add-btn {
+          background: #1e222b;
+          border-color: rgba(255, 255, 255, 0.12);
+          color: #ef4444;
+
+          &:hover {
+            background: #dc2626;
+            color: #ffffff;
+            border-color: #dc2626;
+          }
+        }
+      }
+    }
+
+    .pos-context-card {
+      background: #161920;
+      border-color: rgba(255, 255, 255, 0.08);
+
+      .table-assignment-banner {
+        border-bottom-color: rgba(255, 255, 255, 0.06);
+
+        .selected-table-showcase .tbl-badge {
+          background: #1e222b;
+          border-color: rgba(255, 255, 255, 0.12);
+          color: #f2f4f8;
+        }
+      }
+
+      .custom-table-select,
+      .custom-input {
+        background: #121418;
+        border-color: rgba(255, 255, 255, 0.1);
+        color: #f2f4f8;
+
+        &:focus {
+          border-color: #ef4444;
+          box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.15);
+        }
+      }
+    }
+
+    .manual-items-box {
+      background: #0d0f13;
+      border-color: rgba(255, 255, 255, 0.08);
+
+      .tray-header {
+        border-bottom-color: rgba(255, 255, 255, 0.08);
+
+        .tray-badge {
+          background: #1e222b;
+          color: #94a3b8;
+
+          &.has-items {
+            background: #10b981;
+            color: #ffffff;
+          }
+        }
+      }
+
+      .empty-tray-state .empty-tray-icon {
+        background: #161920;
+        border-color: rgba(255, 255, 255, 0.08);
+        color: #64748b;
+      }
+
+      .m-item-row {
+        background: #161920;
+        border-color: rgba(255, 255, 255, 0.08);
+
+        .m-item-title {
+          color: #f2f4f8;
+        }
+
+        .m-qty-stepper {
+          background: #101216;
+          border-color: rgba(255, 255, 255, 0.1);
+
+          .stepper-btn {
+            color: #f2f4f8;
+            &:hover {
+              background: #1e222b;
+            }
+          }
+
+          .stepper-count {
+            color: #f2f4f8;
+          }
+        }
+
+        .m-item-right .m-item-total {
+          color: #f2f4f8;
+        }
+      }
+
+      .order-math-summary {
+        background: #161920;
+        border-color: rgba(255, 255, 255, 0.08);
+
+        .tax-rate-pill {
+          background: #1e222b;
+          border-color: rgba(255, 255, 255, 0.1);
+          color: #94a3b8;
+        }
+
+        .math-value {
+          color: #f2f4f8;
+        }
+
+        .math-row.total-highlight {
+          border-top-color: rgba(255, 255, 255, 0.08);
+
+          .total-text-group .total-main-label {
+            color: #f2f4f8;
+          }
+
+          .total-grand-amount {
+            color: #f87171;
+          }
+        }
+      }
+    }
+
+    .modal-footer {
+      background: #121418;
+      border-top-color: rgba(255, 255, 255, 0.08);
     }
   }
 
@@ -1495,93 +2248,374 @@
   }
 
   .active-order-card {
-    background: #1c212b !important;
+    background: #181c24 !important;
     border-color: rgba(255, 255, 255, 0.08) !important;
+    color: #f1f5f9 !important;
 
     &.order-ready {
-      background: rgba(16, 185, 129, 0.1) !important;
-      border-left-color: #10b981 !important;
+      background: rgba(16, 185, 129, 0.08) !important;
+      border-color: rgba(16, 185, 129, 0.25) !important;
     }
 
     &.order-served {
-      background: rgba(59, 130, 246, 0.1) !important;
-      border-left-color: #3b82f6 !important;
+      background: rgba(59, 130, 246, 0.08) !important;
+      border-color: rgba(59, 130, 246, 0.25) !important;
     }
 
-    .order-details-grid {
-      background: #14171d !important;
-      border-color: rgba(255, 255, 255, 0.05) !important;
-      color: #e2e8f0 !important;
+    .apple-table-pill {
+      background: rgba(16, 185, 129, 0.15) !important;
+      border-color: rgba(16, 185, 129, 0.3) !important;
+      color: #34d399 !important;
     }
 
-    .order-items-compact-list {
-      border-color: rgba(255, 255, 255, 0.08) !important;
-      .compact-item-row .item-name {
+    .round-badge {
+      background: rgba(239, 68, 68, 0.2) !important;
+      border-color: rgba(239, 68, 68, 0.3) !important;
+      color: #f87171 !important;
+    }
+
+    .apple-ord-num {
+      color: #cbd5e1 !important;
+    }
+
+    .apple-ord-time {
+      color: #94a3b8 !important;
+    }
+
+    .guest-server-recessed {
+      background: #12151b !important;
+      border-color: rgba(255, 255, 255, 0.06) !important;
+
+      .guest-avatar-disc {
+        background: rgba(255, 255, 255, 0.08) !important;
         color: #f1f5f9 !important;
       }
-      .compact-item-row .item-price {
-        color: #94a3b8 !important;
-      }
-    }
 
-    .drawer-inline-server {
-      background: #14171d !important;
-      border-color: rgba(255, 255, 255, 0.08) !important;
-      label {
-        color: #94a3b8 !important;
-      }
-      .active-server-select {
-        background: #1c212b !important;
+      .cust-name-clean {
         color: #f1f5f9 !important;
-        border-color: rgba(255, 255, 255, 0.15) !important;
       }
-    }
 
-    .lifecycle-control-box {
-      background: rgba(220, 38, 38, 0.08) !important;
-      border-color: rgba(239, 68, 68, 0.25) !important;
+      .phone-sub-clean {
+        color: #94a3b8 !important;
+      }
 
-      .stepper-track {
-        .step-pill {
-          background: #252b36 !important;
-          color: #94a3b8 !important;
+      .server-select-pill,
+      .server-completed-pill {
+        background: #1f242d !important;
+        border-color: rgba(255, 255, 255, 0.1) !important;
+        color: #cbd5e1 !important;
+      }
 
-          &.active {
-            background: #ef4444 !important;
-            color: #ffffff !important;
-          }
-          &.passed {
-            background: #10b981 !important;
-            color: #ffffff !important;
-          }
+      .server-select-clean {
+        color: #f1f5f9 !important;
+
+        option {
+          background: #1f242d !important;
+          color: #f1f5f9 !important;
         }
-        .step-arrow {
-          color: #64748b !important;
+      }
+
+      .btn-unlock-inline {
+        color: #94a3b8 !important;
+        &:hover {
+          color: #f87171 !important;
+        }
+      }
+    }
+
+    .session-receipt-stream {
+      .receipt-stream-header {
+        color: #94a3b8 !important;
+
+        .receipt-stream-subtotal {
+          color: #cbd5e1 !important;
+        }
+      }
+
+      .receipt-round-segment.round-pending-soft {
+        background: rgba(239, 68, 68, 0.06) !important;
+      }
+
+      .qty-bubble {
+        background: rgba(255, 255, 255, 0.08) !important;
+        color: #f1f5f9 !important;
+      }
+
+      .item-title {
+        color: #f1f5f9 !important;
+      }
+
+      .portion-tag {
+        background: rgba(255, 255, 255, 0.06) !important;
+        color: #94a3b8 !important;
+      }
+
+      .item-price {
+        color: #cbd5e1 !important;
+      }
+    }
+
+    .grand-bill-strip-apple {
+      background: #12151b !important;
+      border-color: rgba(255, 255, 255, 0.06) !important;
+
+      .sub-line {
+        color: #94a3b8 !important;
+
+        .bill-val {
+          color: #cbd5e1 !important;
+        }
+
+        &.discount {
+          color: #34d399 !important;
+        }
+      }
+
+      .total-row-apple {
+        border-top-color: rgba(255, 255, 255, 0.08) !important;
+
+        .total-label-apple {
+          color: #f1f5f9 !important;
+        }
+
+        .status-pill-chip.paid {
+          background: rgba(16, 185, 129, 0.2) !important;
+          color: #34d399 !important;
+        }
+
+        .status-pill-chip.unpaid {
+          background: rgba(245, 158, 11, 0.2) !important;
+          color: #fbbf24 !important;
+        }
+
+        .payable-val-apple {
+          color: #f87171 !important;
+        }
+      }
+    }
+
+    .card-footer-actions-apple {
+      .apple-util-btn {
+        background: #1f242d !important;
+        border-color: rgba(255, 255, 255, 0.08) !important;
+        color: #cbd5e1 !important;
+
+        &:hover {
+          background: #282e3a !important;
+          color: #ffffff !important;
         }
       }
     }
   }
 
-  .canvas-settle-card {
+  .round-mini-bar {
+    background: rgba(255, 255, 255, 0.03) !important;
+    border-bottom-color: rgba(255, 255, 255, 0.08) !important;
+
+    .round-mini-left {
+      .round-mini-title {
+        color: #f87171 !important;
+      }
+      .round-mini-ord-num {
+        color: #cbd5e1 !important;
+      }
+    }
+
+    .round-mini-right .round-mini-time {
+      color: #94a3b8 !important;
+    }
+  }
+
+  .canvas-settle-card,
+  .settle-modal {
     background: #181c24 !important;
     border-color: rgba(255, 255, 255, 0.1) !important;
     color: #f1f5f9 !important;
+
+    .modal-body {
+      &::-webkit-scrollbar-thumb {
+        background: rgba(255, 255, 255, 0.16) !important;
+
+        &:hover {
+          background: rgba(255, 255, 255, 0.28) !important;
+        }
+      }
+    }
+
+    .settle-mode-tabs {
+      background: #12151b !important;
+      border-color: rgba(255, 255, 255, 0.08) !important;
+
+      .mode-tab-btn {
+        color: #94a3b8 !important;
+
+        &.active {
+          background: #1e222b !important;
+          color: #f1f5f9 !important;
+        }
+      }
+    }
 
     .settle-summary-box {
       background: #14171d !important;
       border-color: rgba(255, 255, 255, 0.08) !important;
       color: #cbd5e1 !important;
+
+      .settle-items-section {
+        background: #0d1015 !important;
+        border-color: rgba(255, 255, 255, 0.08) !important;
+
+        .settle-items-header {
+          border-bottom-color: rgba(255, 255, 255, 0.06) !important;
+          color: #94a3b8 !important;
+        }
+
+        .item-name-text {
+          color: #f1f5f9 !important;
+        }
+
+        .item-instruction-text {
+          color: #64748b !important;
+        }
+
+        .item-total-price {
+          color: #e2e8f0 !important;
+        }
+
+        .item-qty-pill {
+          background: rgba(99, 102, 241, 0.2) !important;
+          color: #a5b4fc !important;
+        }
+      }
+
+      .settle-row {
+        color: #cbd5e1 !important;
+        &.discount {
+          color: #f87171 !important;
+        }
+        &.total-highlight {
+          color: #f1f5f9 !important;
+          .amount-large {
+            color: #f87171 !important;
+          }
+        }
+      }
+
+      .settle-divider {
+        border-bottom-color: rgba(255, 255, 255, 0.08) !important;
+      }
     }
 
-    .settle-payment-section .pay-choice-btn {
-      background: #1c212b !important;
-      border-color: rgba(255, 255, 255, 0.1) !important;
-      color: #cbd5e1 !important;
+    .settle-discount-card {
+      background: #14171d !important;
+      border-color: rgba(255, 255, 255, 0.08) !important;
 
-      &.active {
-        background: #252b36 !important;
+      .discount-title {
+        color: #f1f5f9 !important;
+      }
+
+      .discount-segmented-control {
+        background: #1c212b !important;
+        border-color: rgba(255, 255, 255, 0.1) !important;
+
+        .seg-btn {
+          color: #94a3b8 !important;
+          &.active {
+            background: #2563eb !important;
+            color: #ffffff !important;
+          }
+        }
+      }
+
+      .inr-input {
+        background: #1c212b !important;
+        border-color: rgba(255, 255, 255, 0.12) !important;
+        color: #f1f5f9 !important;
+      }
+
+      .disc-chip {
+        background: #1c212b !important;
+        border-color: rgba(255, 255, 255, 0.1) !important;
+        color: #cbd5e1 !important;
+
+        &:hover {
+          background: #252b36 !important;
+          color: #ffffff !important;
+        }
+
+        &.chip-active {
+          background: rgba(37, 99, 235, 0.2) !important;
+          border-color: #3b82f6 !important;
+          color: #60a5fa !important;
+        }
+
+        &.chip-round {
+          background: rgba(16, 185, 129, 0.15) !important;
+          border-color: rgba(16, 185, 129, 0.3) !important;
+          color: #34d399 !important;
+        }
+      }
+
+      .coupon-select {
+        background: #1c212b !important;
+        border-color: rgba(255, 255, 255, 0.12) !important;
+        color: #f1f5f9 !important;
+
+        option {
+          background: #1c212b !important;
+          color: #f1f5f9 !important;
+        }
+      }
+
+      .applied-coupon-badge {
+        background: rgba(16, 185, 129, 0.15) !important;
+        border-color: rgba(16, 185, 129, 0.3) !important;
+        color: #34d399 !important;
+      }
+    }
+
+    .split-stepper-box {
+      background: #14171d !important;
+      border-color: rgba(255, 255, 255, 0.08) !important;
+
+      .stepper-label,
+      .stepper-val {
+        color: #f1f5f9 !important;
+      }
+
+      .stepper-btn {
+        background: #1c212b !important;
+        border-color: rgba(255, 255, 255, 0.12) !important;
+        color: #f1f5f9 !important;
+      }
+    }
+
+    .split-preview-item {
+      background: #14171d !important;
+      border-color: rgba(255, 255, 255, 0.08) !important;
+
+      .p-num {
+        color: #94a3b8 !important;
+      }
+      .p-val {
         color: #f87171 !important;
-        border-color: #ef4444 !important;
+      }
+    }
+
+    .split-banner-notice {
+      background: rgba(245, 158, 11, 0.12) !important;
+      border-color: rgba(245, 158, 11, 0.25) !important;
+      color: #fbbf24 !important;
+    }
+
+    .split-card-row {
+      background: #14171d !important;
+      border-color: rgba(255, 255, 255, 0.08) !important;
+      color: #f1f5f9 !important;
+
+      &.is-paid {
+        background: rgba(16, 185, 129, 0.08) !important;
+        border-color: rgba(16, 185, 129, 0.2) !important;
       }
     }
   }
@@ -1734,6 +2768,113 @@
     }
   }
 
+  // Inventory Page Apple Redesign Dark Mode
+  .inventory-page {
+    .apple-btn-secondary {
+      background: #14171d !important;
+      border-color: rgba(255, 255, 255, 0.08) !important;
+      color: #e2e8f0 !important;
+
+      &:hover {
+        background: #1b1f27 !important;
+        border-color: rgba(255, 255, 255, 0.16) !important;
+      }
+    }
+
+    .kpi-card {
+      background: #14171d !important;
+      border-color: rgba(255, 255, 255, 0.07) !important;
+      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3) !important;
+
+      .kpi-icon {
+        background: rgba(255, 255, 255, 0.05) !important;
+      }
+
+      .kpi-value {
+        color: #f1f5f9 !important;
+      }
+
+      &.kpi-alert {
+        border-color: rgba(245, 158, 11, 0.25) !important;
+        background: rgba(245, 158, 11, 0.04) !important;
+      }
+
+      &.kpi-danger {
+        border-color: rgba(239, 68, 68, 0.25) !important;
+        background: rgba(239, 68, 68, 0.04) !important;
+      }
+    }
+
+    .tabs-nav-bar {
+      background: #0d0f13 !important;
+      border-color: rgba(255, 255, 255, 0.07) !important;
+
+      .tab-btn {
+        color: #94a3b8 !important;
+
+        .tab-count-pill {
+          background: rgba(255, 255, 255, 0.06) !important;
+          color: #94a3b8 !important;
+        }
+
+        &:hover:not(.active) {
+          background: rgba(255, 255, 255, 0.04) !important;
+          color: #f1f5f9 !important;
+        }
+
+        &.active {
+          background: #1a1e26 !important;
+          color: #f1f5f9 !important;
+          box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4) !important;
+
+          .tab-count-pill {
+            background: rgba(249, 115, 22, 0.2) !important;
+            color: #fb923c !important;
+          }
+        }
+      }
+    }
+
+    .toolbar-card {
+      background: #14171d !important;
+      border-color: rgba(255, 255, 255, 0.07) !important;
+    }
+
+    .table-container {
+      background: #14171d !important;
+      border-color: rgba(255, 255, 255, 0.07) !important;
+
+      .data-table {
+        th {
+          background: #101216 !important;
+          border-color: rgba(255, 255, 255, 0.07) !important;
+          color: #94a3b8 !important;
+        }
+
+        td {
+          border-color: rgba(255, 255, 255, 0.05) !important;
+          color: #e2e8f0 !important;
+        }
+
+        tr:hover td {
+          background: #181c23 !important;
+        }
+      }
+    }
+
+    .apple-row-btn {
+      background: #181c23 !important;
+      border-color: rgba(255, 255, 255, 0.08) !important;
+      color: #cbd5e1 !important;
+
+      &:hover {
+        background: #222731 !important;
+        border-color: rgba(255, 255, 255, 0.18) !important;
+        color: #ffffff !important;
+      }
+    }
+  }
+
   // 8. Staff Attendance, Working Days & Payroll High Contrast
   .count-pill,
   .attendance-tag {
@@ -1767,12 +2908,124 @@
     color: #4ade80 !important;
   }
 
-  .calendar-day.is-selected {
-    background: #252b36 !important;
-    color: #ffffff !important;
+  // Attendance Calendar Day Cells
+  .cal-day-cell,
+  .calendar-day {
+    background: #14171d !important;
+    border-color: rgba(255, 255, 255, 0.08) !important;
+    color: #f1f5f9 !important;
 
     .day-num {
+      color: #f1f5f9 !important;
+    }
+
+    &:hover {
+      border-color: var(--color-crimson) !important;
+      background: rgba(220, 38, 38, 0.15) !important;
+    }
+
+    &.not-current {
+      opacity: 0.35 !important;
+    }
+
+    &.in-cycle {
+      background: rgba(212, 175, 55, 0.12) !important;
+      border-color: rgba(212, 175, 55, 0.35) !important;
+    }
+
+    &.is-today {
+      border: 2px solid #ef4444 !important;
+      font-weight: 800 !important;
+
+      .day-num {
+        color: #f87171 !important;
+      }
+    }
+
+    &.is-selected {
+      background: #dc2626 !important;
+      border-color: #ef4444 !important;
       color: #ffffff !important;
+      box-shadow: 0 2px 8px rgba(220, 38, 38, 0.45) !important;
+
+      .day-num {
+        color: #ffffff !important;
+      }
+
+      &.in-cycle {
+        background: #dc2626 !important;
+        color: #ffffff !important;
+
+        .day-num {
+          color: #ffffff !important;
+        }
+      }
+
+      &.is-today {
+        border-color: #ffffff !important;
+        box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.9), 0 2px 10px rgba(220, 38, 38, 0.5) !important;
+
+        .day-num {
+          color: #ffffff !important;
+        }
+      }
+    }
+  }
+
+  // Staff Permissions & Modular Access Section
+  .permissions-section {
+    background: #14171d !important;
+    border-color: rgba(255, 255, 255, 0.08) !important;
+
+    .permissions-header {
+      .form-label {
+        color: #f87171 !important;
+      }
+
+      .field-hint {
+        color: #94a3b8 !important;
+      }
+    }
+
+    .perm-bulk-actions {
+      .btn-text-action {
+        color: #f87171 !important;
+
+        &:hover {
+          background: rgba(239, 68, 68, 0.15) !important;
+          color: #fca5a5 !important;
+        }
+      }
+    }
+
+    .permission-group-card {
+      background: #181c24 !important;
+      border-color: rgba(255, 255, 255, 0.08) !important;
+
+      .group-header {
+        color: #f1f5f9 !important;
+        border-bottom-color: rgba(255, 255, 255, 0.08) !important;
+
+        i {
+          color: #f87171 !important;
+        }
+      }
+
+      .permission-item-label {
+        &:hover {
+          background: rgba(255, 255, 255, 0.05) !important;
+        }
+
+        .perm-text {
+          .perm-title {
+            color: #f1f5f9 !important;
+          }
+
+          .perm-subtitle {
+            color: #94a3b8 !important;
+          }
+        }
+      }
     }
   }
 
@@ -1805,18 +3058,20 @@
   #invoicePaper,
   .qr-standee,
   [data-printable-receipt] {
-    --color-background: #ffffff;
-    --color-surface: #ffffff;
-    --color-surface-hover: #fbf9f5;
-    --color-bone: #f6f2eb;
-    --color-bone-light: #faf8f4;
-    --color-bone-dark: #eae3d7;
-    --color-text-primary: #121212;
-    --color-text-secondary: #555555;
-    --color-text-muted: #777777;
-    --color-onyx: #121212;
-    --color-border: #e5ded4;
-    --color-border-subtle: #f0eae1;
+    color-scheme: light !important;
+    isolation: isolate !important;
+    --color-background: #ffffff !important;
+    --color-surface: #ffffff !important;
+    --color-surface-hover: #fbf9f5 !important;
+    --color-bone: #f6f2eb !important;
+    --color-bone-light: #faf8f4 !important;
+    --color-bone-dark: #eae3d7 !important;
+    --color-text-primary: #0f172a !important;
+    --color-text-secondary: #475569 !important;
+    --color-text-muted: #64748b !important;
+    --color-onyx: #0f172a !important;
+    --color-border: #e2e8f0 !important;
+    --color-border-subtle: #f1f5f9 !important;
 
     background: #ffffff !important;
     background-color: #ffffff !important;
@@ -2368,128 +3623,7 @@
       }
     }
 
-    .active-order-card {
-      background: #1c2029 !important;
-      border-color: rgba(255, 255, 255, 0.08) !important;
-      color: #f1f5f9 !important;
 
-      &.order-ready {
-        border-left-color: #10b981 !important;
-        background: rgba(16, 185, 129, 0.08) !important;
-      }
-
-      &.order-served {
-        border-left-color: #3b82f6 !important;
-        background: rgba(59, 130, 246, 0.08) !important;
-      }
-
-      .active-order-header {
-        .round-badge {
-          background: rgba(239, 68, 68, 0.2) !important;
-          color: #f87171 !important;
-        }
-        .order-id-chip {
-          color: #f1f5f9 !important;
-        }
-      }
-
-      .order-details-grid {
-        background: #14171d !important;
-        border-color: rgba(255, 255, 255, 0.06) !important;
-
-        .text-muted {
-          color: #94a3b8 !important;
-        }
-        strong {
-          color: #f1f5f9 !important;
-        }
-        .text-crimson {
-          color: #f87171 !important;
-        }
-      }
-
-      .order-items-compact-list {
-        border-top-color: rgba(255, 255, 255, 0.08) !important;
-        border-bottom-color: rgba(255, 255, 255, 0.08) !important;
-
-        .compact-item-row {
-          .item-qty {
-            color: #f87171 !important;
-          }
-          .item-name {
-            color: #e2e8f0 !important;
-          }
-          .item-price {
-            color: #cbd5e1 !important;
-          }
-        }
-      }
-
-      .drawer-inline-server {
-        background: #14171d !important;
-        border-color: rgba(255, 255, 255, 0.08) !important;
-
-        label {
-          color: #94a3b8 !important;
-        }
-
-        .active-server-select {
-          background-color: #1a1e26 !important;
-          border-color: rgba(255, 255, 255, 0.12) !important;
-          color: #f1f5f9 !important;
-        }
-
-        .locked-server-row {
-          color: #f1f5f9 !important;
-
-          .btn-unlock-server {
-            background: #1e222b !important;
-            border-color: rgba(255, 255, 255, 0.12) !important;
-            color: #f87171 !important;
-
-            &:hover {
-              background: rgba(239, 68, 68, 0.15) !important;
-              border-color: #f87171 !important;
-            }
-          }
-        }
-      }
-
-      .lifecycle-control-box {
-        background: #14171d !important;
-        border-color: rgba(239, 68, 68, 0.3) !important;
-
-        .stepper-track {
-          .step-pill {
-            background: #252b36 !important;
-            color: #94a3b8 !important;
-
-            &.active {
-              background: #dc2626 !important;
-              color: #ffffff !important;
-              box-shadow: 0 2px 10px rgba(220, 38, 38, 0.45) !important;
-            }
-
-            &.passed {
-              background: #059669 !important;
-              color: #ffffff !important;
-            }
-          }
-
-          .step-arrow {
-            color: #64748b !important;
-          }
-        }
-      }
-
-      .active-order-actions {
-        .bill-gated-badge {
-          background: rgba(245, 158, 11, 0.14) !important;
-          color: #fbbf24 !important;
-          border-color: rgba(245, 158, 11, 0.3) !important;
-        }
-      }
-    }
 
     .no-orders-box {
       background: #161920 !important;
@@ -2531,6 +3665,29 @@
       background: #121418 !important;
       border-color: rgba(255, 255, 255, 0.08) !important;
       color: #cbd5e1 !important;
+
+      .settle-items-section {
+        background: #0b0d11 !important;
+        border-color: rgba(255, 255, 255, 0.08) !important;
+
+        .settle-items-header {
+          border-bottom-color: rgba(255, 255, 255, 0.06) !important;
+          color: #94a3b8 !important;
+        }
+
+        .item-name-text {
+          color: #f1f5f9 !important;
+        }
+
+        .item-total-price {
+          color: #e2e8f0 !important;
+        }
+
+        .item-qty-pill {
+          background: rgba(99, 102, 241, 0.2) !important;
+          color: #a5b4fc !important;
+        }
+      }
 
       .settle-divider {
         background: rgba(255, 255, 255, 0.08) !important;
@@ -2579,6 +3736,67 @@
 
     .standee-url-text {
       color: #cbd5e1 !important;
+    }
+  }
+
+  /* Split Bills expandable sub-table in Billing Queue */
+  .split-bills-row {
+    background: #0d1015 !important;
+    border-bottom-color: rgba(255, 255, 255, 0.08) !important;
+  }
+
+  .split-bills-container {
+    .split-banner {
+      color: #f1f5f9 !important;
+
+      .btn-close-split {
+        background: #181c24 !important;
+        border-color: rgba(255, 255, 255, 0.12) !important;
+        color: #cbd5e1 !important;
+
+        &:hover {
+          background: #222733 !important;
+          color: #ffffff !important;
+          border-color: #ef4444 !important;
+        }
+      }
+    }
+  }
+
+  .split-pill-toggle-btn {
+    background: rgba(239, 68, 68, 0.15) !important;
+    border-color: rgba(239, 68, 68, 0.3) !important;
+    color: #f87171 !important;
+
+    &:hover {
+      background: rgba(239, 68, 68, 0.25) !important;
+      border-color: rgba(239, 68, 68, 0.45) !important;
+    }
+
+    &.expanded {
+      background: #dc2626 !important;
+      color: #ffffff !important;
+      border-color: #dc2626 !important;
+    }
+  }
+
+  .split-parts-toggle-btn.btn-active-toggle {
+    background: #dc2626 !important;
+    color: #ffffff !important;
+    border-color: #dc2626 !important;
+  }
+
+  .split-dropdown-box {
+    background: #181c24 !important;
+    border-color: rgba(255, 255, 255, 0.12) !important;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45) !important;
+
+    .split-dropdown-link {
+      color: #f1f5f9 !important;
+
+      &:hover {
+        background: #232834 !important;
+      }
     }
   }
 }

@@ -68,3 +68,4 @@ Thumbs.db
 # --- Temporary & Agent Scratch Dirs ---
 .system_generated/
 scratch/
+auth_info_baileys/

@@ -293,5 +293,46 @@ describe('Live Order Stream & Active Queue Synchronization', () => {
       expect(found?.paymentStatus).toBe('PAID');
       expect(found?.printCount).toBe(1);
     });
+
+    it('settles multi-round session orders without zeroing out child order totalAmount to 0rs', () => {
+      const sessionId = 'session-table-4';
+      const round1 = createDummyOrder('ord-sess-1', 'SERVED', '#ORD-101');
+      round1.tableNumber = '4';
+      round1.tableId = 'tbl-4';
+      round1.seatingSessionId = sessionId;
+      round1.subtotal = 500;
+      round1.taxAmount = 25;
+      round1.totalAmount = 525;
+
+      const round2 = createDummyOrder('ord-sess-2', 'SERVED', '#ORD-102');
+      round2.tableNumber = '4';
+      round2.tableId = 'tbl-4';
+      round2.seatingSessionId = sessionId;
+      round2.subtotal = 300;
+      round2.taxAmount = 15;
+      round2.totalAmount = 315;
+
+      mockService.orders.set([round1, round2]);
+
+      const res = mockService.settleOrder({
+        orderId: round1.id,
+        paymentMethod: 'UPI',
+      });
+
+      expect(res.success).toBe(true);
+      const orders = mockService.orders();
+      const settledPrimary = orders.find((o) => o.id === round1.id);
+      const settledChild = orders.find((o) => o.id === round2.id);
+
+      expect(settledPrimary).toBeDefined();
+      expect(settledChild).toBeDefined();
+      expect(settledPrimary?.paymentStatus).toBe('PAID');
+      expect(settledChild?.paymentStatus).toBe('PAID');
+
+      // Crucial requirement: Child order totalAmount must NOT be wiped to 0rs!
+      expect(settledChild?.totalAmount).toBe(315);
+      expect(settledChild?.totalAmount).toBeGreaterThan(0);
+      expect(settledPrimary?.totalAmount).toBe(840); // 525 + 315 consolidated grand total
+    });
   });
 });

@@ -456,10 +456,14 @@ export class FeedbackListComponent {
   private mock = this.dataService;
   private toastService = inject(ToastService);
 
+  constructor() {
+    this.dataService.loadFeedback();
+  }
+
   feedbacks = this.mock.feedbacks;
 
   readonly isLoading = computed(
-    () => this.dataService.isCustomersLoading() || !this.dataService.customersLoaded(),
+    () => this.feedbacks().length === 0 && !this.dataService.isInitialized(),
   );
 
   ratingFilter = signal<number>(0);

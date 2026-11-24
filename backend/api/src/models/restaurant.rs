@@ -30,6 +30,8 @@ pub struct Restaurant {
     pub service_charge_rate: Option<f64>,
     #[sqlx(default)]
     pub google_review_url: Option<String>,
+    #[sqlx(default)]
+    pub whatsapp_templates: Option<serde_json::Value>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }
@@ -52,6 +54,7 @@ pub struct UpdateRestaurantPayload {
     pub sgst_rate: Option<f64>,
     pub service_charge_rate: Option<f64>,
     pub google_review_url: Option<String>,
+    pub whatsapp_templates: Option<serde_json::Value>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

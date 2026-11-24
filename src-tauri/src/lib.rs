@@ -41,6 +41,45 @@ pub fn run() {
                 }
             });
 
+            // Spawn the WhatsApp Baileys background gateway bridge
+            tauri::async_runtime::spawn(async move {
+                log::info!("Initializing WhatsApp Baileys background gateway service on port 3001...");
+                
+                // Locate whatsapp-bridge in current directory or parent directory
+                let candidate_paths = [
+                    std::path::PathBuf::from("whatsapp-bridge"),
+                    std::path::PathBuf::from("../whatsapp-bridge"),
+                    std::env::current_exe()
+                        .ok()
+                        .and_then(|p| p.parent().map(|d| d.join("whatsapp-bridge")))
+                        .unwrap_or_default(),
+                ];
+
+                for bridge_dir in candidate_paths {
+                    let script = bridge_dir.join("index.js");
+                    if script.exists() {
+                        let mut cmd = std::process::Command::new("node");
+                        cmd.arg(&script);
+                        cmd.current_dir(&bridge_dir);
+                        #[cfg(windows)]
+                        {
+                            use std::os::windows::process::CommandExt;
+                            const CREATE_NO_WINDOW: u32 = 0x08000000;
+                            cmd.creation_flags(CREATE_NO_WINDOW);
+                        }
+                        match cmd.spawn() {
+                            Ok(_) => {
+                                log::info!("WhatsApp bridge started successfully from {:?}", bridge_dir);
+                                break;
+                            }
+                            Err(e) => {
+                                log::warn!("Failed to spawn WhatsApp bridge from {:?}: {}", bridge_dir, e);
+                            }
+                        }
+                    }
+                }
+            });
+
             Ok(())
         })
         .on_window_event(|window, event| {

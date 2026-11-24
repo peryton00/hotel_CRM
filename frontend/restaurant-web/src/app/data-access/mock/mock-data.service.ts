@@ -102,7 +102,8 @@ export class MockDataService {
     this.tables.set([]);
     this.coupons.set([]);
     this.reservations.set([]);
-    this.staffMembers.set([]);
+    const savedStaff = this.loadLocalArray<StaffMember>('staff');
+    this.staffMembers.set(savedStaff && savedStaff.length > 0 ? savedStaff : []);
     this.feedbacks.set([]);
     this.loyaltyTiers.set(DEFAULT_LOYALTY_TIERS);
     this.loyaltyTransactions.set([]);
@@ -955,9 +956,16 @@ export class MockDataService {
       nextStatus = 'RESERVED';
     }
 
-    if (table.status !== nextStatus) {
+    if (nextStatus === 'AVAILABLE' || table.status !== nextStatus) {
       const updatedTables = this.tables().map((t) =>
-        t.id === table.id ? { ...t, status: nextStatus } : t,
+        t.id === table.id
+          ? {
+              ...t,
+              status: nextStatus,
+              currentSeatingSessionId: nextStatus === 'AVAILABLE' ? undefined : t.currentSeatingSessionId,
+              activeOrderId: nextStatus === 'AVAILABLE' ? undefined : t.activeOrderId,
+            }
+          : t,
       );
       this.tables.set(updatedTables);
       this.saveLocal('tables', updatedTables);
@@ -1043,16 +1051,39 @@ export class MockDataService {
     }
 
     // Allowed status transition (e.g. marking unoccupied table DIRTY for cleaning, or DIRTY -> AVAILABLE)
-    const updatedTables = this.tables().map((t) =>
-      t.id === table.id ? { ...t, status: newStatus } : t,
-    );
+    const updatedTables = this.tables().map((t) => {
+      if (t.id !== table.id) return t;
+      if (newStatus === 'AVAILABLE' || newStatus === 'DIRTY') {
+        return {
+          ...t,
+          status: newStatus,
+          currentSeatingSessionId: undefined,
+          activeOrderId: undefined,
+        };
+      }
+      if (newStatus === 'OCCUPIED' && !t.currentSeatingSessionId) {
+        return {
+          ...t,
+          status: newStatus,
+          currentSeatingSessionId: 'sess_' + Math.random().toString(36).substring(2, 9),
+        };
+      }
+      return { ...t, status: newStatus };
+    });
     this.tables.set(updatedTables);
     this.saveLocal('tables', updatedTables);
 
     return {
       success: true,
       status: newStatus,
-      table: { ...table, status: newStatus },
+      table: {
+        ...table,
+        status: newStatus,
+        currentSeatingSessionId:
+          newStatus === 'AVAILABLE' || newStatus === 'DIRTY'
+            ? undefined
+            : table.currentSeatingSessionId,
+      },
     };
   }
 
@@ -1700,16 +1731,31 @@ export class MockDataService {
     const nextStatus = isPrinted ? 'COMPLETED' : order.status;
 
     // Detect if this table has multiple rounds/orders that must be unified into one bill
+    // Strict isolation: require matching seatingSessionId if present, exact table matching, and within 3 hours
     const siblingOrders =
       (order.tableId || order.tableNumber) && order.orderType !== 'TAKEAWAY'
-        ? this.orders().filter(
-            (o) =>
-              o.id !== order.id &&
-              o.status !== 'CANCELLED' &&
-              o.paymentStatus !== 'PAID' &&
-              ((order.tableId && o.tableId === order.tableId) ||
-                (order.tableNumber && o.tableNumber === order.tableNumber)),
-          )
+        ? this.orders().filter((o) => {
+            if (o.id === order.id || o.status === 'CANCELLED' || o.paymentStatus === 'PAID') {
+              return false;
+            }
+            if (order.seatingSessionId && o.seatingSessionId) {
+              return o.seatingSessionId === order.seatingSessionId;
+            }
+            if (order.tableId && o.tableId && order.tableId !== o.tableId) {
+              return false;
+            }
+            const sameTable =
+              (order.tableId && o.tableId === order.tableId) ||
+              (order.tableNumber &&
+                o.tableNumber &&
+                order.tableNumber.trim().toLowerCase() === o.tableNumber.trim().toLowerCase());
+            if (!sameTable) return false;
+
+            const timeDiff = Math.abs(
+              new Date(order.createdAt).getTime() - new Date(o.createdAt).getTime(),
+            );
+            return timeDiff <= 3 * 60 * 60 * 1000;
+          })
         : [];
 
     const combinedSubtotal =
@@ -1721,19 +1767,55 @@ export class MockDataService {
         (order.taxAmount + siblingOrders.reduce((sum, s) => sum + (s.taxAmount || 0), 0)) * 100,
       ) / 100;
     const grossTotal = Math.round((combinedSubtotal + combinedTax) * 100) / 100;
-    const finalDiscount = Math.min(
-      grossTotal,
-      Math.max(
-        0,
-        req.discountAmount !== undefined ? req.discountAmount : order.discountAmount || 0,
-      ),
+    const rawDiscount =
+      req.discountAmount !== undefined ? req.discountAmount : order.discountAmount || 0;
+    const hasCoupon = !!(req.appliedCouponCode || order.appliedCouponCode);
+
+    const cgstRate = this.restaurant()?.taxSettings?.cgstRate ?? 2.5;
+    const sgstRate = this.restaurant()?.taxSettings?.sgstRate ?? 2.5;
+
+    let taxableValue: number;
+    let cgstAmount: number;
+    let sgstAmount: number;
+    let calculatedTax: number;
+    let finalDiscount: number;
+    let totalAmount: number;
+
+    if (hasCoupon) {
+      // Coupon discount applies to total BEFORE taxes
+      finalDiscount = Math.min(combinedSubtotal, Math.max(0, rawDiscount));
+      taxableValue = Math.max(0, Math.round((combinedSubtotal - finalDiscount) * 100) / 100);
+      cgstAmount = Math.round(taxableValue * (cgstRate / 100) * 100) / 100;
+      sgstAmount = Math.round(taxableValue * (sgstRate / 100) * 100) / 100;
+      calculatedTax = Math.round((cgstAmount + sgstAmount) * 100) / 100;
+      // Chargeable amount never shows in pointed/decimal value: rounded to whole rupee
+      totalAmount = Math.round(Math.max(0, taxableValue + calculatedTax));
+    } else {
+      // Admin / round-off discount applies to total AFTER taxes
+      taxableValue = combinedSubtotal;
+      cgstAmount = Math.round(taxableValue * (cgstRate / 100) * 100) / 100;
+      sgstAmount = Math.round(taxableValue * (sgstRate / 100) * 100) / 100;
+      calculatedTax = Math.round((cgstAmount + sgstAmount) * 100) / 100;
+      const combinedGross = Math.round((taxableValue + calculatedTax) * 100) / 100;
+      finalDiscount = Math.min(combinedGross, Math.max(0, rawDiscount));
+      // Chargeable amount never shows in pointed/decimal value: rounded to whole rupee
+      totalAmount = Math.round(Math.max(0, combinedGross - finalDiscount));
+    }
+
+    const allSessionOrders = [order, ...siblingOrders].sort(
+      (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
     );
-    const totalAmount = Math.max(0, Math.round((grossTotal - finalDiscount) * 100) / 100);
+    const allItems = allSessionOrders.flatMap((o) => o.items || []);
 
     const updatedOrder: Order = {
       ...order,
+      items: allItems.length > 0 ? allItems : order.items,
       subtotal: combinedSubtotal,
-      taxAmount: combinedTax,
+      cgstRate,
+      sgstRate,
+      cgstAmount,
+      sgstAmount,
+      taxAmount: calculatedTax,
       status: nextStatus,
       paymentStatus: 'PAID',
       paymentMethod: req.paymentMethod,
@@ -1743,6 +1825,9 @@ export class MockDataService {
       totalAmount,
       settledAt: now,
       updatedAt: now,
+      isSessionConsolidated: siblingOrders.length > 0,
+      sessionRoundsCount: allSessionOrders.length,
+      sessionRounds: allSessionOrders,
       timeline: [
         ...order.timeline,
         {
@@ -1757,14 +1842,14 @@ export class MockDataService {
 
     const siblingIds = new Set(siblingOrders.map((s) => s.id));
     const updatedOrders = this.orders().map((o) => {
-      if (o.id === order.id) return updatedOrder;
+      if (o.id === order.id) return { ...updatedOrder, seatingSessionId: undefined };
       if (siblingIds.has(o.id)) {
         return {
           ...o,
           status: 'COMPLETED' as const,
           paymentStatus: 'PAID' as const,
           paymentMethod: req.paymentMethod,
-          totalAmount: 0,
+          seatingSessionId: undefined,
           settledAt: now,
           updatedAt: now,
           timeline: [
@@ -1787,7 +1872,22 @@ export class MockDataService {
     if (order.orderType !== 'TAKEAWAY') {
       const tableKey = order.tableId || order.tableNumber;
       if (tableKey) {
-        this.recalculateTableStatus(tableKey);
+        // Table dining session is finished: release table and wipe session code
+        const updatedTables = this.tables().map((t) => {
+          const matches =
+            (order.tableId && t.id === order.tableId) ||
+            (order.tableNumber && t.number === order.tableNumber);
+          return matches
+            ? {
+                ...t,
+                status: 'AVAILABLE' as TableStatus,
+                currentSeatingSessionId: undefined,
+                activeOrderId: undefined,
+              }
+            : t;
+        });
+        this.tables.set(updatedTables);
+        this.saveLocal('tables', updatedTables);
       }
     }
 
@@ -3550,6 +3650,13 @@ export class MockDataService {
     // Idempotent no-op if status is already identical
     if (order.status === targetStatus) {
       return { success: true, order };
+    }
+
+    if (order.status === 'COMPLETED' || order.status === 'CANCELLED') {
+      return {
+        success: false,
+        error: `${order.status === 'COMPLETED' ? 'Completed' : 'Cancelled'} orders cannot transition to any other status.`,
+      };
     }
 
     // 1. Transition to ACCEPTED: reserve required ingredients

@@ -16,6 +16,17 @@ export async function getTable(token: string) {
 }
 
 export async function getMenu() {
+  if (typeof window !== 'undefined') {
+    try {
+      const cached = sessionStorage.getItem(`menu_${RID}`);
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (parsed.expiresAt && Date.now() < parsed.expiresAt) {
+          return parsed.data;
+        }
+      }
+    } catch {}
+  }
   try {
     const res = await fetch(`${BASE}/public/menu?rid=${RID}`, {
       next: { revalidate: 60 },
@@ -23,7 +34,16 @@ export async function getMenu() {
     if (!res.ok) {
       return { data: { categories: [], items: [] } };
     }
-    return res.json();
+    const data = await res.json();
+    if (typeof window !== 'undefined') {
+      try {
+        sessionStorage.setItem(
+          `menu_${RID}`,
+          JSON.stringify({ data, expiresAt: Date.now() + 10 * 60 * 1000 })
+        );
+      } catch {}
+    }
+    return data;
   } catch {
     return { data: { categories: [], items: [] } };
   }

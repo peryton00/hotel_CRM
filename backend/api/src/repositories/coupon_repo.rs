@@ -56,14 +56,16 @@ impl CouponRepository {
             r#"
             INSERT INTO coupons (
                 restaurant_id, code, title, description, discount_type, discount_value,
-                min_order_amount_paise, max_discount_amount_paise, one_time_per_customer,
+                min_order_amount_paise, max_discount_paise, one_time_per_customer,
                 is_active
             )
             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, true)
             RETURNING id, restaurant_id, code, description,
                       discount_type::text AS discount_type,
                       discount_value::float8 AS discount_value,
-                      min_order_amount_paise, max_discount_amount_paise, one_time_per_customer,
+                      min_order_amount_paise,
+                      COALESCE(max_discount_paise, max_discount_amount_paise) AS max_discount_amount_paise,
+                      one_time_per_customer,
                       is_active, start_date, end_date, created_at, updated_at
             "#,
         )
@@ -123,7 +125,7 @@ impl CouponRepository {
                 discount_type = COALESCE($5, discount_type),
                 discount_value = COALESCE($6, discount_value),
                 min_order_amount_paise = COALESCE($7, min_order_amount_paise),
-                max_discount_amount_paise = COALESCE($8, max_discount_amount_paise),
+                max_discount_paise = COALESCE($8, max_discount_paise),
                 one_time_per_customer = COALESCE($9, one_time_per_customer),
                 is_active = COALESCE($10, is_active),
                 updated_at = NOW()
@@ -131,7 +133,9 @@ impl CouponRepository {
             RETURNING id, restaurant_id, code, description,
                       discount_type::text AS discount_type,
                       discount_value::float8 AS discount_value,
-                      min_order_amount_paise, max_discount_amount_paise, one_time_per_customer,
+                      min_order_amount_paise,
+                      COALESCE(max_discount_paise, max_discount_amount_paise) AS max_discount_amount_paise,
+                      one_time_per_customer,
                       is_active, start_date, end_date, created_at, updated_at
             "#,
         )

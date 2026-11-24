@@ -2859,6 +2859,7 @@ import { EmptyStateComponent } from '../../../shared/components/empty-state/empt
         justify-content: center;
         border: 1px solid var(--color-border-subtle);
         background: var(--color-surface);
+        color: var(--color-text-primary);
         border-radius: var(--radius-xs);
         cursor: pointer;
         position: relative;
@@ -2875,12 +2876,12 @@ import { EmptyStateComponent } from '../../../shared/components/empty-state/empt
         }
 
         &.is-today {
-          border-color: var(--color-crimson);
+          border: 2px solid var(--color-crimson);
           font-weight: 800;
         }
 
         &.in-cycle {
-          background: rgba(212, 175, 55, 0.05);
+          background: rgba(212, 175, 55, 0.08);
         }
 
         &.is-future {
@@ -2895,13 +2896,13 @@ import { EmptyStateComponent } from '../../../shared/components/empty-state/empt
         }
 
         &.is-selected {
-          border-color: var(--color-onyx);
-          background: var(--color-onyx);
-          color: #ffffff;
+          border-color: #0f172a;
+          background: #0f172a;
+          color: #ffffff !important;
           box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25);
 
           .day-num {
-            color: #ffffff;
+            color: #ffffff !important;
           }
         }
       }
@@ -2909,6 +2910,7 @@ import { EmptyStateComponent } from '../../../shared/components/empty-state/empt
       .day-num {
         font-size: 0.75rem;
         font-weight: 600;
+        color: inherit;
       }
 
       .day-status-dot {
@@ -3188,7 +3190,7 @@ import { EmptyStateComponent } from '../../../shared/components/empty-state/empt
       }
 
       .permissions-section {
-        background: rgba(0, 0, 0, 0.02);
+        background: var(--color-surface-hover, rgba(0, 0, 0, 0.02));
         border: 1px solid var(--color-border);
         border-radius: var(--radius-md);
         padding: 16px;
@@ -3241,7 +3243,7 @@ import { EmptyStateComponent } from '../../../shared/components/empty-state/empt
       }
 
       .permission-group-card {
-        background: var(--color-bg-card, #ffffff);
+        background: var(--color-surface, #ffffff);
         border: 1px solid var(--color-border);
         border-radius: var(--radius-sm);
         padding: 12px;
@@ -3282,7 +3284,7 @@ import { EmptyStateComponent } from '../../../shared/components/empty-state/empt
           transition: background 0.15s ease;
 
           &:hover {
-            background: rgba(0, 0, 0, 0.03);
+            background: var(--color-surface-hover, rgba(0, 0, 0, 0.03));
           }
 
           input[type='checkbox'] {
@@ -3316,6 +3318,10 @@ export class StaffListComponent {
   private dataService = inject(RestaurantDataService);
   private staffRepo = inject(STAFF_REPO);
   private toastService = inject(ToastService);
+
+  constructor() {
+    this.dataService.loadStaff();
+  }
 
   staff = this.dataService.staffMembers;
   readonly isLoading = computed(

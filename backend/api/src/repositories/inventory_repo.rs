@@ -20,7 +20,7 @@ impl InventoryRepository {
         let items = sqlx::query_as::<_, InventoryItem>(
             r#"
             SELECT id, restaurant_id, name, sku,
-                   'general'::text AS category,
+                   COALESCE(category, 'General') AS category,
                    unit_of_measure,
                    current_stock::float8 AS current_stock,
                    0.0::float8 AS reserved_stock,
@@ -89,14 +89,16 @@ impl InventoryRepository {
             UPDATE inventory_items
             SET name = COALESCE($3, name),
                 sku = COALESCE($4, sku),
-                unit_of_measure = COALESCE($5, unit_of_measure),
-                current_stock = COALESCE($6, current_stock),
-                reorder_level = COALESCE($7, reorder_level),
-                cost_per_unit_paise = COALESCE($8, cost_per_unit_paise),
+                category = COALESCE($5, category),
+                unit_of_measure = COALESCE($6, unit_of_measure),
+                unit = COALESCE($6, unit),
+                current_stock = COALESCE($7, current_stock),
+                reorder_level = COALESCE($8, reorder_level),
+                cost_per_unit_paise = COALESCE($9, cost_per_unit_paise),
                 updated_at = NOW()
             WHERE restaurant_id = $1 AND id = $2
             RETURNING id, restaurant_id, name, sku,
-                      'general'::text AS category,
+                      COALESCE(category, 'General') AS category,
                       unit_of_measure,
                       current_stock::float8 AS current_stock,
                       0.0::float8 AS reserved_stock,
@@ -109,6 +111,7 @@ impl InventoryRepository {
         .bind(item_id)
         .bind(req.name)
         .bind(req.sku)
+        .bind(req.category)
         .bind(req.unit_of_measure)
         .bind(req.current_stock)
         .bind(req.reorder_level)
@@ -153,7 +156,7 @@ impl InventoryRepository {
         let item = sqlx::query_as::<_, InventoryItem>(
             r#"
             SELECT id, restaurant_id, name, sku,
-                   'general'::text AS category,
+                   COALESCE(category, 'General') AS category,
                    unit_of_measure,
                    current_stock::float8 AS current_stock,
                    0.0::float8 AS reserved_stock,

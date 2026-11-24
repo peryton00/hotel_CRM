@@ -82,7 +82,10 @@ pub fn create_router(state: AppState) -> Router {
             "/menu/categories",
             get(menu_routes::list_categories).post(menu_routes::create_category),
         )
-        .route("/menu/categories/:id", delete(menu_routes::delete_category))
+        .route(
+            "/menu/categories/:id",
+            put(menu_routes::update_category).delete(menu_routes::delete_category),
+        )
         .route(
             "/menu/items",
             get(menu_routes::list_items).post(menu_routes::create_item),
@@ -101,11 +104,17 @@ pub fn create_router(state: AppState) -> Router {
             get(order_routes::list_orders).post(order_routes::create_order),
         )
         .route("/orders/:id", get(order_routes::get_order))
+        .route("/orders/:id/items", put(order_routes::update_order_items))
         .route("/orders/:id/status", put(order_routes::update_order_status))
         .route("/orders/:id/server", put(order_routes::assign_order_server))
         // Billing & payments
+        .route("/payments", post(billing_routes::record_payment))
         .route("/orders/:id/settle", post(billing_routes::settle_order))
-        .route("/orders/:id/split", post(billing_routes::split_order))
+        .route(
+            "/orders/:id/split",
+            post(billing_routes::split_order).get(billing_routes::get_order_split_bills),
+        )
+        .route("/split-bills", get(billing_routes::list_split_bills))
         .route("/orders/:id/refund", post(billing_routes::create_refund))
         .route(
             "/refunds/:id/status",

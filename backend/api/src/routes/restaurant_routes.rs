@@ -226,10 +226,12 @@ pub async fn update_staff_member(
     if let Some(ref pwd) = payload.password {
         let trimmed_pwd = pwd.trim();
         if !trimmed_pwd.is_empty() {
+            let hashed_pwd = crate::routes::auth_routes::hash_password(trimmed_pwd)
+                .unwrap_or_else(|_| trimmed_pwd.to_string());
             sqlx::query(
                 "UPDATE staff_members SET pin_hash = $1, updated_at = NOW() WHERE id = $2 AND restaurant_id = $3",
             )
-            .bind(trimmed_pwd)
+            .bind(hashed_pwd)
             .bind(id)
             .bind(tenant.restaurant_id)
             .execute(&pool)

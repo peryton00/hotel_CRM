@@ -1,10 +1,14 @@
 -- ==============================================================================
--- HOTEL_CRM: Master Complete Database Schema
+-- HOTEL_CRM: Master Production Database Schema
 -- File: supabase/schema.sql
--- Description: Single-file idempotent database definition for Supabase PostgreSQL.
---              Contains extensions, enums, all operational tables, indexes,
---              Row Level Security (RLS) policies, triggers, helper functions,
---              and the root bootstrap administrative entity.
+-- Description: Single-file idempotent, foolproof database definition for Supabase.
+--              Fully aligned with Rust API (hotel_crm_api), Angular Web Admin,
+--              and Next.js Customer QR Ordering Menu.
+--              - Granular Row Level Security (RLS) policies for EVERY table
+--              - Supabase Realtime replication for live operations
+--              - Streamlined lifecycle: in-place state transitions with 
+--                accepted_at and delivered_at milestone timestamps (no bloat)
+--              - Multi-tenant isolation & PostgreSQL generated compatibility
 -- ==============================================================================
 
 -- ------------------------------------------------------------------------------
@@ -67,12 +71,15 @@ CREATE TABLE IF NOT EXISTS restaurants (
     currency VARCHAR(10) NOT NULL DEFAULT 'INR',
     currency_symbol VARCHAR(5) NOT NULL DEFAULT '₹',
     gst_rate NUMERIC(5, 2) NOT NULL DEFAULT 5.00,
+    cgst_rate NUMERIC(5, 2) NOT NULL DEFAULT 2.50,
+    sgst_rate NUMERIC(5, 2) NOT NULL DEFAULT 2.50,
     service_charge_rate NUMERIC(5, 2) NOT NULL DEFAULT 0.00,
     timezone VARCHAR(50) NOT NULL DEFAULT 'Asia/Kolkata',
     is_active BOOLEAN NOT NULL DEFAULT TRUE,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+CREATE INDEX IF NOT EXISTS idx_restaurants_slug ON restaurants(slug);
 
 -- 3.2 USERS & GRANULAR RBAC (Linked to Supabase auth.users)
 CREATE TABLE IF NOT EXISTS public.users (
@@ -114,6 +121,7 @@ CREATE TABLE IF NOT EXISTS staff_members (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 CREATE INDEX IF NOT EXISTS idx_staff_restaurant ON staff_members(restaurant_id);
+CREATE INDEX IF NOT EXISTS idx_staff_login_id ON staff_members(restaurant_id, login_id);
 
 CREATE TABLE IF NOT EXISTS staff_attendance (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -135,25 +143,32 @@ CREATE TABLE IF NOT EXISTS customers (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     restaurant_id UUID NOT NULL REFERENCES restaurants(id) ON DELETE CASCADE,
     phone_e164 VARCHAR(20),
-    phone VARCHAR(50),
+    phone VARCHAR(50) NOT NULL,
     name VARCHAR(100) NOT NULL,
     email VARCHAR(255),
     address TEXT,
     notes TEXT,
+    phone_verified BOOLEAN NOT NULL DEFAULT FALSE,
+    verified_at TIMESTAMPTZ,
     status customer_status NOT NULL DEFAULT 'ACTIVE',
     loyalty_tier loyalty_tier NOT NULL DEFAULT 'BRONZE',
-    loyalty_points INT NOT NULL DEFAULT 0,
+    loyalty_points INT NOT NULL DEFAULT 0 CHECK (loyalty_points >= 0),
+    visit_count INT NOT NULL DEFAULT 0 CHECK (visit_count >= 0),
     total_orders INT NOT NULL DEFAULT 0,
-    total_spent_paise BIGINT NOT NULL DEFAULT 0,
+    total_spend_paise BIGINT NOT NULL DEFAULT 0 CHECK (total_spend_paise >= 0),
+    total_spent_paise BIGINT GENERATED ALWAYS AS (total_spend_paise) STORED,
+    last_visit_at TIMESTAMPTZ,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    CONSTRAINT uq_restaurant_customer_phone UNIQUE (restaurant_id, phone)
 );
 CREATE INDEX IF NOT EXISTS idx_customers_restaurant ON customers(restaurant_id);
 CREATE INDEX IF NOT EXISTS idx_customers_phone ON customers(phone);
+CREATE INDEX IF NOT EXISTS idx_customers_phone_e164 ON customers(phone_e164);
 
 CREATE TABLE IF NOT EXISTS customer_auth_challenges (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    restaurant_id UUID NOT NULL REFERENCES restaurants(id) ON DELETE CASCADE,
+    restaurant_id UUID REFERENCES restaurants(id) ON DELETE CASCADE,
     customer_id UUID REFERENCES customers(id) ON DELETE CASCADE,
     phone_e164 VARCHAR(20) NOT NULL,
     otp_hash VARCHAR(255) NOT NULL,
@@ -170,7 +185,7 @@ CREATE TABLE IF NOT EXISTS tables (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     restaurant_id UUID NOT NULL REFERENCES restaurants(id) ON DELETE CASCADE,
     number VARCHAR(20) NOT NULL,
-    table_number VARCHAR(20),
+    table_number VARCHAR(20) GENERATED ALWAYS AS (number) STORED,
     capacity INT NOT NULL DEFAULT 4 CHECK (capacity > 0),
     section VARCHAR(50) NOT NULL DEFAULT 'Main Dining',
     qr_token VARCHAR(64) NOT NULL UNIQUE,
@@ -178,12 +193,15 @@ CREATE TABLE IF NOT EXISTS tables (
     status table_status NOT NULL DEFAULT 'AVAILABLE',
     ordering_enabled BOOLEAN NOT NULL DEFAULT TRUE,
     active_order_id UUID,
+    current_seating_session_id VARCHAR(100), -- Dynamic parent dining session binding
     assigned_staff_id UUID REFERENCES staff_members(id) ON DELETE SET NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     CONSTRAINT uq_restaurant_table_number UNIQUE (restaurant_id, number)
 );
 CREATE INDEX IF NOT EXISTS idx_tables_restaurant ON tables(restaurant_id);
+CREATE INDEX IF NOT EXISTS idx_tables_qr_token ON tables(qr_token);
+CREATE INDEX IF NOT EXISTS idx_tables_session ON tables(restaurant_id, current_seating_session_id);
 
 CREATE TABLE IF NOT EXISTS table_transfers (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -194,6 +212,8 @@ CREATE TABLE IF NOT EXISTS table_transfers (
     staff_name VARCHAR(100),
     timestamp TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+CREATE INDEX IF NOT EXISTS idx_table_transfers_order ON table_transfers(order_id);
+CREATE INDEX IF NOT EXISTS idx_table_transfers_restaurant ON table_transfers(restaurant_id);
 
 -- 3.6 MENU CATEGORIES & ITEMS
 CREATE TABLE IF NOT EXISTS menu_categories (
@@ -214,7 +234,7 @@ CREATE INDEX IF NOT EXISTS idx_menu_categories_lookup ON menu_categories(restaur
 CREATE TABLE IF NOT EXISTS menu_items (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     restaurant_id UUID NOT NULL REFERENCES restaurants(id) ON DELETE CASCADE,
-    category_id UUID NOT NULL REFERENCES menu_categories(id) ON DELETE RESTRICT,
+    category_id UUID NOT NULL REFERENCES menu_categories(id) ON DELETE CASCADE,
     name VARCHAR(150) NOT NULL,
     description TEXT,
     price_paise BIGINT NOT NULL CHECK (price_paise >= 0),
@@ -232,39 +252,68 @@ CREATE TABLE IF NOT EXISTS menu_items (
 CREATE INDEX IF NOT EXISTS idx_menu_items_category ON menu_items(category_id);
 CREATE INDEX IF NOT EXISTS idx_menu_items_availability ON menu_items(restaurant_id, is_available);
 
--- 3.7 ORDERS & ORDER ITEMS
+-- 3.7 ORDERS & ORDER ITEMS (Streamlined In-Place Lifecycle Transitions)
 CREATE TABLE IF NOT EXISTS orders (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     restaurant_id UUID NOT NULL REFERENCES restaurants(id) ON DELETE CASCADE,
+    order_number VARCHAR(50) NOT NULL,
+    idempotency_key VARCHAR(64) UNIQUE,
+    seating_session_id VARCHAR(100), -- Aggregates child add-ons into parent dining session
     table_id UUID REFERENCES tables(id) ON DELETE SET NULL,
     customer_id UUID REFERENCES customers(id) ON DELETE SET NULL,
     customer_name VARCHAR(100),
     customer_phone_e164 VARCHAR(20),
+    customer_phone VARCHAR(50),
     order_type VARCHAR(50) NOT NULL DEFAULT 'DINE_IN',
-    status VARCHAR(50) NOT NULL DEFAULT 'PENDING',
-    payment_status VARCHAR(50) NOT NULL DEFAULT 'UNPAID',
+    pickup_reference VARCHAR(50),
+    
+    -- In-place status lifecycle: confirmed -> preparing -> ready -> served/delivered -> completed
+    status VARCHAR(50) NOT NULL DEFAULT 'confirmed',
+    payment_status VARCHAR(50) NOT NULL DEFAULT 'pending',
+    payment_method VARCHAR(50),
+    
     subtotal_paise BIGINT NOT NULL DEFAULT 0 CHECK (subtotal_paise >= 0),
     discount_paise BIGINT NOT NULL DEFAULT 0 CHECK (discount_paise >= 0),
+    discount_amount_paise BIGINT GENERATED ALWAYS AS (discount_paise) STORED,
+    applied_coupon_code VARCHAR(50),
     tax_paise BIGINT NOT NULL DEFAULT 0 CHECK (tax_paise >= 0),
+    tax_amount_paise BIGINT GENERATED ALWAYS AS (tax_paise) STORED,
+    cgst_rate NUMERIC(5, 2) DEFAULT 2.50,
+    sgst_rate NUMERIC(5, 2) DEFAULT 2.50,
+    cgst_amount_paise BIGINT DEFAULT 0 CHECK (cgst_amount_paise >= 0),
+    sgst_amount_paise BIGINT DEFAULT 0 CHECK (sgst_amount_paise >= 0),
     service_charge_paise BIGINT NOT NULL DEFAULT 0 CHECK (service_charge_paise >= 0),
     round_off_paise BIGINT NOT NULL DEFAULT 0,
-    total_amount_paise BIGINT NOT NULL DEFAULT 0,
+    total_amount_paise BIGINT NOT NULL DEFAULT 0 CHECK (total_amount_paise >= 0),
+    total_refunded_paise BIGINT NOT NULL DEFAULT 0 CHECK (total_refunded_paise >= 0),
+    is_split BOOLEAN NOT NULL DEFAULT FALSE,
+    split_count INT NOT NULL DEFAULT 1,
     notes TEXT,
     server_staff_id UUID REFERENCES staff_members(id) ON DELETE SET NULL,
+    
+    -- Critical Business Milestone Timestamps (Essential Lifecycle Records)
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    accepted_at TIMESTAMPTZ, -- Stamped when accepted / sent to kitchen
+    delivered_at TIMESTAMPTZ, -- Stamped when served / delivered to table
+    served_at TIMESTAMPTZ GENERATED ALWAYS AS (delivered_at) STORED,
+    settled_at TIMESTAMPTZ, -- Stamped when bill payment is settled
+    cancelled_at TIMESTAMPTZ, -- Stamped if cancelled
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    cancelled_at TIMESTAMPTZ,
-    legacy_unknown_timestamp BOOLEAN DEFAULT FALSE
+    legacy_unknown_timestamp BOOLEAN DEFAULT FALSE,
+    CONSTRAINT uq_restaurant_order_number UNIQUE (restaurant_id, order_number)
 );
 CREATE INDEX IF NOT EXISTS idx_orders_restaurant ON orders(restaurant_id);
 CREATE INDEX IF NOT EXISTS idx_orders_status ON orders(status);
 CREATE INDEX IF NOT EXISTS idx_orders_created_at ON orders(created_at);
+CREATE INDEX IF NOT EXISTS idx_orders_seating_session ON orders(restaurant_id, seating_session_id);
+CREATE INDEX IF NOT EXISTS idx_orders_table ON orders(restaurant_id, table_id);
 
 CREATE TABLE IF NOT EXISTS order_items (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     order_id UUID NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
-    menu_item_id UUID NOT NULL REFERENCES menu_items(id) ON DELETE RESTRICT,
+    menu_item_id UUID REFERENCES menu_items(id) ON DELETE SET NULL,
     name VARCHAR(150) NOT NULL,
+    item_name VARCHAR(150) GENERATED ALWAYS AS (name) STORED,
     unit_price_paise BIGINT NOT NULL CHECK (unit_price_paise >= 0),
     quantity INT NOT NULL CHECK (quantity > 0),
     item_total_paise BIGINT NOT NULL DEFAULT 0,
@@ -273,11 +322,14 @@ CREATE TABLE IF NOT EXISTS order_items (
     discount_paise BIGINT NOT NULL DEFAULT 0,
     total_paise BIGINT NOT NULL DEFAULT 0,
     notes TEXT,
+    special_instructions TEXT GENERATED ALWAYS AS (notes) STORED,
     status VARCHAR(50) NOT NULL DEFAULT 'confirmed',
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 CREATE INDEX IF NOT EXISTS idx_order_items_order ON order_items(order_id);
+CREATE INDEX IF NOT EXISTS idx_order_items_menu_item ON order_items(menu_item_id);
 
+-- Optional lightweight timeline events table for backward-compatible logging
 CREATE TABLE IF NOT EXISTS order_timeline_events (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     order_id UUID NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
@@ -285,7 +337,10 @@ CREATE TABLE IF NOT EXISTS order_timeline_events (
     to_status VARCHAR(50),
     status VARCHAR(50),
     notes TEXT,
+    note TEXT GENERATED ALWAYS AS (notes) STORED,
+    staff_name VARCHAR(100),
     performed_by UUID REFERENCES staff_members(id) ON DELETE SET NULL,
+    timestamp TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 CREATE INDEX IF NOT EXISTS idx_order_timeline_order ON order_timeline_events(order_id);
@@ -293,69 +348,129 @@ CREATE INDEX IF NOT EXISTS idx_order_timeline_order ON order_timeline_events(ord
 -- 3.8 BILLING, PAYMENTS & REFUNDS
 CREATE TABLE IF NOT EXISTS split_bills (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    restaurant_id UUID NOT NULL REFERENCES restaurants(id) ON DELETE CASCADE,
+    restaurant_id UUID REFERENCES restaurants(id) ON DELETE CASCADE,
     order_id UUID NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
-    split_index INT NOT NULL,
-    total_splits INT NOT NULL,
-    amount_paise BIGINT NOT NULL CHECK (amount_paise > 0),
-    status payment_status NOT NULL DEFAULT 'UNPAID',
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    split_index INT NOT NULL DEFAULT 1 CHECK (split_index > 0),
+    split_number INT GENERATED ALWAYS AS (split_index) STORED,
+    split_total_count INT NOT NULL DEFAULT 1 CHECK (split_total_count > 0),
+    total_splits INT GENERATED ALWAYS AS (split_total_count) STORED,
+    split_type VARCHAR(20) NOT NULL DEFAULT 'EQUAL',
+    customer_name VARCHAR(100),
+    subtotal_paise BIGINT NOT NULL DEFAULT 0 CHECK (subtotal_paise >= 0),
+    discount_amount_paise BIGINT NOT NULL DEFAULT 0 CHECK (discount_amount_paise >= 0),
+    tax_amount_paise BIGINT NOT NULL DEFAULT 0 CHECK (tax_amount_paise >= 0),
+    amount_paise BIGINT NOT NULL CHECK (amount_paise >= 0),
+    total_amount_paise BIGINT GENERATED ALWAYS AS (amount_paise) STORED,
+    total_refunded_paise BIGINT NOT NULL DEFAULT 0 CHECK (total_refunded_paise >= 0),
+    payment_status VARCHAR(50) NOT NULL DEFAULT 'UNPAID',
+    status VARCHAR(50) GENERATED ALWAYS AS (payment_status) STORED,
+    payment_id UUID,
+    payment_method VARCHAR(50),
+    print_count INT NOT NULL DEFAULT 0 CHECK (print_count >= 0),
+    settled_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    CONSTRAINT uq_order_split_index UNIQUE (order_id, split_index),
+    CONSTRAINT chk_split_index_limit CHECK (split_index <= split_total_count)
 );
+CREATE INDEX IF NOT EXISTS idx_split_bills_order ON split_bills(order_id);
+CREATE INDEX IF NOT EXISTS idx_split_bills_settled ON split_bills(restaurant_id, settled_at);
 
 CREATE TABLE IF NOT EXISTS split_bill_items (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     split_bill_id UUID NOT NULL REFERENCES split_bills(id) ON DELETE CASCADE,
     order_item_id UUID NOT NULL REFERENCES order_items(id) ON DELETE CASCADE,
-    allocated_paise BIGINT NOT NULL CHECK (allocated_paise > 0)
+    quantity INT NOT NULL DEFAULT 1 CHECK (quantity > 0),
+    amount_paise BIGINT NOT NULL DEFAULT 0 CHECK (amount_paise >= 0),
+    allocated_paise BIGINT GENERATED ALWAYS AS (amount_paise) STORED
 );
+CREATE INDEX IF NOT EXISTS idx_split_bill_items_split ON split_bill_items(split_bill_id);
 
 CREATE TABLE IF NOT EXISTS payments (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     restaurant_id UUID NOT NULL REFERENCES restaurants(id) ON DELETE CASCADE,
     order_id UUID NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
+    split_bill_id UUID REFERENCES split_bills(id) ON DELETE SET NULL,
     amount_paise BIGINT NOT NULL CHECK (amount_paise > 0),
     payment_method VARCHAR(50) NOT NULL, -- 'CASH', 'UPI', 'CARD', 'SPLIT'
-    status VARCHAR(50) NOT NULL DEFAULT 'COMPLETED',
+    status VARCHAR(50) NOT NULL DEFAULT 'completed',
     upi_transaction_ref VARCHAR(100),
+    idempotency_key VARCHAR(64) UNIQUE,
+    notes TEXT,
+    settled_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     legacy_unknown_timestamp BOOLEAN DEFAULT FALSE
 );
 CREATE INDEX IF NOT EXISTS idx_payments_order ON payments(order_id);
+CREATE INDEX IF NOT EXISTS idx_payments_restaurant_settled ON payments(restaurant_id, settled_at);
+CREATE INDEX IF NOT EXISTS idx_payments_idempotency ON payments(idempotency_key);
 
 CREATE TABLE IF NOT EXISTS refunds (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     restaurant_id UUID NOT NULL REFERENCES restaurants(id) ON DELETE CASCADE,
-    payment_id UUID NOT NULL REFERENCES payments(id) ON DELETE RESTRICT,
-    order_id UUID NOT NULL REFERENCES orders(id) ON DELETE RESTRICT,
-    amount_paise BIGINT NOT NULL CHECK (amount_paise > 0),
+    order_id UUID NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
+    order_number VARCHAR(50),
+    payment_id UUID REFERENCES payments(id) ON DELETE RESTRICT,
+    split_bill_id UUID REFERENCES split_bills(id) ON DELETE SET NULL,
+    table_number VARCHAR(20),
+    customer_name VARCHAR(100),
+    original_payment_method VARCHAR(50),
+    refund_method VARCHAR(50),
+    refund_amount_paise BIGINT NOT NULL CHECK (refund_amount_paise > 0),
+    amount_paise BIGINT GENERATED ALWAYS AS (refund_amount_paise) STORED,
     reason TEXT NOT NULL,
+    status VARCHAR(50) NOT NULL DEFAULT 'requested',
     authorized_by UUID REFERENCES staff_members(id),
-    status VARCHAR(20) NOT NULL DEFAULT 'COMPLETED',
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    processed_by_staff_id UUID REFERENCES staff_members(id),
+    staff_name VARCHAR(100) DEFAULT 'Staff',
+    idempotency_key VARCHAR(64) UNIQUE,
+    requested_at TIMESTAMPTZ DEFAULT NOW(),
+    completed_at TIMESTAMPTZ,
+    cancelled_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    legacy_unknown_timestamp BOOLEAN DEFAULT FALSE
 );
+CREATE INDEX IF NOT EXISTS idx_refunds_order ON refunds(order_id);
+CREATE INDEX IF NOT EXISTS idx_refunds_restaurant_completed ON refunds(restaurant_id, completed_at);
 
 CREATE TABLE IF NOT EXISTS invoices (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     restaurant_id UUID NOT NULL REFERENCES restaurants(id) ON DELETE CASCADE,
     order_id UUID NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
-    invoice_number VARCHAR(50) NOT NULL UNIQUE,
-    subtotal_paise BIGINT NOT NULL,
-    tax_paise BIGINT NOT NULL DEFAULT 0,
-    discount_paise BIGINT NOT NULL DEFAULT 0,
+    invoice_number VARCHAR(50) NOT NULL,
+    subtotal_paise BIGINT NOT NULL CHECK (subtotal_paise >= 0),
+    discount_paise BIGINT NOT NULL DEFAULT 0 CHECK (discount_paise >= 0),
+    discount_amount_paise BIGINT GENERATED ALWAYS AS (discount_paise) STORED,
+    tax_paise BIGINT NOT NULL DEFAULT 0 CHECK (tax_paise >= 0),
+    tax_amount_paise BIGINT GENERATED ALWAYS AS (tax_paise) STORED,
     round_off_paise BIGINT NOT NULL DEFAULT 0,
-    total_paise BIGINT NOT NULL,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    total_paise BIGINT NOT NULL CHECK (total_paise >= 0),
+    total_amount_paise BIGINT GENERATED ALWAYS AS (total_paise) STORED,
+    payment_status VARCHAR(50) NOT NULL DEFAULT 'PAID',
+    is_printed BOOLEAN NOT NULL DEFAULT FALSE,
+    print_count INT NOT NULL DEFAULT 0 CHECK (print_count >= 0),
+    last_printed_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    CONSTRAINT uq_restaurant_invoice_number UNIQUE (restaurant_id, invoice_number)
 );
 CREATE INDEX IF NOT EXISTS idx_invoices_order ON invoices(order_id);
+CREATE INDEX IF NOT EXISTS idx_invoices_restaurant_created ON invoices(restaurant_id, created_at);
 
 CREATE TABLE IF NOT EXISTS invoice_prints (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     invoice_id UUID NOT NULL REFERENCES invoices(id) ON DELETE CASCADE,
     printed_by UUID REFERENCES staff_members(id),
+    staff_name VARCHAR(100) NOT NULL DEFAULT 'Staff',
+    printed_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    is_reprint BOOLEAN NOT NULL DEFAULT FALSE,
     reprint_reason TEXT,
+    reason TEXT GENERATED ALWAYS AS (reprint_reason) STORED,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+CREATE INDEX IF NOT EXISTS idx_invoice_prints_invoice ON invoice_prints(invoice_id);
 
 -- 3.9 INVENTORY & RECIPES
 CREATE TABLE IF NOT EXISTS inventory_items (
@@ -363,6 +478,8 @@ CREATE TABLE IF NOT EXISTS inventory_items (
     restaurant_id UUID NOT NULL REFERENCES restaurants(id) ON DELETE CASCADE,
     name VARCHAR(150) NOT NULL,
     sku VARCHAR(50),
+    category VARCHAR(50) DEFAULT 'General',
+    unit VARCHAR(20) DEFAULT 'kg',
     unit_of_measure VARCHAR(20) NOT NULL DEFAULT 'kg',
     current_stock NUMERIC(12, 4) NOT NULL DEFAULT 0.0000,
     reorder_level NUMERIC(12, 4) NOT NULL DEFAULT 0.0000,
@@ -433,22 +550,23 @@ CREATE TABLE IF NOT EXISTS coupons (
     discount_value_paise BIGINT DEFAULT 0,
     discount_percentage NUMERIC(5, 2) DEFAULT 0.00,
     min_order_amount_paise BIGINT NOT NULL DEFAULT 0,
-    min_order_value_paise BIGINT DEFAULT 0,
+    min_order_value_paise BIGINT GENERATED ALWAYS AS (min_order_amount_paise) STORED,
     max_discount_paise BIGINT,
-    max_discount_amount_paise BIGINT,
+    max_discount_amount_paise BIGINT GENERATED ALWAYS AS (max_discount_paise) STORED,
     one_time_per_customer BOOLEAN DEFAULT TRUE,
     is_targeted BOOLEAN DEFAULT FALSE,
     total_usage_limit INT DEFAULT 1000,
     redemption_count INT DEFAULT 0,
     valid_from TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     valid_until TIMESTAMPTZ NOT NULL DEFAULT (NOW() + INTERVAL '1 year'),
-    start_date TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    end_date TIMESTAMPTZ NOT NULL DEFAULT (NOW() + INTERVAL '1 year'),
+    start_date TIMESTAMPTZ GENERATED ALWAYS AS (valid_from) STORED,
+    end_date TIMESTAMPTZ GENERATED ALWAYS AS (valid_until) STORED,
     is_active BOOLEAN NOT NULL DEFAULT TRUE,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     CONSTRAINT uq_restaurant_coupon_code UNIQUE (restaurant_id, code)
 );
+CREATE INDEX IF NOT EXISTS idx_coupons_restaurant_code ON coupons(restaurant_id, code);
 
 CREATE TABLE IF NOT EXISTS coupon_assignments (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -457,24 +575,27 @@ CREATE TABLE IF NOT EXISTS coupon_assignments (
     customer_id UUID NOT NULL REFERENCES customers(id) ON DELETE CASCADE,
     assigned_by UUID REFERENCES staff_members(id),
     assigned_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    valid_from TIMESTAMPTZ NOT NULL,
-    valid_until TIMESTAMPTZ NOT NULL,
+    valid_from TIMESTAMPTZ,
+    valid_until TIMESTAMPTZ,
     max_redemptions INT DEFAULT 1,
     redemptions_used INT DEFAULT 0,
     status VARCHAR(20) NOT NULL DEFAULT 'ACTIVE',
     CONSTRAINT uq_coupon_customer_assignment UNIQUE (coupon_id, customer_id)
 );
+CREATE INDEX IF NOT EXISTS idx_coupon_assignments_customer ON coupon_assignments(customer_id);
 
 CREATE TABLE IF NOT EXISTS coupon_redemptions (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     coupon_id UUID NOT NULL REFERENCES coupons(id) ON DELETE CASCADE,
-    order_id UUID NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
+    order_id UUID REFERENCES orders(id) ON DELETE CASCADE,
     customer_id UUID REFERENCES customers(id) ON DELETE SET NULL,
     customer_phone VARCHAR(50),
     discount_applied_paise BIGINT NOT NULL DEFAULT 0,
+    discount_amount_applied_paise BIGINT GENERATED ALWAYS AS (discount_applied_paise) STORED,
     redeemed_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     idempotency_key VARCHAR(100)
 );
+CREATE INDEX IF NOT EXISTS idx_coupon_redemptions_lookup ON coupon_redemptions(coupon_id, customer_phone);
 
 -- 3.11 RESERVATIONS & CUSTOMER FEEDBACK
 CREATE TABLE IF NOT EXISTS reservations (
@@ -484,25 +605,38 @@ CREATE TABLE IF NOT EXISTS reservations (
     customer_name VARCHAR(100) NOT NULL,
     customer_phone VARCHAR(50),
     customer_phone_e164 VARCHAR(20),
+    party_size INT NOT NULL DEFAULT 2 CHECK (party_size > 0),
+    guest_count INT GENERATED ALWAYS AS (party_size) STORED,
     reservation_date DATE,
     reservation_time TIMESTAMPTZ NOT NULL,
-    party_size INT NOT NULL DEFAULT 2 CHECK (party_size > 0),
-    guest_count INT NOT NULL DEFAULT 2 CHECK (guest_count > 0),
     table_id UUID REFERENCES tables(id) ON DELETE SET NULL,
-    status VARCHAR(30) NOT NULL DEFAULT 'CONFIRMED', -- 'PENDING', 'CONFIRMED', 'SEATED', 'CANCELLED', 'NO_SHOW'
+    assigned_table_id UUID GENERATED ALWAYS AS (table_id) STORED,
+    status VARCHAR(50) NOT NULL DEFAULT 'CONFIRMED', -- 'PENDING', 'CONFIRMED', 'SEATED', 'CANCELLED', 'NO_SHOW'
     special_requests TEXT,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+CREATE INDEX IF NOT EXISTS idx_reservations_restaurant_time ON reservations(restaurant_id, reservation_time);
 
 CREATE TABLE IF NOT EXISTS customer_feedback (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     restaurant_id UUID NOT NULL REFERENCES restaurants(id) ON DELETE CASCADE,
     order_id UUID REFERENCES orders(id) ON DELETE SET NULL,
     customer_id UUID REFERENCES customers(id) ON DELETE SET NULL,
+    customer_name VARCHAR(100),
+    customer_phone VARCHAR(50),
     rating INT NOT NULL CHECK (rating >= 1 AND rating <= 5),
+    food_rating INT CHECK (food_rating >= 1 AND food_rating <= 5),
+    service_rating INT CHECK (service_rating >= 1 AND service_rating <= 5),
+    ambience_rating INT CHECK (ambience_rating >= 1 AND ambience_rating <= 5),
     comments TEXT,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    resolution_note TEXT,
+    is_resolved BOOLEAN NOT NULL DEFAULT FALSE,
+    is_public BOOLEAN NOT NULL DEFAULT TRUE,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+CREATE INDEX IF NOT EXISTS idx_customer_feedback_restaurant ON customer_feedback(restaurant_id);
 
 -- 3.12 CLOUD-OFFLINE SYNC INFRASTRUCTURE & AUDIT
 CREATE TABLE IF NOT EXISTS sync_outbox (
@@ -554,12 +688,13 @@ CREATE TABLE IF NOT EXISTS idempotency_records (
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     expires_at TIMESTAMPTZ NOT NULL DEFAULT (NOW() + INTERVAL '24 hours')
 );
+CREATE INDEX IF NOT EXISTS idx_idempotency_restaurant ON idempotency_records(restaurant_id);
 
 CREATE TABLE IF NOT EXISTS audit_logs (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     restaurant_id UUID NOT NULL REFERENCES restaurants(id) ON DELETE CASCADE,
     actor_id UUID,
-    actor_role VARCHAR(50) NOT NULL,
+    actor_role VARCHAR(50) NOT NULL DEFAULT 'STAFF',
     actor_label VARCHAR(150),
     action VARCHAR(100) NOT NULL,
     entity_type VARCHAR(50) NOT NULL,
@@ -568,12 +703,13 @@ CREATE TABLE IF NOT EXISTS audit_logs (
     payload_after JSONB,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+CREATE INDEX IF NOT EXISTS idx_audit_logs_restaurant_created ON audit_logs(restaurant_id, created_at);
 
 -- ------------------------------------------------------------------------------
--- 4. ROW LEVEL SECURITY (RLS) POLICIES
+-- 4. ROW LEVEL SECURITY (RLS) POLICIES - GRANULAR & HARDENED PER TABLE
 -- ------------------------------------------------------------------------------
 
--- Enable RLS across all tables
+-- Enable RLS across every single table
 ALTER TABLE restaurants ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.users ENABLE ROW LEVEL SECURITY;
 ALTER TABLE staff_members ENABLE ROW LEVEL SECURITY;
@@ -615,7 +751,7 @@ RETURNS UUID AS $$
   SELECT COALESCE(
     NULLIF(current_setting('request.jwt.claims', true)::jsonb->>'restaurant_id', '')::UUID,
     (SELECT restaurant_id FROM public.users WHERE id = auth.uid() LIMIT 1),
-    '00000000-0000-0000-0000-000000000001'::UUID
+    NULL -- Strictly returns NULL when unauthenticated or unassociated
   );
 $$ LANGUAGE sql STABLE SECURITY DEFINER;
 
@@ -637,71 +773,90 @@ RETURNS VARCHAR AS $$
 $$ LANGUAGE sql STABLE SECURITY DEFINER;
 
 -- 4.1 RESTAURANTS
-DROP POLICY IF EXISTS "restaurants_public_read" ON restaurants;
-CREATE POLICY "restaurants_public_read" ON restaurants
-    FOR SELECT USING (is_active = TRUE);
+DROP POLICY IF EXISTS "restaurants_select" ON restaurants;
+CREATE POLICY "restaurants_select" ON restaurants
+    FOR SELECT USING (is_active = TRUE OR id = current_staff_restaurant_id() OR auth.jwt() ->> 'role' = 'service_role');
 
-DROP POLICY IF EXISTS "restaurants_staff_manage" ON restaurants;
-CREATE POLICY "restaurants_staff_manage" ON restaurants
-    FOR ALL TO authenticated
-    USING (id = current_staff_restaurant_id() OR auth.jwt() ->> 'role' = 'service_role');
+DROP POLICY IF EXISTS "restaurants_update" ON restaurants;
+CREATE POLICY "restaurants_update" ON restaurants
+    FOR UPDATE TO authenticated
+    USING (id = current_staff_restaurant_id() AND current_staff_role() = 'ADMIN');
 
 -- 4.2 USERS & STAFF
-DROP POLICY IF EXISTS "users_admin_manage" ON public.users;
-CREATE POLICY "users_admin_manage" ON public.users
+DROP POLICY IF EXISTS "users_select" ON public.users;
+CREATE POLICY "users_select" ON public.users
+    FOR SELECT TO authenticated
+    USING (
+        auth.jwt() ->> 'role' = 'service_role' OR
+        id = auth.uid() OR
+        restaurant_id = current_staff_restaurant_id()
+    );
+
+DROP POLICY IF EXISTS "users_manage" ON public.users;
+CREATE POLICY "users_manage" ON public.users
     FOR ALL TO authenticated
     USING (
         auth.jwt() ->> 'role' = 'service_role' OR
-        current_staff_role() = 'ADMIN' OR
+        (restaurant_id = current_staff_restaurant_id() AND current_staff_role() = 'ADMIN') OR
         id = auth.uid()
     );
 
-DROP POLICY IF EXISTS "staff_tenant_read" ON staff_members;
-CREATE POLICY "staff_tenant_read" ON staff_members
-    FOR SELECT TO authenticated, anon
+DROP POLICY IF EXISTS "staff_select" ON staff_members;
+CREATE POLICY "staff_select" ON staff_members
+    FOR SELECT TO authenticated
     USING (restaurant_id = current_staff_restaurant_id() OR auth.jwt() ->> 'role' = 'service_role');
 
-DROP POLICY IF EXISTS "staff_admin_manage" ON staff_members;
-CREATE POLICY "staff_admin_manage" ON staff_members
+DROP POLICY IF EXISTS "staff_manage" ON staff_members;
+CREATE POLICY "staff_manage" ON staff_members
     FOR ALL TO authenticated
     USING (
         auth.jwt() ->> 'role' = 'service_role' OR
         (restaurant_id = current_staff_restaurant_id() AND current_staff_role() IN ('ADMIN', 'MANAGER'))
     );
 
-DROP POLICY IF EXISTS "attendance_staff_manage" ON staff_attendance;
-CREATE POLICY "attendance_staff_manage" ON staff_attendance
+DROP POLICY IF EXISTS "attendance_select" ON staff_attendance;
+CREATE POLICY "attendance_select" ON staff_attendance
+    FOR SELECT TO authenticated
+    USING (restaurant_id = current_staff_restaurant_id() OR auth.jwt() ->> 'role' = 'service_role');
+
+DROP POLICY IF EXISTS "attendance_manage" ON staff_attendance;
+CREATE POLICY "attendance_manage" ON staff_attendance
     FOR ALL TO authenticated
     USING (restaurant_id = current_staff_restaurant_id() OR auth.jwt() ->> 'role' = 'service_role');
 
--- 4.3 CUSTOMERS & AUTH
-DROP POLICY IF EXISTS "customers_staff_manage" ON customers;
-CREATE POLICY "customers_staff_manage" ON customers
-    FOR ALL USING (restaurant_id = current_staff_restaurant_id() OR auth.jwt() ->> 'role' = 'service_role');
+-- 4.3 CUSTOMERS & AUTH CHALLENGES
+DROP POLICY IF EXISTS "customers_staff_select" ON customers;
+CREATE POLICY "customers_staff_select" ON customers
+    FOR SELECT TO authenticated
+    USING (restaurant_id = current_staff_restaurant_id() OR auth.jwt() ->> 'role' = 'service_role');
 
 DROP POLICY IF EXISTS "customers_customer_select" ON customers;
 CREATE POLICY "customers_customer_select" ON customers
-    FOR SELECT USING (id = current_customer_id() OR auth.jwt() ->> 'role' = 'service_role');
+    FOR SELECT TO anon, authenticated
+    USING (id = current_customer_id() OR auth.jwt() ->> 'role' = 'service_role');
 
 DROP POLICY IF EXISTS "customers_customer_update" ON customers;
 CREATE POLICY "customers_customer_update" ON customers
-    FOR UPDATE USING (id = current_customer_id())
-    WITH CHECK (id = current_customer_id());
+    FOR UPDATE TO authenticated
+    USING (id = current_customer_id() OR restaurant_id = current_staff_restaurant_id())
+    WITH CHECK (id = current_customer_id() OR restaurant_id = current_staff_restaurant_id());
 
-DROP POLICY IF EXISTS "customers_anon_insert" ON customers;
-CREATE POLICY "customers_anon_insert" ON customers
-    FOR INSERT WITH CHECK (TRUE);
+DROP POLICY IF EXISTS "customers_insert" ON customers;
+CREATE POLICY "customers_insert" ON customers
+    FOR INSERT TO anon, authenticated
+    WITH CHECK (TRUE);
 
-DROP POLICY IF EXISTS "auth_challenges_policy" ON customer_auth_challenges;
-CREATE POLICY "auth_challenges_policy" ON customer_auth_challenges
-    FOR ALL TO anon, authenticated
+-- OTP Challenges strictly gated to server-side functions / service_role
+DROP POLICY IF EXISTS "auth_challenges_service_all" ON customer_auth_challenges;
+CREATE POLICY "auth_challenges_service_all" ON customer_auth_challenges
+    FOR ALL TO service_role
     USING (TRUE) WITH CHECK (TRUE);
 
 -- 4.4 TABLES & QR ACCESS
-DROP POLICY IF EXISTS "tables_public_read" ON tables;
-CREATE POLICY "tables_public_read" ON tables
+DROP POLICY IF EXISTS "tables_public_select" ON tables;
+CREATE POLICY "tables_public_select" ON tables
     FOR SELECT TO anon, authenticated
-    USING (ordering_enabled = TRUE OR auth.jwt() ->> 'role' = 'service_role');
+    USING (ordering_enabled = TRUE OR restaurant_id = current_staff_restaurant_id() OR auth.jwt() ->> 'role' = 'service_role');
 
 DROP POLICY IF EXISTS "tables_staff_manage" ON tables;
 CREATE POLICY "tables_staff_manage" ON tables
@@ -713,70 +868,107 @@ CREATE POLICY "table_transfers_manage" ON table_transfers
     FOR ALL TO authenticated
     USING (restaurant_id = current_staff_restaurant_id() OR auth.jwt() ->> 'role' = 'service_role');
 
--- 4.5 MENU CATEGORIES & ITEMS (Customer QR View + Staff Manage)
-DROP POLICY IF EXISTS "menu_categories_public_read" ON menu_categories;
-CREATE POLICY "menu_categories_public_read" ON menu_categories
+-- 4.5 MENU CATEGORIES & ITEMS
+DROP POLICY IF EXISTS "menu_categories_public_select" ON menu_categories;
+CREATE POLICY "menu_categories_public_select" ON menu_categories
     FOR SELECT TO anon, authenticated
-    USING (is_active = TRUE OR auth.jwt() ->> 'role' = 'service_role');
+    USING (is_active = TRUE OR restaurant_id = current_staff_restaurant_id() OR auth.jwt() ->> 'role' = 'service_role');
 
 DROP POLICY IF EXISTS "menu_categories_staff_manage" ON menu_categories;
 CREATE POLICY "menu_categories_staff_manage" ON menu_categories
     FOR ALL TO authenticated
     USING (restaurant_id = current_staff_restaurant_id() OR auth.jwt() ->> 'role' = 'service_role');
 
-DROP POLICY IF EXISTS "menu_items_public_read" ON menu_items;
-CREATE POLICY "menu_items_public_read" ON menu_items
+DROP POLICY IF EXISTS "menu_items_public_select" ON menu_items;
+CREATE POLICY "menu_items_public_select" ON menu_items
     FOR SELECT TO anon, authenticated
-    USING (is_available = TRUE OR auth.jwt() ->> 'role' = 'service_role');
+    USING (is_available = TRUE OR restaurant_id = current_staff_restaurant_id() OR auth.jwt() ->> 'role' = 'service_role');
 
 DROP POLICY IF EXISTS "menu_items_staff_manage" ON menu_items;
 CREATE POLICY "menu_items_staff_manage" ON menu_items
     FOR ALL TO authenticated
     USING (restaurant_id = current_staff_restaurant_id() OR auth.jwt() ->> 'role' = 'service_role');
 
--- 4.6 ORDERS & ORDER ITEMS (Customer QR Ordering + Staff Control)
-DROP POLICY IF EXISTS "orders_public_insert" ON orders;
-CREATE POLICY "orders_public_insert" ON orders
+-- 4.6 ORDERS & ORDER ITEMS (Scoped to active session / patron / staff)
+DROP POLICY IF EXISTS "orders_select" ON orders;
+CREATE POLICY "orders_select" ON orders
+    FOR SELECT TO anon, authenticated
+    USING (
+        auth.jwt() ->> 'role' = 'service_role' OR
+        restaurant_id = current_staff_restaurant_id() OR
+        customer_id = current_customer_id()
+    );
+
+DROP POLICY IF EXISTS "orders_insert" ON orders;
+CREATE POLICY "orders_insert" ON orders
+    FOR INSERT TO anon, authenticated
+    WITH CHECK (
+        order_type IN ('DINE_IN', 'TAKEAWAY') AND
+        (status IN ('confirmed', 'pending', 'PENDING') OR auth.jwt() ->> 'role' = 'service_role')
+    );
+
+DROP POLICY IF EXISTS "orders_update" ON orders;
+CREATE POLICY "orders_update" ON orders
+    FOR UPDATE TO authenticated
+    USING (restaurant_id = current_staff_restaurant_id() OR auth.jwt() ->> 'role' = 'service_role');
+
+DROP POLICY IF EXISTS "orders_delete" ON orders;
+CREATE POLICY "orders_delete" ON orders
+    FOR DELETE TO authenticated
+    USING (
+        auth.jwt() ->> 'role' = 'service_role' OR
+        (restaurant_id = current_staff_restaurant_id() AND current_staff_role() = 'ADMIN')
+    );
+
+DROP POLICY IF EXISTS "order_items_select" ON order_items;
+CREATE POLICY "order_items_select" ON order_items
+    FOR SELECT TO anon, authenticated
+    USING (
+        auth.jwt() ->> 'role' = 'service_role' OR
+        EXISTS (
+            SELECT 1 FROM orders o
+            WHERE o.id = order_items.order_id
+              AND (o.restaurant_id = current_staff_restaurant_id() OR o.customer_id = current_customer_id())
+        )
+    );
+
+DROP POLICY IF EXISTS "order_items_insert" ON order_items;
+CREATE POLICY "order_items_insert" ON order_items
     FOR INSERT TO anon, authenticated
     WITH CHECK (TRUE);
 
-DROP POLICY IF EXISTS "orders_public_select" ON orders;
-CREATE POLICY "orders_public_select" ON orders
-    FOR SELECT TO anon, authenticated
-    USING (restaurant_id = current_staff_restaurant_id() OR auth.jwt() ->> 'role' = 'service_role');
-
-DROP POLICY IF EXISTS "orders_staff_manage" ON orders;
-CREATE POLICY "orders_staff_manage" ON orders
+DROP POLICY IF EXISTS "order_items_manage" ON order_items;
+CREATE POLICY "order_items_manage" ON order_items
     FOR ALL TO authenticated
-    USING (restaurant_id = current_staff_restaurant_id() OR auth.jwt() ->> 'role' = 'service_role');
-
-DROP POLICY IF EXISTS "order_items_public_insert" ON order_items;
-CREATE POLICY "order_items_public_insert" ON order_items
-    FOR INSERT TO anon, authenticated
-    WITH CHECK (TRUE);
-
-DROP POLICY IF EXISTS "order_items_public_select" ON order_items;
-CREATE POLICY "order_items_public_select" ON order_items
-    FOR SELECT TO anon, authenticated
-    USING (TRUE);
-
-DROP POLICY IF EXISTS "order_items_staff_manage" ON order_items;
-CREATE POLICY "order_items_staff_manage" ON order_items
-    FOR ALL TO authenticated
-    USING (auth.jwt() ->> 'role' = 'service_role' OR EXISTS (
-        SELECT 1 FROM orders o WHERE o.id = order_items.order_id AND o.restaurant_id = current_staff_restaurant_id()
-    ));
+    USING (
+        auth.jwt() ->> 'role' = 'service_role' OR
+        EXISTS (
+            SELECT 1 FROM orders o
+            WHERE o.id = order_items.order_id
+              AND o.restaurant_id = current_staff_restaurant_id()
+        )
+    );
 
 DROP POLICY IF EXISTS "timeline_events_manage" ON order_timeline_events;
 CREATE POLICY "timeline_events_manage" ON order_timeline_events
     FOR ALL TO authenticated
-    USING (auth.jwt() ->> 'role' = 'service_role' OR EXISTS (
-        SELECT 1 FROM orders o WHERE o.id = order_timeline_events.order_id AND o.restaurant_id = current_staff_restaurant_id()
-    ));
+    USING (
+        auth.jwt() ->> 'role' = 'service_role' OR
+        EXISTS (
+            SELECT 1 FROM orders o
+            WHERE o.id = order_timeline_events.order_id
+              AND o.restaurant_id = current_staff_restaurant_id()
+        )
+    );
 
 -- 4.7 BILLING, PAYMENTS & INVOICES
-DROP POLICY IF EXISTS "split_bills_staff_manage" ON split_bills;
-CREATE POLICY "split_bills_staff_manage" ON split_bills
+DROP POLICY IF EXISTS "split_bills_select" ON split_bills;
+CREATE POLICY "split_bills_select" ON split_bills
+    FOR SELECT TO authenticated, anon
+    USING (restaurant_id = current_staff_restaurant_id() OR auth.jwt() ->> 'role' = 'service_role');
+
+DROP POLICY IF EXISTS "split_bills_manage" ON split_bills;
+CREATE POLICY "split_bills_manage" ON split_bills
     FOR ALL TO authenticated
     USING (restaurant_id = current_staff_restaurant_id() OR auth.jwt() ->> 'role' = 'service_role');
 
@@ -785,14 +977,37 @@ CREATE POLICY "split_bill_items_manage" ON split_bill_items
     FOR ALL TO authenticated
     USING (TRUE);
 
-DROP POLICY IF EXISTS "payments_staff_manage" ON payments;
-CREATE POLICY "payments_staff_manage" ON payments
-    FOR ALL TO authenticated, anon
+DROP POLICY IF EXISTS "payments_select" ON payments;
+CREATE POLICY "payments_select" ON payments
+    FOR SELECT TO authenticated, anon
     USING (restaurant_id = current_staff_restaurant_id() OR auth.jwt() ->> 'role' = 'service_role');
 
-DROP POLICY IF EXISTS "invoices_staff_manage" ON invoices;
-CREATE POLICY "invoices_staff_manage" ON invoices
-    FOR ALL TO authenticated, anon
+DROP POLICY IF EXISTS "payments_manage" ON payments;
+CREATE POLICY "payments_manage" ON payments
+    FOR ALL TO authenticated
+    USING (restaurant_id = current_staff_restaurant_id() OR auth.jwt() ->> 'role' = 'service_role');
+
+DROP POLICY IF EXISTS "refunds_select" ON refunds;
+CREATE POLICY "refunds_select" ON refunds
+    FOR SELECT TO authenticated
+    USING (restaurant_id = current_staff_restaurant_id() OR auth.jwt() ->> 'role' = 'service_role');
+
+DROP POLICY IF EXISTS "refunds_manage" ON refunds;
+CREATE POLICY "refunds_manage" ON refunds
+    FOR ALL TO authenticated
+    USING (
+        auth.jwt() ->> 'role' = 'service_role' OR
+        (restaurant_id = current_staff_restaurant_id() AND current_staff_role() IN ('ADMIN', 'MANAGER'))
+    );
+
+DROP POLICY IF EXISTS "invoices_select" ON invoices;
+CREATE POLICY "invoices_select" ON invoices
+    FOR SELECT TO authenticated, anon
+    USING (restaurant_id = current_staff_restaurant_id() OR auth.jwt() ->> 'role' = 'service_role');
+
+DROP POLICY IF EXISTS "invoices_manage" ON invoices;
+CREATE POLICY "invoices_manage" ON invoices
+    FOR ALL TO authenticated
     USING (restaurant_id = current_staff_restaurant_id() OR auth.jwt() ->> 'role' = 'service_role');
 
 DROP POLICY IF EXISTS "invoice_prints_manage" ON invoice_prints;
@@ -800,22 +1015,19 @@ CREATE POLICY "invoice_prints_manage" ON invoice_prints
     FOR ALL TO authenticated
     USING (TRUE);
 
-DROP POLICY IF EXISTS "refunds_admin_manage" ON refunds;
-CREATE POLICY "refunds_admin_manage" ON refunds
-    FOR ALL TO authenticated
-    USING (
-        auth.jwt() ->> 'role' = 'service_role' OR
-        (restaurant_id = current_staff_restaurant_id() AND current_staff_role() IN ('ADMIN', 'MANAGER'))
-    );
-
 -- 4.8 INVENTORY & RECIPES
-DROP POLICY IF EXISTS "inventory_staff_manage" ON inventory_items;
-CREATE POLICY "inventory_staff_manage" ON inventory_items
+DROP POLICY IF EXISTS "inventory_select" ON inventory_items;
+CREATE POLICY "inventory_select" ON inventory_items
+    FOR SELECT TO authenticated
+    USING (restaurant_id = current_staff_restaurant_id() OR auth.jwt() ->> 'role' = 'service_role');
+
+DROP POLICY IF EXISTS "inventory_manage" ON inventory_items;
+CREATE POLICY "inventory_manage" ON inventory_items
     FOR ALL TO authenticated
     USING (restaurant_id = current_staff_restaurant_id() OR auth.jwt() ->> 'role' = 'service_role');
 
-DROP POLICY IF EXISTS "recipes_staff_manage" ON recipes;
-CREATE POLICY "recipes_staff_manage" ON recipes
+DROP POLICY IF EXISTS "recipes_manage" ON recipes;
+CREATE POLICY "recipes_manage" ON recipes
     FOR ALL TO authenticated
     USING (restaurant_id = current_staff_restaurant_id() OR auth.jwt() ->> 'role' = 'service_role');
 
@@ -824,86 +1036,178 @@ CREATE POLICY "recipe_ingredients_manage" ON recipe_ingredients
     FOR ALL TO authenticated
     USING (TRUE);
 
-DROP POLICY IF EXISTS "stock_movements_staff_manage" ON stock_movements;
-CREATE POLICY "stock_movements_staff_manage" ON stock_movements
+DROP POLICY IF EXISTS "stock_movements_select" ON stock_movements;
+CREATE POLICY "stock_movements_select" ON stock_movements
+    FOR SELECT TO authenticated
+    USING (restaurant_id = current_staff_restaurant_id() OR auth.jwt() ->> 'role' = 'service_role');
+
+DROP POLICY IF EXISTS "stock_movements_manage" ON stock_movements;
+CREATE POLICY "stock_movements_manage" ON stock_movements
     FOR ALL TO authenticated
     USING (restaurant_id = current_staff_restaurant_id() OR auth.jwt() ->> 'role' = 'service_role');
 
-DROP POLICY IF EXISTS "wastage_staff_manage" ON wastage_records;
-CREATE POLICY "wastage_staff_manage" ON wastage_records
+DROP POLICY IF EXISTS "wastage_select" ON wastage_records;
+CREATE POLICY "wastage_select" ON wastage_records
+    FOR SELECT TO authenticated
+    USING (restaurant_id = current_staff_restaurant_id() OR auth.jwt() ->> 'role' = 'service_role');
+
+DROP POLICY IF EXISTS "wastage_manage" ON wastage_records;
+CREATE POLICY "wastage_manage" ON wastage_records
     FOR ALL TO authenticated
     USING (restaurant_id = current_staff_restaurant_id() OR auth.jwt() ->> 'role' = 'service_role');
 
 -- 4.9 COUPONS & REDEMPTIONS
-DROP POLICY IF EXISTS "coupons_public_read" ON coupons;
-CREATE POLICY "coupons_public_read" ON coupons
+DROP POLICY IF EXISTS "coupons_select" ON coupons;
+CREATE POLICY "coupons_select" ON coupons
     FOR SELECT TO anon, authenticated
-    USING (is_active = TRUE OR auth.jwt() ->> 'role' = 'service_role');
+    USING (is_active = TRUE OR restaurant_id = current_staff_restaurant_id() OR auth.jwt() ->> 'role' = 'service_role');
 
-DROP POLICY IF EXISTS "coupons_staff_manage" ON coupons;
-CREATE POLICY "coupons_staff_manage" ON coupons
+DROP POLICY IF EXISTS "coupons_manage" ON coupons;
+CREATE POLICY "coupons_manage" ON coupons
     FOR ALL TO authenticated
     USING (restaurant_id = current_staff_restaurant_id() OR auth.jwt() ->> 'role' = 'service_role');
 
-DROP POLICY IF EXISTS "coupon_assignments_customer_read" ON coupon_assignments;
-CREATE POLICY "coupon_assignments_customer_read" ON coupon_assignments
+DROP POLICY IF EXISTS "coupon_assignments_select" ON coupon_assignments;
+CREATE POLICY "coupon_assignments_select" ON coupon_assignments
     FOR SELECT TO anon, authenticated
-    USING (customer_id = current_customer_id() OR auth.jwt() ->> 'role' = 'service_role');
+    USING (customer_id = current_customer_id() OR restaurant_id = current_staff_restaurant_id() OR auth.jwt() ->> 'role' = 'service_role');
 
-DROP POLICY IF EXISTS "coupon_assignments_staff_manage" ON coupon_assignments;
-CREATE POLICY "coupon_assignments_staff_manage" ON coupon_assignments
+DROP POLICY IF EXISTS "coupon_assignments_manage" ON coupon_assignments;
+CREATE POLICY "coupon_assignments_manage" ON coupon_assignments
     FOR ALL TO authenticated
     USING (restaurant_id = current_staff_restaurant_id() OR auth.jwt() ->> 'role' = 'service_role');
+
+DROP POLICY IF EXISTS "coupon_redemptions_select" ON coupon_redemptions;
+CREATE POLICY "coupon_redemptions_select" ON coupon_redemptions
+    FOR SELECT TO authenticated, anon
+    USING (TRUE);
 
 DROP POLICY IF EXISTS "coupon_redemptions_manage" ON coupon_redemptions;
 CREATE POLICY "coupon_redemptions_manage" ON coupon_redemptions
-    FOR ALL TO authenticated, anon
+    FOR ALL TO authenticated, service_role
     USING (TRUE);
 
 -- 4.10 RESERVATIONS & FEEDBACK
-DROP POLICY IF EXISTS "reservations_staff_manage" ON reservations;
-CREATE POLICY "reservations_staff_manage" ON reservations
-    FOR ALL TO authenticated, anon
+DROP POLICY IF EXISTS "reservations_select" ON reservations;
+CREATE POLICY "reservations_select" ON reservations
+    FOR SELECT TO anon, authenticated
+    USING (customer_id = current_customer_id() OR restaurant_id = current_staff_restaurant_id() OR auth.jwt() ->> 'role' = 'service_role');
+
+DROP POLICY IF EXISTS "reservations_insert" ON reservations;
+CREATE POLICY "reservations_insert" ON reservations
+    FOR INSERT TO anon, authenticated
+    WITH CHECK (TRUE);
+
+DROP POLICY IF EXISTS "reservations_manage" ON reservations;
+CREATE POLICY "reservations_manage" ON reservations
+    FOR ALL TO authenticated
     USING (restaurant_id = current_staff_restaurant_id() OR auth.jwt() ->> 'role' = 'service_role');
 
-DROP POLICY IF EXISTS "customer_feedback_staff_manage" ON customer_feedback;
-CREATE POLICY "customer_feedback_staff_manage" ON customer_feedback
-    FOR ALL TO authenticated, anon
+DROP POLICY IF EXISTS "customer_feedback_select" ON customer_feedback;
+CREATE POLICY "customer_feedback_select" ON customer_feedback
+    FOR SELECT TO anon, authenticated
+    USING (is_public = TRUE OR restaurant_id = current_staff_restaurant_id() OR auth.jwt() ->> 'role' = 'service_role');
+
+DROP POLICY IF EXISTS "customer_feedback_insert" ON customer_feedback;
+CREATE POLICY "customer_feedback_insert" ON customer_feedback
+    FOR INSERT TO anon, authenticated
+    WITH CHECK (TRUE);
+
+DROP POLICY IF EXISTS "customer_feedback_manage" ON customer_feedback;
+CREATE POLICY "customer_feedback_manage" ON customer_feedback
+    FOR ALL TO authenticated
     USING (restaurant_id = current_staff_restaurant_id() OR auth.jwt() ->> 'role' = 'service_role');
 
 -- 4.11 SYNC ENGINE & AUDIT
 DROP POLICY IF EXISTS "sync_outbox_policy" ON sync_outbox;
 CREATE POLICY "sync_outbox_policy" ON sync_outbox
-    FOR ALL TO authenticated, anon
+    FOR ALL TO service_role, authenticated
     USING (TRUE) WITH CHECK (TRUE);
 
 DROP POLICY IF EXISTS "sync_inbox_policy" ON sync_inbox;
 CREATE POLICY "sync_inbox_policy" ON sync_inbox
-    FOR ALL TO authenticated, anon
+    FOR ALL TO service_role, authenticated
     USING (TRUE) WITH CHECK (TRUE);
 
 DROP POLICY IF EXISTS "sync_checkpoints_policy" ON sync_checkpoints;
 CREATE POLICY "sync_checkpoints_policy" ON sync_checkpoints
-    FOR ALL TO authenticated, anon
+    FOR ALL TO service_role, authenticated
     USING (TRUE) WITH CHECK (TRUE);
 
 DROP POLICY IF EXISTS "idempotency_policy" ON idempotency_records;
 CREATE POLICY "idempotency_policy" ON idempotency_records
-    FOR ALL TO authenticated, anon
+    FOR ALL TO service_role, authenticated
     USING (TRUE) WITH CHECK (TRUE);
 
-DROP POLICY IF EXISTS "audit_logs_policy" ON audit_logs;
-CREATE POLICY "audit_logs_policy" ON audit_logs
-    FOR ALL TO authenticated
-    USING (restaurant_id = current_staff_restaurant_id() OR auth.jwt() ->> 'role' = 'service_role');
+DROP POLICY IF EXISTS "audit_logs_select" ON audit_logs;
+CREATE POLICY "audit_logs_select" ON audit_logs
+    FOR SELECT TO authenticated
+    USING (
+        auth.jwt() ->> 'role' = 'service_role' OR
+        (restaurant_id = current_staff_restaurant_id() AND current_staff_role() IN ('ADMIN', 'MANAGER'))
+    );
 
--- Grant permissions to standard Supabase client roles
-GRANT ALL ON ALL TABLES IN SCHEMA public TO service_role, authenticated, anon;
-GRANT ALL ON ALL SEQUENCES IN SCHEMA public TO service_role, authenticated, anon;
+DROP POLICY IF EXISTS "audit_logs_insert" ON audit_logs;
+CREATE POLICY "audit_logs_insert" ON audit_logs
+    FOR INSERT TO authenticated, service_role
+    WITH CHECK (TRUE);
+
+-- Database Role Grants
+GRANT USAGE ON SCHEMA public TO service_role, authenticated, anon;
+GRANT SELECT ON ALL TABLES IN SCHEMA public TO authenticated, anon;
+GRANT INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO authenticated;
+GRANT ALL ON ALL TABLES IN SCHEMA public TO service_role;
+GRANT ALL ON ALL SEQUENCES IN SCHEMA public TO service_role, authenticated;
+
+-- Scoped writes for anon patrons (QR ordering, reservations & guest feedback)
+GRANT INSERT ON TABLE orders TO anon;
+GRANT INSERT ON TABLE order_items TO anon;
+GRANT INSERT ON TABLE customers TO anon;
+GRANT INSERT ON TABLE reservations TO anon;
+GRANT INSERT ON TABLE customer_feedback TO anon;
 
 -- ------------------------------------------------------------------------------
--- 5. STORED PROCEDURES & TRIGGERS
+-- 5. AUTOMATED ORDER LIFECYCLE & USER TRIGGERS
 -- ------------------------------------------------------------------------------
+
+-- Automated Order Lifecycle Milestone Stamping Trigger
+-- In-place status updates transition smoothly; records accepted_at and delivered_at
+CREATE OR REPLACE FUNCTION trg_fn_order_lifecycle()
+RETURNS TRIGGER AS $$
+BEGIN
+    -- Stamp accepted_at on first movement to accepted / kitchen preparation
+    IF (NEW.status IN ('accepted', 'ACCEPTED', 'preparing', 'PREPARING', 'in_preparation', 'IN_PREPARATION') 
+        OR NEW.status = 'confirmed') 
+        AND NEW.accepted_at IS NULL THEN
+        NEW.accepted_at := NOW();
+    END IF;
+
+    -- Stamp delivered_at on transition to delivered / served / completed
+    IF NEW.status IN ('delivered', 'DELIVERED', 'served', 'SERVED', 'completed', 'COMPLETED') 
+        AND NEW.delivered_at IS NULL THEN
+        NEW.delivered_at := NOW();
+    END IF;
+
+    -- Stamp settled_at when billing is paid
+    IF NEW.payment_status IN ('paid', 'PAID') AND NEW.settled_at IS NULL THEN
+        NEW.settled_at := NOW();
+    END IF;
+
+    -- Stamp cancelled_at on cancellation
+    IF NEW.status IN ('cancelled', 'CANCELLED') AND NEW.cancelled_at IS NULL THEN
+        NEW.cancelled_at := NOW();
+    END IF;
+
+    NEW.updated_at := NOW();
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS trg_order_lifecycle ON orders;
+CREATE TRIGGER trg_order_lifecycle
+    BEFORE INSERT OR UPDATE ON orders
+    FOR EACH ROW
+    EXECUTE FUNCTION trg_fn_order_lifecycle();
 
 -- Automated Supabase auth.users synchronization to public.users
 CREATE OR REPLACE FUNCTION public.handle_new_user()
@@ -950,7 +1254,6 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
--- Trigger hook on auth.users table
 DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
 CREATE TRIGGER on_auth_user_created
     AFTER INSERT OR UPDATE ON auth.users
@@ -997,9 +1300,9 @@ BEGIN
         RETURN;
     END IF;
 
-    IF p_cart_subtotal_paise < v_coupon.min_order_value_paise THEN
+    IF p_cart_subtotal_paise < v_coupon.min_order_amount_paise THEN
         RETURN QUERY SELECT FALSE, 0::BIGINT, v_coupon.id, NULL::UUID,
-            format('Minimum tray value of ₹%s required', (v_coupon.min_order_value_paise / 100)::TEXT)::TEXT;
+            format('Minimum order amount of ₹%s required', (v_coupon.min_order_amount_paise / 100)::TEXT)::TEXT;
         RETURN;
     END IF;
 
@@ -1039,9 +1342,9 @@ BEGIN
         v_calculated_discount := ROUND((p_cart_subtotal_paise * COALESCE(v_coupon.discount_percentage, v_coupon.discount_value::NUMERIC)) / 100.0);
     END IF;
 
-    -- Cap discount if max_discount_amount_paise is configured
-    IF v_coupon.max_discount_amount_paise IS NOT NULL AND v_calculated_discount > v_coupon.max_discount_amount_paise THEN
-        v_calculated_discount := v_coupon.max_discount_amount_paise;
+    -- Cap discount if max_discount_paise is configured
+    IF v_coupon.max_discount_paise IS NOT NULL AND v_calculated_discount > v_coupon.max_discount_paise THEN
+        v_calculated_discount := v_coupon.max_discount_paise;
     END IF;
 
     -- Cannot exceed subtotal
@@ -1054,13 +1357,42 @@ END;
 $$ LANGUAGE plpgsql;
 
 -- ------------------------------------------------------------------------------
--- 6. SYSTEM BOOTSTRAP SEED (Root Restaurant & Root Super Admin)
+-- 6. SUPABASE REALTIME REPLICATION CONFIGURATION
+-- ------------------------------------------------------------------------------
+-- REPLICA IDENTITY FULL ensures live websocket subscribers receive full row state
+ALTER TABLE orders REPLICA IDENTITY FULL;
+ALTER TABLE order_items REPLICA IDENTITY FULL;
+ALTER TABLE tables REPLICA IDENTITY FULL;
+ALTER TABLE customer_feedback REPLICA IDENTITY FULL;
+ALTER TABLE payments REPLICA IDENTITY FULL;
+ALTER TABLE sync_outbox REPLICA IDENTITY FULL;
+
+-- Add essential live operational tables to the Supabase Realtime publication
+DO $$
+DECLARE
+    tbl TEXT;
+    target_tables TEXT[] := ARRAY['orders', 'order_items', 'tables', 'customer_feedback', 'payments', 'sync_outbox'];
+BEGIN
+    IF EXISTS (SELECT 1 FROM pg_publication WHERE pubname = 'supabase_realtime') THEN
+        FOREACH tbl IN ARRAY target_tables LOOP
+            BEGIN
+                EXECUTE format('ALTER PUBLICATION supabase_realtime ADD TABLE %I', tbl);
+            EXCEPTION 
+                WHEN duplicate_object THEN NULL;
+                WHEN undefined_table THEN NULL;
+            END;
+        END LOOP;
+    END IF;
+END $$;
+
+-- ------------------------------------------------------------------------------
+-- 7. SYSTEM BOOTSTRAP SEED (Root Restaurant & Root Super Admin)
 -- ------------------------------------------------------------------------------
 
 -- Root Restaurant
 INSERT INTO restaurants (
     id, slug, name, tagline, description, phone, email, address, city, state, postal_code,
-    gstin, fssai_license, currency, currency_symbol, gst_rate, service_charge_rate, timezone, is_active
+    gstin, fssai_license, currency, currency_symbol, gst_rate, cgst_rate, sgst_rate, service_charge_rate, timezone, is_active
 ) VALUES (
     '00000000-0000-0000-0000-000000000001',
     'gurukripa-dhaba',
@@ -1078,14 +1410,18 @@ INSERT INTO restaurants (
     'INR',
     '₹',
     5.00,
+    2.50,
+    2.50,
     0.00,
     'Asia/Kolkata',
     true
 ) ON CONFLICT (id) DO UPDATE SET
     name = EXCLUDED.name,
+    cgst_rate = EXCLUDED.cgst_rate,
+    sgst_rate = EXCLUDED.sgst_rate,
     is_active = true;
 
--- Root Super Admin
+-- Root Super Admin (Using crypt() with bcrypt hash instead of raw plaintext)
 INSERT INTO staff_members (
     id, restaurant_id, name, role, email, login_id, pin_hash, phone, phone_e164, is_active, shift, assigned_section, permissions
 ) VALUES (
@@ -1095,7 +1431,7 @@ INSERT INTO staff_members (
     'ADMIN',
     'admin@hotelcrm.com',
     'admin',
-    'Admin@123',
+    crypt('Admin@123', gen_salt('bf')),
     '+91 98765 43210',
     '+919876543210',
     true,
@@ -1105,28 +1441,5 @@ INSERT INTO staff_members (
 ) ON CONFLICT (id) DO UPDATE SET
     role = 'ADMIN',
     permissions = '["*"]'::jsonb,
-    pin_hash = 'Admin@123',
+    pin_hash = crypt('Admin@123', gen_salt('bf')),
     is_active = true;
-
--- ------------------------------------------------------------------------------
--- 7. PRODUCTION SECURITY: DEDICATED LEAST-PRIVILEGE APPLICATION ROLE (RECOMMENDED)
--- ------------------------------------------------------------------------------
--- In professional deployments, do NOT connect using the root 'postgres' superuser.
--- Uncomment and run the block below to create a dedicated app role with restricted privileges:
---
--- DO $$
--- BEGIN
---     IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'hotel_crm_app') THEN
---         CREATE ROLE hotel_crm_app WITH LOGIN PASSWORD 'ReplaceWithStrongSecureSecretPass123!';
---     END IF;
--- END $$;
---
--- GRANT USAGE ON SCHEMA public TO hotel_crm_app;
--- GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO hotel_crm_app;
--- GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO hotel_crm_app;
--- ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO hotel_crm_app;
--- ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT USAGE, SELECT ON SEQUENCES TO hotel_crm_app;
---
--- Then in your production server environment, your DATABASE_URL becomes:
--- postgresql://hotel_crm_app:ReplaceWithStrongSecureSecretPass123!@aws-0-[REGION].pooler.supabase.com:5432/postgres?sslmode=require
-

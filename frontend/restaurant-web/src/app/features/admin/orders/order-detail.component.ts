@@ -127,7 +127,7 @@ import { ThermalReceiptModalComponent } from '../../../shared/components/thermal
                 <span>Record Refund</span>
               </button>
             }
-            @if (ord.status !== 'CANCELLED') {
+            @if (isOrderPaid(ord) && ord.status !== 'CANCELLED') {
               @if (!ord.printCount || ord.printCount === 0) {
                 <button
                   class="btn btn-secondary"
@@ -151,6 +151,8 @@ import { ThermalReceiptModalComponent } from '../../../shared/components/thermal
                   <span>Reprint (Copy #{{ ord.printCount + 1 }})</span>
                 </button>
               }
+            }
+            @if (ord.status !== 'CANCELLED') {
               <a [routerLink]="['/admin/billing', ord.id]" class="btn btn-primary">
                 <i class="ph ph-receipt"></i>
                 <span>Invoice & Billing Preview</span>
@@ -401,7 +403,9 @@ import { ThermalReceiptModalComponent } from '../../../shared/components/thermal
                   <div class="invoice-box-actions">
                     <div class="invoice-status-info">
                       <span class="text-xs text-muted">
-                        @if (!ord.printCount || ord.printCount === 0) {
+                        @if (!isOrderPaid(ord)) {
+                          <i class="ph ph-clock text-amber"></i> Payment incomplete — Settle bill to enable tax invoice printing
+                        } @else if (!ord.printCount || ord.printCount === 0) {
                           <i class="ph ph-receipt"></i> Ready to print Original Invoice
                         } @else {
                           <i class="ph ph-check-circle text-success"></i> Printed
@@ -410,24 +414,26 @@ import { ThermalReceiptModalComponent } from '../../../shared/components/thermal
                       </span>
                     </div>
                     <div class="invoice-buttons-row">
-                      @if (!ord.printCount || ord.printCount === 0) {
-                        <button
-                          class="btn btn-primary btn-sm flex-1"
-                          (click)="printOrderReceipt()"
-                          title="Print Original Tax Invoice"
-                        >
-                          <i class="ph ph-printer"></i>
-                          <span>Print Invoice</span>
-                        </button>
-                      } @else {
-                        <button
-                          class="btn btn-secondary btn-sm flex-1 btn-reprint"
-                          (click)="openReprintReceiptModal()"
-                          title="Reprint Invoice (Admin authorization required)"
-                        >
-                          <i class="ph ph-lock-key"></i>
-                          <span>Reprint (Copy #{{ ord.printCount + 1 }})</span>
-                        </button>
+                      @if (isOrderPaid(ord)) {
+                        @if (!ord.printCount || ord.printCount === 0) {
+                          <button
+                            class="btn btn-primary btn-sm flex-1"
+                            (click)="printOrderReceipt()"
+                            title="Print Original Tax Invoice"
+                          >
+                            <i class="ph ph-printer"></i>
+                            <span>Print Invoice</span>
+                          </button>
+                        } @else {
+                          <button
+                            class="btn btn-secondary btn-sm flex-1 btn-reprint"
+                            (click)="openReprintReceiptModal()"
+                            title="Reprint Invoice (Admin authorization required)"
+                          >
+                            <i class="ph ph-lock-key"></i>
+                            <span>Reprint (Copy #{{ ord.printCount + 1 }})</span>
+                          </button>
+                        }
                       }
                       <a
                         [routerLink]="['/admin/billing', ord.id]"
@@ -2087,15 +2093,40 @@ import { ThermalReceiptModalComponent } from '../../../shared/components/thermal
 
       .catalog-search-wrap {
         position: relative;
+        display: flex;
+        align-items: center;
+
         i {
           position: absolute;
-          left: 10px;
+          left: 14px;
           top: 50%;
           transform: translateY(-50%);
           color: var(--color-text-muted);
+          font-size: 1.125rem;
+          pointer-events: none;
         }
+
         .form-input {
-          padding-left: 32px;
+          padding-left: 42px;
+          padding-right: 16px;
+          height: 44px;
+          border-radius: var(--radius-md, 10px);
+          background: var(--color-surface);
+          border: 1px solid var(--color-border);
+          font-size: 0.875rem;
+          color: var(--color-text-primary);
+          transition: all var(--transition-fast, 0.15s ease);
+          box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
+
+          &:focus {
+            border-color: var(--color-primary);
+            box-shadow: 0 0 0 3px rgba(194, 65, 12, 0.12);
+            outline: none;
+          }
+
+          &::placeholder {
+            color: var(--color-text-muted);
+          }
         }
       }
 
@@ -2718,6 +2749,7 @@ export class OrderDetailComponent implements OnInit {
   });
 
   ngOnInit(): void {
+    this.dataService.loadStaff();
     this.route.paramMap.subscribe((params) => {
       this.orderId.set(params.get('orderId') || '');
     });
@@ -2921,10 +2953,20 @@ export class OrderDetailComponent implements OnInit {
   printOrderReceipt(): void {
     const ord = this.order();
     if (!ord) return;
+    if (!this.isOrderPaid(ord) || ord.status === 'CANCELLED') {
+      this.toastService.warning('Cannot print bill for an unpaid or cancelled order.');
+      return;
+    }
     this.showThermalModal.set(true);
   }
 
   openReprintReceiptModal(): void {
+    const ord = this.order();
+    if (!ord) return;
+    if (!this.isOrderPaid(ord) || ord.status === 'CANCELLED') {
+      this.toastService.warning('Cannot print bill for an unpaid or cancelled order.');
+      return;
+    }
     this.showThermalModal.set(true);
   }
 
@@ -3144,6 +3186,14 @@ export class OrderDetailComponent implements OnInit {
 
     this.mock.orders.set(updatedOrders);
     this.mock.saveLocal('orders', updatedOrders);
+
+    this.mock.updateOrderItems(ord.id, {
+      items: [...this.editItems()],
+      customerName: this.editCustomerName(),
+      customerPhone: this.editCustomerPhone(),
+      tableId: ord.tableId,
+      notes: ord.notes,
+    });
 
     this.isSavingEdit.set(false);
     this.showEditModal.set(false);

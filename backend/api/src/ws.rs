@@ -108,6 +108,60 @@ pub fn broadcast_new_reservation(reservation: &crate::models::customer::Reservat
     }
 }
 
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct OrderStatusBroadcast {
+    pub event: &'static str,
+    pub order_id: Uuid,
+    pub table_id: Option<Uuid>,
+    pub table_number: Option<String>,
+    pub status: String,
+    pub payment_status: Option<String>,
+    pub updated_at: chrono::DateTime<chrono::Utc>,
+}
+
+/// Broadcast real-time order status transition (CONFIRMED, IN_PREPARATION, READY, SERVED, COMPLETED, CANCELLED)
+pub fn broadcast_order_status(
+    order_id: Uuid,
+    table_id: Option<Uuid>,
+    table_number: Option<String>,
+    status: &str,
+    payment_status: Option<&str>,
+) {
+    let payload = OrderStatusBroadcast {
+        event: "ORDER_STATUS_CHANGED",
+        order_id,
+        table_id,
+        table_number,
+        status: status.to_uppercase(),
+        payment_status: payment_status.map(|s| s.to_uppercase()),
+        updated_at: chrono::Utc::now(),
+    };
+    if let Ok(json) = serde_json::to_string(&payload) {
+        broadcast_str(&json);
+    }
+}
+
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct MenuAvailabilityBroadcast {
+    pub event: &'static str,
+    pub item_id: Uuid,
+    pub is_available: bool,
+    pub updated_at: chrono::DateTime<chrono::Utc>,
+}
+
+/// Broadcast 86'd / item stock availability changes to online customer menus & POS terminals
+pub fn broadcast_menu_availability(item_id: Uuid, is_available: bool) {
+    let payload = MenuAvailabilityBroadcast {
+        event: "MENU_AVAILABILITY_CHANGED",
+        item_id,
+        is_available,
+        updated_at: chrono::Utc::now(),
+    };
+    if let Ok(json) = serde_json::to_string(&payload) {
+        broadcast_str(&json);
+    }
+}
+
 fn broadcast_str(order_json: &str) {
     let mut list = clients().lock().unwrap();
     list.retain(|tx| tx.send(order_json.to_string()).is_ok());

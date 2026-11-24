@@ -12,7 +12,7 @@ use crate::{
     error::AppError,
     models::{
         common::{ApiResponse, PaginationQuery},
-        order::{CreateOrderRequest, UpdateOrderStatusRequest},
+        order::{CreateOrderRequest, UpdateOrderStatusRequest, UpdateOrderItemsRequest},
     },
     repositories::OrderRepository,
     routes::auth_routes::verify_password,
@@ -84,6 +84,32 @@ pub async fn update_order_status(
         Some(tenant.user.user_id),
     )
     .await?;
+
+    Ok(Json(ApiResponse::success(order)))
+}
+
+pub async fn update_order_items(
+    State(pool): State<PgPool>,
+    tenant: TenantContext,
+    Path(order_id): Path<Uuid>,
+    Json(req): Json<UpdateOrderItemsRequest>,
+) -> Result<impl IntoResponse, AppError> {
+    let order = OrderRepository::update_items(
+        &pool,
+        tenant.restaurant_id,
+        order_id,
+        req,
+        Some(tenant.user.user_id),
+    )
+    .await?;
+
+    crate::ws::broadcast_order_status(
+        order.order.id,
+        order.order.table_id,
+        None,
+        &order.order.status,
+        Some(&order.order.payment_status),
+    );
 
     Ok(Json(ApiResponse::success(order)))
 }

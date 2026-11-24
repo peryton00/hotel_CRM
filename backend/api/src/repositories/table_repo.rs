@@ -14,6 +14,25 @@ impl TableRepository {
         pool: &PgPool,
         restaurant_id: Uuid,
     ) -> Result<Vec<RestaurantTable>, AppError> {
+        // Automatically release any OCCUPIED table that has no active orders
+        let _ = sqlx::query(
+            r#"
+            UPDATE tables t
+            SET status = 'AVAILABLE'::table_status, active_order_id = NULL, current_seating_session_id = NULL, updated_at = NOW()
+            WHERE t.restaurant_id = $1
+              AND t.status = 'OCCUPIED'::table_status
+              AND NOT EXISTS (
+                  SELECT 1 FROM orders o
+                  WHERE o.table_id = t.id
+                    AND o.restaurant_id = t.restaurant_id
+                    AND LOWER(o.status) NOT IN ('completed', 'cancelled')
+              )
+            "#,
+        )
+        .bind(restaurant_id)
+        .execute(pool)
+        .await;
+
         let tables = sqlx::query_as::<_, RestaurantTable>(
             r#"
             SELECT id, restaurant_id,
@@ -22,7 +41,12 @@ impl TableRepository {
                    status::text AS status,
                    COALESCE(qr_code_identifier, qr_token) AS qr_code_identifier,
                    active_order_id, assigned_staff_id,
-                   ordering_enabled, current_seating_session_id,
+                   ordering_enabled,
+                   CASE 
+                       WHEN current_seating_session_id::text ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$' 
+                       THEN current_seating_session_id::uuid 
+                       ELSE NULL 
+                   END AS current_seating_session_id,
                    created_at, updated_at
             FROM tables
             WHERE restaurant_id = $1
@@ -49,7 +73,12 @@ impl TableRepository {
                    status::text AS status,
                    COALESCE(qr_code_identifier, qr_token) AS qr_code_identifier,
                    active_order_id, assigned_staff_id,
-                   ordering_enabled, current_seating_session_id,
+                   ordering_enabled,
+                   CASE 
+                       WHEN current_seating_session_id::text ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$' 
+                       THEN current_seating_session_id::uuid 
+                       ELSE NULL 
+                   END AS current_seating_session_id,
                    created_at, updated_at
             FROM tables
             WHERE restaurant_id = $1 AND id = $2
@@ -77,8 +106,17 @@ impl TableRepository {
             .ok_or_else(|| AppError::NotFound("Table not found".to_string()))?;
 
         let new_status = status.unwrap_or(&existing.status);
-        let normalized_status = new_status.to_uppercase();
-        let new_active_order = active_order_id.or(existing.active_order_id);
+        let normalized_status = match new_status.to_uppercase().as_str() {
+            "OCCUPIED" | "SEATED" | "ACTIVE" => "OCCUPIED".to_string(),
+            "DIRTY" | "CLEANING" | "BILLED" => "DIRTY".to_string(),
+            "RESERVED" => "RESERVED".to_string(),
+            _ => "AVAILABLE".to_string(),
+        };
+        let new_active_order = if normalized_status == "OCCUPIED" {
+            active_order_id.or(existing.active_order_id)
+        } else {
+            None
+        };
         let new_assigned_staff = match assigned_staff_id {
             Some(val) => val,
             None => existing.assigned_staff_id,
@@ -113,7 +151,12 @@ impl TableRepository {
                       status::text AS status,
                       COALESCE(qr_code_identifier, qr_token) AS qr_code_identifier,
                       active_order_id, assigned_staff_id,
-                      ordering_enabled, current_seating_session_id,
+                      ordering_enabled,
+                      CASE 
+                          WHEN current_seating_session_id::text ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$' 
+                          THEN current_seating_session_id::uuid 
+                          ELSE NULL 
+                      END AS current_seating_session_id,
                       created_at, updated_at
             "#,
         )
@@ -153,16 +196,23 @@ impl TableRepository {
         let table = sqlx::query_as::<_, RestaurantTable>(
             r#"
             INSERT INTO tables (
-                restaurant_id, number, table_number, capacity, section,
+                restaurant_id, number, capacity, section,
                 qr_token, qr_code_identifier, status, ordering_enabled
             )
-            VALUES ($1, $2, $2, $3, $4, $5, $5, 'AVAILABLE', true)
+            VALUES ($1, $2, $3, $4, $5, $5, 'AVAILABLE', true)
             RETURNING id, restaurant_id,
                       COALESCE(table_number, number) AS table_number,
                       capacity, section,
                       status::text AS status,
                       COALESCE(qr_code_identifier, qr_token) AS qr_code_identifier,
-                      active_order_id, assigned_staff_id, created_at, updated_at
+                      active_order_id, assigned_staff_id,
+                      ordering_enabled,
+                      CASE 
+                          WHEN current_seating_session_id::text ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$' 
+                          THEN current_seating_session_id::uuid 
+                          ELSE NULL 
+                      END AS current_seating_session_id,
+                      created_at, updated_at
             "#,
         )
         .bind(restaurant_id)
@@ -218,7 +268,14 @@ impl TableRepository {
                       capacity, section,
                       status::text AS status,
                       COALESCE(qr_code_identifier, qr_token) AS qr_code_identifier,
-                      active_order_id, assigned_staff_id, created_at, updated_at
+                      active_order_id, assigned_staff_id,
+                      ordering_enabled,
+                      CASE 
+                          WHEN current_seating_session_id::text ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$' 
+                          THEN current_seating_session_id::uuid 
+                          ELSE NULL 
+                      END AS current_seating_session_id,
+                      created_at, updated_at
             "#,
         )
         .bind(restaurant_id)
@@ -248,7 +305,14 @@ impl TableRepository {
                    capacity, section,
                    status::text AS status,
                    COALESCE(qr_code_identifier, qr_token) AS qr_code_identifier,
-                   active_order_id, assigned_staff_id, created_at, updated_at
+                   active_order_id, assigned_staff_id,
+                   ordering_enabled,
+                   CASE 
+                       WHEN current_seating_session_id::text ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$' 
+                       THEN current_seating_session_id::uuid 
+                       ELSE NULL 
+                   END AS current_seating_session_id,
+                   created_at, updated_at
             FROM tables
             WHERE restaurant_id = $1 AND id = $2 FOR UPDATE
             "#,
@@ -271,7 +335,14 @@ impl TableRepository {
                    capacity, section,
                    status::text AS status,
                    COALESCE(qr_code_identifier, qr_token) AS qr_code_identifier,
-                   active_order_id, assigned_staff_id, created_at, updated_at
+                   active_order_id, assigned_staff_id,
+                   ordering_enabled,
+                   CASE 
+                       WHEN current_seating_session_id::text ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$' 
+                       THEN current_seating_session_id::uuid 
+                       ELSE NULL 
+                   END AS current_seating_session_id,
+                   created_at, updated_at
             FROM tables
             WHERE restaurant_id = $1 AND id = $2 FOR UPDATE
             "#,

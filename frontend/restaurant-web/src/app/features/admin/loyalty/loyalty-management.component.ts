@@ -986,24 +986,37 @@ import { EmptyStateComponent } from '../../../shared/components/empty-state/empt
       .table-search-box {
         display: flex;
         align-items: center;
-        gap: 8px;
-        background: var(--color-bone-light);
+        gap: 12px;
+        background: var(--color-surface);
         border: 1px solid var(--color-border);
-        border-radius: var(--radius-sm);
-        padding: 6px 12px;
+        border-radius: var(--radius-md, 10px);
+        padding: 0 14px;
+        height: 44px;
         width: 100%;
         max-width: 320px;
+        box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
+        transition: all var(--transition-fast, 0.15s ease);
+
+        &:focus-within {
+          border-color: var(--color-primary);
+          box-shadow: 0 0 0 3px rgba(194, 65, 12, 0.12);
+        }
 
         i {
           color: var(--color-text-muted);
+          font-size: 1.125rem;
         }
         .search-input {
           border: none;
           background: none;
           outline: none;
           width: 100%;
-          font-size: 0.8125rem;
+          font-size: 0.875rem;
           color: var(--color-text-primary);
+
+          &::placeholder {
+            color: var(--color-text-muted);
+          }
         }
       }
 
@@ -1138,6 +1151,10 @@ export class LoyaltyManagementComponent {
   private dataService = inject(RestaurantDataService);
   private mock = this.dataService;
   private toastService = inject(ToastService);
+
+  constructor() {
+    this.dataService.loadCustomers();
+  }
 
   readonly isLoading = computed(
     () => this.dataService.isCustomersLoading() || !this.dataService.customersLoaded(),

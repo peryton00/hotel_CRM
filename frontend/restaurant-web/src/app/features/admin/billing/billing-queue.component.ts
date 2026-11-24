@@ -9,7 +9,7 @@ import { SkeletonLoaderComponent } from '../../../shared/components/loading/skel
 import { LoadingButtonDirective } from '../../../shared/components/loading/loading-button.directive';
 import { EmptyStateComponent } from '../../../shared/components/empty-state/empty-state.component';
 import { ToastService } from '../../../core/services/toast.service';
-import { Order } from '../../../core/models/order.model';
+import { Order, OrderItem, PaymentStatus } from '../../../core/models/order.model';
 import { Invoice, SplitBill } from '../../../core/models/billing.model';
 import { generateIdempotencyKey } from '../../../core/utils/idempotency.util';
 import {
@@ -19,6 +19,8 @@ import {
   getWhatsAppAppUrl,
   launchExternalUrl,
 } from '../../../core/utils/whatsapp-bill.util';
+import { WhatsAppBridgeService } from '../../../core/services/whatsapp-bridge.service';
+import { AdminAuthService } from '../../../core/services/admin-auth.service';
 
 @Component({
   selector: 'app-billing-queue',
@@ -58,39 +60,97 @@ import {
 
       <!-- Filter Toolbar -->
       <div class="toolbar-card">
-        <div class="filter-tabs">
-          <button
-            class="filter-btn"
-            [class.active]="selectedTab() === 'ALL'"
-            (click)="selectedTab.set('ALL')"
-          >
-            All Orders ({{ orders().length }})
-          </button>
-          <button
-            class="filter-btn"
-            [class.active]="selectedTab() === 'UNPAID'"
-            (click)="selectedTab.set('UNPAID')"
-          >
-            Awaiting Payment ({{ countPaymentStatus('UNPAID') }})
-          </button>
-          <button
-            class="filter-btn"
-            [class.active]="selectedTab() === 'PAID'"
-            (click)="selectedTab.set('PAID')"
-          >
-            Settled Invoices ({{ countPaymentStatus('PAID') }})
-          </button>
+        <div class="toolbar-top-row">
+          <div class="filter-tabs">
+            <button
+              class="filter-btn"
+              [class.active]="selectedTab() === 'ALL'"
+              (click)="selectedTab.set('ALL')"
+            >
+              All Orders ({{ orders().length }})
+            </button>
+            <button
+              class="filter-btn"
+              [class.active]="selectedTab() === 'UNPAID'"
+              (click)="selectedTab.set('UNPAID')"
+            >
+              Awaiting Payment ({{ countPaymentStatus('UNPAID') }})
+            </button>
+            <button
+              class="filter-btn"
+              [class.active]="selectedTab() === 'PAID'"
+              (click)="selectedTab.set('PAID')"
+            >
+              Settled Invoices ({{ countPaymentStatus('PAID') }})
+            </button>
+          </div>
+
+          <div class="search-input-wrap">
+            <i class="ph ph-magnifying-glass"></i>
+            <input
+              type="text"
+              class="form-input"
+              placeholder="Search by table, order #, or guest..."
+              [ngModel]="searchQuery()"
+              (ngModelChange)="searchQuery.set($event)"
+            />
+          </div>
         </div>
 
-        <div class="search-input-wrap">
-          <i class="ph ph-magnifying-glass"></i>
-          <input
-            type="text"
-            class="form-input"
-            placeholder="Search by table, order #, or guest..."
-            [ngModel]="searchQuery()"
-            (ngModelChange)="searchQuery.set($event)"
-          />
+        <div class="toolbar-controls-row">
+          <div class="date-filter-group" role="group" aria-label="Filter by completion date">
+            <span class="control-label"><i class="ph ph-calendar-blank"></i> Completion Date:</span>
+            <button
+              type="button"
+              class="date-pill-btn"
+              [class.active]="dateFilter() === 'ALL'"
+              (click)="dateFilter.set('ALL')"
+            >
+              All Time
+            </button>
+            <button
+              type="button"
+              class="date-pill-btn"
+              [class.active]="dateFilter() === 'TODAY'"
+              (click)="dateFilter.set('TODAY')"
+            >
+              Today
+            </button>
+            <button
+              type="button"
+              class="date-pill-btn"
+              [class.active]="dateFilter() === 'YESTERDAY'"
+              (click)="dateFilter.set('YESTERDAY')"
+            >
+              Yesterday
+            </button>
+            <button
+              type="button"
+              class="date-pill-btn"
+              [class.active]="dateFilter() === 'THIS_WEEK'"
+              (click)="dateFilter.set('THIS_WEEK')"
+            >
+              This Week
+            </button>
+          </div>
+
+          <div class="sort-selector-wrap">
+            <span class="control-label"><i class="ph ph-sort-descending"></i> Sort:</span>
+            <div class="select-box-wrap">
+              <select
+                class="sort-select"
+                [ngModel]="sortOption()"
+                (ngModelChange)="sortOption.set($event)"
+                aria-label="Sort orders"
+              >
+                <option value="COMPLETION_DESC">Completion: Newest First</option>
+                <option value="COMPLETION_ASC">Completion: Oldest First</option>
+                <option value="CREATED_DESC">Created: Newest First</option>
+                <option value="AMOUNT_DESC">Total Amount: High to Low</option>
+              </select>
+              <i class="ph ph-caret-down select-caret"></i>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -118,7 +178,7 @@ import {
               </tr>
             } @else {
               @for (ord of filteredOrders(); track ord.id) {
-                <tr>
+                <tr class="clickable-order-row" (click)="onOrderRowClick(ord, $event)" title="Click row to open bill preview">
                   <td>
                     <div class="ord-tbl-cell">
                       @if (ord.orderType === 'TAKEAWAY') {
@@ -138,8 +198,30 @@ import {
                           }
                         </span>
                       }
-                      <span class="order-id-text">{{ ord.orderNumber }}</span>
-                      <span class="time-text">{{ ord.createdAt | date: 'shortTime' }}</span>
+                      <span class="order-id-text">
+                        {{ ord.orderNumber }}
+                        @if (ord.printCount && ord.printCount > 0) {
+                          <span class="badge badge-subtle print-count-badge" title="Printed {{ ord.printCount }} times">
+                            {{ ord.printCount }}x
+                          </span>
+                        }
+                      </span>
+                      @if (isOrderCompletedOrSettled(ord)) {
+                        <div class="timing-badge-wrap" [title]="'Completion / Settlement: ' + (getOrderCompletionDate(ord) | date: 'medium')">
+                          <span class="time-text completion-badge">
+                            <i class="ph ph-check-circle"></i>
+                            <span>{{ getOrderCompletionDate(ord) | date: 'd MMM, h:mm a' }}</span>
+                          </span>
+                          <span class="created-subtime text-xs text-muted">Created {{ ord.createdAt | date: 'shortTime' }}</span>
+                        </div>
+                      } @else {
+                        <div class="timing-badge-wrap">
+                          <span class="time-text active-time">
+                            <i class="ph ph-clock"></i>
+                            <span>Active • {{ ord.createdAt | date: 'd MMM, h:mm a' }}</span>
+                          </span>
+                        </div>
+                      }
                     </div>
                   </td>
                   <td>
@@ -165,13 +247,12 @@ import {
                         }
                         )
                       </span>
-                      @if (ord.isSplit) {
-                        <span class="split-pill"
-                          ><i class="ph ph-split-horizontal"></i> Split ({{
-                            getOrderSplitBills(ord.id).length
-                          }}
-                          Bills)</span
-                        >
+                      @if (ord.isSplit || getOrderSplitBills(ord.id).length > 0) {
+                        <!-- DC-1: single toggle pill only here, removed duplicate from actions -->
+                        <span class="split-info-chip">
+                          <i class="ph ph-split-horizontal"></i>
+                          {{ getOrderSplitBills(ord.id).length }} Split Bills
+                        </span>
                       }
                     </div>
                   </td>
@@ -193,52 +274,62 @@ import {
                         <i class="ph ph-x-circle"></i> CANCELLED
                       </span>
                     } @else {
-                      <app-status-badge [status]="ord.paymentStatus"></app-status-badge>
+                      <app-status-badge [status]="getOrderPaymentStatus(ord)"></app-status-badge>
                     }
                   </td>
                   <td>
                     <div class="billing-actions">
-                      <a
-                        [routerLink]="['/admin/billing', ord.id]"
-                        class="btn btn-secondary btn-sm"
-                        title="Preview Bill"
-                      >
-                        <i class="ph ph-receipt"></i>
-                        <span>Bill Preview</span>
-                        @if (ord.printCount && ord.printCount > 0) {
-                          <span class="badge badge-subtle print-count-badge">
-                            {{ ord.printCount }}x
-                          </span>
-                        }
-                      </a>
-                      <button
-                        type="button"
-                        class="btn btn-whatsapp btn-sm"
-                        (click)="openWhatsAppForOrder(ord)"
-                        title="Send Bill via WhatsApp"
-                      >
-                        <i class="ph ph-whatsapp-logo"></i>
-                        <span>WhatsApp</span>
-                      </button>
-
-                      @if (
-                        !ord.isSplit && ord.paymentStatus === 'UNPAID' && ord.status !== 'CANCELLED'
-                      ) {
+                      @if (ord.paymentStatus === 'PAID') {
                         <button
-                          class="btn btn-secondary btn-sm"
-                          (click)="openSplitModal(ord)"
-                          title="Divide bill into multiple parts"
+                          type="button"
+                          class="btn btn-whatsapp btn-sm btn-whatsapp-icon-only"
+                          (click)="openWhatsAppForOrder(ord)"
+                          title="Send Bill via WhatsApp"
+                          aria-label="Send Bill via WhatsApp"
                         >
-                          <i class="ph ph-split-horizontal"></i>
-                          <span>Split Bill</span>
-                        </button>
-                        <button class="btn btn-primary btn-sm" (click)="openSettleModal(ord)">
-                          <i class="ph ph-check"></i>
-                          <span>Settle Bill</span>
+                          <i class="ph ph-whatsapp-logo"></i>
                         </button>
                       }
 
-                      @if (ord.paymentStatus === 'PAID' || ord.paymentStatus === 'PARTIALLY_PAID') {
+                      <!-- DC-1: split toggle only in items cell; removed duplicate here -->
+                      @if (ord.isSplit || getOrderSplitBills(ord.id).length > 0) {
+                        <button
+                          type="button"
+                          class="btn btn-secondary btn-sm split-parts-toggle-btn"
+                          [class.btn-active-toggle]="isSplitBillsExpanded(ord.id)"
+                          (click)="toggleSplitBills(ord.id)"
+                          [title]="isSplitBillsExpanded(ord.id) ? 'Hide split bills breakdown' : 'Show split bills breakdown'"
+                        >
+                          <i class="ph" [class.ph-caret-down]="!isSplitBillsExpanded(ord.id)" [class.ph-caret-up]="isSplitBillsExpanded(ord.id)"></i>
+                          <span>{{ isSplitBillsExpanded(ord.id) ? 'Hide Splits' : 'Split Bills (' + getOrderSplitBills(ord.id).length + ')' }}</span>
+                        </button>
+                      }
+
+                      @if (
+                        ord.paymentStatus !== 'PAID' && ord.status !== 'CANCELLED'
+                      ) {
+                        <!-- DC-2: Split Bill option only if not already split -->
+                        @if (!ord.isSplit && getOrderSplitBills(ord.id).length === 0) {
+                          <button
+                            class="btn btn-secondary btn-sm"
+                            (click)="openSplitModal(ord)"
+                            title="Divide bill into multiple parts"
+                          >
+                            <i class="ph ph-split-horizontal"></i>
+                            <span>Split Bill</span>
+                          </button>
+                        }
+                        <!-- DC-2: Settle Bill hidden when order is already split (backend rejects with 409) -->
+                        @if (!ord.isSplit && getOrderSplitBills(ord.id).length === 0) {
+                          <button class="btn btn-primary btn-sm" (click)="openSettleModal(ord)">
+                            <i class="ph ph-check"></i>
+                            <span>Settle Bill</span>
+                          </button>
+                        }
+                      }
+
+                      <!-- DC-8: Refund only on fully PAID, not PARTIALLY_PAID -->
+                      @if (ord.paymentStatus === 'PAID') {
                         <button
                           class="btn btn-secondary btn-sm"
                           (click)="openRefundModal(ord)"
@@ -253,18 +344,29 @@ import {
                 </tr>
 
                 <!-- Nested Split Bills Breakdown if Order is Split -->
-                @if (ord.isSplit && getOrderSplitBills(ord.id).length > 0) {
+                @if ((ord.isSplit || getOrderSplitBills(ord.id).length > 0) && isSplitBillsExpanded(ord.id)) {
                   <tr class="split-bills-row">
                     <td colspan="8">
                       <div class="split-bills-container">
                         <div class="split-banner">
-                          <i class="ph ph-split-horizontal"></i>
-                          <span
-                            >Split Bills for {{ ord.orderNumber }} ({{
-                              getOrderSplitBills(ord.id).length
-                            }}
-                            Payable Bills)</span
+                          <div class="split-banner-left">
+                            <i class="ph ph-split-horizontal"></i>
+                            <span
+                              >Split Bills for {{ ord.orderNumber }} ({{
+                                getOrderSplitBills(ord.id).length
+                              }}
+                              Payable Bills)</span
+                            >
+                          </div>
+                          <button
+                            type="button"
+                            class="btn-close-split"
+                            (click)="toggleSplitBills(ord.id)"
+                            title="Collapse split bills view"
                           >
+                            <i class="ph ph-caret-up"></i>
+                            <span>Hide</span>
+                          </button>
                         </div>
                         <div class="split-table-wrap">
                           <table class="sub-data-table">
@@ -277,12 +379,17 @@ import {
                                 <th>Taxes</th>
                                 <th>Total Amount</th>
                                 <th>Payment Status</th>
-                                <th>Payment Action</th>
+                                <th>Receipt</th>
                               </tr>
                             </thead>
                             <tbody>
                               @for (split of getOrderSplitBills(ord.id); track split.id) {
-                                <tr>
+                                <tr
+                                  class="split-item-row"
+                                  (click)="onSplitRowClick(ord, split, $event)"
+                                  style="cursor: pointer;"
+                                  title="Click to preview split bill slip"
+                                >
                                   <td>
                                     <strong
                                       >Bill #{{ split.splitIndex }}/{{
@@ -320,42 +427,24 @@ import {
                                   </td>
                                   <td>
                                     <div class="billing-actions">
-                                      <a
-                                        [routerLink]="['/admin/billing', ord.id]"
-                                        [queryParams]="{ splitId: split.id }"
-                                        class="btn btn-secondary btn-xs"
-                                        title="Print Split Slip"
-                                      >
-                                        <i class="ph ph-receipt"></i>
-                                        <span>Slip</span>
-                                      </a>
-                                      <button
-                                        type="button"
-                                        class="btn btn-whatsapp btn-xs"
-                                        (click)="openWhatsAppForSplit(ord, split)"
-                                        title="Send Split Bill via WhatsApp"
-                                      >
-                                        <i class="ph ph-whatsapp-logo"></i>
-                                        <span>WhatsApp</span>
-                                      </button>
-                                      @if (
-                                        split.paymentStatus === 'UNPAID' &&
-                                        ord.status !== 'CANCELLED'
-                                      ) {
-                                        <button
-                                          class="btn btn-primary btn-xs"
-                                          (click)="openSettleSplitModal(ord, split)"
-                                        >
-                                          <i class="ph ph-check"></i>
-                                          <span>Settle Part #{{ split.splitIndex }}</span>
-                                        </button>
-                                      } @else if (split.paymentStatus === 'PAID') {
-                                        <button
+                                      @if (split.paymentStatus === 'PAID') {
+                                        <a
+                                          [routerLink]="['/admin/billing', ord.id]"
+                                          [queryParams]="{ splitId: split.id }"
                                           class="btn btn-secondary btn-xs"
-                                          (click)="openRefundSplitModal(ord, split)"
+                                          title="Print Split Slip"
                                         >
-                                          <i class="ph ph-arrow-counter-clockwise"></i>
-                                          <span>Refund Part</span>
+                                          <i class="ph ph-receipt"></i>
+                                          <span>Slip</span>
+                                        </a>
+                                        <button
+                                          type="button"
+                                          class="btn btn-whatsapp btn-xs btn-whatsapp-icon-only"
+                                          (click)="openWhatsAppForSplit(ord, split)"
+                                          title="Send Split Bill via WhatsApp"
+                                          aria-label="Send Split Bill via WhatsApp"
+                                        >
+                                          <i class="ph ph-whatsapp-logo"></i>
                                         </button>
                                       }
                                     </div>
@@ -468,19 +557,40 @@ import {
                     >
                   </div>
                 }
+
+                <!-- Itemized dishes breakdown -->
+                <div class="settle-items-section">
+                  <div class="settle-items-header">
+                    <span>Ordered Dishes</span>
+                    <span class="text-xs text-muted">{{ getSettlementItems(ord).length }} items</span>
+                  </div>
+                  <div class="settle-items-list">
+                    @for (item of getSettlementItems(ord); track $index) {
+                      <div class="settle-item-row">
+                        <div class="settle-item-left">
+                          <span class="item-qty-pill">{{ item.quantity }}x</span>
+                          <div class="item-text-group">
+                            <span class="item-name-text">{{ item.name }}</span>
+                            @if (item.notes || item.specialInstructions) {
+                              <span class="item-instruction-text">{{ item.notes || item.specialInstructions }}</span>
+                            }
+                          </div>
+                        </div>
+                        <span class="item-total-price">{{ (item.itemTotal || (item.unitPrice * item.quantity)) | currencyInr }}</span>
+                      </div>
+                    }
+                  </div>
+                </div>
+
+                <div class="settle-divider"></div>
+
                 <div class="settle-row">
                   <span>Item Subtotal</span>
-                  <span>{{ getSettlementSubtotal(ord) | currencyInr }}</span>
+                  <span class="font-semibold">{{ getSettlementSubtotal(ord) | currencyInr }}</span>
                 </div>
-                @if (getEffectiveDiscount(ord) > 0) {
+                @if (settleDiscountMode() === 'COUPON' && getEffectiveDiscount(ord) > 0) {
                   <div class="settle-row discount">
-                    <span
-                      >Discount ({{
-                        settleDiscountMode() === 'COUPON' && selectedCouponCode()
-                          ? selectedCouponCode()
-                          : 'Counter Off'
-                      }})</span
-                    >
+                    <span>Coupon Discount ({{ selectedCouponCode() }})</span>
                     <span class="text-success font-semibold"
                       >-{{ getEffectiveDiscount(ord) | currencyInr }}</span
                     >
@@ -490,9 +600,17 @@ import {
                   <span>Taxes (CGST + SGST)</span>
                   <span>{{ getSettlementTax(ord) | currencyInr }}</span>
                 </div>
+                @if (settleDiscountMode() === 'CUSTOM' && getEffectiveDiscount(ord) > 0) {
+                  <div class="settle-row discount">
+                    <span>Admin Discount / Round-off</span>
+                    <span class="text-success font-semibold"
+                      >-{{ getEffectiveDiscount(ord) | currencyInr }}</span
+                    >
+                  </div>
+                }
                 <div class="settle-divider"></div>
                 <div class="settle-row total-highlight">
-                  <span>Net Payable Total</span>
+                  <span>Net Payable</span>
                   <span class="amount-large">{{ getSettlementTotal(ord) | currencyInr }}</span>
                 </div>
               </div>
@@ -528,7 +646,7 @@ import {
                       <input
                         type="number"
                         min="0"
-                        [max]="ord.subtotal + ord.taxAmount"
+                        [max]="ord.subtotal"
                         class="inr-input"
                         placeholder="Enter rupees off..."
                         [value]="customDiscountRupees() || ''"
@@ -729,7 +847,7 @@ import {
                 </div>
                 <div class="settle-divider"></div>
                 <div class="settle-row total-highlight">
-                  <span>Net Payable Amount</span>
+                  <span>Net Payable</span>
                   <span class="amount-large">{{ split.totalAmount | currencyInr }}</span>
                 </div>
               </div>
@@ -1116,17 +1234,24 @@ import {
         </div>
       }
 
-      <!-- WhatsApp Delivery Modal -->
+      <!-- WhatsApp Delivery Modal (Apple Fluid Design) -->
       @if (showWhatsAppModal() && whatsAppOrder(); as ord) {
         <div class="modal-overlay" (click)="onModalBackdropClick($event, 'whatsapp')">
           <div class="modal-card settle-modal whatsapp-dialog-card" role="dialog" aria-modal="true">
-            <div class="modal-header">
+            <!-- Modal Header -->
+            <div class="modal-header whatsapp-apple-header">
               <div class="whatsapp-header-wrap">
                 <div class="whatsapp-icon-badge">
-                  <i class="ph ph-whatsapp-logo"></i>
+                  <i class="ph-fill ph-whatsapp-logo"></i>
                 </div>
                 <div>
-                  <h3 class="heading-card">Send Bill via WhatsApp</h3>
+                  <div class="flex items-center gap-2">
+                    <h3 class="heading-card">Send Bill via WhatsApp</h3>
+                    <span class="badge-gateway-chip" [class.is-connected]="whatsAppBridge.connectionStatus() === 'CONNECTED'">
+                      <span class="dot-indicator"></span>
+                      {{ whatsAppBridge.connectionStatus() === 'CONNECTED' ? 'DIRECT GATEWAY' : 'WEB FALLBACK' }}
+                    </span>
+                  </div>
                   <span class="text-xs text-muted">
                     {{ ord.orderNumber }} • Table {{ ord.tableNumber || 'Dine-In' }}
                     @if (whatsAppSplit(); as split) {
@@ -1140,76 +1265,105 @@ import {
               </button>
             </div>
 
-            <div class="modal-body">
+            <!-- Modal Body -->
+            <div class="modal-body whatsapp-apple-body">
+              <!-- Customer WhatsApp Phone Number (Admin Gated) -->
               <div class="form-group">
-                <label class="form-label" for="bq-wa-phone">Customer WhatsApp Phone Number *</label>
+                <div class="label-cluster-between">
+                  <label class="form-label font-bold" for="bq-wa-phone">
+                    <i class="ph ph-phone text-whatsapp"></i> Customer WhatsApp Number
+                  </label>
+                  @if (authService.isAdmin()) {
+                    <span class="admin-verified-pill" title="Administrator access permitted to change recipient">
+                      <i class="ph ph-shield-check"></i> Admin Editable
+                    </span>
+                  } @else {
+                    <span class="admin-locked-pill" title="Only Admin can modify customer phone number">
+                      <i class="ph ph-lock-key"></i> Admin Protected
+                    </span>
+                  }
+                </div>
+                
                 <div class="input-with-icon">
                   <i class="ph ph-phone"></i>
                   <input
                     id="bq-wa-phone"
                     type="tel"
                     class="form-input"
+                    [class.input-locked]="!authService.isAdmin()"
+                    [readonly]="!authService.isAdmin()"
                     placeholder="e.g. 9876543210 or +91 98765 43210"
                     [value]="whatsAppPhone()"
                     (input)="whatsAppPhone.set($any($event.target).value)"
                     (keyup.enter)="sendWhatsAppBill()"
-                    autofocus
                   />
+                  @if (!authService.isAdmin()) {
+                    <i class="ph ph-lock-key lock-status-icon" title="Only Admins can modify phone number"></i>
+                  }
                 </div>
-                <span class="hint-text"
-                  >Enter 10-digit mobile number. Country code defaults to +91 (India) if
-                  omitted.</span
-                >
+                <span class="hint-text">
+                  @if (authService.isAdmin()) {
+                    Enter 10-digit customer mobile number. Country code defaults to +91 (India).
+                  } @else {
+                    Recipient phone is locked to registered customer. Contact Admin to modify.
+                  }
+                </span>
               </div>
 
+              <!-- Message Composer (Editable) -->
               <div class="form-group">
-                <label class="form-label">Message Preview</label>
-                <pre class="whatsapp-preview-box">{{ whatsAppMessagePreview() }}</pre>
+                <div class="label-cluster-between">
+                  <label class="form-label font-bold">
+                    <i class="ph ph-pencil-simple-line text-whatsapp"></i> Message Text (Editable)
+                  </label>
+                  <span class="char-counter-text">
+                    {{ whatsAppMessagePreview().length }} characters
+                  </span>
+                </div>
+                <textarea
+                  class="form-input whatsapp-composer-box"
+                  rows="7"
+                  [ngModel]="whatsAppMessagePreview()"
+                  (ngModelChange)="whatsAppCustomMessage.set($event)"
+                  placeholder="Enter message to send..."
+                ></textarea>
               </div>
             </div>
 
-            <div class="modal-footer whatsapp-modal-footer">
-              <button class="btn btn-secondary" (click)="closeWhatsAppModal()">Cancel</button>
-              <button
-                type="button"
-                class="btn btn-secondary"
-                (click)="copyBillToClipboard()"
-                title="Copy formatted bill text to clipboard"
-              >
-                <i class="ph ph-copy"></i>
-                <span>Copy Text</span>
+            <!-- Modal Footer: Single Primary Action & Secondary Utils -->
+            <div class="modal-footer whatsapp-apple-footer">
+              <button type="button" class="btn btn-secondary btn-apple-cancel" (click)="closeWhatsAppModal()">
+                Cancel
               </button>
-              @if (whatsAppAppUrl()) {
-                <a
-                  [href]="whatsAppAppUrl()"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  class="btn btn-secondary"
-                  (click)="onWhatsAppLinkClicked(whatsAppAppUrl())"
-                  title="Open in WhatsApp Desktop App or Mobile"
+
+              <div class="footer-actions-group">
+                <button
+                  type="button"
+                  class="btn btn-secondary btn-apple-copy"
+                  (click)="copyBillToClipboard()"
+                  title="Copy formatted bill text to clipboard"
                 >
-                  <i class="ph ph-device-mobile"></i>
-                  <span>WhatsApp App</span>
-                </a>
-              }
-              @if (whatsAppWebUrl()) {
-                <a
-                  [href]="whatsAppWebUrl()"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  class="btn btn-whatsapp-action"
-                  (click)="onWhatsAppLinkClicked(whatsAppWebUrl())"
-                  title="Directly launch WhatsApp Web in a new tab"
-                >
-                  <i class="ph ph-whatsapp-logo"></i>
-                  <span>Open WhatsApp Web</span>
-                </a>
-              } @else {
-                <button type="button" class="btn btn-whatsapp-action" disabled>
-                  <i class="ph ph-whatsapp-logo"></i>
-                  <span>Enter Valid 10-Digit Mobile</span>
+                  <i class="ph ph-copy"></i>
+                  <span>Copy Text</span>
                 </button>
-              }
+
+                <!-- Single Embedded WhatsApp Send Button -->
+                <button
+                  type="button"
+                  class="btn btn-whatsapp-direct"
+                  (click)="sendWhatsAppBill()"
+                  [disabled]="isDispatchingWhatsApp() || !whatsAppPhone().trim()"
+                  title="Send bill directly via embedded WhatsApp"
+                >
+                  @if (isDispatchingWhatsApp()) {
+                    <i class="ph ph-spinner ph-spin"></i>
+                    <span>Sending in background...</span>
+                  } @else {
+                    <i class="ph-bold ph-paper-plane-tilt"></i>
+                    <span>Send Bill via WhatsApp</span>
+                  }
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -1264,12 +1418,124 @@ import {
         background: var(--color-surface);
         border: 1px solid var(--color-border);
         border-radius: var(--radius-md);
-        padding: 14px 20px;
+        padding: 16px 20px;
+        display: flex;
+        flex-direction: column;
+        gap: 14px;
+      }
+
+      .toolbar-top-row {
         display: flex;
         align-items: center;
         justify-content: space-between;
         gap: 16px;
         flex-wrap: wrap;
+        width: 100%;
+      }
+
+      .toolbar-controls-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+        flex-wrap: wrap;
+        padding-top: 12px;
+        border-top: 1px solid var(--color-border);
+        width: 100%;
+      }
+
+      .date-filter-group {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex-wrap: wrap;
+
+        .control-label {
+          font-size: 0.75rem;
+          font-weight: 700;
+          text-transform: uppercase;
+          letter-spacing: 0.04em;
+          color: var(--color-text-muted);
+          display: inline-flex;
+          align-items: center;
+          gap: 5px;
+          margin-right: 2px;
+        }
+      }
+
+      .date-pill-btn {
+        padding: 6px 13px;
+        font-size: 0.78125rem;
+        font-weight: 600;
+        color: var(--color-text-secondary);
+        background: var(--color-bone-light, rgba(0, 0, 0, 0.04));
+        border: 1px solid var(--color-border);
+        border-radius: 9999px;
+        cursor: pointer;
+        transition: all 0.16s ease;
+
+        &:hover {
+          background: var(--color-bone-medium, rgba(0, 0, 0, 0.08));
+          color: var(--color-text-primary);
+        }
+
+        &.active {
+          background: var(--color-crimson, #c2410c);
+          color: #ffffff;
+          border-color: var(--color-crimson, #c2410c);
+          box-shadow: 0 2px 6px rgba(194, 65, 12, 0.25);
+        }
+      }
+
+      .sort-selector-wrap {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+
+        .control-label {
+          font-size: 0.75rem;
+          font-weight: 700;
+          text-transform: uppercase;
+          letter-spacing: 0.04em;
+          color: var(--color-text-muted);
+          display: inline-flex;
+          align-items: center;
+          gap: 5px;
+        }
+
+        .select-box-wrap {
+          position: relative;
+          display: inline-flex;
+          align-items: center;
+
+          .sort-select {
+            appearance: none;
+            -webkit-appearance: none;
+            background: var(--color-surface);
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-sm, 8px);
+            padding: 6px 32px 6px 12px;
+            font-size: 0.8125rem;
+            font-weight: 600;
+            color: var(--color-text-primary);
+            cursor: pointer;
+            transition: all 0.15s ease;
+            outline: none;
+
+            &:focus {
+              border-color: var(--color-primary);
+              box-shadow: 0 0 0 2px rgba(194, 65, 12, 0.12);
+            }
+          }
+
+          .select-caret {
+            position: absolute;
+            right: 10px;
+            pointer-events: none;
+            font-size: 0.75rem;
+            color: var(--color-text-muted);
+          }
+        }
       }
 
       .filter-tabs {
@@ -1298,18 +1564,49 @@ import {
         position: relative;
         min-width: 240px;
         flex: 1;
+        display: flex;
+        align-items: center;
 
         i {
           position: absolute;
-          left: 12px;
+          left: 14px;
           top: 50%;
           transform: translateY(-50%);
           color: var(--color-text-muted);
-          font-size: 1.1rem;
+          font-size: 1.125rem;
+          pointer-events: none;
         }
 
         .form-input {
-          padding-left: 38px;
+          padding-left: 42px;
+          padding-right: 16px;
+          height: 44px;
+          border-radius: var(--radius-md, 10px);
+          background: var(--color-surface);
+          border: 1px solid var(--color-border);
+          font-size: 0.875rem;
+          color: var(--color-text-primary);
+          transition: all var(--transition-fast, 0.15s ease);
+          box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
+
+          &:focus {
+            border-color: var(--color-primary);
+            box-shadow: 0 0 0 3px rgba(194, 65, 12, 0.12);
+            outline: none;
+          }
+
+          &::placeholder {
+            color: var(--color-text-muted);
+          }
+        }
+      }
+
+      .clickable-order-row {
+        cursor: pointer;
+        transition: background-color var(--transition-fast, 0.15s ease);
+
+        &:hover {
+          background-color: var(--color-bone-light, rgba(0, 0, 0, 0.025)) !important;
         }
       }
 
@@ -1352,6 +1649,55 @@ import {
       .time-text {
         font-size: 0.75rem;
         color: var(--color-text-muted);
+      }
+
+      .timing-badge-wrap {
+        display: flex;
+        flex-direction: column;
+        gap: 3px;
+        margin-top: 3px;
+      }
+
+      .completion-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        font-size: 0.75rem;
+        font-weight: 700;
+        color: #059669;
+        background: rgba(16, 185, 129, 0.1);
+        border: 1px solid rgba(16, 185, 129, 0.25);
+        padding: 2px 7px;
+        border-radius: 6px;
+        width: fit-content;
+
+        i {
+          font-size: 0.85rem;
+        }
+      }
+
+      .created-subtime {
+        font-size: 0.7rem;
+        color: var(--color-text-muted);
+        padding-left: 2px;
+      }
+
+      .active-time {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        font-size: 0.75rem;
+        font-weight: 600;
+        color: #d97706;
+        background: rgba(245, 158, 11, 0.1);
+        border: 1px solid rgba(245, 158, 11, 0.25);
+        padding: 2px 7px;
+        border-radius: 6px;
+        width: fit-content;
+
+        i {
+          font-size: 0.85rem;
+        }
       }
 
       .guest-cell {
@@ -1397,6 +1743,98 @@ import {
         flex-direction: column;
         gap: 8px;
         margin-bottom: 14px;
+      }
+
+      .settle-items-section {
+        background: var(--color-surface, #ffffff);
+        border: 1px solid var(--color-border, #e2e8f0);
+        border-radius: var(--radius-sm, 6px);
+        padding: 8px 10px;
+        margin: 2px 0 4px;
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+      }
+
+      .settle-items-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        font-size: 0.72rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: var(--color-text-muted, #94a3b8);
+        padding-bottom: 4px;
+        border-bottom: 1px solid var(--color-border, #f1f5f9);
+      }
+
+      .settle-items-list {
+        max-height: 160px;
+        overflow-y: auto;
+        display: flex;
+        flex-direction: column;
+        gap: 5px;
+        padding-right: 2px;
+      }
+
+      .settle-item-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        font-size: 0.8125rem;
+        padding: 2px 0;
+      }
+
+      .settle-item-left {
+        display: flex;
+        align-items: flex-start;
+        gap: 6px;
+        flex: 1;
+        min-width: 0;
+      }
+
+      .item-qty-pill {
+        font-size: 0.7rem;
+        font-weight: 700;
+        background: rgba(99, 102, 241, 0.1);
+        color: var(--color-primary, #6366f1);
+        padding: 1px 5px;
+        border-radius: 4px;
+        flex-shrink: 0;
+        margin-top: 1px;
+      }
+
+      .item-text-group {
+        display: flex;
+        flex-direction: column;
+        min-width: 0;
+      }
+
+      .item-name-text {
+        font-weight: 600;
+        color: var(--color-onyx, #1e293b);
+        line-height: 1.25;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .item-instruction-text {
+        font-size: 0.6875rem;
+        color: var(--color-text-muted, #64748b);
+        line-height: 1.2;
+        margin-top: 1px;
+        font-style: italic;
+      }
+
+      .item-total-price {
+        font-weight: 600;
+        color: var(--color-text-primary, #0f172a);
+        font-family: 'SF Mono', Consolas, monospace;
+        font-size: 0.8125rem;
+        flex-shrink: 0;
+        margin-left: 8px;
       }
 
       .settle-discount-card {
@@ -1865,39 +2303,129 @@ import {
         color: var(--color-crimson);
       }
 
-      .split-pill {
+      .split-pill-toggle-btn {
         font-size: 0.6875rem;
         font-weight: 700;
         color: var(--color-crimson);
         background: var(--color-danger-bg);
         border: 1px solid rgba(194, 24, 7, 0.25);
-        padding: 2px 6px;
+        padding: 3px 8px;
         border-radius: var(--radius-full);
         display: inline-flex;
         align-items: center;
-        gap: 3px;
-        margin-top: 2px;
+        gap: 5px;
+        margin-top: 4px;
         width: fit-content;
+        cursor: pointer;
+        transition: all var(--transition-fast, 0.15s ease);
+
+        &:hover {
+          background: rgba(220, 38, 38, 0.16);
+          border-color: rgba(220, 38, 38, 0.4);
+          transform: translateY(-1px);
+        }
+
+        &:active {
+          transform: scale(0.97);
+        }
+
+        &.expanded {
+          background: var(--color-crimson);
+          color: #ffffff;
+          border-color: var(--color-crimson);
+          box-shadow: 0 2px 6px rgba(220, 38, 38, 0.25);
+        }
+      }
+
+      /* DC-1: static chip replaces the pill toggle in items cell */
+      .split-info-chip {
+        font-size: 0.6875rem;
+        font-weight: 700;
+        color: #b45309;
+        background: rgba(180, 83, 9, 0.08);
+        border: 1px solid rgba(180, 83, 9, 0.2);
+        padding: 2px 7px;
+        border-radius: var(--radius-full);
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        margin-top: 4px;
+        width: fit-content;
+      }
+
+      .split-parts-toggle-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        font-weight: 600;
+        transition: all var(--transition-fast, 0.15s ease);
+
+        &.btn-active-toggle {
+          background: var(--color-crimson);
+          color: #ffffff;
+          border-color: var(--color-crimson);
+          box-shadow: 0 2px 6px rgba(220, 38, 38, 0.2);
+        }
       }
 
       .split-bills-row {
         background: var(--color-bone-light);
+        border-bottom: 2px solid var(--color-border);
       }
 
       .split-bills-container {
-        padding: 12px 16px;
+        padding: 14px 18px;
         display: flex;
         flex-direction: column;
-        gap: 8px;
+        gap: 10px;
+        animation: splitExpandIn 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+      }
+
+      @keyframes splitExpandIn {
+        from {
+          opacity: 0;
+          transform: translateY(-6px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
       }
 
       .split-banner {
         display: flex;
         align-items: center;
-        gap: 8px;
+        justify-content: space-between;
         font-size: 0.8125rem;
         font-weight: 700;
         color: var(--color-onyx);
+
+        .split-banner-left {
+          display: inline-flex;
+          align-items: center;
+          gap: 8px;
+        }
+
+        .btn-close-split {
+          display: inline-flex;
+          align-items: center;
+          gap: 4px;
+          padding: 3px 10px;
+          font-size: 0.75rem;
+          font-weight: 600;
+          border-radius: var(--radius-xs, 6px);
+          border: 1px solid var(--color-border);
+          background: var(--color-surface, #ffffff);
+          color: var(--color-text-secondary);
+          cursor: pointer;
+          transition: all var(--transition-fast, 0.15s ease);
+
+          &:hover {
+            background: var(--color-bone-light);
+            color: var(--color-crimson);
+            border-color: var(--color-crimson);
+          }
+        }
       }
 
       .sub-data-table {
@@ -2089,38 +2617,55 @@ import {
       .btn-whatsapp {
         display: inline-flex;
         align-items: center;
-        gap: 5px;
+        justify-content: center;
         background: #25d366;
         color: #ffffff;
         font-weight: 500;
         border: none;
         cursor: pointer;
-        transition: background 0.15s ease;
+        transition: background 0.15s ease, transform 0.1s ease;
 
         &:hover {
           background: #20ba5a;
           color: #ffffff;
         }
 
+        &:active {
+          transform: scale(0.95);
+        }
+
         i {
-          font-size: 1rem;
+          font-size: 1.15rem;
         }
 
         &.btn-xs {
-          padding: 3px 8px;
-          font-size: 0.6875rem;
+          padding: 0 6px;
+          height: 26px;
+          min-width: 26px;
           border-radius: var(--radius-xs, 4px);
+
+          i {
+            font-size: 0.95rem;
+          }
         }
 
         &.btn-sm {
-          padding: 6px 10px;
-          font-size: 0.75rem;
+          padding: 0 10px;
+          height: 32px;
+          min-width: 34px;
           border-radius: var(--radius-sm, 6px);
         }
       }
 
       .whatsapp-dialog-card {
-        max-width: 480px;
+        max-width: 540px;
+        border-radius: 20px;
+        overflow: hidden;
+      }
+
+      .whatsapp-apple-header {
+        border-bottom: 1px solid var(--color-border);
+        padding-bottom: 12px;
       }
 
       .whatsapp-header-wrap {
@@ -2130,70 +2675,183 @@ import {
       }
 
       .whatsapp-icon-badge {
-        width: 36px;
-        height: 36px;
-        border-radius: 50%;
+        width: 42px;
+        height: 42px;
+        border-radius: 12px;
         background: rgba(37, 211, 102, 0.12);
         color: #25d366;
         display: flex;
         align-items: center;
         justify-content: center;
-        font-size: 1.25rem;
+        font-size: 1.5rem;
       }
 
-      .whatsapp-preview-box {
-        margin: 0;
-        padding: 10px 12px;
-        background: #f8fafc;
-        border: 1px solid var(--color-border, #e2e8f0);
-        border-radius: 6px;
-        font-family: monospace;
-        font-size: 0.75rem;
-        line-height: 1.45;
-        color: #334155;
-        white-space: pre-wrap;
-        word-break: break-word;
-        max-height: 180px;
-        overflow-y: auto;
-      }
-
-      .btn-whatsapp-action {
+      .badge-gateway-chip {
         display: inline-flex;
         align-items: center;
-        gap: 6px;
-        background: #25d366;
-        color: #ffffff;
-        font-weight: 600;
-        font-size: 0.875rem;
-        padding: 8px 16px;
-        border-radius: var(--radius-sm, 6px);
-        border: none;
-        cursor: pointer;
-        transition: background 0.15s ease;
+        gap: 5px;
+        font-size: 0.65rem;
+        font-weight: 700;
+        padding: 2px 7px;
+        border-radius: 999px;
+        background: rgba(148, 163, 184, 0.15);
+        color: var(--color-text-secondary);
+        border: 1px solid rgba(148, 163, 184, 0.25);
 
-        &:hover:not(:disabled) {
-          background: #20ba5a;
+        .dot-indicator {
+          width: 6px;
+          height: 6px;
+          border-radius: 50%;
+          background: #94a3b8;
         }
 
-        &:disabled {
-          opacity: 0.5;
-          cursor: not-allowed;
-        }
+        &.is-connected {
+          background: rgba(34, 197, 94, 0.12);
+          color: #16a34a;
+          border-color: rgba(34, 197, 94, 0.25);
 
-        i {
-          font-size: 1.15rem;
+          .dot-indicator {
+            background: #22c55e;
+            box-shadow: 0 0 6px rgba(34, 197, 94, 0.6);
+          }
         }
       }
 
-      .whatsapp-modal-footer {
+      .whatsapp-apple-body {
+        display: flex;
+        flex-direction: column;
+        gap: 14px;
+        padding-top: 14px;
+      }
+
+      .label-cluster-between {
         display: flex;
         align-items: center;
-        justify-content: flex-end;
-        gap: 8px;
-        flex-wrap: wrap;
+        justify-content: space-between;
+        margin-bottom: 4px;
+      }
 
-        a.btn {
-          text-decoration: none;
+      .text-whatsapp {
+        color: #25d366;
+      }
+
+      .admin-verified-pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        font-size: 0.6875rem;
+        font-weight: 700;
+        padding: 2px 8px;
+        border-radius: 999px;
+        background: rgba(16, 185, 129, 0.12);
+        color: #059669;
+        border: 1px solid rgba(16, 185, 129, 0.25);
+      }
+
+      .admin-locked-pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        font-size: 0.6875rem;
+        font-weight: 700;
+        padding: 2px 8px;
+        border-radius: 999px;
+        background: rgba(245, 158, 11, 0.12);
+        color: #b45309;
+        border: 1px solid rgba(245, 158, 11, 0.25);
+      }
+
+      .input-locked {
+        background: rgba(0, 0, 0, 0.04) !important;
+        cursor: not-allowed;
+        color: var(--color-text-secondary);
+      }
+
+      .lock-status-icon {
+        position: absolute;
+        right: 12px;
+        color: var(--color-text-muted);
+        font-size: 1rem;
+      }
+
+      .char-counter-text {
+        font-size: 0.6875rem;
+        color: var(--color-text-muted);
+        font-family: var(--font-mono, monospace);
+      }
+
+      .whatsapp-composer-box {
+        font-family: var(--font-mono, monospace);
+        font-size: 0.75rem;
+        line-height: 1.5;
+        resize: vertical;
+        min-height: 140px;
+        background: var(--color-surface);
+        border: 1px solid var(--color-border);
+        border-radius: 12px;
+        padding: 10px 12px;
+        transition: border-color 0.15s ease;
+
+        &:focus {
+          border-color: #25d366;
+          box-shadow: 0 0 0 3px rgba(37, 211, 102, 0.15);
+        }
+      }
+
+      .whatsapp-apple-footer {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding-top: 14px;
+        border-top: 1px solid var(--color-border);
+
+        .footer-actions-group {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+        }
+
+        .btn-apple-cancel {
+          border-radius: 10px;
+          font-weight: 600;
+        }
+
+        .btn-apple-copy {
+          border-radius: 10px;
+          display: inline-flex;
+          align-items: center;
+          gap: 5px;
+          font-weight: 600;
+        }
+
+        .btn-whatsapp-direct {
+          display: inline-flex;
+          align-items: center;
+          gap: 6px;
+          background: #25d366;
+          color: #ffffff;
+          font-weight: 700;
+          font-size: 0.8125rem;
+          padding: 9px 18px;
+          border-radius: 12px;
+          border: none;
+          cursor: pointer;
+          box-shadow: 0 2px 10px rgba(37, 211, 102, 0.3);
+          transition: transform 0.15s cubic-bezier(0.16, 1, 0.3, 1), background-color 0.15s ease, opacity 0.15s ease;
+
+          &:hover:not(:disabled) {
+            background: #20ba5a;
+            box-shadow: 0 4px 14px rgba(37, 211, 102, 0.4);
+          }
+
+          &:active:not(:disabled) {
+            transform: scale(0.97);
+          }
+
+          &:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+          }
         }
       }
     `,
@@ -2204,6 +2862,8 @@ export class BillingQueueComponent {
   private mock = this.dataService;
   private toastService = inject(ToastService);
   private router = inject(Router);
+  readonly whatsAppBridge = inject(WhatsAppBridgeService);
+  readonly authService = inject(AdminAuthService);
 
   readonly isLoading = computed(
     () =>
@@ -2216,6 +2876,16 @@ export class BillingQueueComponent {
   orders = this.mock.orders;
   selectedTab = signal<string>('ALL');
   searchQuery = signal<string>('');
+  dateFilter = signal<'ALL' | 'TODAY' | 'YESTERDAY' | 'THIS_WEEK'>('ALL');
+  sortOption = signal<'COMPLETION_DESC' | 'COMPLETION_ASC' | 'CREATED_DESC' | 'AMOUNT_DESC'>('COMPLETION_DESC');
+
+  get cgstRate(): number {
+    return this.dataService.restaurant()?.taxSettings?.cgstRate ?? 2.5;
+  }
+
+  get sgstRate(): number {
+    return this.dataService.restaurant()?.taxSettings?.sgstRate ?? 2.5;
+  }
 
   // Settle Full Order State
   showSettleModal = signal<boolean>(false);
@@ -2247,6 +2917,34 @@ export class BillingQueueComponent {
   splitError = signal<string>('');
   isSubmittingSplit = signal<boolean>(false);
 
+  // Split Bills Row Expansion State (collapsed by default)
+  expandedSplitOrders = signal<Set<string>>(new Set());
+
+  toggleSplitBills(orderId: string): void {
+    this.expandedSplitOrders.update((set) => {
+      const next = new Set(set);
+      if (next.has(orderId)) {
+        next.delete(orderId);
+      } else {
+        next.add(orderId);
+      }
+      return next;
+    });
+  }
+
+  isSplitBillsExpanded(orderId: string): boolean {
+    return this.expandedSplitOrders().has(orderId);
+  }
+
+  onOrderRowClick(ord: Order, event: MouseEvent): void {
+    const target = event.target as HTMLElement;
+    // Do not trigger row navigation if user clicked an inner interactive button/link/input/toggle
+    if (target.closest('button, a, input, select, textarea, .btn, .split-pill-toggle-btn')) {
+      return;
+    }
+    this.router.navigate(['/admin/billing', ord.id]);
+  }
+
   // Refund State
   showRefundModal = signal<boolean>(false);
   selectedOrderForRefund = signal<Order | null>(null);
@@ -2261,8 +2959,14 @@ export class BillingQueueComponent {
   whatsAppOrder = signal<Order | null>(null);
   whatsAppSplit = signal<SplitBill | null>(null);
   whatsAppPhone = signal<string>('');
+  whatsAppCustomMessage = signal<string>('');
+  isDispatchingWhatsApp = signal<boolean>(false);
 
   whatsAppMessagePreview = computed(() => {
+    // If user edited message, return customized text
+    if (this.whatsAppCustomMessage()) {
+      return this.whatsAppCustomMessage();
+    }
     const ord = this.whatsAppOrder();
     if (!ord) return '';
     const split = this.whatsAppSplit();
@@ -2393,7 +3097,40 @@ export class BillingQueueComponent {
   }
 
   getOrderSplitBills(orderId: string): SplitBill[] {
-    return this.mock.splitBills().filter((b) => b.orderId === orderId);
+    const parent = this.orders().find((o) => o.id === orderId);
+    const splits = this.mock.splitBills().filter((b) => b.orderId === orderId);
+    if (parent?.paymentStatus === 'PAID') {
+      return splits.map((s) =>
+        s.paymentStatus === 'PAID'
+          ? s
+          : {
+              ...s,
+              paymentStatus: 'PAID' as PaymentStatus,
+              paymentMethod: s.paymentMethod || parent.paymentMethod,
+            },
+      );
+    }
+    return splits;
+  }
+
+  getOrderPaymentStatus(ord: Order): PaymentStatus {
+    if (ord.paymentStatus === 'PAID') return 'PAID';
+    const splits = this.mock.splitBills().filter((b) => b.orderId === ord.id);
+    if (splits.length > 0) {
+      const paidCount = splits.filter((s) => s.paymentStatus === 'PAID').length;
+      if (paidCount === splits.length) return 'PAID';
+      if (paidCount > 0) return 'PARTIALLY_PAID';
+      return 'UNPAID';
+    }
+    return ord.paymentStatus;
+  }
+
+  onSplitRowClick(ord: Order, split: SplitBill, event: MouseEvent): void {
+    const target = event.target as HTMLElement;
+    if (target.closest('button, a, input, select, textarea, .billing-actions')) {
+      return;
+    }
+    this.router.navigate(['/admin/billing', ord.id], { queryParams: { splitId: split.id } });
   }
 
   getSplitIndices(): number[] {
@@ -2410,74 +3147,205 @@ export class BillingQueueComponent {
     if (ord.orderType === 'TAKEAWAY' || (!ord.tableId && !ord.tableNumber)) {
       return [ord];
     }
-    const siblings = this.orders().filter(
-      (o) =>
-        o.id !== ord.id &&
-        o.status !== 'CANCELLED' &&
-        o.paymentStatus === 'UNPAID' &&
-        ((ord.seatingSessionId && o.seatingSessionId === ord.seatingSessionId) ||
-          (ord.tableId && o.tableId === ord.tableId) ||
-          (ord.tableNumber && o.tableNumber === ord.tableNumber)),
-    );
+    const siblings = this.orders().filter((o) => {
+      if (o.id === ord.id || o.status === 'CANCELLED' || o.orderType === 'TAKEAWAY') {
+        return false;
+      }
+      // Must have same paymentStatus (don't mix unpaid with paid)
+      if (o.paymentStatus !== ord.paymentStatus) return false;
+
+      // 1. Strict seatingSessionId check if both have one
+      if (ord.seatingSessionId && o.seatingSessionId) {
+        return o.seatingSessionId === ord.seatingSessionId;
+      }
+
+      // 2. Exact table match (must match tableId if both present)
+      if (ord.tableId && o.tableId && ord.tableId !== o.tableId) {
+        return false;
+      }
+      const sameTable =
+        (ord.tableId && o.tableId === ord.tableId) ||
+        (ord.tableNumber &&
+          o.tableNumber &&
+          ord.tableNumber.trim().toLowerCase() === o.tableNumber.trim().toLowerCase());
+      if (!sameTable) return false;
+
+      // 3. Time guard: Never mix orders created > 3 hours apart
+      const timeDiff = Math.abs(
+        new Date(ord.createdAt).getTime() - new Date(o.createdAt).getTime(),
+      );
+      return timeDiff <= 3 * 60 * 60 * 1000;
+    });
     return [ord, ...siblings].sort(
       (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
+    );
+  }
+
+  consolidateOrdersForBilling(ordersList: Order[]): Order[] {
+    const tableMap = new Map<string, Order[]>();
+    const nonTableOrders: Order[] = [];
+
+    for (const ord of ordersList) {
+      if (ord.orderType !== 'TAKEAWAY' && (ord.tableId || ord.tableNumber)) {
+        let key = '';
+        if (ord.seatingSessionId) {
+          // Group by seating session — multiple rounds share one bill
+          key = `sess_${ord.seatingSessionId}`;
+        } else if (ord.paymentStatus === 'PAID') {
+          // PAID orders with no session ID are independent bills — never re-group them
+          // ponytail: using ord.id as the key so each settled order is its own bucket
+          key = `paid_${ord.id}`;
+        } else {
+          key = `tbl_active_${ord.tableId || ord.tableNumber}`;
+        }
+        if (!tableMap.has(key)) {
+          tableMap.set(key, []);
+        }
+        tableMap.get(key)!.push(ord);
+      } else {
+        nonTableOrders.push(ord);
+      }
+    }
+
+    const consolidatedList: Order[] = [...nonTableOrders];
+
+    for (const [, ordersGroup] of tableMap.entries()) {
+      if (ordersGroup.length === 1) {
+        consolidatedList.push(ordersGroup[0]);
+      } else {
+        const sorted = [...ordersGroup].sort(
+          (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
+        );
+        const primary = sorted[0];
+        const combinedSubtotal =
+          Math.round(sorted.reduce((sum, r) => sum + (r.subtotal || 0), 0) * 100) / 100;
+        const combinedTax =
+          Math.round(sorted.reduce((sum, r) => sum + (r.taxAmount || 0), 0) * 100) / 100;
+        const combinedTotal = Math.round((combinedSubtotal + combinedTax) * 100) / 100;
+        const allItems = sorted.flatMap((r) => r.items);
+        const allPaid = sorted.every((r) => r.paymentStatus === 'PAID');
+        const latestSettledAt = sorted
+          .map((r) => r.settledAt)
+          .filter((s): s is string => Boolean(s))
+          .sort()
+          .pop();
+
+        consolidatedList.push({
+          ...primary,
+          paymentStatus: allPaid ? 'PAID' : primary.paymentStatus,
+          items: allItems,
+          subtotal: combinedSubtotal,
+          taxAmount: combinedTax,
+          totalAmount: combinedTotal,
+          isSessionConsolidated: true,
+          sessionRoundsCount: sorted.length,
+          sessionRounds: sorted,
+          settledAt: latestSettledAt || primary.settledAt,
+        });
+      }
+    }
+
+    return consolidatedList;
+  }
+
+  getOrderCompletionTimestamp(ord: Order): number {
+    if (ord.settledAt) {
+      const t = new Date(ord.settledAt).getTime();
+      if (!isNaN(t) && t > 0) return t;
+    }
+
+    if (ord.sessionRounds && ord.sessionRounds.length > 0) {
+      let latestTime = 0;
+      for (const round of ord.sessionRounds) {
+        if (round.settledAt) {
+          const t = new Date(round.settledAt).getTime();
+          if (!isNaN(t) && t > latestTime) latestTime = t;
+        }
+        if (round.timeline && Array.isArray(round.timeline)) {
+          for (const ev of round.timeline) {
+            if (['COMPLETED', 'PAID', 'SERVED'].includes(ev.status?.toUpperCase())) {
+              const t = new Date(ev.timestamp).getTime();
+              if (!isNaN(t) && t > latestTime) latestTime = t;
+            }
+          }
+        }
+        if (round.paymentStatus === 'PAID' && round.updatedAt) {
+          const t = new Date(round.updatedAt).getTime();
+          if (!isNaN(t) && t > latestTime) latestTime = t;
+        }
+      }
+      if (latestTime > 0) return latestTime;
+    }
+
+    if (ord.timeline && Array.isArray(ord.timeline)) {
+      for (let i = ord.timeline.length - 1; i >= 0; i--) {
+        const ev = ord.timeline[i];
+        if (['COMPLETED', 'PAID', 'SERVED'].includes(ev.status?.toUpperCase())) {
+          const t = new Date(ev.timestamp).getTime();
+          if (!isNaN(t) && t > 0) return t;
+        }
+      }
+    }
+
+    if ((ord.paymentStatus === 'PAID' || ord.status === 'COMPLETED') && ord.updatedAt) {
+      const t = new Date(ord.updatedAt).getTime();
+      if (!isNaN(t) && t > 0) return t;
+    }
+
+    const created = new Date(ord.createdAt).getTime();
+    return !isNaN(created) ? created : 0;
+  }
+
+  getOrderCompletionDate(ord: Order): Date {
+    return new Date(this.getOrderCompletionTimestamp(ord));
+  }
+
+  isOrderCompletedOrSettled(ord: Order): boolean {
+    return ord.paymentStatus === 'PAID' || ord.status === 'COMPLETED' || Boolean(ord.settledAt);
+  }
+
+  isSameCalendarDay(d1: Date, d2: Date): boolean {
+    return (
+      d1.getFullYear() === d2.getFullYear() &&
+      d1.getMonth() === d2.getMonth() &&
+      d1.getDate() === d2.getDate()
     );
   }
 
   filteredOrders = computed(() => {
     let list = this.orders();
     if (this.selectedTab() === 'UNPAID') {
-      const unpaid = list.filter((o) => o.paymentStatus === 'UNPAID' && o.status !== 'CANCELLED');
-      const tableMap = new Map<string, Order[]>();
-      const nonTableOrders: Order[] = [];
-
-      for (const ord of unpaid) {
-        if (ord.orderType !== 'TAKEAWAY' && (ord.tableId || ord.tableNumber)) {
-          const key = (ord.tableId || ord.tableNumber)!;
-          if (!tableMap.has(key)) {
-            tableMap.set(key, []);
-          }
-          tableMap.get(key)!.push(ord);
-        } else {
-          nonTableOrders.push(ord);
-        }
-      }
-
-      const consolidatedList: Order[] = [...nonTableOrders];
-
-      for (const [, ordersGroup] of tableMap.entries()) {
-        if (ordersGroup.length === 1) {
-          consolidatedList.push(ordersGroup[0]);
-        } else {
-          const sorted = [...ordersGroup].sort(
-            (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
-          );
-          const primary = sorted[0];
-          const combinedSubtotal =
-            Math.round(sorted.reduce((sum, r) => sum + (r.subtotal || 0), 0) * 100) / 100;
-          const combinedTax =
-            Math.round(sorted.reduce((sum, r) => sum + (r.taxAmount || 0), 0) * 100) / 100;
-          const combinedTotal = Math.round((combinedSubtotal + combinedTax) * 100) / 100;
-          const allItems = sorted.flatMap((r) => r.items);
-
-          consolidatedList.push({
-            ...primary,
-            items: allItems,
-            subtotal: combinedSubtotal,
-            taxAmount: combinedTax,
-            totalAmount: combinedTotal,
-            isSessionConsolidated: true,
-            sessionRoundsCount: sorted.length,
-            sessionRounds: sorted,
-          });
-        }
-      }
-
-      list = consolidatedList.sort(
-        (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
-      );
+      list = list.filter((o) => o.paymentStatus === 'UNPAID' && o.status !== 'CANCELLED');
     } else if (this.selectedTab() === 'PAID') {
-      list = list.filter((o) => o.paymentStatus === 'PAID' && o.totalAmount > 0);
+      list = list.filter((o) => o.paymentStatus === 'PAID');
+    }
+
+    const consolidated = this.consolidateOrdersForBilling(list);
+    list = consolidated;
+
+    // Filter by Completion/Event Date
+    const filter = this.dateFilter();
+    if (filter !== 'ALL') {
+      const now = new Date();
+      list = list.filter((o) => {
+        const orderTime = this.getOrderCompletionTimestamp(o);
+        const orderDate = new Date(orderTime);
+        if (filter === 'TODAY') {
+          return this.isSameCalendarDay(orderDate, now);
+        }
+        if (filter === 'YESTERDAY') {
+          const yesterday = new Date();
+          yesterday.setDate(now.getDate() - 1);
+          return this.isSameCalendarDay(orderDate, yesterday);
+        }
+        if (filter === 'THIS_WEEK') {
+          const weekAgo = new Date();
+          weekAgo.setDate(now.getDate() - 7);
+          weekAgo.setHours(0, 0, 0, 0);
+          return orderTime >= weekAgo.getTime();
+        }
+        return true;
+      });
     }
 
     const q = this.searchQuery().toLowerCase().trim();
@@ -2487,9 +3355,30 @@ export class BillingQueueComponent {
           o.orderNumber.toLowerCase().includes(q) ||
           (o.pickupReference && o.pickupReference.toLowerCase().includes(q)) ||
           (o.tableNumber && o.tableNumber.toLowerCase().includes(q)) ||
-          o.customerName.toLowerCase().includes(q),
+          o.customerName.toLowerCase().includes(q) ||
+          (o.sessionRounds && o.sessionRounds.some((r) => r.orderNumber.toLowerCase().includes(q))),
       );
     }
+
+    // Sort bills: Default COMPLETION_DESC (newest completion time & date at top)
+    const sort = this.sortOption();
+    list = [...list].sort((a, b) => {
+      if (sort === 'COMPLETION_DESC') {
+        const diff = this.getOrderCompletionTimestamp(b) - this.getOrderCompletionTimestamp(a);
+        return diff !== 0 ? diff : new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+      }
+      if (sort === 'COMPLETION_ASC') {
+        const diff = this.getOrderCompletionTimestamp(a) - this.getOrderCompletionTimestamp(b);
+        return diff !== 0 ? diff : new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+      }
+      if (sort === 'CREATED_DESC') {
+        return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+      }
+      if (sort === 'AMOUNT_DESC') {
+        return (b.totalAmount || 0) - (a.totalAmount || 0);
+      }
+      return 0;
+    });
 
     return list;
   });
@@ -2517,6 +3406,15 @@ export class BillingQueueComponent {
     this.showSettleModal.set(true);
   }
 
+  getSettlementItems(ord: Order | null): OrderItem[] {
+    if (!ord) return [];
+    const rounds = this.selectedSessionOrders();
+    if (rounds.length > 1) {
+      return rounds.flatMap((r) => r.items || []);
+    }
+    return ord.items || [];
+  }
+
   getSettlementSubtotal(ord: Order | null): number {
     if (!ord) return 0;
     const rounds = this.selectedSessionOrders();
@@ -2528,19 +3426,24 @@ export class BillingQueueComponent {
 
   getSettlementTax(ord: Order | null): number {
     if (!ord) return 0;
-    const rounds = this.selectedSessionOrders();
-    if (rounds.length > 0) {
-      return Math.round(rounds.reduce((sum, r) => sum + (r.taxAmount || 0), 0) * 100) / 100;
+    const subtotal = this.getSettlementSubtotal(ord);
+    const taxRate = (this.cgstRate || 2.5) + (this.sgstRate || 2.5);
+    if (this.settleDiscountMode() === 'COUPON') {
+      const couponDisc = this.getEffectiveDiscount(ord);
+      const taxable = Math.max(0, subtotal - couponDisc);
+      return Math.round(taxable * (taxRate / 100) * 100) / 100;
+    } else {
+      return Math.round(subtotal * (taxRate / 100) * 100) / 100;
     }
-    return ord.taxAmount || 0;
   }
 
   getEffectiveDiscount(ord: Order | null): number {
     if (!ord) return 0;
     const subtotal = this.getSettlementSubtotal(ord);
-    const tax = this.getSettlementTax(ord);
-    const grossTotal = Math.round((subtotal + tax) * 100) / 100;
+    const taxRate = (this.cgstRate || 2.5) + (this.sgstRate || 2.5);
     if (this.settleDiscountMode() === 'CUSTOM') {
+      const tax = Math.round(subtotal * (taxRate / 100) * 100) / 100;
+      const grossTotal = Math.round((subtotal + tax) * 100) / 100;
       const disc = Math.max(0, this.customDiscountRupees() || 0);
       return Math.min(grossTotal, Math.round(disc * 100) / 100);
     } else {
@@ -2552,14 +3455,15 @@ export class BillingQueueComponent {
 
       let disc = 0;
       if (coup.discountType === 'PERCENTAGE') {
-        disc = (grossTotal * coup.discountValue) / 100;
+        // Coupon discount applies to total BEFORE taxes
+        disc = (subtotal * coup.discountValue) / 100;
         if (coup.maxDiscountAmount && disc > coup.maxDiscountAmount) {
           disc = coup.maxDiscountAmount;
         }
       } else {
         disc = coup.discountValue;
       }
-      return Math.min(grossTotal, Math.round(disc * 100) / 100);
+      return Math.min(subtotal, Math.round(disc * 100) / 100);
     }
   }
 
@@ -2567,9 +3471,17 @@ export class BillingQueueComponent {
     if (!ord) return 0;
     const subtotal = this.getSettlementSubtotal(ord);
     const tax = this.getSettlementTax(ord);
-    const grossTotal = Math.round((subtotal + tax) * 100) / 100;
-    const effectiveDisc = this.getEffectiveDiscount(ord);
-    return Math.max(0, Math.round((grossTotal - effectiveDisc) * 100) / 100);
+    if (this.settleDiscountMode() === 'COUPON') {
+      const couponDisc = this.getEffectiveDiscount(ord);
+      const taxable = Math.max(0, subtotal - couponDisc);
+      // Chargeable amount never shows pointed/decimal value: rounded to whole integer
+      return Math.round(Math.max(0, taxable + tax));
+    } else {
+      const grossTotal = subtotal + tax;
+      const adminDisc = this.getEffectiveDiscount(ord);
+      // Chargeable amount never shows pointed/decimal value: rounded to whole integer
+      return Math.round(Math.max(0, grossTotal - adminDisc));
+    }
   }
 
   onCustomDiscountChange(event: Event, maxLimit: number): void {
@@ -2591,7 +3503,8 @@ export class BillingQueueComponent {
   applyRoundOffDiscount(ord: Order): void {
     this.settleDiscountMode.set('CUSTOM');
     const subtotal = this.getSettlementSubtotal(ord);
-    const tax = this.getSettlementTax(ord);
+    const taxRate = (this.cgstRate || 2.5) + (this.sgstRate || 2.5);
+    const tax = Math.round(subtotal * (taxRate / 100) * 100) / 100;
     const grossTotal = Math.round((subtotal + tax) * 100) / 100;
     const roundedDown = Math.floor(grossTotal / 10) * 10;
     const neededOff = Math.max(0, Math.round((grossTotal - roundedDown) * 100) / 100);
@@ -2636,6 +3549,9 @@ export class BillingQueueComponent {
 
     this.isSettling.set(false);
     if (res.success) {
+      if (ord.tableId || ord.tableNumber) {
+        this.mock.recalculateTableStatus(ord.tableId || ord.tableNumber!);
+      }
       const roundsCount = this.selectedSessionOrders().length;
       const msg =
         roundsCount > 1
@@ -2643,7 +3559,7 @@ export class BillingQueueComponent {
           : `Order ${ord.orderNumber} successfully settled via ${method}`;
       this.toastService.success(msg);
       this.closeSettleModal();
-      this.router.navigate(['/admin/billing', ord.id]);
+      this.router.navigate(['/admin/billing', ord.id], { queryParams: { preview: 'thermal' } });
     } else {
       this.toastService.warning(res.error || 'Failed to settle order');
       this.closeSettleModal();
@@ -2692,7 +3608,7 @@ export class BillingQueueComponent {
         `Split Bill #${split.splitIndex} (₹${split.totalAmount}) settled via ${method}.`,
       );
       this.closeSettleSplitModal();
-      this.router.navigate(['/admin/billing', ord.id], { queryParams: { splitId: split.id } });
+      this.router.navigate(['/admin/billing', ord.id], { queryParams: { splitId: split.id, preview: 'thermal' } });
     } else {
       this.toastService.error(res.error || 'Failed to settle split bill');
     }
@@ -2708,8 +3624,12 @@ export class BillingQueueComponent {
       this.toastService.warning('Cannot split an already settled bill.');
       return;
     }
-    if (order.isSplit) {
-      this.toastService.warning('This order has already been split.');
+    if (order.isSplit || this.getOrderSplitBills(order.id).length > 0) {
+      this.toastService.warning('This order has already been split. Please settle the existing split bills.');
+      return;
+    }
+    if (order.paymentStatus === 'PARTIALLY_PAID') {
+      this.toastService.warning('Cannot split an order that has already been partially settled.');
       return;
     }
     this.selectedOrderForSplit.set(order);
@@ -2786,6 +3706,7 @@ export class BillingQueueComponent {
         this.toastService.success(
           `Order ${ord.orderNumber} successfully split into ${this.splitCount()} equal bills.`,
         );
+        this.expandedSplitOrders.update((set) => new Set(set).add(ord.id));
         this.closeSplitModal();
       } else {
         this.splitError.set(res.error || 'Failed to split bill');
@@ -2823,6 +3744,7 @@ export class BillingQueueComponent {
         this.toastService.success(
           `Order ${ord.orderNumber} successfully split into ${n} item-based bills.`,
         );
+        this.expandedSplitOrders.update((set) => new Set(set).add(ord.id));
         this.closeSplitModal();
       } else {
         this.splitError.set(res.error || 'Failed to split bill');
@@ -2913,14 +3835,28 @@ export class BillingQueueComponent {
     this.whatsAppOrder.set(order);
     this.whatsAppSplit.set(null);
     this.whatsAppPhone.set(order.customerPhone || '');
+    const restName = this.dataService.restaurant()?.name || 'GuruKripa Dhaba';
+    this.whatsAppCustomMessage.set(buildWhatsAppBillMessage(restName, order, null));
     this.showWhatsAppModal.set(true);
+    this.whatsAppBridge.startStatusPoller();
   }
 
   openWhatsAppForSplit(order: Order, split: SplitBill): void {
     this.whatsAppOrder.set(order);
     this.whatsAppSplit.set(split);
     this.whatsAppPhone.set(order.customerPhone || '');
+    const restName = this.dataService.restaurant()?.name || 'GuruKripa Dhaba';
+    this.whatsAppCustomMessage.set(
+      buildWhatsAppBillMessage(restName, order, {
+        splitIndex: split.splitIndex,
+        splitTotalCount: split.splitTotalCount,
+        totalAmount: split.totalAmount,
+        paymentStatus: split.paymentStatus,
+        paymentMethod: split.paymentMethod,
+      }),
+    );
     this.showWhatsAppModal.set(true);
+    this.whatsAppBridge.startStatusPoller();
   }
 
   closeWhatsAppModal(): void {
@@ -2928,6 +3864,8 @@ export class BillingQueueComponent {
     this.whatsAppOrder.set(null);
     this.whatsAppSplit.set(null);
     this.whatsAppPhone.set('');
+    this.whatsAppCustomMessage.set('');
+    this.isDispatchingWhatsApp.set(false);
   }
 
   copyBillToClipboard(): void {
@@ -2971,8 +3909,39 @@ export class BillingQueueComponent {
       : null;
 
     const restName = this.dataService.restaurant()?.name || 'GuruKripa Dhaba';
-    const ok = openWhatsAppBill(phone, restName, ord, splitArg);
-    if (ok) {
+    const message = this.whatsAppMessagePreview();
+
+    this.isDispatchingWhatsApp.set(true);
+
+    // If Baileys background bridge is connected, send 1-click silent dispatch
+    if (this.whatsAppBridge.connectionStatus() === 'CONNECTED') {
+      this.toastService.info('Dispatching WhatsApp message in background...');
+      this.whatsAppBridge.sendBill(phone, restName, ord, splitArg, message).subscribe({
+        next: (res) => {
+          this.isDispatchingWhatsApp.set(false);
+          if (res.success) {
+            this.toastService.success('WhatsApp bill delivered directly to customer!');
+            this.closeWhatsAppModal();
+          } else {
+            this.toastService.warning(res.error || 'Direct dispatch failed, opening WhatsApp Web fallback...');
+            launchExternalUrl(`https://web.whatsapp.com/send?phone=${phone.replace(/\D/g, '')}&text=${encodeURIComponent(message)}`);
+            this.closeWhatsAppModal();
+          }
+        },
+        error: () => {
+          this.isDispatchingWhatsApp.set(false);
+          launchExternalUrl(`https://web.whatsapp.com/send?phone=${phone.replace(/\D/g, '')}&text=${encodeURIComponent(message)}`);
+          this.closeWhatsAppModal();
+        },
+      });
+      return;
+    }
+
+    // Fallback if bridge is not connected: open WhatsApp Web
+    this.isDispatchingWhatsApp.set(false);
+    const cleanDigits = phone.replace(/\D/g, '');
+    if (cleanDigits.length >= 10) {
+      launchExternalUrl(`https://web.whatsapp.com/send?phone=${cleanDigits}&text=${encodeURIComponent(message)}`);
       this.toastService.success('WhatsApp opened with customer bill!');
       this.closeWhatsAppModal();
     } else {

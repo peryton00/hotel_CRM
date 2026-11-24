@@ -236,6 +236,58 @@ impl SyncWorker {
                 .bind(notes)
                 .execute(&self.cloud_pool)
                 .await?;
+
+                if let Some(items) = p.get("items").and_then(|v| v.as_array()) {
+                    for item in items {
+                        let item_id = item
+                            .get("id")
+                            .and_then(|v| v.as_str())
+                            .and_then(|s| Uuid::parse_str(s).ok())
+                            .unwrap_or_else(Uuid::new_v4);
+                        let menu_item_id = item
+                            .get("menu_item_id")
+                            .and_then(|v| v.as_str())
+                            .and_then(|s| Uuid::parse_str(s).ok());
+                        let item_name = item
+                            .get("item_name")
+                            .or_else(|| item.get("name"))
+                            .and_then(|v| v.as_str())
+                            .unwrap_or("Dish");
+                        let qty = item.get("quantity").and_then(|v| v.as_i64()).unwrap_or(1) as i32;
+                        let unit_price = item.get("unit_price_paise").and_then(|v| v.as_i64()).unwrap_or(0);
+                        let item_sub = item.get("subtotal_paise").and_then(|v| v.as_i64()).unwrap_or(unit_price * qty as i64);
+                        let item_tax = item.get("tax_paise").and_then(|v| v.as_i64()).unwrap_or(0);
+                        let item_disc = item.get("discount_paise").and_then(|v| v.as_i64()).unwrap_or(0);
+                        let item_tot = item.get("total_paise").and_then(|v| v.as_i64()).unwrap_or(item_sub + item_tax - item_disc);
+                        let item_notes = item.get("notes").and_then(|v| v.as_str());
+                        let item_status = item.get("status").and_then(|v| v.as_str()).unwrap_or("confirmed");
+
+                        sqlx::query(
+                            r#"
+                            INSERT INTO order_items (
+                                id, order_id, menu_item_id, name, quantity, unit_price_paise,
+                                subtotal_paise, tax_paise, discount_paise, total_paise, item_total_paise, notes, status
+                            )
+                            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $10, $11, $12)
+                            ON CONFLICT (id) DO NOTHING
+                            "#,
+                        )
+                        .bind(item_id)
+                        .bind(id)
+                        .bind(menu_item_id)
+                        .bind(item_name)
+                        .bind(qty)
+                        .bind(unit_price)
+                        .bind(item_sub)
+                        .bind(item_tax)
+                        .bind(item_disc)
+                        .bind(item_tot)
+                        .bind(item_notes)
+                        .bind(item_status)
+                        .execute(&self.cloud_pool)
+                        .await?;
+                    }
+                }
             }
 
             "ORDER_STATUS_UPDATED" => {
@@ -487,6 +539,47 @@ impl SyncWorker {
                 .bind(&notes)
                 .execute(&mut *tx)
                 .await?;
+
+                let cloud_items = sqlx::query_as::<_, crate::models::order::OrderItem>(
+                    r#"
+                    SELECT id, order_id, menu_item_id, COALESCE(item_name, name) AS item_name,
+                           quantity, unit_price_paise, subtotal_paise, tax_paise, discount_paise,
+                           total_paise, notes, status, created_at
+                    FROM order_items
+                    WHERE order_id = $1
+                    "#,
+                )
+                .bind(id)
+                .fetch_all(&self.cloud_pool)
+                .await
+                .unwrap_or_default();
+
+                for ci in cloud_items {
+                    sqlx::query(
+                        r#"
+                        INSERT INTO order_items (
+                            id, order_id, menu_item_id, name, quantity, unit_price_paise,
+                            subtotal_paise, tax_paise, discount_paise, total_paise, item_total_paise, notes, status
+                        )
+                        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $10, $11, $12)
+                        ON CONFLICT (id) DO NOTHING
+                        "#,
+                    )
+                    .bind(ci.id)
+                    .bind(id)
+                    .bind(ci.menu_item_id)
+                    .bind(&ci.item_name)
+                    .bind(ci.quantity)
+                    .bind(ci.unit_price_paise)
+                    .bind(ci.subtotal_paise)
+                    .bind(ci.tax_paise)
+                    .bind(ci.discount_paise)
+                    .bind(ci.total_paise)
+                    .bind(&ci.notes)
+                    .bind(&ci.status)
+                    .execute(&mut *tx)
+                    .await?;
+                }
 
                 if let Some(tbl) = table_id {
                     let _ = sqlx::query(

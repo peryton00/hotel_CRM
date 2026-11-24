@@ -628,8 +628,12 @@ import { renderEscPosPreviewText, EscPosPrinterConfig } from '../../../core/util
         justify-content: center;
         transition: all 0.15s ease;
         &:hover {
-          color: #0f172a;
-          background: #f1f5f9;
+          color: #0f172a !important;
+          background: #f1f5f9 !important;
+          i,
+          .ph {
+            color: #0f172a !important;
+          }
         }
       }
 
@@ -1534,7 +1538,8 @@ import { renderEscPosPreviewText, EscPosPrinterConfig } from '../../../core/util
         white-space: pre;
         color: #0f172a !important;
         user-select: text;
-        text-align: center;
+        display: flex;
+        justify-content: center;
       }
 
       /* Modal Footer */

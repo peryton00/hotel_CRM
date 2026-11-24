@@ -512,6 +512,7 @@ export class CustomerDetailComponent implements OnInit {
   pointsReason = '';
 
   ngOnInit(): void {
+    this.dataService.loadCustomers();
     this.route.paramMap.subscribe((params) => {
       this.customerId.set(params.get('customerId') || '');
     });

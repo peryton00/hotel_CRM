@@ -1,4 +1,5 @@
 -- Orders compatibility migration
+ALTER TABLE restaurants ADD COLUMN IF NOT EXISTS whatsapp_templates JSONB;
 ALTER TABLE orders ADD COLUMN IF NOT EXISTS customer_name VARCHAR(100);
 ALTER TABLE orders ADD COLUMN IF NOT EXISTS customer_phone_e164 VARCHAR(20);
 ALTER TABLE orders ADD COLUMN IF NOT EXISTS customer_phone VARCHAR(50);

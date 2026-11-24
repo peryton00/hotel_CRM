@@ -16,9 +16,22 @@ export interface Table {
   posX?: number;
   posY?: number;
   shape?: 'ROUND' | 'RECT';
+  width?: number;
+  height?: number;
 }
 
-export type FloorElementType = 'ENTRANCE' | 'KITCHEN' | 'BAR' | 'RESTROOM' | 'WALL' | 'STAGE';
+export type FloorElementType =
+  | 'ENTRANCE'
+  | 'KITCHEN'
+  | 'BAR'
+  | 'RESTROOM'
+  | 'WALL'
+  | 'STAGE'
+  | 'CASHIER'
+  | 'WINDOW'
+  | 'BUFFET'
+  | 'STAIRS'
+  | 'CUSTOM';
 
 export interface FloorElement {
   id: string;
@@ -29,4 +42,5 @@ export interface FloorElement {
   posY: number;
   width?: number;
   height?: number;
+  icon?: string;
 }

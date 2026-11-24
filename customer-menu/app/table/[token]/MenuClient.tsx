@@ -38,6 +38,7 @@ export default function MenuClient({
   token: string;
 }) {
   const { add, update, items: cartItems, count, total } = useCart();
+  const [menuItems, setMenuItems] = useState<MenuItem[]>(items);
   const [activeCat, setActiveCat] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [filterType, setFilterType] = useState<"all" | "veg" | "non-veg">(
@@ -76,6 +77,8 @@ export default function MenuClient({
       const newStatus = res?.data?.status ? res.data.status.toUpperCase() : undefined;
       if (res?.data?.current_seating_session_id) {
         setSeatingSessionId(res.data.current_seating_session_id);
+      } else if (newStatus && newStatus !== "OCCUPIED") {
+        setSeatingSessionId(undefined);
       }
       if (newStatus) {
         setTableStatus(newStatus);
@@ -115,6 +118,26 @@ export default function MenuClient({
         const data = JSON.parse(rawText);
         if (data.event === "RESTAURANT_STATUS_CHANGED" || data.type === "RESTAURANT_STATUS_CHANGED") {
           setIsPosOnline(Boolean(data.is_online));
+          return;
+        }
+        if (data.event === "MENU_AVAILABILITY_CHANGED" || data.type === "MENU_AVAILABILITY_CHANGED") {
+          const itemId = data.item_id;
+          const isAvail = Boolean(data.is_available);
+          if (itemId) {
+            setMenuItems((prev) =>
+              prev.map((it) => (it.id === itemId ? { ...it, is_available: isAvail } : it))
+            );
+            if (!isAvail) {
+              setMenuItems((current) => {
+                const matched = current.find((it) => it.id === itemId);
+                dynaura.warning({
+                  title: "Item Sold Out",
+                  description: `${matched?.name || "An item"} was just marked sold out by the kitchen.`,
+                });
+                return current;
+              });
+            }
+          }
           return;
         }
         if (data.event === "TABLE_STATUS_CHANGED") {
@@ -272,7 +295,7 @@ export default function MenuClient({
   );
 
   const filtered = useMemo(() => {
-    let list = items.filter((i) => i.is_available);
+    let list = menuItems.filter((i) => i.is_available);
     if (filterType === "veg") list = list.filter((i) => i.is_veg);
     if (filterType === "non-veg") list = list.filter((i) => !i.is_veg);
     if (activeCat) list = list.filter((i) => i.category_id === activeCat);
@@ -285,7 +308,7 @@ export default function MenuClient({
       );
     }
     return list;
-  }, [items, activeCat, search, filterType]);
+  }, [menuItems, activeCat, search, filterType]);
 
   const getQty = (id: string) =>
     cartItems.find((i) => i.item.id === id)?.quantity ?? 0;
@@ -298,10 +321,10 @@ export default function MenuClient({
     return activeCategories
       .map((cat) => ({
         category: cat,
-        items: items.filter((i) => i.category_id === cat.id && i.is_available),
+        items: menuItems.filter((i) => i.category_id === cat.id && i.is_available),
       }))
       .filter((section) => section.items.length > 0);
-  }, [filtered, activeCat, search, filterType, activeCategories, items]);
+  }, [filtered, activeCat, search, filterType, activeCategories, menuItems]);
 
   return (
     <div className="max-w-md mx-auto pb-32 min-h-dvh bg-[#f8f6f2] dark:bg-[#0c0e12] text-neutral-900 dark:text-neutral-100 flex flex-col font-sans selection:bg-orange-100 dark:selection:bg-orange-950 transition-colors duration-200">

@@ -57,7 +57,8 @@ pub struct CreateReservationRequest {
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct UpdateReservationStatusRequest {
-    pub status: String,
+    pub status: Option<String>,
+    pub table_id: Option<Uuid>,
 }
 
 #[derive(Debug, Clone, Deserialize)]

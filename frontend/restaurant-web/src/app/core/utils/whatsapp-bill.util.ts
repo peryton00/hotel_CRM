@@ -24,17 +24,102 @@ export function buildWhatsAppBillMessage(
       : `Table ${ord.tableNumber || 'Dine-In'}`;
 
   const isSplit = !!split;
-  const totalAmount = isSplit ? split!.totalAmount : ord.totalAmount;
+  const totalAmount = isSplit ? split!.totalAmount ?? 0 : ord.totalAmount ?? 0;
   const tender = (isSplit ? split!.paymentMethod : ord.paymentMethod) || 'SETTLED';
   const payStatus =
     (isSplit ? split!.paymentStatus : ord.paymentStatus) === 'PAID'
       ? `PAID (${tender})`
       : 'PENDING';
 
+  // 1. Items itemization with proper currency spacing
   const itemsLines = (ord.items || [])
-    .map((it) => `• ${it.name} x ${it.quantity} = ₹${(it.quantity * it.unitPrice).toFixed(2)}`)
+    .map((it) => `• ${it.name} x ${it.quantity} = ₹${(it.itemTotal ?? it.quantity * it.unitPrice).toFixed(2)}`)
     .join('\n');
 
+  // 2. Subtotal calculation
+  const subtotal =
+    typeof ord.subtotal === 'number' && ord.subtotal > 0
+      ? ord.subtotal
+      : (ord.items || []).reduce(
+          (sum, it) => sum + (it.itemTotal || it.quantity * it.unitPrice),
+          0,
+        );
+
+  // 3. Discount calculation
+  const discountAmount = ord.discountAmount || 0;
+  const couponCode = ord.appliedCouponCode
+    ? ord.appliedCouponCode.trim().replace(/[*_~`]/g, '')
+    : '';
+
+  // 4. Tax / GST calculations
+  const cgstAmount = ord.cgstAmount || 0;
+  const sgstAmount = ord.sgstAmount || 0;
+  const totalTaxAmount = ord.taxAmount || cgstAmount + sgstAmount;
+
+  // Rate detection: from order property or inferred from taxable base
+  const taxableValue = Math.max(0, subtotal - discountAmount);
+  const cgstRate =
+    ord.cgstRate ??
+    (ord as any).cgst_rate ??
+    (taxableValue > 0 && cgstAmount
+      ? Math.round((cgstAmount / taxableValue) * 1000) / 10
+      : undefined);
+  const sgstRate =
+    ord.sgstRate ??
+    (ord as any).sgst_rate ??
+    (taxableValue > 0 && sgstAmount
+      ? Math.round((sgstAmount / taxableValue) * 1000) / 10
+      : undefined);
+
+  // 5. Build financial breakdown rows
+  const financialLines: string[] = [];
+
+  if (subtotal > 0) {
+    financialLines.push(`*Subtotal:* ₹${subtotal.toFixed(2)}`);
+  }
+
+  if (discountAmount > 0) {
+    const discountLabel = couponCode ? `*Discount (${couponCode}):*` : `*Discount:*`;
+    financialLines.push(`${discountLabel} -₹${discountAmount.toFixed(2)}`);
+  }
+
+  if (cgstAmount > 0) {
+    const cgstLabel = cgstRate != null ? `*CGST (${cgstRate}%):*` : `*CGST:*`;
+    financialLines.push(`${cgstLabel} ₹${cgstAmount.toFixed(2)}`);
+  }
+
+  if (sgstAmount > 0) {
+    const sgstLabel = sgstRate != null ? `*SGST (${sgstRate}%):*` : `*SGST:*`;
+    financialLines.push(`${sgstLabel} ₹${sgstAmount.toFixed(2)}`);
+  } else if (!cgstAmount && totalTaxAmount > 0) {
+    financialLines.push(`*Taxes & GST:* ₹${totalTaxAmount.toFixed(2)}`);
+  }
+
+  if (ord.serviceChargeAmount && ord.serviceChargeAmount > 0) {
+    financialLines.push(`*Service Charge:* ₹${ord.serviceChargeAmount.toFixed(2)}`);
+  }
+
+  const formattedTotal =
+    typeof totalAmount === 'number'
+      ? Number.isInteger(totalAmount)
+        ? totalAmount.toString()
+        : totalAmount.toFixed(2)
+      : String(totalAmount);
+
+  if (isSplit) {
+    const ordTotalFormatted =
+      typeof ord.totalAmount === 'number'
+        ? Number.isInteger(ord.totalAmount)
+          ? ord.totalAmount.toString()
+          : ord.totalAmount.toFixed(2)
+        : String(ord.totalAmount ?? 0);
+    financialLines.push(`*Total Order Bill:* ₹${ordTotalFormatted}`);
+    financialLines.push(
+      `*Split Share (#${split!.splitIndex}/${split!.splitTotalCount}):* *₹${formattedTotal}*`,
+    );
+  }
+
+  // Assemble clean structured WhatsApp message
   const lines = [
     `*Namaste ${custName}!* 🙏`,
     `Thank you for dining at *${restaurantName || 'Our Restaurant'}*. Here is your bill receipt:`,
@@ -48,7 +133,8 @@ export function buildWhatsAppBillMessage(
     `🍽️ *ORDER SUMMARY:*`,
     itemsLines || '• Dining Bill',
     `━━━━━━━━━━━━━━━━━━`,
-    `*Net Total:* *₹${totalAmount}*`,
+    ...financialLines,
+    `*Net Total:* *₹${formattedTotal}*`,
     `*Payment Status:* *${payStatus}*`,
     `━━━━━━━━━━━━━━━━━━`,
     '',

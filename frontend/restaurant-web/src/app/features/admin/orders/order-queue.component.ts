@@ -23,6 +23,36 @@ import {
   getWhatsAppAppUrl,
   launchExternalUrl,
 } from '../../../core/utils/whatsapp-bill.util';
+import { WhatsAppBridgeService } from '../../../core/services/whatsapp-bridge.service';
+
+export interface OrderSessionGroup {
+  sessionId: string;
+  primaryOrder: Order;
+  latestOrder: Order;
+  orders: Order[];
+  isMultiRound: boolean;
+  orderCount: number;
+  tableNumber?: string;
+  tableId?: string;
+  orderType: 'DINE_IN' | 'TAKEAWAY';
+  pickupReference?: string;
+  customerName: string;
+  customerPhone?: string;
+  serverStaffId?: string;
+  createdAt: string;
+  latestCreatedAt: string;
+  grandSubtotal: number;
+  grandTax: number;
+  grandDiscount: number;
+  grandTotal: number;
+  effectiveStatus: OrderStatus;
+  isAllCompleted: boolean;
+  isAllPaid: boolean;
+  isSplit?: boolean;
+  splitCount?: number;
+  printCount?: number;
+  paymentMethod?: string;
+}
 
 @Component({
   selector: 'app-order-queue',
@@ -102,45 +132,6 @@ import {
 
           <button
             class="status-tab"
-            [class.active]="selectedStatus() === 'PENDING'"
-            (click)="selectedStatus.set('PENDING')"
-            type="button"
-          >
-            <i class="ph ph-clock-countdown tab-icon status-pending"></i>
-            <span class="tab-label">Pending</span>
-            <span class="tab-count-badge" [class.has-count]="countByStatus('PENDING') > 0">
-              {{ countByStatus('PENDING') }}
-            </span>
-          </button>
-
-          <button
-            class="status-tab"
-            [class.active]="selectedStatus() === 'PREPARING'"
-            (click)="selectedStatus.set('PREPARING')"
-            type="button"
-          >
-            <i class="ph ph-cooking-pot tab-icon status-preparing"></i>
-            <span class="tab-label">In Kitchen</span>
-            <span class="tab-count-badge" [class.has-count]="countByStatus('PREPARING') > 0">
-              {{ countByStatus('PREPARING') }}
-            </span>
-          </button>
-
-          <button
-            class="status-tab"
-            [class.active]="selectedStatus() === 'SERVED'"
-            (click)="selectedStatus.set('SERVED')"
-            type="button"
-          >
-            <i class="ph ph-check tab-icon status-served"></i>
-            <span class="tab-label">Served</span>
-            <span class="tab-count-badge" [class.has-count]="countByStatus('SERVED') > 0">
-              {{ countByStatus('SERVED') }}
-            </span>
-          </button>
-
-          <button
-            class="status-tab"
             [class.active]="selectedStatus() === 'COMPLETED'"
             (click)="selectedStatus.set('COMPLETED')"
             type="button"
@@ -181,78 +172,83 @@ import {
         @if (isLoading()) {
           <app-skeleton variant="order-card" [count]="6" />
         } @else {
-          @for (ord of filteredOrders(); track ord.id) {
-            @if (ord.status === 'COMPLETED') {
-              <!-- Completed Order Card (Clean Editorial Layout) -->
+          @for (session of filteredOrderSessions(); track session.sessionId) {
+            @if (session.isAllCompleted) {
+              <!-- Completed Order Parent Container (Consolidated Session) -->
               <div
-                class="order-board-card completed-board-card"
-                [class.new-order-flash]="latestNewOrderId() === ord.id"
-                [class.card-selected]="selectedSidePanelOrderId() === ord.id"
-                (click)="openOrderSidePanel(ord)"
+                class="order-board-card completed-board-card session-completed-card"
+                [class.new-order-flash]="isSessionNew(session)"
+                [class.card-selected]="isSessionSelected(session)"
+                (click)="openOrderSidePanel(session.primaryOrder)"
                 title="Click to view full order bill & details in side panel"
               >
                 <!-- Row 1: (customer name) -------------------------------- (status) -->
                 <div class="completed-row-1">
                   <div class="cust-info">
-                    <span class="cust-name-main" [title]="ord.customerName">
-                      {{ ord.customerName }}
+                    <span class="cust-name-main" [title]="session.customerName">
+                      {{ session.customerName }}
                     </span>
-                    @if (ord.customerPhone) {
-                      <span class="cust-phone-inline"> · {{ ord.customerPhone }} </span>
+                    @if (session.customerPhone) {
+                      <span class="cust-phone-inline"> · {{ session.customerPhone }} </span>
                     }
                   </div>
                   <div class="card-status-badges">
-                    @if (ord.isSplit && ord.splitCount) {
-                      <span class="split-indicator-pill" title="Split Bill Active">
-                        <i class="ph ph-users"></i> {{ ord.splitCount }}P Split
+                    @if (session.isMultiRound) {
+                      <span class="session-rounds-chip" title="Multi-round dining session">
+                        <i class="ph ph-stack"></i> {{ session.orders.length }} Rounds
                       </span>
                     }
-                    <app-status-badge [status]="ord.status"></app-status-badge>
+                    @if (session.isSplit && session.splitCount) {
+                      <span class="split-indicator-pill" title="Split Bill Active">
+                        <i class="ph ph-users"></i> {{ session.splitCount }}P Split
+                      </span>
+                    }
+                    <app-status-badge status="COMPLETED"></app-status-badge>
                   </div>
                 </div>
 
                 <!-- Row 2: (table number) ---------------------------------- (time) -->
                 <div class="completed-row-2">
                   <div class="table-info">
-                    @if (ord.orderType === 'TAKEAWAY') {
+                    @if (session.orderType === 'TAKEAWAY') {
                       <span class="tbl-badge takeaway-badge">
                         <i class="ph ph-bag"></i> Takeaway ({{
-                          ord.pickupReference || ord.orderNumber
+                          session.pickupReference || session.primaryOrder.orderNumber
                         }})
                       </span>
                     } @else {
                       <span
                         class="tbl-badge completed-tbl-badge"
-                        [title]="'Table ' + (ord.tableNumber || 'Unassigned')"
+                        [title]="'Table ' + (session.tableNumber || 'Unassigned')"
                       >
-                        <i class="ph ph-table"></i> Table {{ ord.tableNumber || 'Unassigned' }}
+                        <i class="ph ph-table"></i> Table {{ session.tableNumber || 'Unassigned' }}
                       </span>
                     }
                   </div>
                   <span class="ord-time">
-                    <i class="ph ph-clock"></i> {{ ord.createdAt | date: 'shortTime' }}
+                    <i class="ph ph-clock"></i> {{ session.createdAt | date: 'shortTime' }}
                   </span>
                 </div>
 
                 <!-- Row 3: (order id) -------------------------------------- (who served) -->
                 <div class="completed-row-3">
                   <span class="completed-ord-num" title="Order ID">
-                    <i class="ph ph-receipt"></i> {{ ord.orderNumber }}
+                    <i class="ph ph-receipt"></i> {{ session.primaryOrder.orderNumber }}
                   </span>
                   <div class="completed-server-cell">
                     <span class="server-caption">Served by:</span>
                     <span
                       class="server-name-text"
                       [title]="
-                        'Serving Staff: ' + (getServerStaffName(ord.serverStaffId) || 'Unassigned')
+                        'Serving Staff: ' + (getServerStaffName(session.serverStaffId) || 'Unassigned')
                       "
                     >
-                      {{ getServerStaffName(ord.serverStaffId) || 'Unassigned' }}
+                      {{ getServerStaffName(session.serverStaffId) || 'Unassigned' }}
                     </span>
                     <button
                       type="button"
                       class="btn-unlock-server-xs"
-                      (click)="$event.stopPropagation(); promptChangeCompletedServer(ord)"
+                      (click)="$event.stopPropagation(); promptChangeCompletedServer(session.primaryOrder)"
                       title="Change serving staff for paid order (Admin Password required)"
                     >
                       <i class="ph ph-pencil-simple"></i>
@@ -263,33 +259,36 @@ import {
                 <!-- Row 4: (payment method) ------- (printed receipt) ------- (Invoice) -->
                 <div class="completed-row-4">
                   <span class="meta-pill pill-paid">
-                    <i class="ph ph-check-circle"></i> Paid ({{ ord.paymentMethod || 'PAID' }})
+                    <i class="ph ph-check-circle"></i> Paid ({{ session.paymentMethod || 'PAID' }})
                   </span>
                   <span class="meta-pill pill-printed">
-                    <i class="ph ph-printer"></i> Printed ({{ ord.printCount || 1 }}x)
+                    <i class="ph ph-printer"></i> Printed ({{ session.printCount || 1 }}x)
                   </span>
-                  <a
-                    [routerLink]="['/admin/billing', ord.id]"
-                    [queryParams]="
-                      ord.printCount && ord.printCount > 0 ? { reprint: 'true' } : null
-                    "
-                    (click)="$event.stopPropagation()"
+                  <button
+                    type="button"
+                    (click)="$event.stopPropagation(); handlePrintInvoice(session.primaryOrder)"
                     class="btn-invoice-action"
+                    [disabled]="isNavigatingToInvoice() === session.primaryOrder.id"
                     [title]="
-                      ord.printCount && ord.printCount > 0
+                      session.printCount && session.printCount > 0
                         ? 'Tax Invoice printed ' +
-                          ord.printCount +
+                          session.printCount +
                           ' time(s) — Reprint requires Admin authorization'
                         : 'Print Tax Invoice'
                     "
                   >
-                    <i class="ph ph-file-text"></i>
-                    <span>Invoice</span>
-                  </a>
+                    @if (isNavigatingToInvoice() === session.primaryOrder.id) {
+                      <i class="ph ph-spinner ph-spin"></i>
+                      <span>Opening...</span>
+                    } @else {
+                      <i class="ph ph-file-text"></i>
+                      <span>Invoice</span>
+                    }
+                  </button>
                   <button
                     type="button"
                     class="btn-invoice-action btn-wa-action"
-                    (click)="$event.stopPropagation(); openWhatsAppModal(ord)"
+                    (click)="$event.stopPropagation(); openWhatsAppModal(session.primaryOrder)"
                     title="Send Digital Bill via WhatsApp"
                   >
                     <i class="ph ph-whatsapp-logo"></i>
@@ -297,420 +296,336 @@ import {
                   </button>
                 </div>
 
-                <!-- Row 5 (Inset Box): order details and prices -->
+                <!-- Row 5 (Inset Box): Arrived Orders in this Session -->
                 <div class="completed-items-inset-box">
-                  <div class="items-summary-list">
-                    @for (item of ord.items; track item.id) {
-                      <div class="item-line">
-                        <div class="item-info-group">
-                          <span class="qty-pill">{{ item.quantity }}×</span>
-                          <span class="dish-name" [title]="item.name">{{ item.name }}</span>
-                          @if (item.selectedPortion) {
-                            <span class="portion-label">{{ item.selectedPortion.label }}</span>
+                  @if (session.isMultiRound) {
+                    @for (rnd of session.orders; track rnd.id; let idx = $index) {
+                      <div class="completed-round-section">
+                        <div class="completed-round-bar">
+                          <span class="completed-round-title">Round {{ idx + 1 }} ({{ rnd.orderNumber }})</span>
+                          <span class="completed-round-total">{{ rnd.totalAmount | currencyInr }}</span>
+                        </div>
+                        <div class="items-summary-list">
+                          @for (item of rnd.items; track item.id) {
+                            <div class="item-line">
+                              <div class="item-info-group">
+                                <span class="qty-pill">{{ item.quantity }}×</span>
+                                <span class="dish-name" [title]="item.name">{{ item.name }}</span>
+                                @if (item.selectedPortion) {
+                                  <span class="portion-label">{{ item.selectedPortion.label }}</span>
+                                }
+                              </div>
+                              <span class="line-cost">{{ item.itemTotal | currencyInr }}</span>
+                            </div>
                           }
                         </div>
-                        <span class="line-cost">{{ item.itemTotal | currencyInr }}</span>
                       </div>
                     }
-                  </div>
+                  } @else {
+                    <div class="items-summary-list">
+                      @for (item of session.primaryOrder.items; track item.id) {
+                        <div class="item-line">
+                          <div class="item-info-group">
+                            <span class="qty-pill">{{ item.quantity }}×</span>
+                            <span class="dish-name" [title]="item.name">{{ item.name }}</span>
+                            @if (item.selectedPortion) {
+                              <span class="portion-label">{{ item.selectedPortion.label }}</span>
+                            }
+                          </div>
+                          <span class="line-cost">{{ item.itemTotal | currencyInr }}</span>
+                        </div>
+                      }
+                    </div>
+                  }
                 </div>
 
-                <!-- Row 6: (total amount) -->
+                <!-- Row 6: Grand Total -->
                 <div class="completed-total-strip">
                   <div class="sub-meta-left">
-                    @if (ord.discountAmount > 0) {
+                    @if (session.grandDiscount > 0) {
                       <span class="discount-pill">
-                        <i class="ph ph-tag"></i> -{{ ord.discountAmount | currencyInr }}
+                        <i class="ph ph-tag"></i> -{{ session.grandDiscount | currencyInr }}
                       </span>
                     }
-                    @if (ord.isSplit && ord.splitCount) {
+                    @if (session.isSplit && session.splitCount) {
                       <span class="split-pill">
-                        <i class="ph ph-users"></i> {{ ord.splitCount }} ways
+                        <i class="ph ph-users"></i> {{ session.splitCount }} ways
                       </span>
                     }
                   </div>
                   <div class="total-amount-box">
-                    <span class="total-label-compact">Total Amount:</span>
-                    <span class="payable-val-highlight">{{ ord.totalAmount | currencyInr }}</span>
+                    <span class="total-label-compact">Grand Total:</span>
+                    <span class="payable-val-highlight">{{ session.grandTotal | currencyInr }}</span>
                   </div>
                 </div>
               </div>
             } @else {
-              <!-- Active Orders (Pending, Accepted, Preparing, Ready, Dispatched, Served) -->
+              <!-- Active Orders Parent Container (Apple Fluid Design) -->
               <div
-                class="order-board-card"
-                [class.pending-highlight]="ord.status === 'PENDING'"
-                [class.new-order-flash]="latestNewOrderId() === ord.id"
-                [class.card-selected]="selectedSidePanelOrderId() === ord.id"
-                (click)="openOrderSidePanel(ord)"
-                title="Click to view full order bill & details in side panel"
+                class="order-board-card session-parent-card"
+                [class.pending-highlight]="session.effectiveStatus === 'PENDING'"
+                [class.new-order-flash]="isSessionNew(session)"
+                [class.card-selected]="isSessionSelected(session)"
+                (click)="openOrderSidePanel(session.primaryOrder)"
+                title="Click to view full session details in side panel"
               >
-                <!-- 1. Header: ID & Time + Split Indicator -->
-                <div class="card-top">
-                  <div class="order-id-group">
-                    <span class="ord-num">{{ ord.orderNumber }}</span>
-                    <span class="ord-time">
-                      <i class="ph ph-clock"></i> {{ ord.createdAt | date: 'shortTime' }}
-                    </span>
-                  </div>
-                  @if (ord.isSplit && ord.splitCount) {
-                    <div class="card-status-badges">
-                      <span class="split-indicator-pill" title="Split Bill Active">
-                        <i class="ph ph-users"></i> {{ ord.splitCount }}P Split
+                <!-- Apple Card Top Accent Strip -->
+                <div class="apple-card-accent"></div>
+
+                <!-- 1. Header: Table Allotment Pill + Order ID + Time + Status Badge -->
+                <div class="card-top apple-card-top">
+                  <div class="header-left-cluster">
+                    @if (session.orderType === 'TAKEAWAY') {
+                      <div class="apple-table-pill takeaway-pill">
+                        <i class="ph ph-bag"></i>
+                        <span>Takeaway</span>
+                      </div>
+                    } @else {
+                      <button
+                        type="button"
+                        class="apple-table-pill reallot-clickable"
+                        [disabled]="session.isAllPaid"
+                        (click)="handleTableBadgeClick($event, session.primaryOrder)"
+                        [title]="session.isAllPaid ? 'Table ' + (session.tableNumber || 'Unassigned') : 'Click to reallot table'"
+                      >
+                        <i class="ph ph-table"></i>
+                        <span>{{ session.tableNumber ? 'Table ' + session.tableNumber : 'Allot Table' }}</span>
+                        @if (!session.isAllPaid) {
+                          <i class="ph ph-caret-down text-micro"></i>
+                        }
+                      </button>
+                    }
+                    <span class="ord-num apple-ord-num">{{ session.primaryOrder.orderNumber }}</span>
+                    @if (session.isMultiRound) {
+                      <span class="session-rounds-chip" title="Multi-round dining session">
+                        <i class="ph ph-stack"></i> {{ session.orders.length }}R
                       </span>
-                    </div>
-                  }
+                    }
+                  </div>
+
+                  <div class="header-right-cluster">
+                    <span class="ord-time apple-ord-time">
+                      <i class="ph ph-clock"></i> {{ session.createdAt | date: 'shortTime' }}
+                    </span>
+                    @if (session.isSplit && session.splitCount) {
+                      <span class="split-indicator-pill" title="Split Bill Active">
+                        <i class="ph ph-users"></i> {{ session.splitCount }}P
+                      </span>
+                    }
+                    <app-status-badge [status]="session.effectiveStatus"></app-status-badge>
+                  </div>
                 </div>
 
-                <!-- 2. Guest & Location Bar -->
-                <div class="guest-bar">
-                  @if (ord.orderType === 'TAKEAWAY') {
-                    <div class="tbl-badge takeaway-badge">
-                      <i class="ph ph-bag"></i>
-                      <span>Takeaway ({{ ord.pickupReference || ord.orderNumber }})</span>
-                    </div>
-                  } @else {
-                    <button
-                      type="button"
-                      class="tbl-badge reallot-clickable"
-                      [disabled]="isOrderPaid(ord)"
-                      (click)="handleTableBadgeClick($event, ord)"
-                      [title]="
-                        isOrderPaid(ord)
-                          ? 'Table ' + (ord.tableNumber || 'Unassigned')
-                          : 'Click to change/reallot table'
-                      "
-                    >
-                      <i class="ph ph-table"></i>
-                      <span>{{
-                        ord.tableNumber ? 'Table ' + ord.tableNumber : 'Allot Table'
-                      }}</span>
-                      @if (!isOrderPaid(ord)) {
-                        <i
-                          class="ph ph-pencil-simple"
-                          style="font-size: 0.75rem; margin-left: 2px; opacity: 0.85;"
-                        ></i>
+                <!-- 2. Guest & Server Info Strip (Apple Recessed Surface) -->
+                <div class="guest-server-recessed">
+                  <div class="guest-compact-meta">
+                    <div class="guest-avatar-disc">{{ (session.customerName || 'G').charAt(0).toUpperCase() }}</div>
+                    <div class="guest-text-col truncate">
+                      <span class="cust-name-clean truncate" [title]="session.customerName">{{ session.customerName || 'Walk-in Guest' }}</span>
+                      @if (session.customerPhone) {
+                        <span class="phone-sub-clean">
+                          <i class="ph ph-phone"></i> {{ session.customerPhone }}
+                        </span>
                       }
-                    </button>
-                  }
-                  <div class="guest-meta">
-                    <span class="cust-name" [title]="ord.customerName">{{ ord.customerName }}</span>
-                    @if (ord.customerPhone) {
-                      <span class="phone-sub">
-                        <i class="ph ph-phone"></i> {{ ord.customerPhone }}
-                      </span>
+                    </div>
+                  </div>
+
+                  <div class="server-inline-picker" [class.server-bar-locked]="session.isAllPaid">
+                    @if (session.isAllPaid) {
+                      <div class="server-completed-pill" title="Serving Staff">
+                        <i class="ph ph-lock-key"></i>
+                        <span class="truncate">{{ getServerStaffName(session.serverStaffId) || 'Staff' }}</span>
+                        <button
+                          type="button"
+                          class="btn-unlock-inline"
+                          (click)="$event.stopPropagation(); promptChangeCompletedServer(session.primaryOrder)"
+                          title="Change serving staff"
+                        >
+                          <i class="ph ph-pencil-simple"></i>
+                        </button>
+                      </div>
+                    } @else {
+                      <div class="server-select-pill">
+                        <i class="ph ph-user-check"></i>
+                        <select
+                          class="server-select-clean"
+                          [class.is-unassigned]="!session.serverStaffId"
+                          [ngModel]="session.serverStaffId || ''"
+                          (ngModelChange)="onAssignOrderServer(session.primaryOrder, $event)"
+                          (click)="$event.stopPropagation()"
+                          title="Assign staff handling this dining session"
+                        >
+                          <option value="">Server...</option>
+                          @for (s of staffMembers(); track s.id) {
+                            <option [value]="s.id">{{ s.name }} ({{ s.role }})</option>
+                          }
+                          @if (session.serverStaffId && !isStaffInList(session.serverStaffId)) {
+                            <option [value]="session.serverStaffId">{{ session.serverStaffId }}</option>
+                          }
+                        </select>
+                        <i class="ph ph-caret-down pill-caret"></i>
+                      </div>
                     }
                   </div>
                 </div>
 
-                <!-- Server / Staff Handling Order -->
-                <div
-                  class="server-bar"
-                  [class.server-bar-locked]="isOrderPaid(ord)"
-                  [class.has-server]="!!ord.serverStaffId"
-                >
-                  <span class="server-label">
-                    <i
-                      class="ph"
-                      [class.ph-user-check]="!isOrderPaid(ord)"
-                      [class.ph-lock-key]="isOrderPaid(ord)"
-                    ></i>
-                    <span>Server:</span>
-                  </span>
-                  @if (isOrderPaid(ord)) {
-                    <div class="server-completed-box">
-                      <span
-                        class="server-name-badge"
-                        [title]="
-                          'Serving Staff: ' +
-                          (getServerStaffName(ord.serverStaffId) || 'Unassigned')
-                        "
-                      >
-                        {{ getServerStaffName(ord.serverStaffId) || 'Unassigned' }}
-                      </span>
-                      <button
-                        type="button"
-                        class="btn-unlock-server"
-                        (click)="$event.stopPropagation(); promptChangeCompletedServer(ord)"
-                        title="Change serving staff for paid order (Admin Password required)"
-                      >
-                        <i class="ph ph-lock-key"></i>
-                        <span>Change</span>
-                      </button>
-                    </div>
-                  } @else {
-                    <div class="server-select-wrapper">
-                      <select
-                        class="server-select"
-                        [class.is-unassigned]="!ord.serverStaffId"
-                        [ngModel]="ord.serverStaffId || ''"
-                        (ngModelChange)="onAssignOrderServer(ord, $event)"
-                        (click)="$event.stopPropagation()"
-                        title="Assign staff handling this order"
-                      >
-                        <option value="">Unassigned</option>
-                        @for (s of staffMembers(); track s.id) {
-                          <option [value]="s.id">{{ s.name }} ({{ s.role }})</option>
-                        }
-                      </select>
-                      <i class="ph ph-caret-down server-select-caret"></i>
-                    </div>
-                  }
-                </div>
+                <!-- 3. Arrived Order Items Stream (Editorial Receipt Style) -->
+                <div class="session-receipt-stream">
+                  <div class="receipt-stream-header">
+                    <span class="receipt-stream-title">
+                      <i class="ph ph-receipt"></i>
+                      Ordered Items ({{ session.orders.length }} {{ session.orders.length === 1 ? 'Round' : 'Rounds' }})
+                    </span>
+                    <span class="receipt-stream-subtotal">
+                      {{ session.grandSubtotal | currencyInr }}
+                    </span>
+                  </div>
 
-                <!-- 3. Ordered Dishes Stream -->
-                <div class="items-summary-list">
-                  @for (item of ord.items; track item.id) {
-                    <div class="item-line">
-                      <div class="item-info-group">
-                        <span class="qty-pill">{{ item.quantity }}×</span>
-                        <div class="dish-details">
-                          <span class="dish-name" [title]="item.name">{{ item.name }}</span>
-                          @if (item.selectedPortion) {
-                            <span class="portion-label">{{ item.selectedPortion.label }}</span>
+                  <div class="receipt-rounds-body">
+                    @for (roundOrd of session.orders; track roundOrd.id; let roundIdx = $index) {
+                      <div class="receipt-round-segment" [class.round-pending-soft]="roundOrd.status === 'PENDING'">
+                        <!-- Round Mini Meta Bar (only if multi-round) -->
+                        @if (session.isMultiRound) {
+                          <div class="round-mini-bar">
+                            <div class="round-mini-left">
+                              <span class="round-mini-title">Round {{ roundIdx + 1 }}</span>
+                              <span class="round-mini-ord-num">#{{ roundOrd.orderNumber }}</span>
+                            </div>
+                            <div class="round-mini-right">
+                              <span class="round-mini-time"><i class="ph ph-clock"></i> {{ roundOrd.createdAt | date: 'shortTime' }}</span>
+                              <app-status-badge [status]="roundOrd.status"></app-status-badge>
+                            </div>
+                          </div>
+                        }
+
+                        <!-- Dishes List -->
+                        <div class="round-items-clean">
+                          @for (item of roundOrd.items; track item.id) {
+                            <div class="receipt-item-row">
+                              <div class="item-name-cluster">
+                                <span class="qty-bubble">{{ item.quantity }}×</span>
+                                <span class="item-title truncate" [title]="item.name">{{ item.name }}</span>
+                                @if (item.selectedPortion) {
+                                  <span class="portion-tag">{{ item.selectedPortion.label }}</span>
+                                }
+                              </div>
+                              <span class="item-price">{{ item.itemTotal | currencyInr }}</span>
+                            </div>
                           }
                         </div>
                       </div>
-                      <span class="line-cost">{{ item.itemTotal | currencyInr }}</span>
-                    </div>
-                  }
-                </div>
-
-                <!-- 4. Financial Summary & Total Breakdown -->
-                <div class="bill-strip">
-                  <div class="sub-line">
-                    <span class="bill-label"
-                      >Subtotal ({{ ord.items.length }}
-                      {{ ord.items.length === 1 ? 'item' : 'items' }})</span
-                    >
-                    <span class="bill-val">{{ ord.subtotal | currencyInr }}</span>
-                  </div>
-                  @if (ord.discountAmount > 0) {
-                    <div class="sub-line discount">
-                      <span class="bill-label"
-                        ><i class="ph ph-tag"></i> {{ ord.appliedCouponCode }}</span
-                      >
-                      <span class="bill-val">-{{ ord.discountAmount | currencyInr }}</span>
-                    </div>
-                  }
-                  @if (ord.isSplit && ord.splitCount) {
-                    <div class="sub-line split-note">
-                      <span class="bill-label"
-                        ><i class="ph ph-users"></i> Split ({{ ord.splitCount }} ways)</span
-                      >
-                      <span class="bill-val"
-                        >{{ ord.totalAmount / ord.splitCount | currencyInr }}/pers</span
-                      >
-                    </div>
-                  }
-                  <div class="sub-line total-line">
-                    <span class="total-label">Final Payable</span>
-                    <span class="payable-val">{{ ord.totalAmount | currencyInr }}</span>
-                  </div>
-                </div>
-
-                <!-- 5. Progressive Dispatch Stepper Bar & Operational Actions -->
-                <div class="card-footer-actions">
-                  <!-- Progressive Step Indicators (Clickable on each stage) -->
-                  @if (ord.status !== 'CANCELLED') {
-                    <div class="dispatch-stepper-bar">
-                      <div
-                        class="step-bubble"
-                        [class.completed]="getOrderStageIndex(ord.status) >= 1"
-                        [class.active]="ord.status === 'ACCEPTED'"
-                        (click)="$event.stopPropagation(); advanceStatus(ord, 'ACCEPTED')"
-                        title="Click to mark Accepted"
-                      >
-                        <span class="step-num"><i class="ph ph-check"></i></span>
-                        <span class="step-txt">Accept</span>
-                      </div>
-                      <div
-                        class="step-connector"
-                        [class.filled]="getOrderStageIndex(ord.status) >= 2"
-                      ></div>
-
-                      <div
-                        class="step-bubble"
-                        [class.completed]="getOrderStageIndex(ord.status) >= 2"
-                        [class.active]="ord.status === 'PREPARING'"
-                        (click)="$event.stopPropagation(); advanceStatus(ord, 'PREPARING')"
-                        title="Click to send to Kitchen"
-                      >
-                        <span class="step-num"><i class="ph ph-cooking-pot"></i></span>
-                        <span class="step-txt">Prepare</span>
-                      </div>
-                      <div
-                        class="step-connector"
-                        [class.filled]="getOrderStageIndex(ord.status) >= 3"
-                      ></div>
-
-                      <div
-                        class="step-bubble"
-                        [class.completed]="getOrderStageIndex(ord.status) >= 3"
-                        [class.active]="ord.status === 'READY'"
-                        (click)="$event.stopPropagation(); advanceStatus(ord, 'READY')"
-                        title="Click to mark Ready"
-                      >
-                        <span class="step-num"><i class="ph ph-bell-ringing"></i></span>
-                        <span class="step-txt">Ready</span>
-                      </div>
-                      <div
-                        class="step-connector"
-                        [class.filled]="getOrderStageIndex(ord.status) >= 4"
-                      ></div>
-
-                      <div
-                        class="step-bubble"
-                        [class.completed]="getOrderStageIndex(ord.status) >= 4"
-                        [class.active]="ord.status === 'DISPATCHED'"
-                        (click)="$event.stopPropagation(); advanceStatus(ord, 'DISPATCHED')"
-                        title="Click to mark Dispatched"
-                      >
-                        <span class="step-num"><i class="ph ph-moped"></i></span>
-                        <span class="step-txt">Dispatch</span>
-                      </div>
-                      <div
-                        class="step-connector"
-                        [class.filled]="getOrderStageIndex(ord.status) >= 5"
-                      ></div>
-
-                      <div
-                        class="step-bubble"
-                        [class.completed]="getOrderStageIndex(ord.status) >= 5"
-                        [class.active]="ord.status === 'SERVED'"
-                        (click)="$event.stopPropagation(); advanceStatus(ord, 'SERVED')"
-                        title="Click to mark Served / Delivered"
-                      >
-                        <span class="step-num"><i class="ph ph-hand-waving"></i></span>
-                        <span class="step-txt">Serve</span>
-                      </div>
-                    </div>
-                  }
-
-                  <!-- Primary Next-Stage Button -->
-                  <div class="action-row-primary">
-                    @if (ord.status === 'PENDING') {
-                      <button
-                        class="btn btn-primary btn-sm w-full action-btn-main"
-                        (click)="$event.stopPropagation(); advanceStatus(ord, 'ACCEPTED')"
-                      >
-                        <i class="ph ph-check-bold"></i> Accept Order
-                      </button>
-                    } @else if (ord.status === 'ACCEPTED') {
-                      <button
-                        class="btn btn-dark btn-sm w-full action-btn-main"
-                        (click)="$event.stopPropagation(); advanceStatus(ord, 'PREPARING')"
-                      >
-                        <i class="ph ph-cooking-pot"></i> Send to Kitchen
-                      </button>
-                    } @else if (ord.status === 'PREPARING') {
-                      <button
-                        class="btn btn-gold btn-sm w-full action-btn-main"
-                        (click)="$event.stopPropagation(); advanceStatus(ord, 'READY')"
-                      >
-                        <i class="ph ph-bell-ringing"></i> Mark Ready
-                      </button>
-                    } @else if (ord.status === 'READY') {
-                      <button
-                        class="btn btn-info btn-sm w-full action-btn-main"
-                        (click)="$event.stopPropagation(); advanceStatus(ord, 'DISPATCHED')"
-                      >
-                        <i class="ph ph-moped"></i>
-                        <span>{{
-                          ord.orderType === 'TAKEAWAY'
-                            ? 'Dispatch for Delivery/Handover'
-                            : 'Dispatch to Table'
-                        }}</span>
-                      </button>
-                    } @else if (ord.status === 'DISPATCHED') {
-                      <button
-                        class="btn btn-success btn-sm w-full action-btn-main"
-                        (click)="$event.stopPropagation(); advanceStatus(ord, 'SERVED')"
-                      >
-                        <i class="ph ph-check-circle"></i>
-                        <span>{{
-                          ord.orderType === 'TAKEAWAY'
-                            ? 'Delivered / Handed Over'
-                            : 'Mark Delivered & Served'
-                        }}</span>
-                      </button>
-                    } @else if (ord.status === 'SERVED') {
-                      <button
-                        type="button"
-                        (click)="$event.stopPropagation(); openSettleModal(ord)"
-                        class="btn btn-primary btn-sm w-full action-btn-main checkout-glow"
-                      >
-                        <i class="ph ph-shopping-bag-open"></i>
-                        <span>Checkout & Print Invoice</span>
-                      </button>
                     }
                   </div>
+                </div>
 
-                  <div class="action-row-secondary">
+                <!-- 4. Grand Total Financial Breakdown Strip -->
+                <div class="bill-strip grand-bill-strip-apple">
+                  <div class="sub-line">
+                    <span class="bill-label">Subtotal ({{ session.orderCount }} {{ session.orderCount === 1 ? 'order' : 'orders' }})</span>
+                    <span class="bill-val">{{ session.grandSubtotal | currencyInr }}</span>
+                  </div>
+                  @if (session.grandDiscount > 0) {
+                    <div class="sub-line discount">
+                      <span class="bill-label"><i class="ph ph-tag"></i> {{ session.primaryOrder.appliedCouponCode || 'Discount' }}</span>
+                      <span class="bill-val">-{{ session.grandDiscount | currencyInr }}</span>
+                    </div>
+                  }
+                  @if (session.isSplit && session.splitCount) {
+                    <div class="sub-line split-note">
+                      <span class="bill-label"><i class="ph ph-users"></i> Split ({{ session.splitCount }} ways)</span>
+                      <span class="bill-val">{{ session.grandTotal / session.splitCount | currencyInr }}/pers</span>
+                    </div>
+                  }
+                  <div class="total-row-apple">
+                    <div class="total-meta-left">
+                      <span class="total-label-apple">Payable Total</span>
+                      <span class="tax-badge-apple">Taxes Included</span>
+                    </div>
+                    <span class="payable-val-apple">{{ session.grandTotal | currencyInr }}</span>
+                  </div>
+                </div>
+
+                <!-- 5. Tactile Action Controls: Primary CTA + 4 Utility Buttons -->
+                <div class="card-footer-actions-apple">
+                  <!-- Primary Action Button: Direct Feedback -->
+                  <div class="action-row-primary">
                     <button
                       type="button"
-                      (click)="$event.stopPropagation(); openOrderSidePanel(ord)"
-                      class="card-util-btn"
-                      title="View Full Bill & Order Details in Side Panel"
+                      (click)="$event.stopPropagation(); handleCheckoutAndPrint(session)"
+                      class="apple-btn-primary"
+                      [disabled]="isProcessingCheckout() === session.primaryOrder.id || isNavigatingToInvoice() === session.primaryOrder.id"
+                    >
+                      @if (isProcessingCheckout() === session.primaryOrder.id) {
+                        <i class="ph ph-spinner ph-spin"></i>
+                        <span>Opening Checkout...</span>
+                      } @else if (isNavigatingToInvoice() === session.primaryOrder.id) {
+                        <i class="ph ph-spinner ph-spin"></i>
+                        <span>Opening Invoice...</span>
+                      } @else if (!session.isAllPaid) {
+                        <i class="ph ph-credit-card"></i>
+                        <span>Settle Bill ({{ session.grandTotal | currencyInr }})</span>
+                      } @else {
+                        <i class="ph ph-receipt"></i>
+                        <span>Print Invoice ({{ session.grandTotal | currencyInr }})</span>
+                      }
+                    </button>
+                  </div>
+
+                  <!-- Secondary 4-Column Utility Grid -->
+                  <div class="apple-util-grid">
+                    <button
+                      type="button"
+                      (click)="$event.stopPropagation(); openOrderSidePanel(session.primaryOrder)"
+                      class="apple-util-btn"
+                      title="View Full Bill & Order Details"
                     >
                       <i class="ph ph-sidebar-simple"></i>
                       <span>Details</span>
                     </button>
 
-                    @if (ord.status !== 'CANCELLED') {
+                    @if (!session.isAllCompleted && session.effectiveStatus !== 'CANCELLED') {
                       <button
                         type="button"
-                        class="card-util-btn"
-                        [class.paid-locked]="isOrderPaid(ord)"
-                        (click)="$event.stopPropagation(); openEditOrderModal(ord)"
-                        [title]="
-                          isOrderPaid(ord)
-                            ? 'Order is PAID — Admin Password required to edit'
-                            : 'Edit Order & Add Further Dishes'
-                        "
+                        class="apple-util-btn"
+                        [class.paid-locked]="session.isAllPaid"
+                        (click)="$event.stopPropagation(); openEditOrderModal(session.latestOrder || session.primaryOrder)"
+                        [title]="session.isAllPaid ? 'Order is PAID — Admin Password required to edit' : 'Edit Order & Add Further Dishes'"
                       >
                         <i
                           class="ph"
-                          [class.ph-lock-key]="isOrderPaid(ord)"
-                          [class.ph-pencil-simple-line]="!isOrderPaid(ord)"
+                          [class.ph-lock-key]="session.isAllPaid"
+                          [class.ph-pencil-simple-line]="!session.isAllPaid"
                         ></i>
-                        <span>{{ isOrderPaid(ord) ? 'Edit (Paid)' : 'Edit' }}</span>
+                        <span>{{ session.isAllPaid ? 'Edit (Paid)' : 'Edit' }}</span>
                       </button>
                     }
 
-                    @if (ord.status !== 'CANCELLED') {
-                      <a
-                        [routerLink]="['/admin/billing', ord.id]"
-                        [queryParams]="
-                          ord.printCount && ord.printCount > 0 ? { reprint: 'true' } : null
-                        "
-                        (click)="$event.stopPropagation()"
-                        class="card-util-btn"
-                        [title]="
-                          ord.printCount && ord.printCount > 0
-                            ? 'Tax Invoice printed ' +
-                              ord.printCount +
-                              ' time(s) — Reprint requires Admin authorization'
-                            : 'Print Tax Invoice'
-                        "
-                      >
-                        <i class="ph ph-printer"></i>
-                        <span>{{
-                          ord.printCount && ord.printCount > 0
-                            ? 'Invoice (' + ord.printCount + 'x)'
-                            : 'Invoice'
-                        }}</span>
-                      </a>
-                    }
-
-                    @if (ord.status !== 'CANCELLED') {
+                    @if (session.isAllPaid && session.effectiveStatus !== 'CANCELLED') {
                       <button
                         type="button"
-                        class="card-util-btn btn-cancel-order"
-                        (click)="$event.stopPropagation(); openCancelModal(ord)"
+                        (click)="$event.stopPropagation(); handlePrintInvoice(session.primaryOrder)"
+                        class="apple-util-btn"
+                        [disabled]="isNavigatingToInvoice() === session.primaryOrder.id"
+                        [title]="session.printCount && session.printCount > 0 ? 'Tax Invoice printed ' + session.printCount + ' time(s)' : 'Print Tax Invoice'"
+                      >
+                        @if (isNavigatingToInvoice() === session.primaryOrder.id) {
+                          <i class="ph ph-spinner ph-spin"></i>
+                          <span>Opening...</span>
+                        } @else {
+                          <i class="ph ph-printer"></i>
+                          <span>{{ session.printCount && session.printCount > 0 ? 'Invoice (' + session.printCount + 'x)' : 'Invoice' }}</span>
+                        }
+                      </button>
+                    }
+
+                    @if (session.effectiveStatus !== 'CANCELLED') {
+                      <button
+                        type="button"
+                        class="apple-util-btn btn-apple-cancel"
+                        (click)="$event.stopPropagation(); openCancelModal(session.primaryOrder)"
                         title="Cancel Order"
                       >
-                        <i class="ph ph-x-circle text-crimson"></i>
+                        <i class="ph ph-x-circle"></i>
                         <span>Cancel</span>
                       </button>
                     }
@@ -787,6 +702,19 @@ import {
 
           <!-- Drawer Body (Scrollable) -->
           <div class="drawer-body">
+            @if (selectedSessionOrders().length > 1) {
+              <div class="drawer-session-banner" style="margin-bottom: 14px; background: rgba(37, 99, 235, 0.08); border: 1px solid rgba(37, 99, 235, 0.2); border-radius: 8px; padding: 10px 12px; display: flex; align-items: center; justify-content: space-between;">
+                <div style="display: flex; align-items: center; gap: 8px;">
+                  <i class="ph ph-stack" style="color: #2563eb; font-size: 1.1rem;"></i>
+                  <div>
+                    <strong style="font-size: 0.8125rem; color: #1e40af;">CONSOLIDATED DINING SESSION</strong>
+                    <div style="font-size: 0.75rem; color: var(--color-text-muted);">{{ selectedSessionOrders().length }} Orders unified for Table {{ sideOrd.tableNumber }}</div>
+                  </div>
+                </div>
+                <span style="font-size: 0.875rem; font-weight: 800; color: #1e40af;">{{ getSettlementGrandTotal(sideOrd) | currencyInr }}</span>
+              </div>
+            }
+
             <!-- 1. Customer & Contact Details Card -->
             <div class="drawer-section-card">
               <div class="section-card-header">
@@ -890,6 +818,9 @@ import {
                         @for (s of staffMembers(); track s.id) {
                           <option [value]="s.id">{{ s.name }} ({{ s.role }})</option>
                         }
+                        @if (sideOrd.serverStaffId && !isStaffInList(sideOrd.serverStaffId)) {
+                          <option [value]="sideOrd.serverStaffId">{{ sideOrd.serverStaffId }}</option>
+                        }
                       </select>
                     </div>
                   }
@@ -897,145 +828,7 @@ import {
               </div>
             </div>
 
-            <!-- 2. Live Order Workflow & Dispatch Controls (If live) -->
-            @if (sideOrd.status !== 'COMPLETED' && sideOrd.status !== 'CANCELLED') {
-              <div class="drawer-section-card workflow-card">
-                <div class="section-card-header">
-                  <span class="section-card-title"
-                    ><i class="ph ph-arrows-clockwise"></i> Live Dispatch Progression</span
-                  >
-                  <span class="current-stage-tag">{{ sideOrd.status }}</span>
-                </div>
-
-                <!-- Stepper Progress Bar -->
-                <div class="stepper-horizontal-bar">
-                  <div
-                    class="step-point"
-                    [class.done]="getOrderStageIndex(sideOrd.status) >= 1"
-                    [class.current]="sideOrd.status === 'PENDING'"
-                  >
-                    <span class="point-dot"><i class="ph ph-bell"></i></span>
-                    <span class="point-lbl">Pending</span>
-                  </div>
-                  <div
-                    class="step-connector"
-                    [class.filled]="getOrderStageIndex(sideOrd.status) >= 1"
-                  ></div>
-                  <div
-                    class="step-point"
-                    [class.done]="getOrderStageIndex(sideOrd.status) >= 2"
-                    [class.current]="sideOrd.status === 'ACCEPTED'"
-                  >
-                    <span class="point-dot"><i class="ph ph-check"></i></span>
-                    <span class="point-lbl">Accepted</span>
-                  </div>
-                  <div
-                    class="step-connector"
-                    [class.filled]="getOrderStageIndex(sideOrd.status) >= 2"
-                  ></div>
-                  <div
-                    class="step-point"
-                    [class.done]="getOrderStageIndex(sideOrd.status) >= 3"
-                    [class.current]="sideOrd.status === 'PREPARING'"
-                  >
-                    <span class="point-dot"><i class="ph ph-cooking-pot"></i></span>
-                    <span class="point-lbl">Kitchen</span>
-                  </div>
-                  <div
-                    class="step-connector"
-                    [class.filled]="getOrderStageIndex(sideOrd.status) >= 3"
-                  ></div>
-                  <div
-                    class="step-point"
-                    [class.done]="getOrderStageIndex(sideOrd.status) >= 4"
-                    [class.current]="sideOrd.status === 'READY'"
-                  >
-                    <span class="point-dot"><i class="ph ph-bell-ringing"></i></span>
-                    <span class="point-lbl">Ready</span>
-                  </div>
-                  <div
-                    class="step-connector"
-                    [class.filled]="getOrderStageIndex(sideOrd.status) >= 4"
-                  ></div>
-                  <div
-                    class="step-point"
-                    [class.done]="getOrderStageIndex(sideOrd.status) >= 5"
-                    [class.current]="sideOrd.status === 'DISPATCHED'"
-                  >
-                    <span class="point-dot"><i class="ph ph-moped"></i></span>
-                    <span class="point-lbl">Dispatch</span>
-                  </div>
-                  <div
-                    class="step-connector"
-                    [class.filled]="getOrderStageIndex(sideOrd.status) >= 5"
-                  ></div>
-                  <div
-                    class="step-point"
-                    [class.done]="sideOrd.status === 'SERVED'"
-                    [class.current]="sideOrd.status === 'SERVED'"
-                  >
-                    <span class="point-dot"><i class="ph ph-hand-waving"></i></span>
-                    <span class="point-lbl">Served</span>
-                  </div>
-                </div>
-
-                <!-- Next Dispatch Action Button -->
-                <div class="drawer-dispatch-action-row">
-                  @if (sideOrd.status === 'PENDING') {
-                    <button
-                      class="btn btn-primary w-full"
-                      (click)="advanceStatus(sideOrd, 'ACCEPTED')"
-                    >
-                      <i class="ph ph-check-bold"></i> Accept Order
-                    </button>
-                  } @else if (sideOrd.status === 'ACCEPTED') {
-                    <button
-                      class="btn btn-dark w-full"
-                      (click)="advanceStatus(sideOrd, 'PREPARING')"
-                    >
-                      <i class="ph ph-cooking-pot"></i> Send to Kitchen / Preparing
-                    </button>
-                  } @else if (sideOrd.status === 'PREPARING') {
-                    <button class="btn btn-gold w-full" (click)="advanceStatus(sideOrd, 'READY')">
-                      <i class="ph ph-bell-ringing"></i> Mark Food Ready
-                    </button>
-                  } @else if (sideOrd.status === 'READY') {
-                    <button
-                      class="btn btn-info w-full"
-                      (click)="advanceStatus(sideOrd, 'DISPATCHED')"
-                    >
-                      <i class="ph ph-moped"></i>
-                      {{
-                        sideOrd.orderType === 'TAKEAWAY'
-                          ? 'Handover for Delivery / Counter'
-                          : 'Dispatch to Table'
-                      }}
-                    </button>
-                  } @else if (sideOrd.status === 'DISPATCHED') {
-                    <button
-                      class="btn btn-success w-full"
-                      (click)="advanceStatus(sideOrd, 'SERVED')"
-                    >
-                      <i class="ph ph-check-circle"></i>
-                      {{
-                        sideOrd.orderType === 'TAKEAWAY'
-                          ? 'Mark Picked Up / Delivered'
-                          : 'Mark Delivered & Served'
-                      }}
-                    </button>
-                  } @else if (sideOrd.status === 'SERVED') {
-                    <button
-                      class="btn btn-primary w-full checkout-glow"
-                      (click)="openSettleModal(sideOrd)"
-                    >
-                      <i class="ph ph-credit-card"></i> Proceed to Bill Settlement & Invoice
-                    </button>
-                  }
-                </div>
-              </div>
-            }
-
-            <!-- 3. Billing & Payment Status Card (Unpaid vs Paid vs Completed) -->
+            <!-- 2. Billing & Payment Status Card (Unpaid vs Paid vs Completed) -->
             <div class="drawer-section-card billing-card">
               <div class="section-card-header">
                 <span class="section-card-title"
@@ -1079,20 +872,6 @@ import {
                     >
                       <i class="ph ph-credit-card"></i> Settle Bill
                     </button>
-                    <button
-                      class="btn btn-secondary btn-sm"
-                      (click)="printOrderReceipt(sideOrd)"
-                      title="Print Bill Receipt"
-                    >
-                      <i class="ph ph-printer"></i> Print Bill
-                    </button>
-                    <button
-                      class="btn btn-whatsapp btn-sm"
-                      (click)="openWhatsAppModal(sideOrd)"
-                      title="Send Bill via WhatsApp"
-                    >
-                      <i class="ph ph-whatsapp-logo"></i> WhatsApp
-                    </button>
                   </div>
                 } @else if (sideOrd.status === 'COMPLETED') {
                   <div class="completed-summary-box">
@@ -1111,15 +890,26 @@ import {
                       Order is completed, settled and invoice printed.
                     </p>
                     <div class="completed-invoice-actions">
-                      <button class="btn btn-secondary btn-sm" (click)="printOrderReceipt(sideOrd)">
-                        <i class="ph ph-printer"></i> Reprint Receipt
+                      <button
+                        class="btn btn-secondary btn-sm"
+                        (click)="handlePrintInvoice(sideOrd)"
+                        [disabled]="isNavigatingToInvoice() === sideOrd.id"
+                      >
+                        @if (isNavigatingToInvoice() === sideOrd.id) {
+                          <i class="ph ph-spinner ph-spin"></i>
+                          <span>Opening...</span>
+                        } @else {
+                          <i class="ph ph-printer"></i>
+                          <span>Reprint Receipt</span>
+                        }
                       </button>
                       <button
                         class="btn btn-whatsapp btn-sm"
                         (click)="openWhatsAppModal(sideOrd)"
                         title="Send Digital Bill via WhatsApp"
+                        aria-label="Send Digital Bill via WhatsApp"
                       >
-                        <i class="ph ph-whatsapp-logo"></i> WhatsApp
+                        <i class="ph ph-whatsapp-logo"></i>
                       </button>
                       <a
                         [routerLink]="['/admin/billing', sideOrd.id]"
@@ -1161,8 +951,9 @@ import {
                         class="btn btn-whatsapp btn-sm"
                         (click)="openWhatsAppModal(sideOrd)"
                         title="Send Bill via WhatsApp"
+                        aria-label="Send Bill via WhatsApp"
                       >
-                        <i class="ph ph-whatsapp-logo"></i> WhatsApp
+                        <i class="ph ph-whatsapp-logo"></i>
                       </button>
                     </div>
                   </div>
@@ -1288,15 +1079,23 @@ import {
       <!-- Manual Walk-in Order Creation Modal -->
       @if (showManualModal) {
         <div class="modal-overlay" (click)="onBackdropClick($event)">
-          <div class="modal-card manual-order-modal" role="dialog" aria-modal="true">
+          <div
+            class="modal-card manual-order-modal-canvas"
+            role="dialog"
+            aria-modal="true"
+            (click)="$event.stopPropagation()"
+          >
             <div class="modal-header">
-              <div>
-                <h3 class="heading-card">Create Manual Walk-in Order</h3>
-                <p class="text-xs text-muted" style="margin-top: 2px;">
-                  Direct entry for walk-in guests or phone orders without app scan.
-                </p>
+              <div class="modal-title-with-icon">
+                <div class="icon-circle"><i class="ph ph-receipt"></i></div>
+                <div>
+                  <h3 class="heading-card">Create Dining &amp; Counter Order</h3>
+                  <p class="text-xs text-muted" style="margin: 2px 0 0;">
+                    Direct entry for walk-in dining guests or takeaway counter.
+                  </p>
+                </div>
               </div>
-              <button class="close-btn" (click)="showManualModal = false">
+              <button class="close-btn" (click)="showManualModal = false" type="button">
                 <i class="ph ph-x"></i>
               </button>
             </div>
@@ -1429,148 +1228,249 @@ import {
 
               <!-- RIGHT SIDE: ORDER DETAILS & TRAY SUMMARY -->
               <section class="pos-order-summary-panel">
-                <div
-                  class="pos-order-type-picker"
-                  style="display: flex; gap: 8px; margin-bottom: 12px; align-items: center;"
-                >
-                  <button
-                    type="button"
-                    class="btn btn-sm"
-                    [class.btn-primary]="manualOrderType === 'DINE_IN'"
-                    [class.btn-secondary]="manualOrderType !== 'DINE_IN'"
-                    (click)="manualOrderType = 'DINE_IN'"
-                  >
-                    <i class="ph ph-fork-knife"></i> Dine-In
-                  </button>
-                  <button
-                    type="button"
-                    class="btn btn-sm"
-                    [class.btn-primary]="manualOrderType === 'TAKEAWAY'"
-                    [class.btn-secondary]="manualOrderType !== 'TAKEAWAY'"
-                    [disabled]="!isTakeawayEnabled()"
-                    (click)="setManualOrderTypeTakeaway()"
-                  >
-                    <i class="ph ph-bag"></i> Takeaway / Counter
-                  </button>
-                  @if (!isTakeawayEnabled()) {
-                    <span class="text-xs text-muted">(Takeaway disabled in settings)</span>
-                  }
-                </div>
+                <!-- Dining Context & Guest Details -->
+                <div class="pos-context-card">
+                  <!-- Order Type Segmented Switcher (Dine-In vs Takeaway / Counter) -->
+                  <div class="pos-order-type-segmented">
+                    <button
+                      type="button"
+                      class="type-seg-btn"
+                      [class.active]="manualOrderType === 'DINE_IN'"
+                      (click)="manualOrderType = 'DINE_IN'"
+                    >
+                      <i class="ph ph-fork-knife"></i>
+                      <span>Dine-In Table</span>
+                    </button>
+                    <button
+                      type="button"
+                      class="type-seg-btn"
+                      [class.active]="manualOrderType === 'TAKEAWAY'"
+                      [class.disabled]="!isTakeawayEnabled()"
+                      [disabled]="!isTakeawayEnabled()"
+                      (click)="setManualOrderTypeTakeaway()"
+                    >
+                      <i class="ph ph-bag"></i>
+                      <span>Takeaway / Counter</span>
+                    </button>
+                  </div>
 
-                <div class="form-row-3">
+                  <!-- Active Table Showcase & Switcher (When Dine-In) -->
                   @if (manualOrderType === 'DINE_IN') {
-                    <div class="form-group">
-                      <label class="form-label">Dining Table *</label>
-                      <select class="form-select" [(ngModel)]="manualTableId">
-                        <option value="" disabled>-- Select Table --</option>
-                        @for (tbl of tables(); track tbl.id) {
-                          <option [value]="tbl.id">
-                            Table {{ tbl.number }} ({{ tbl.section }}) — {{ tbl.status }}
-                          </option>
+                    <div class="table-assignment-banner">
+                      <div class="assignment-meta">
+                        <div class="assignment-label-row">
+                          <span class="context-eyebrow">
+                            <i class="ph ph-armchair"></i> Assigned Table
+                          </span>
+                          @if (selectedManualTable(); as tbl) {
+                            <span class="table-status-pill" [class]="tbl.status.toLowerCase()">
+                              <span class="status-dot"></span> {{ tbl.status }}
+                            </span>
+                          }
+                        </div>
+
+                        @if (selectedManualTable(); as tbl) {
+                          <div class="selected-table-showcase">
+                            <span class="tbl-badge">Table {{ tbl.number }}</span>
+                            <span class="tbl-detail-pill">
+                              <i class="ph ph-map-pin"></i> {{ tbl.section }}
+                            </span>
+                            <span class="tbl-detail-pill">
+                              <i class="ph ph-users"></i> {{ tbl.capacity }} Seats
+                            </span>
+                          </div>
                         }
-                      </select>
+                      </div>
+
+                      <div class="table-picker-control">
+                        <label class="picker-label" for="manualOrderTableSelect">Change Table</label>
+                        <select
+                          id="manualOrderTableSelect"
+                          class="form-select custom-table-select"
+                          [ngModel]="manualTableId()"
+                          (ngModelChange)="manualTableId.set($event)"
+                        >
+                          <option value="" disabled>-- Select Table --</option>
+                          @for (tbl of tables(); track tbl.id) {
+                            <option [value]="tbl.id">
+                              Table {{ tbl.number }} ({{ tbl.section }} • {{ tbl.capacity }}p) — {{ tbl.status }}
+                            </option>
+                          }
+                        </select>
+                      </div>
                     </div>
                   } @else {
-                    <div class="form-group">
-                      <label class="form-label">Pickup Reference</label>
-                      <input
-                        type="text"
-                        class="form-input pickup-ref-input"
-                        [value]="manualPickupRef"
-                        readonly
-                      />
+                    <!-- Takeaway Showcase Banner -->
+                    <div class="table-assignment-banner takeaway-banner">
+                      <div class="assignment-meta">
+                        <div class="assignment-label-row">
+                          <span class="context-eyebrow">
+                            <i class="ph ph-bag"></i> Takeaway / Pickup
+                          </span>
+                          <span class="table-status-pill takeaway-pill">
+                            <span class="status-dot"></span> Counter Order
+                          </span>
+                        </div>
+                        <div class="selected-table-showcase">
+                          <span class="tbl-badge takeaway-ref-badge">#{{ manualPickupRef }}</span>
+                          <span class="tbl-detail-pill">
+                            <i class="ph ph-storefront"></i> Front Counter
+                          </span>
+                          <span class="tbl-detail-pill">
+                            <i class="ph ph-clock"></i> Immediate Prep
+                          </span>
+                        </div>
+                      </div>
+
+                      <div class="table-picker-control">
+                        <label class="picker-label">Pickup Reference</label>
+                        <input
+                          type="text"
+                          class="form-input custom-input takeaway-ref-input"
+                          [value]="manualPickupRef"
+                          readonly
+                        />
+                      </div>
                     </div>
                   }
-                  <div class="form-group">
-                    <label class="form-label">Guest Name</label>
-                    <input
-                      type="text"
-                      class="form-input"
-                      [placeholder]="
-                        manualOrderType === 'TAKEAWAY'
-                          ? 'e.g. Rahul Verma (optional)'
-                          : 'e.g. Rahul Verma'
-                      "
-                      [(ngModel)]="manualCustomerName"
-                    />
-                  </div>
-                  <div class="form-group">
-                    <label class="form-label">Guest Phone</label>
-                    <input
-                      type="tel"
-                      class="form-input"
-                      placeholder="+91 98765 00000 (optional)"
-                      [(ngModel)]="manualCustomerPhone"
-                    />
+
+                  <!-- Guest Information Inputs -->
+                  <div class="guest-details-grid">
+                    <div class="form-group compact">
+                      <label class="form-label-compact" for="manualOrderCustName">
+                        <i class="ph ph-user"></i> Guest Name
+                      </label>
+                      <div class="input-icon-wrap">
+                        <i class="ph ph-user-circle input-prefix-icon"></i>
+                        <input
+                          id="manualOrderCustName"
+                          type="text"
+                          class="form-input custom-input"
+                          [placeholder]="
+                            manualOrderType === 'TAKEAWAY'
+                              ? 'e.g. Rahul Verma (optional)'
+                              : 'e.g. Rahul Verma / Walk-in'
+                          "
+                          [(ngModel)]="manualCustomerName"
+                        />
+                      </div>
+                    </div>
+                    <div class="form-group compact">
+                      <label class="form-label-compact" for="manualOrderCustPhone">
+                        <i class="ph ph-phone"></i> Guest Phone
+                      </label>
+                      <div class="input-icon-wrap">
+                        <i class="ph ph-phone-call input-prefix-icon"></i>
+                        <input
+                          id="manualOrderCustPhone"
+                          type="tel"
+                          class="form-input custom-input"
+                          placeholder="+91 98765 00000 (optional)"
+                          [(ngModel)]="manualCustomerPhone"
+                        />
+                      </div>
+                    </div>
                   </div>
                 </div>
 
                 <!-- Selected Items List -->
                 <div class="manual-items-box">
-                  <div class="box-title">Order Items Tray ({{ manualItems.length }})</div>
+                  <div class="tray-header">
+                    <div class="tray-title-group">
+                      <span class="tray-title">Order Items Tray</span>
+                      <span class="tray-badge" [class.has-items]="manualItems.length > 0">
+                        {{ manualItems.length }} {{ manualItems.length === 1 ? 'item' : 'items' }}
+                      </span>
+                    </div>
+                    @if (manualItems.length > 0) {
+                      <button
+                        type="button"
+                        class="clear-tray-btn"
+                        (click)="clearManualTray()"
+                        title="Clear all dishes from tray"
+                      >
+                        <i class="ph ph-trash"></i>
+                        <span>Clear Tray</span>
+                      </button>
+                    }
+                  </div>
+
                   @if (manualItems.length === 0) {
-                    <div class="empty-items-notice">
-                      <i
-                        class="ph ph-hand-pointing"
-                        style="font-size: 1.5rem; display: block; margin-bottom: 6px;"
-                      ></i>
-                      Click any dish from the side panel on the left to add items to this order.
+                    <div class="empty-tray-state">
+                      <div class="empty-tray-icon">
+                        <i class="ph ph-hand-pointing"></i>
+                      </div>
+                      <h4 class="empty-tray-title">Tray is empty</h4>
+                      <p class="empty-tray-subtitle">
+                        Click any dish from the catalog on the left to add it to this order.
+                      </p>
                     </div>
                   } @else {
-                    <div class="manual-items-table">
+                    <div class="manual-items-table custom-scrollbar">
                       @for (item of manualItems; track item.id; let idx = $index) {
                         <div class="m-item-row">
-                          <div class="m-item-name">
-                            <strong>{{ item.name }}</strong>
-                            <span class="m-item-price"
-                              >{{ item.unitPrice | currencyInr }} each</span
-                            >
+                          <div class="m-item-details">
+                            <strong class="m-item-title">{{ item.name }}</strong>
+                            <span class="m-item-rate">{{ item.unitPrice | currencyInr }} each</span>
                           </div>
-                          <div class="m-qty-controls">
+
+                          <div class="m-qty-stepper">
                             <button
                               type="button"
-                              class="qty-btn"
+                              class="stepper-btn minus"
                               (click)="updateManualItemQty(item, -1)"
+                              title="Decrease"
                             >
-                              -
+                              <i class="ph ph-minus"></i>
                             </button>
-                            <span class="qty-num">{{ item.quantity }}</span>
+                            <span class="stepper-count">{{ item.quantity }}</span>
                             <button
                               type="button"
-                              class="qty-btn"
+                              class="stepper-btn plus"
                               (click)="updateManualItemQty(item, 1)"
+                              title="Increase"
                             >
-                              +
+                              <i class="ph ph-plus"></i>
                             </button>
                           </div>
-                          <div class="m-item-total">{{ item.itemTotal | currencyInr }}</div>
-                          <button
-                            type="button"
-                            class="remove-btn"
-                            (click)="removeManualItem(idx)"
-                            title="Remove item"
-                          >
-                            <i class="ph ph-trash"></i>
-                          </button>
+
+                          <div class="m-item-right">
+                            <span class="m-item-total">{{ item.itemTotal | currencyInr }}</span>
+                            <button
+                              type="button"
+                              class="m-remove-btn"
+                              (click)="removeManualItem(idx)"
+                              title="Remove {{ item.name }}"
+                            >
+                              <i class="ph ph-x"></i>
+                            </button>
+                          </div>
                         </div>
                       }
                     </div>
 
                     <div class="order-math-summary">
-                      <div class="math-line">
-                        <span>Subtotal</span>
-                        <strong>{{ manualSubtotal() | currencyInr }}</strong>
+                      <div class="math-row">
+                        <span class="math-label">Item Subtotal</span>
+                        <strong class="math-value">{{ manualSubtotal() | currencyInr }}</strong>
                       </div>
-                      <div class="math-line">
-                        <span
-                          >Taxes (CGST {{ restaurant()?.taxSettings?.cgstRate ?? 2.5 }}% + SGST
-                          {{ restaurant()?.taxSettings?.sgstRate ?? 2.5 }}%)</span
-                        >
-                        <span>{{ manualTax() | currencyInr }}</span>
+                      <div class="math-row tax-line">
+                        <span class="math-label">
+                          <span>Taxes &amp; Levies</span>
+                          <span class="tax-rate-pill">
+                            CGST {{ restaurant()?.taxSettings?.cgstRate ?? 2.5 }}% + SGST
+                            {{ restaurant()?.taxSettings?.sgstRate ?? 2.5 }}%
+                          </span>
+                        </span>
+                        <span class="math-value">{{ manualTax() | currencyInr }}</span>
                       </div>
-                      <div class="math-line total">
-                        <span>Grand Total</span>
-                        <strong class="text-price">{{ manualTotal() | currencyInr }}</strong>
+                      <div class="math-divider"></div>
+                      <div class="math-row total-highlight">
+                        <div class="total-text-group">
+                          <span class="total-main-label">Net Payable Total</span>
+                          <span class="total-sub-label">Includes all taxes &amp; fees</span>
+                        </div>
+                        <span class="total-grand-amount">{{ manualTotal() | currencyInr }}</span>
                       </div>
                     </div>
                   }
@@ -1706,7 +1606,7 @@ import {
 
             <div class="modal-body">
               <!-- Mode Tabs if order is not split yet -->
-              @if (!ord.isSplit) {
+              @if (!ord.isSplit && getOrderSplitBills(ord.id).length === 0) {
                 <div class="settle-mode-tabs">
                   <button
                     type="button"
@@ -1736,19 +1636,40 @@ import {
                     <span>Guest Name</span>
                     <strong>{{ ord.customerName }}</strong>
                   </div>
+
+                  <!-- Itemized dishes breakdown -->
+                  <div class="settle-items-section">
+                    <div class="settle-items-header">
+                      <span>Ordered Dishes</span>
+                      <span class="text-xs text-muted">{{ getSettlementItems(ord).length }} items</span>
+                    </div>
+                    <div class="settle-items-list">
+                      @for (item of getSettlementItems(ord); track $index) {
+                        <div class="settle-item-row">
+                          <div class="settle-item-left">
+                            <span class="item-qty-pill">{{ item.quantity }}x</span>
+                            <div class="item-text-group">
+                              <span class="item-name-text">{{ item.name }}</span>
+                              @if (item.notes || item.specialInstructions) {
+                                <span class="item-instruction-text">{{ item.notes || item.specialInstructions }}</span>
+                              }
+                            </div>
+                          </div>
+                          <span class="item-total-price">{{ (item.itemTotal || (item.unitPrice * item.quantity)) | currencyInr }}</span>
+                        </div>
+                      }
+                    </div>
+                  </div>
+
+                  <div class="settle-divider"></div>
+
                   <div class="settle-row">
                     <span>Item Subtotal</span>
-                    <span>{{ ord.subtotal | currencyInr }}</span>
+                    <span class="font-semibold">{{ ord.subtotal | currencyInr }}</span>
                   </div>
-                  @if (getEffectiveDiscount(ord) > 0) {
+                  @if (settleDiscountMode() === 'COUPON' && getEffectiveDiscount(ord) > 0) {
                     <div class="settle-row discount">
-                      <span
-                        >Discount ({{
-                          settleDiscountMode() === 'COUPON' && selectedCouponCode()
-                            ? selectedCouponCode()
-                            : 'Counter Off'
-                        }})</span
-                      >
+                      <span>Coupon Discount ({{ selectedCouponCode() }})</span>
                       <span class="text-success font-semibold"
                         >-{{ getEffectiveDiscount(ord) | currencyInr }}</span
                       >
@@ -1758,6 +1679,14 @@ import {
                     <span>Taxes (CGST + SGST)</span>
                     <span>{{ getSettlementTax(ord) | currencyInr }}</span>
                   </div>
+                  @if (settleDiscountMode() === 'CUSTOM' && getEffectiveDiscount(ord) > 0) {
+                    <div class="settle-row discount">
+                      <span>Admin Discount / Round-off</span>
+                      <span class="text-success font-semibold"
+                        >-{{ getEffectiveDiscount(ord) | currencyInr }}</span
+                      >
+                    </div>
+                  }
                   <div class="settle-divider"></div>
                   <div class="settle-row total-highlight">
                     <span>Net Payable Total</span>
@@ -2098,7 +2027,8 @@ import {
                     [disabled]="isSettling()"
                   >
                     @if (isSettling()) {
-                      <span>Recording...</span>
+                      <i class="ph ph-spinner ph-spin"></i>
+                      <span>Settling & Generating Invoice...</span>
                     } @else {
                       <i class="ph ph-check"></i>
                       <span>Confirm {{ selectedPaymentMethod() }} Settlement</span>
@@ -2124,12 +2054,17 @@ import {
                       (click)="confirmSettlement()"
                       [disabled]="isSettling()"
                     >
-                      <i class="ph ph-check-circle"></i>
-                      <span>{{
-                        ord.orderType === 'TAKEAWAY'
-                          ? 'Complete Order'
-                          : 'Complete Order & Release Table'
-                      }}</span>
+                      @if (isSettling()) {
+                        <i class="ph ph-spinner ph-spin"></i>
+                        <span>Finalizing Order...</span>
+                      } @else {
+                        <i class="ph ph-check-circle"></i>
+                        <span>{{
+                          ord.orderType === 'TAKEAWAY'
+                            ? 'Complete Order'
+                            : 'Complete Order & Release Table'
+                        }}</span>
+                      }
                     </button>
                   } @else {
                     <button
@@ -2137,8 +2072,13 @@ import {
                       (click)="settleAllSplitParts(ord)"
                       [disabled]="isSettling()"
                     >
-                      <i class="ph ph-check-double"></i>
-                      <span>Settle All Remaining ({{ selectedPaymentMethod() }})</span>
+                      @if (isSettling()) {
+                        <i class="ph ph-spinner ph-spin"></i>
+                        <span>Settling Split Bills...</span>
+                      } @else {
+                        <i class="ph ph-check-double"></i>
+                        <span>Settle All Remaining ({{ selectedPaymentMethod() }})</span>
+                      }
                     </button>
                   }
                 }
@@ -2415,6 +2355,9 @@ import {
                   @for (s of staffMembers(); track s.id) {
                     <option [value]="s.id">{{ s.name }} ({{ s.role }})</option>
                   }
+                  @if (selectedNewStaffId() && !isStaffInList(selectedNewStaffId())) {
+                    <option [value]="selectedNewStaffId()">{{ selectedNewStaffId() }}</option>
+                  }
                 </select>
               </div>
 
@@ -2683,25 +2626,27 @@ import {
         </div>
       }
 
-      <!-- WhatsApp Delivery Modal -->
+      <!-- WhatsApp Delivery Modal (Apple Fluid Design) -->
       @if (showWhatsAppModal() && whatsAppOrder(); as ord) {
         <div class="modal-overlay" (click)="onBackdropClick($event, 'whatsapp')">
-          <div
-            class="modal-card auth-modal-card whatsapp-dialog-card"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="oq-wa-title"
-          >
-            <div class="modal-header">
-              <div class="auth-modal-title-wrap">
-                <div class="auth-icon-badge whatsapp-badge">
-                  <i class="ph ph-whatsapp-logo"></i>
+          <div class="modal-card settle-modal whatsapp-dialog-card" role="dialog" aria-modal="true">
+            <!-- Modal Header -->
+            <div class="modal-header whatsapp-apple-header">
+              <div class="whatsapp-header-wrap">
+                <div class="whatsapp-icon-badge">
+                  <i class="ph-fill ph-whatsapp-logo"></i>
                 </div>
                 <div>
-                  <h3 id="oq-wa-title" class="heading-card">Send Bill via WhatsApp</h3>
-                  <span class="text-xs text-muted"
-                    >{{ ord.orderNumber }} • Table {{ ord.tableNumber || 'Dine-In' }}</span
-                  >
+                  <div class="flex items-center gap-2">
+                    <h3 class="heading-card">Send Bill via WhatsApp</h3>
+                    <span class="badge-gateway-chip" [class.is-connected]="whatsAppBridge.connectionStatus() === 'CONNECTED'">
+                      <span class="dot-indicator"></span>
+                      {{ whatsAppBridge.connectionStatus() === 'CONNECTED' ? 'DIRECT GATEWAY' : 'WEB FALLBACK' }}
+                    </span>
+                  </div>
+                  <span class="text-xs text-muted">
+                    {{ ord.orderNumber }} • Table {{ ord.tableNumber || 'Dine-In' }}
+                  </span>
                 </div>
               </div>
               <button class="close-btn" (click)="closeWhatsAppModal()" aria-label="Close dialog">
@@ -2709,78 +2654,105 @@ import {
               </button>
             </div>
 
-            <div class="modal-body auth-dialog-body">
+            <!-- Modal Body -->
+            <div class="modal-body whatsapp-apple-body">
+              <!-- Customer WhatsApp Phone Number (Admin Gated) -->
               <div class="form-group">
-                <label class="form-label" for="oq-wa-phone">Customer WhatsApp Phone Number *</label>
+                <div class="label-cluster-between">
+                  <label class="form-label font-bold" for="oq-wa-phone">
+                    <i class="ph ph-phone text-whatsapp"></i> Customer WhatsApp Number
+                  </label>
+                  @if (authService.isAdmin()) {
+                    <span class="admin-verified-pill" title="Administrator access permitted to change recipient">
+                      <i class="ph ph-shield-check"></i> Admin Editable
+                    </span>
+                  } @else {
+                    <span class="admin-locked-pill" title="Only Admin can modify customer phone number">
+                      <i class="ph ph-lock-key"></i> Admin Protected
+                    </span>
+                  }
+                </div>
+                
                 <div class="input-with-icon">
                   <i class="ph ph-phone"></i>
                   <input
                     id="oq-wa-phone"
                     type="tel"
                     class="form-input"
+                    [class.input-locked]="!authService.isAdmin()"
+                    [readonly]="!authService.isAdmin()"
                     placeholder="e.g. 9876543210 or +91 98765 43210"
                     [value]="whatsAppPhone()"
                     (input)="whatsAppPhone.set($any($event.target).value)"
                     (keyup.enter)="sendWhatsAppBill()"
-                    autofocus
                   />
+                  @if (!authService.isAdmin()) {
+                    <i class="ph ph-lock-key lock-status-icon" title="Only Admins can modify phone number"></i>
+                  }
                 </div>
-                <span class="hint-text"
-                  >Enter 10-digit mobile number. Defaults to +91 (India) if country code is
-                  omitted.</span
-                >
+                <span class="hint-text">
+                  @if (authService.isAdmin()) {
+                    Enter 10-digit customer mobile number. Country code defaults to +91 (India).
+                  } @else {
+                    Recipient phone is locked to registered customer. Contact Admin to modify.
+                  }
+                </span>
               </div>
 
+              <!-- Message Composer (Editable) -->
               <div class="form-group">
-                <label class="form-label">Message Preview</label>
-                <pre class="whatsapp-preview-box">{{ whatsAppMessagePreview() }}</pre>
+                <div class="label-cluster-between">
+                  <label class="form-label font-bold">
+                    <i class="ph ph-pencil-simple-line text-whatsapp"></i> Message Text (Editable)
+                  </label>
+                  <span class="char-counter-text">
+                    {{ whatsAppMessagePreview().length }} characters
+                  </span>
+                </div>
+                <textarea
+                  class="form-input whatsapp-composer-box"
+                  rows="7"
+                  [ngModel]="whatsAppMessagePreview()"
+                  (ngModelChange)="whatsAppCustomMessage.set($event)"
+                  placeholder="Enter message to send..."
+                ></textarea>
               </div>
             </div>
 
-            <div class="modal-footer whatsapp-modal-footer">
-              <button type="button" class="btn btn-secondary" (click)="closeWhatsAppModal()">
+            <!-- Modal Footer: Single Primary Action & Secondary Utils -->
+            <div class="modal-footer whatsapp-apple-footer">
+              <button type="button" class="btn btn-secondary btn-apple-cancel" (click)="closeWhatsAppModal()">
                 Cancel
               </button>
-              <button
-                type="button"
-                class="btn btn-secondary"
-                (click)="copyBillToClipboard()"
-                title="Copy formatted bill text to clipboard"
-              >
-                <i class="ph ph-copy"></i>
-                <span>Copy Text</span>
-              </button>
-              @if (whatsAppAppUrl()) {
-                <a
-                  [href]="whatsAppAppUrl()"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  class="btn btn-secondary"
-                  (click)="onWhatsAppLinkClicked(whatsAppAppUrl())"
-                  title="Open in WhatsApp Desktop App or Mobile"
+
+              <div class="footer-actions-group">
+                <button
+                  type="button"
+                  class="btn btn-secondary btn-apple-copy"
+                  (click)="copyBillToClipboard()"
+                  title="Copy formatted bill text to clipboard"
                 >
-                  <i class="ph ph-device-mobile"></i>
-                  <span>WhatsApp App</span>
-                </a>
-              }
-              @if (whatsAppWebUrl()) {
-                <a
-                  [href]="whatsAppWebUrl()"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  class="btn btn-whatsapp-action"
-                  (click)="onWhatsAppLinkClicked(whatsAppWebUrl())"
-                  title="Directly launch WhatsApp Web in a new tab"
-                >
-                  <i class="ph ph-whatsapp-logo"></i>
-                  <span>Open WhatsApp Web</span>
-                </a>
-              } @else {
-                <button type="button" class="btn btn-whatsapp-action" disabled>
-                  <i class="ph ph-whatsapp-logo"></i>
-                  <span>Enter Valid 10-Digit Mobile</span>
+                  <i class="ph ph-copy"></i>
+                  <span>Copy Text</span>
                 </button>
-              }
+
+                <!-- Single Embedded WhatsApp Send Button -->
+                <button
+                  type="button"
+                  class="btn btn-whatsapp-direct"
+                  (click)="sendWhatsAppBill()"
+                  [disabled]="isDispatchingWhatsApp() || !whatsAppPhone().trim()"
+                  title="Send bill directly via embedded WhatsApp"
+                >
+                  @if (isDispatchingWhatsApp()) {
+                    <i class="ph ph-spinner ph-spin"></i>
+                    <span>Sending in background...</span>
+                  } @else {
+                    <i class="ph-bold ph-paper-plane-tilt"></i>
+                    <span>Send Bill via WhatsApp</span>
+                  }
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -2789,6 +2761,19 @@ import {
   `,
   styles: [
     `
+      .ph-spin {
+        animation: spin 0.8s linear infinite;
+        display: inline-block;
+      }
+      @keyframes spin {
+        from { transform: rotate(0deg); }
+        to { transform: rotate(360deg); }
+      }
+      button:active:not(:disabled) {
+        transform: scale(0.98);
+        transition: transform 0.08s cubic-bezier(0.2, 0.8, 0.2, 1);
+      }
+
       .orders-page {
         display: flex;
         flex-direction: column;
@@ -3104,32 +3089,34 @@ import {
 
         .search-icon {
           position: absolute;
-          left: 10px;
+          left: 14px;
           top: 50%;
           transform: translateY(-50%);
-          color: #94a3b8;
-          font-size: 1rem;
+          color: var(--color-text-muted);
+          font-size: 1.125rem;
           pointer-events: none;
         }
 
         .search-input {
           width: 100%;
-          padding: 7px 32px 7px 32px;
-          font-size: 0.78rem;
-          border-radius: 8px;
+          height: 44px;
+          padding: 0 16px 0 42px;
+          font-size: 0.875rem;
+          border-radius: var(--radius-md, 10px);
           border: 1px solid var(--color-border);
           background: var(--color-surface);
           color: var(--color-text-primary);
-          transition: all 0.2s ease;
+          transition: all var(--transition-fast, 0.15s ease);
+          box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
 
           &::placeholder {
-            color: #94a3b8;
+            color: var(--color-text-muted);
           }
 
           &:focus {
             outline: none;
-            border-color: #d97706;
-            box-shadow: 0 0 0 2px rgba(217, 119, 6, 0.15);
+            border-color: var(--color-primary);
+            box-shadow: 0 0 0 3px rgba(194, 65, 12, 0.12);
           }
         }
 
@@ -4222,6 +4209,802 @@ import {
         width: 100%;
       }
 
+      /* Session Parent Container & Child Rounds (Apple-Design Polish) */
+      .session-parent-card {
+        border-radius: 20px;
+        position: relative;
+        overflow: hidden;
+        background: var(--color-surface, #ffffff);
+        border: 1px solid rgba(0, 0, 0, 0.08);
+        box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.05), 0 1px 3px rgba(0, 0, 0, 0.03);
+        padding: 16px;
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+        transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.2s ease, border-color 0.2s ease;
+
+        &:hover {
+          transform: translateY(-2px);
+          box-shadow: 0 12px 30px -4px rgba(0, 0, 0, 0.1);
+        }
+
+        &.pending-highlight {
+          border-color: rgba(186, 12, 47, 0.4);
+        }
+      }
+
+      .apple-card-accent {
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        height: 3px;
+        background: linear-gradient(90deg, var(--color-crimson, #ba0c2f), #e11d48, #f59e0b);
+        border-top-left-radius: 20px;
+        border-top-right-radius: 20px;
+      }
+
+      .apple-card-top {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 8px;
+        padding-top: 2px;
+        flex-wrap: wrap;
+
+        .header-left-cluster {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          flex-wrap: wrap;
+        }
+
+        .header-right-cluster {
+          display: flex;
+          align-items: center;
+          gap: 6px;
+          flex-wrap: wrap;
+        }
+      }
+
+      .apple-table-pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        font-size: 0.75rem;
+        font-weight: 700;
+        color: #065f46;
+        background: rgba(16, 185, 129, 0.12);
+        border: 1px solid rgba(16, 185, 129, 0.25);
+        padding: 3px 9px;
+        border-radius: 999px;
+        cursor: pointer;
+        transition: transform 0.15s cubic-bezier(0.16, 1, 0.3, 1), background-color 0.15s ease;
+
+        &:hover:not(:disabled) {
+          background: rgba(16, 185, 129, 0.18);
+        }
+
+        &:active:not(:disabled) {
+          transform: scale(0.96);
+        }
+
+        &:disabled {
+          cursor: default;
+          opacity: 0.9;
+        }
+
+        .text-micro {
+          font-size: 0.625rem;
+          opacity: 0.75;
+        }
+
+        &.takeaway-pill {
+          color: #1e40af;
+          background: rgba(59, 130, 246, 0.12);
+          border-color: rgba(59, 130, 246, 0.25);
+        }
+      }
+
+      .apple-ord-num {
+        font-family: var(--font-mono, monospace);
+        font-size: 0.75rem;
+        font-weight: 700;
+        color: var(--color-text-secondary, #64748b);
+      }
+
+      .apple-ord-time {
+        font-size: 0.6875rem;
+        color: var(--color-text-muted, #94a3b8);
+        display: inline-flex;
+        align-items: center;
+        gap: 3px;
+        font-weight: 500;
+      }
+
+      .session-rounds-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 3px;
+        font-size: 0.6875rem;
+        font-weight: 700;
+        color: #1d4ed8;
+        background: rgba(37, 99, 235, 0.1);
+        border: 1px solid rgba(37, 99, 235, 0.25);
+        padding: 1px 6px;
+        border-radius: 999px;
+      }
+
+      /* Apple Recessed Meta Surface */
+      .guest-server-recessed {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 10px;
+        background: rgba(0, 0, 0, 0.025);
+        border: 1px solid rgba(0, 0, 0, 0.05);
+        border-radius: 14px;
+        padding: 7px 10px;
+
+        .guest-compact-meta {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          min-width: 0;
+
+          .guest-avatar-disc {
+            width: 26px;
+            height: 26px;
+            border-radius: 50%;
+            background: rgba(0, 0, 0, 0.07);
+            color: var(--color-text-primary, #0f172a);
+            font-size: 0.6875rem;
+            font-weight: 800;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+          }
+
+          .guest-text-col {
+            display: flex;
+            flex-direction: column;
+            line-height: 1.2;
+
+            .cust-name-clean {
+              font-size: 0.75rem;
+              font-weight: 700;
+              color: var(--color-text-primary, #0f172a);
+            }
+
+            .phone-sub-clean {
+              font-size: 0.6875rem;
+              color: var(--color-text-muted, #94a3b8);
+              display: inline-flex;
+              align-items: center;
+              gap: 3px;
+            }
+          }
+        }
+
+        .server-inline-picker {
+          flex-shrink: 0;
+
+          .server-select-pill,
+          .server-completed-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            font-size: 0.7rem;
+            color: var(--color-text-secondary, #64748b);
+            background: rgba(255, 255, 255, 0.8);
+            border: 1px solid rgba(0, 0, 0, 0.08);
+            border-radius: 999px;
+            padding: 2px 6px 2px 8px;
+          }
+
+          .server-select-clean {
+            background: transparent;
+            border: none;
+            font-size: 0.7rem;
+            font-weight: 600;
+            color: var(--color-text-primary, #0f172a);
+            outline: none;
+            cursor: pointer;
+            padding-right: 2px;
+            max-width: 110px;
+
+            &.is-unassigned {
+              color: var(--color-text-muted, #94a3b8);
+              font-weight: 500;
+            }
+          }
+
+          .pill-caret {
+            font-size: 0.625rem;
+            color: var(--color-text-muted, #94a3b8);
+            pointer-events: none;
+          }
+
+          .btn-unlock-inline {
+            background: transparent;
+            border: none;
+            color: var(--color-text-muted, #94a3b8);
+            cursor: pointer;
+            padding: 1px 3px;
+            font-size: 0.6875rem;
+
+            &:hover {
+              color: var(--color-crimson, #ba0c2f);
+            }
+          }
+        }
+      }
+
+      /* Editorial Receipt Stream */
+      .session-receipt-stream {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+
+        .receipt-stream-header {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          font-size: 0.6875rem;
+          font-weight: 700;
+          color: var(--color-text-muted, #94a3b8);
+          text-transform: uppercase;
+          letter-spacing: 0.04em;
+          padding: 0 2px;
+
+          .receipt-stream-title {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+          }
+
+          .receipt-stream-subtotal {
+            font-family: var(--font-mono, monospace);
+            font-size: 0.75rem;
+            color: var(--color-text-secondary, #64748b);
+          }
+        }
+
+        .receipt-rounds-body {
+          display: flex;
+          flex-direction: column;
+          gap: 6px;
+        }
+
+        .receipt-round-segment {
+          display: flex;
+          flex-direction: column;
+          gap: 4px;
+          border-radius: 10px;
+          padding: 2px;
+
+          &.round-pending-soft {
+            background: rgba(186, 12, 47, 0.02);
+            border-left: 2px solid var(--color-crimson, #ba0c2f);
+            padding-left: 6px;
+          }
+        }
+
+        .round-mini-bar {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          padding: 3px 6px;
+          margin-bottom: 2px;
+          border-radius: 6px;
+          background: rgba(0, 0, 0, 0.025);
+          border-bottom: 1px dashed rgba(0, 0, 0, 0.06);
+
+          .round-mini-left {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+
+            .round-mini-title {
+              font-size: 0.6875rem;
+              font-weight: 800;
+              color: var(--color-crimson, #ba0c2f);
+            }
+
+            .round-mini-ord-num {
+              font-family: var(--font-mono, monospace);
+              font-size: 0.6875rem;
+              font-weight: 700;
+              color: var(--color-text-secondary, #64748b);
+            }
+          }
+
+          .round-mini-right {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+
+            .round-mini-time {
+              font-size: 0.625rem;
+              color: var(--color-text-muted, #94a3b8);
+              display: inline-flex;
+              align-items: center;
+              gap: 2px;
+            }
+          }
+        }
+
+        .round-items-clean {
+          display: flex;
+          flex-direction: column;
+          gap: 3px;
+        }
+
+        .receipt-item-row {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          padding: 2px 0;
+          font-size: 0.75rem;
+
+          .item-name-cluster {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            min-width: 0;
+
+            .qty-bubble {
+              font-family: var(--font-mono, monospace);
+              font-size: 0.6875rem;
+              font-weight: 700;
+              background: rgba(0, 0, 0, 0.05);
+              color: var(--color-text-primary, #0f172a);
+              padding: 1px 5px;
+              border-radius: 5px;
+              flex-shrink: 0;
+            }
+
+            .item-title {
+              font-weight: 600;
+              color: var(--color-text-primary, #0f172a);
+            }
+
+            .portion-tag {
+              font-size: 0.625rem;
+              background: rgba(0, 0, 0, 0.04);
+              color: var(--color-text-secondary, #64748b);
+              padding: 1px 4px;
+              border-radius: 4px;
+              flex-shrink: 0;
+            }
+          }
+
+          .item-price {
+            font-family: var(--font-mono, monospace);
+            font-size: 0.75rem;
+            font-weight: 600;
+            color: var(--color-text-secondary, #64748b);
+            flex-shrink: 0;
+          }
+        }
+      }
+
+      /* Apple Financial Strip */
+      .grand-bill-strip-apple {
+        padding: 10px 12px;
+        background: rgba(0, 0, 0, 0.02);
+        border: 1px solid rgba(0, 0, 0, 0.06);
+        border-radius: 14px;
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+
+        .sub-line {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          font-size: 0.75rem;
+          color: var(--color-text-secondary, #64748b);
+
+          .bill-val {
+            font-family: var(--font-mono, monospace);
+            font-weight: 600;
+          }
+
+          &.discount {
+            color: #15803d;
+          }
+
+          &.split-note {
+            color: #1d4ed8;
+          }
+        }
+
+        .total-row-apple {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          padding-top: 6px;
+          margin-top: 2px;
+          border-top: 1px solid rgba(0, 0, 0, 0.06);
+
+          .total-meta-left {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+
+            .total-label-apple {
+              font-size: 0.8125rem;
+              font-weight: 700;
+              color: var(--color-text-primary, #0f172a);
+            }
+
+            .tax-badge-apple {
+              font-size: 0.625rem;
+              font-weight: 600;
+              color: #b45309;
+              background: rgba(245, 158, 11, 0.12);
+              padding: 1px 6px;
+              border-radius: 999px;
+            }
+          }
+
+          .payable-val-apple {
+            font-family: var(--font-mono, monospace);
+            font-size: 1.125rem;
+            font-weight: 800;
+            color: var(--color-crimson, #ba0c2f);
+            letter-spacing: -0.02em;
+          }
+        }
+      }
+
+      /* Apple Action Controls */
+      .card-footer-actions-apple {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        padding-top: 2px;
+
+        .action-row-primary {
+          width: 100%;
+        }
+
+        .apple-btn-primary {
+          width: 100%;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          gap: 6px;
+          padding: 9px 14px;
+          border-radius: 12px;
+          background: var(--color-crimson, #ba0c2f);
+          color: #ffffff;
+          font-size: 0.8125rem;
+          font-weight: 700;
+          border: none;
+          cursor: pointer;
+          box-shadow: 0 2px 8px rgba(186, 12, 47, 0.25);
+          transition: transform 0.15s cubic-bezier(0.16, 1, 0.3, 1), background-color 0.15s ease, opacity 0.15s ease;
+
+          &:hover:not(:disabled) {
+            background: #960a26;
+            box-shadow: 0 4px 12px rgba(186, 12, 47, 0.35);
+          }
+
+          &:active:not(:disabled) {
+            transform: scale(0.98);
+          }
+
+          &:disabled {
+            opacity: 0.7;
+            cursor: not-allowed;
+          }
+        }
+
+        .apple-util-grid {
+          display: grid;
+          grid-template-columns: repeat(4, 1fr);
+          gap: 6px;
+
+          @media (max-width: 480px) {
+            grid-template-columns: repeat(2, 1fr);
+          }
+
+          .apple-util-btn {
+            display: inline-flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 2px;
+            padding: 6px 4px;
+            border-radius: 10px;
+            background: rgba(0, 0, 0, 0.03);
+            border: 1px solid rgba(0, 0, 0, 0.05);
+            color: var(--color-text-secondary, #64748b);
+            font-size: 0.6875rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.15s cubic-bezier(0.16, 1, 0.3, 1), background-color 0.15s ease, color 0.15s ease;
+
+            i {
+              font-size: 0.875rem;
+            }
+
+            &:hover:not(:disabled) {
+              background: rgba(0, 0, 0, 0.07);
+              color: var(--color-text-primary, #0f172a);
+            }
+
+            &:active:not(:disabled) {
+              transform: scale(0.95);
+            }
+
+            &:disabled {
+              opacity: 0.6;
+              cursor: not-allowed;
+            }
+
+            &.btn-apple-cancel {
+              color: var(--color-crimson, #ba0c2f);
+
+              &:hover:not(:disabled) {
+                background: rgba(186, 12, 47, 0.08);
+                color: #960a26;
+              }
+            }
+          }
+        }
+      }
+
+      /* =========================================================================
+         Apple Live Order Card — High-Contrast Dark Mode Enhancements
+         Applies to both attribute [data-theme='dark'] and class .theme-dark
+         ========================================================================= */
+      :host-context([data-theme='dark']),
+      :host-context(.theme-dark) {
+        .session-parent-card {
+          background: var(--color-surface-card, #161920);
+          border: 1px solid rgba(255, 255, 255, 0.09);
+          box-shadow: 0 4px 24px -2px rgba(0, 0, 0, 0.5), 0 1px 3px rgba(0, 0, 0, 0.3);
+
+          &:hover {
+            box-shadow: 0 12px 32px -4px rgba(0, 0, 0, 0.7);
+            border-color: rgba(255, 255, 255, 0.15);
+          }
+        }
+
+        .apple-table-pill {
+          background: rgba(16, 185, 129, 0.16);
+          color: #34d399;
+          border-color: rgba(16, 185, 129, 0.35);
+
+          &:hover:not(:disabled) {
+            background: rgba(16, 185, 129, 0.24);
+          }
+
+          &.takeaway-pill {
+            background: rgba(59, 130, 246, 0.18);
+            color: #93c5fd;
+            border-color: rgba(59, 130, 246, 0.35);
+          }
+        }
+
+        .apple-ord-num {
+          color: #94a3b8;
+        }
+
+        .apple-ord-time {
+          color: #64748b;
+        }
+
+        .session-rounds-chip {
+          background: rgba(59, 130, 246, 0.18);
+          color: #60a5fa;
+          border-color: rgba(59, 130, 246, 0.35);
+        }
+
+        /* Recessed Guest & Server Strip Dark Mode */
+        .guest-server-recessed {
+          background: rgba(255, 255, 255, 0.035);
+          border-color: rgba(255, 255, 255, 0.07);
+
+          .guest-compact-meta {
+            .guest-avatar-disc {
+              background: rgba(255, 255, 255, 0.1);
+              color: #f1f5f9;
+            }
+
+            .guest-text-col {
+              .cust-name-clean {
+                color: #f1f5f9;
+              }
+
+              .phone-sub-clean {
+                color: #94a3b8;
+              }
+            }
+          }
+
+          .server-inline-picker {
+            .server-select-pill,
+            .server-completed-pill {
+              background: rgba(255, 255, 255, 0.06);
+              border-color: rgba(255, 255, 255, 0.12);
+              color: #cbd5e1;
+            }
+
+            .server-select-clean {
+              color: #f1f5f9;
+              background: transparent;
+
+              &.is-unassigned {
+                color: #64748b;
+              }
+
+              option {
+                background: #181b21;
+                color: #f1f5f9;
+              }
+            }
+
+            .pill-caret {
+              color: #94a3b8;
+            }
+
+            .btn-unlock-inline {
+              color: #94a3b8;
+
+              &:hover {
+                color: #f87171;
+              }
+            }
+          }
+        }
+
+        /* Editorial Receipt Stream Dark Mode */
+        .session-receipt-stream {
+          .receipt-stream-header {
+            color: #64748b;
+
+            .receipt-stream-subtotal {
+              color: #94a3b8;
+            }
+          }
+
+          .receipt-round-segment {
+            &.round-pending-soft {
+              background: rgba(239, 68, 68, 0.06);
+              border-left-color: #f87171;
+            }
+          }
+
+          .round-mini-bar {
+            color: #94a3b8;
+            border-bottom-color: rgba(255, 255, 255, 0.07);
+
+            .round-mini-time {
+              color: #64748b;
+            }
+          }
+
+          .receipt-item-row {
+            .item-name-cluster {
+              .qty-bubble {
+                background: rgba(255, 255, 255, 0.08);
+                color: #f1f5f9;
+              }
+
+              .item-title {
+                color: #f1f5f9;
+              }
+
+              .portion-tag {
+                background: rgba(255, 255, 255, 0.06);
+                color: #94a3b8;
+              }
+            }
+
+            .item-price {
+              color: #cbd5e1;
+            }
+          }
+        }
+
+        /* Apple Financial Breakdown Strip Dark Mode */
+        .grand-bill-strip-apple {
+          background: rgba(255, 255, 255, 0.03);
+          border-color: rgba(255, 255, 255, 0.07);
+
+          .sub-line {
+            color: #94a3b8;
+
+            &.discount {
+              color: #4ade80;
+            }
+
+            &.split-note {
+              color: #60a5fa;
+            }
+          }
+
+          .total-row-apple {
+            border-top-color: rgba(255, 255, 255, 0.08);
+
+            .total-meta-left {
+              .total-label-apple {
+                color: #f8fafc;
+              }
+
+              .tax-badge-apple {
+                color: #fbbf24;
+                background: rgba(245, 158, 11, 0.16);
+                border: 1px solid rgba(245, 158, 11, 0.25);
+              }
+            }
+
+            .payable-val-apple {
+              color: #f87171;
+            }
+          }
+        }
+
+        /* Apple Action Controls Dark Mode */
+        .card-footer-actions-apple {
+          .apple-util-grid {
+            .apple-util-btn {
+              background: rgba(255, 255, 255, 0.05);
+              border-color: rgba(255, 255, 255, 0.08);
+              color: #cbd5e1;
+
+              &:hover:not(:disabled) {
+                background: rgba(255, 255, 255, 0.1);
+                color: #ffffff;
+              }
+
+              &.btn-apple-cancel {
+                color: #f87171;
+                background: rgba(239, 68, 68, 0.08);
+                border-color: rgba(239, 68, 68, 0.15);
+
+                &:hover:not(:disabled) {
+                  background: rgba(239, 68, 68, 0.16);
+                  color: #fca5a5;
+                }
+              }
+            }
+          }
+        }
+      }
+
+      .completed-round-section {
+        padding: 6px 0;
+        border-bottom: 1px dashed var(--color-border);
+
+        &:last-child {
+          border-bottom: none;
+        }
+
+        .completed-round-bar {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          font-size: 0.75rem;
+          font-weight: 700;
+          color: var(--color-text-secondary);
+          margin-bottom: 4px;
+
+          .completed-round-title {
+            color: var(--color-text-primary);
+          }
+
+          .completed-round-total {
+            color: var(--color-crimson);
+          }
+        }
+      }
+
       .card-util-btn {
         display: inline-flex;
         align-items: center;
@@ -4283,21 +5066,29 @@ import {
       .btn-whatsapp {
         display: inline-flex;
         align-items: center;
-        gap: 5px;
+        justify-content: center;
         background: #25d366;
         color: #ffffff;
         font-weight: 600;
         border: none;
         cursor: pointer;
-        transition: background 0.15s ease;
+        transition: background 0.15s ease, transform 0.1s ease;
+        padding: 0 10px;
+        height: 32px;
+        min-width: 34px;
+        border-radius: var(--radius-sm, 6px);
 
         &:hover {
           background: #20ba5a;
           color: #ffffff;
         }
 
+        &:active {
+          transform: scale(0.95);
+        }
+
         i {
-          font-size: 1rem;
+          font-size: 1.15rem;
         }
       }
 
@@ -4326,430 +5117,1012 @@ import {
         flex-wrap: wrap;
       }
 
-      .manual-order-modal {
-        width: 100%;
-        max-width: 1040px;
-        max-height: 90vh;
+      .modal-card.manual-order-modal-canvas {
+        max-width: 1040px !important;
+        width: 95vw;
+        height: 88vh;
+        max-height: 840px;
         display: flex;
         flex-direction: column;
-      }
-
-      .manual-order-workspace {
-        display: grid;
-        grid-template-columns: 1.15fr 1fr;
-        gap: 20px;
-        overflow-y: auto;
-        padding: 16px 20px;
-        max-height: calc(90vh - 140px);
-
-        @media (max-width: 860px) {
-          grid-template-columns: 1fr;
-        }
-      }
-
-      /* POS Dish Catalog Panel (Left) */
-      .pos-dish-catalog-panel {
-        display: flex;
-        flex-direction: column;
-        gap: 12px;
-        background: var(--color-bone-light);
+        border-radius: 16px;
+        box-shadow: 0 24px 64px rgba(0, 0, 0, 0.28);
         border: 1px solid var(--color-border);
-        border-radius: var(--radius-md);
-        padding: 14px;
-        max-height: 540px;
+        background: var(--color-surface);
         overflow: hidden;
-      }
 
-      .catalog-panel-top {
-        display: flex;
-        flex-direction: column;
-        gap: 10px;
-      }
-
-      .catalog-search-wrap {
-        position: relative;
-        display: flex;
-        align-items: center;
-
-        .search-ico {
-          position: absolute;
-          left: 12px;
-          color: var(--color-taupe);
-          font-size: 1.05rem;
-          pointer-events: none;
-        }
-
-        .catalog-search-input {
-          padding-left: 36px;
-          padding-right: 32px;
-          height: 38px;
+        .modal-header {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          padding: 16px 22px;
+          border-bottom: 1px solid var(--color-border);
           background: var(--color-surface);
-          border-radius: var(--radius-sm);
-        }
 
-        .search-clear-btn {
-          position: absolute;
-          right: 8px;
-          background: transparent;
-          border: none;
-          color: var(--color-text-muted);
-          cursor: pointer;
-          font-size: 0.85rem;
-          padding: 4px;
-          &:hover {
-            color: var(--color-onyx);
+          .modal-title-with-icon {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+
+            .icon-circle {
+              width: 38px;
+              height: 38px;
+              border-radius: 10px;
+              background: var(--color-bone-light, #f1f5f9);
+              color: var(--color-crimson, #dc2626);
+              display: flex;
+              align-items: center;
+              justify-content: center;
+              font-size: 1.25rem;
+              border: 1px solid var(--color-border);
+            }
+
+            .heading-card {
+              font-size: 1.125rem;
+              font-weight: 700;
+              margin: 0;
+              color: var(--color-text-primary);
+            }
+          }
+
+          .close-btn {
+            width: 32px;
+            height: 32px;
+            border-radius: 8px;
+            border: 1px solid var(--color-border);
+            background: var(--color-surface);
+            color: var(--color-text-muted);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1rem;
+            transition: all 0.15s ease;
+
+            &:hover {
+              background: var(--color-bone-light, #f1f5f9);
+              color: var(--color-text-primary);
+            }
           }
         }
-      }
 
-      .catalog-cat-chips {
-        display: flex;
-        gap: 6px;
-        overflow-x: auto;
-        padding-bottom: 2px;
-        scrollbar-width: none;
-        &::-webkit-scrollbar {
-          display: none;
-        }
-      }
+        .manual-order-workspace {
+          display: grid;
+          grid-template-columns: 380px 1fr;
+          gap: 20px;
+          padding: 20px 24px;
+          flex: 1;
+          min-height: 0;
+          overflow: hidden;
 
-      .cat-chip {
-        padding: 5px 12px;
-        font-size: 0.75rem;
-        font-weight: 600;
-        background: var(--color-surface);
-        border: 1px solid var(--color-border);
-        border-radius: var(--radius-full);
-        color: var(--color-text-secondary);
-        white-space: nowrap;
-        cursor: pointer;
-        transition: all var(--transition-fast);
-
-        &:hover {
-          border-color: var(--color-taupe);
-          color: var(--color-onyx);
-        }
-
-        &.active {
-          background: var(--color-onyx);
-          color: #ffffff;
-          border-color: var(--color-onyx);
-        }
-      }
-
-      .catalog-diet-chips {
-        display: flex;
-        gap: 6px;
-      }
-
-      .diet-filter-pill {
-        display: inline-flex;
-        align-items: center;
-        gap: 4px;
-        padding: 4px 10px;
-        font-size: 0.6875rem;
-        font-weight: 700;
-        border-radius: var(--radius-full);
-        background: var(--color-surface);
-        border: 1px solid var(--color-border);
-        color: var(--color-text-secondary);
-        cursor: pointer;
-        transition: all var(--transition-fast);
-
-        &:hover {
-          border-color: var(--color-taupe);
-        }
-
-        &.active {
-          background: var(--color-onyx);
-          color: #ffffff;
-          border-color: var(--color-onyx);
-        }
-
-        .diet-dot {
-          width: 6px;
-          height: 6px;
-          border-radius: 50%;
-          &.veg {
-            background: #1b633e;
-          }
-          &.non-veg {
-            background: #a91c12;
+          @media (max-width: 860px) {
+            grid-template-columns: 1fr;
+            overflow-y: auto;
           }
         }
-      }
 
-      .catalog-dishes-stream {
-        display: flex;
-        flex-direction: column;
-        gap: 8px;
-        overflow-y: auto;
-        padding-right: 4px;
-        flex: 1;
-        min-height: 240px;
-      }
+        /* LEFT SIDE: DISH CATALOG */
+        .pos-dish-catalog-panel {
+          border-right: 1px solid var(--color-border);
+          padding-right: 20px;
+          display: flex;
+          flex-direction: column;
+          gap: 14px;
+          min-height: 0;
+          overflow: hidden;
 
-      .pos-dish-card {
-        background: var(--color-surface);
-        border: 1px solid var(--color-border);
-        border-radius: var(--radius-sm);
-        padding: 10px 12px;
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: 10px;
-        cursor: pointer;
-        transition: all var(--transition-fast);
+          @media (max-width: 860px) {
+            border-right: none;
+            padding-right: 0;
+            border-bottom: 1px solid var(--color-border);
+            padding-bottom: 16px;
+            max-height: 360px;
+          }
 
-        &:hover:not(.is-out-of-stock) {
-          border-color: var(--color-crimson);
-          background: var(--color-surface-hover);
-          transform: translateX(2px);
-          box-shadow: var(--shadow-xs);
+          .catalog-panel-top {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            flex-shrink: 0;
+          }
+
+          .catalog-search-wrap {
+            position: relative;
+            display: flex;
+            align-items: center;
+
+            .search-ico {
+              position: absolute;
+              left: 12px;
+              color: var(--color-text-muted);
+              font-size: 0.9375rem;
+              pointer-events: none;
+            }
+
+            .catalog-search-input {
+              padding-left: 36px;
+              padding-right: 32px;
+              width: 100%;
+              font-size: 0.8125rem;
+              height: 38px;
+              border-radius: 8px;
+              border: 1px solid var(--color-border);
+              background: var(--color-surface);
+              color: var(--color-text-primary);
+              transition: border-color 0.15s ease, box-shadow 0.15s ease;
+
+              &:focus {
+                border-color: var(--color-crimson, #dc2626);
+                box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.12);
+                outline: none;
+              }
+            }
+
+            .search-clear-btn {
+              position: absolute;
+              right: 10px;
+              background: none;
+              border: none;
+              cursor: pointer;
+              color: var(--color-text-muted);
+              padding: 4px;
+              border-radius: 4px;
+              display: flex;
+              align-items: center;
+
+              &:hover {
+                color: var(--color-text-primary);
+              }
+            }
+          }
+
+          .catalog-cat-chips {
+            display: flex;
+            gap: 6px;
+            overflow-x: auto;
+            padding-bottom: 4px;
+            scrollbar-width: none;
+            &::-webkit-scrollbar {
+              display: none;
+            }
+
+            .cat-chip {
+              padding: 5px 12px;
+              border-radius: 999px;
+              font-size: 0.75rem;
+              font-weight: 600;
+              border: 1px solid var(--color-border);
+              background: var(--color-surface);
+              color: var(--color-text-secondary);
+              cursor: pointer;
+              white-space: nowrap;
+              transition: all 0.15s ease;
+
+              &:hover {
+                border-color: var(--color-text-muted);
+                color: var(--color-text-primary);
+              }
+
+              &.active {
+                background: var(--color-crimson, #dc2626);
+                color: #ffffff;
+                border-color: var(--color-crimson, #dc2626);
+                box-shadow: 0 2px 8px rgba(220, 38, 38, 0.25);
+              }
+            }
+          }
+
+          .catalog-diet-chips {
+            display: flex;
+            gap: 6px;
+
+            .diet-filter-pill {
+              display: inline-flex;
+              align-items: center;
+              gap: 5px;
+              padding: 4px 10px;
+              font-size: 0.71875rem;
+              font-weight: 600;
+              border-radius: 6px;
+              border: 1px solid var(--color-border);
+              background: var(--color-surface);
+              color: var(--color-text-secondary);
+              cursor: pointer;
+              transition: all 0.15s ease;
+
+              &:hover {
+                border-color: var(--color-text-muted);
+              }
+
+              &.active {
+                border-color: var(--color-text-primary);
+                color: var(--color-text-primary);
+                background: var(--color-bone-light, #f8fafc);
+                font-weight: 700;
+              }
+
+              .diet-dot {
+                width: 7px;
+                height: 7px;
+                border-radius: 50%;
+                &.veg { background: #16a34a; }
+                &.non-veg { background: #dc2626; }
+              }
+            }
+          }
+
+          .catalog-dishes-stream {
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            padding-right: 6px;
+            flex: 1;
+            min-height: 0;
+
+            .pos-dish-card {
+              display: flex;
+              align-items: center;
+              justify-content: space-between;
+              padding: 10px 14px;
+              background: var(--color-surface);
+              border: 1px solid var(--color-border);
+              border-radius: 10px;
+              cursor: pointer;
+              transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+
+              &:hover {
+                border-color: var(--color-crimson, #dc2626);
+                transform: translateY(-1px);
+                box-shadow: 0 4px 12px rgba(0, 0, 0, 0.04);
+              }
+
+              &.in-tray {
+                border-color: #10b981;
+                background: rgba(16, 185, 129, 0.05);
+              }
+
+              &.is-out-of-stock {
+                opacity: 0.55;
+                cursor: not-allowed;
+                pointer-events: none;
+                filter: grayscale(0.6);
+              }
+
+              .dish-card-details {
+                display: flex;
+                flex-direction: column;
+                gap: 3px;
+                min-width: 0;
+
+                .dish-name-row {
+                  display: flex;
+                  align-items: center;
+                  gap: 6px;
+
+                  .dish-title {
+                    font-size: 0.84375rem;
+                    font-weight: 600;
+                    color: var(--color-text-primary);
+                    white-space: nowrap;
+                    overflow: hidden;
+                    text-overflow: ellipsis;
+                    max-width: 220px;
+                  }
+                }
+
+                .dish-sub-row {
+                  display: flex;
+                  align-items: center;
+                  gap: 8px;
+
+                  .dish-cost {
+                    font-size: 0.8125rem;
+                    color: var(--color-text-secondary);
+                    font-weight: 600;
+                  }
+
+                  .stock-tag {
+                    font-size: 0.625rem;
+                    font-weight: 700;
+                    padding: 1px 6px;
+                    border-radius: 4px;
+                    text-transform: uppercase;
+                    letter-spacing: 0.03em;
+                    &.low { background: #fef3c7; color: #b45309; }
+                    &.out { background: #fee2e2; color: #b91c1c; }
+                  }
+                }
+              }
+
+              .dish-card-action {
+                display: flex;
+                align-items: center;
+                gap: 8px;
+                flex-shrink: 0;
+
+                .tray-counter-pill {
+                  font-size: 0.6875rem;
+                  font-weight: 700;
+                  background: #10b981;
+                  color: #ffffff;
+                  padding: 2px 8px;
+                  border-radius: 999px;
+                  box-shadow: 0 1px 4px rgba(16, 185, 129, 0.3);
+                }
+
+                .quick-add-btn {
+                  width: 30px;
+                  height: 30px;
+                  border-radius: 8px;
+                  border: 1px solid var(--color-border);
+                  background: var(--color-surface);
+                  cursor: pointer;
+                  display: flex;
+                  align-items: center;
+                  justify-content: center;
+                  color: var(--color-crimson, #dc2626);
+                  font-size: 0.9375rem;
+                  transition: all 0.15s ease;
+
+                  &:hover {
+                    background: var(--color-crimson, #dc2626);
+                    color: #ffffff;
+                    border-color: var(--color-crimson, #dc2626);
+                  }
+                }
+              }
+            }
+
+            .empty-catalog-msg {
+              display: flex;
+              flex-direction: column;
+              align-items: center;
+              justify-content: center;
+              padding: 40px 16px;
+              color: var(--color-text-muted);
+              font-size: 0.8125rem;
+              text-align: center;
+              gap: 8px;
+
+              i {
+                font-size: 1.75rem;
+                opacity: 0.7;
+              }
+            }
+          }
         }
 
-        &.in-tray {
-          border-color: rgba(212, 175, 55, 0.7);
-          background: var(--color-gold-subtle);
+        /* RIGHT SIDE: ORDER DETAILS & TRAY SUMMARY */
+        .pos-order-summary-panel {
+          display: flex;
+          flex-direction: column;
+          gap: 14px;
+          min-height: 0;
+          overflow: hidden;
+
+          /* Table & Guest Context Card */
+          .pos-context-card {
+            background: var(--color-surface);
+            border: 1px solid var(--color-border);
+            border-radius: 12px;
+            padding: 14px 16px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.03);
+
+            /* Segmented order-type switcher */
+            .pos-order-type-segmented {
+              display: flex;
+              background: var(--color-bone-light, #f1f5f9);
+              padding: 3px;
+              border-radius: 8px;
+              gap: 4px;
+              border: 1px solid var(--color-border);
+
+              .type-seg-btn {
+                flex: 1;
+                display: inline-flex;
+                align-items: center;
+                justify-content: center;
+                gap: 6px;
+                padding: 6px 12px;
+                font-size: 0.75rem;
+                font-weight: 700;
+                color: var(--color-text-secondary);
+                background: transparent;
+                border: none;
+                border-radius: 6px;
+                cursor: pointer;
+                transition: all 0.15s ease;
+
+                i {
+                  font-size: 0.875rem;
+                }
+
+                &:hover:not(:disabled) {
+                  color: var(--color-text-primary);
+                }
+
+                &.active {
+                  background: var(--color-surface);
+                  color: var(--color-crimson, #dc2626);
+                  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
+                }
+
+                &:disabled,
+                &.disabled {
+                  opacity: 0.45;
+                  cursor: not-allowed;
+                }
+              }
+            }
+
+            .table-assignment-banner {
+              display: flex;
+              align-items: center;
+              justify-content: space-between;
+              gap: 16px;
+              padding-bottom: 12px;
+              border-bottom: 1px solid var(--color-border-subtle, rgba(0, 0, 0, 0.06));
+
+              @media (max-width: 640px) {
+                flex-direction: column;
+                align-items: stretch;
+              }
+
+              &.takeaway-banner {
+                background: linear-gradient(135deg, rgba(30, 41, 59, 0.03), transparent);
+                padding: 10px 12px;
+                border-radius: 8px;
+                border: 1px dashed var(--color-border);
+
+                .takeaway-pill {
+                  background: rgba(30, 41, 59, 0.12);
+                  color: var(--color-onyx);
+                  .status-dot { background: var(--color-onyx); }
+                }
+
+                .takeaway-ref-badge {
+                  color: var(--color-onyx);
+                  background: rgba(30, 41, 59, 0.08);
+                  font-family: monospace;
+                  letter-spacing: 0.03em;
+                }
+
+                .takeaway-ref-input {
+                  font-family: monospace;
+                  font-weight: 700;
+                  background: var(--color-bone-light, #f1f5f9);
+                  cursor: default;
+                }
+              }
+
+              .assignment-meta {
+                display: flex;
+                flex-direction: column;
+                gap: 6px;
+
+                .assignment-label-row {
+                  display: flex;
+                  align-items: center;
+                  gap: 8px;
+
+                  .context-eyebrow {
+                    font-size: 0.6875rem;
+                    font-weight: 700;
+                    text-transform: uppercase;
+                    letter-spacing: 0.06em;
+                    color: var(--color-text-muted);
+                    display: inline-flex;
+                    align-items: center;
+                    gap: 5px;
+
+                    i {
+                      font-size: 0.8125rem;
+                    }
+                  }
+
+                  .table-status-pill {
+                    font-size: 0.625rem;
+                    font-weight: 700;
+                    text-transform: uppercase;
+                    padding: 2px 7px;
+                    border-radius: 999px;
+                    display: inline-flex;
+                    align-items: center;
+                    gap: 4px;
+                    letter-spacing: 0.04em;
+
+                    .status-dot {
+                      width: 5px;
+                      height: 5px;
+                      border-radius: 50%;
+                    }
+
+                    &.available {
+                      background: rgba(22, 163, 74, 0.12);
+                      color: #16a34a;
+                      .status-dot { background: #16a34a; }
+                    }
+
+                    &.occupied {
+                      background: rgba(220, 38, 38, 0.12);
+                      color: #dc2626;
+                      .status-dot { background: #dc2626; }
+                    }
+
+                    &.reserved {
+                      background: rgba(217, 119, 6, 0.12);
+                      color: #d97706;
+                      .status-dot { background: #d97706; }
+                    }
+
+                    &.dirty {
+                      background: rgba(100, 116, 139, 0.14);
+                      color: #64748b;
+                      .status-dot { background: #64748b; }
+                    }
+                  }
+                }
+
+                .selected-table-showcase {
+                  display: flex;
+                  align-items: center;
+                  gap: 8px;
+                  flex-wrap: wrap;
+
+                  .tbl-badge {
+                    font-size: 1rem;
+                    font-weight: 800;
+                    color: var(--color-text-primary);
+                    background: var(--color-bone-light, #f1f5f9);
+                    padding: 3px 10px;
+                    border-radius: 8px;
+                    border: 1px solid var(--color-border);
+                  }
+
+                  .tbl-detail-pill {
+                    font-size: 0.75rem;
+                    font-weight: 600;
+                    color: var(--color-text-secondary);
+                    display: inline-flex;
+                    align-items: center;
+                    gap: 4px;
+
+                    i {
+                      font-size: 0.8125rem;
+                      color: var(--color-text-muted);
+                    }
+                  }
+                }
+              }
+
+              .table-picker-control {
+                display: flex;
+                flex-direction: column;
+                align-items: flex-end;
+                gap: 4px;
+
+                @media (max-width: 640px) {
+                  align-items: stretch;
+                }
+
+                .picker-label {
+                  font-size: 0.6875rem;
+                  font-weight: 600;
+                  color: var(--color-text-muted);
+                }
+
+                .custom-table-select {
+                  min-width: 200px;
+                  max-width: 260px;
+                  height: 34px;
+                  font-size: 0.75rem;
+                  font-weight: 600;
+                  padding: 4px 10px;
+                  border-radius: 8px;
+                  border: 1px solid var(--color-border);
+                  background: var(--color-surface);
+                  color: var(--color-text-primary);
+                  cursor: pointer;
+                }
+              }
+            }
+
+            .guest-details-grid {
+              display: grid;
+              grid-template-columns: 1fr 1fr;
+              gap: 12px;
+
+              @media (max-width: 540px) {
+                grid-template-columns: 1fr;
+              }
+
+              .form-group.compact {
+                display: flex;
+                flex-direction: column;
+                gap: 4px;
+
+                .form-label-compact {
+                  font-size: 0.6875rem;
+                  font-weight: 700;
+                  color: var(--color-text-muted);
+                  text-transform: uppercase;
+                  letter-spacing: 0.04em;
+                  display: flex;
+                  align-items: center;
+                  gap: 4px;
+
+                  i {
+                    font-size: 0.75rem;
+                  }
+                }
+
+                .input-icon-wrap {
+                  position: relative;
+                  display: flex;
+                  align-items: center;
+
+                  .input-prefix-icon {
+                    position: absolute;
+                    left: 10px;
+                    color: var(--color-text-muted);
+                    font-size: 0.875rem;
+                    pointer-events: none;
+                  }
+
+                  .custom-input {
+                    padding-left: 32px;
+                    height: 34px;
+                    font-size: 0.8125rem;
+                    border-radius: 8px;
+                    border: 1px solid var(--color-border);
+                    background: var(--color-surface);
+                    color: var(--color-text-primary);
+                    width: 100%;
+
+                    &:focus {
+                      border-color: var(--color-crimson, #dc2626);
+                      box-shadow: 0 0 0 2px rgba(220, 38, 38, 0.1);
+                      outline: none;
+                    }
+                  }
+                }
+              }
+            }
+          }
+
+          /* Items Tray Box */
+          .manual-items-box {
+            display: flex;
+            flex-direction: column;
+            background: var(--color-bone-light, #f8fafc);
+            border: 1px solid var(--color-border);
+            border-radius: 12px;
+            padding: 14px;
+            flex: 1;
+            min-height: 0;
+            overflow: hidden;
+
+            .tray-header {
+              display: flex;
+              align-items: center;
+              justify-content: space-between;
+              padding-bottom: 10px;
+              border-bottom: 1px solid var(--color-border);
+              flex-shrink: 0;
+
+              .tray-title-group {
+                display: flex;
+                align-items: center;
+                gap: 8px;
+
+                .tray-title {
+                  font-size: 0.75rem;
+                  font-weight: 700;
+                  color: var(--color-text-primary);
+                  text-transform: uppercase;
+                  letter-spacing: 0.05em;
+                }
+
+                .tray-badge {
+                  font-size: 0.6875rem;
+                  font-weight: 700;
+                  padding: 2px 7px;
+                  border-radius: 999px;
+                  background: var(--color-border);
+                  color: var(--color-text-muted);
+
+                  &.has-items {
+                    background: #10b981;
+                    color: #ffffff;
+                  }
+                }
+              }
+
+              .clear-tray-btn {
+                background: none;
+                border: none;
+                color: var(--color-text-muted);
+                cursor: pointer;
+                font-size: 0.6875rem;
+                font-weight: 600;
+                display: inline-flex;
+                align-items: center;
+                gap: 4px;
+                padding: 3px 6px;
+                border-radius: 4px;
+                transition: all 0.15s ease;
+
+                &:hover {
+                  color: var(--color-danger, #dc2626);
+                  background: rgba(220, 38, 38, 0.08);
+                }
+              }
+            }
+
+            .empty-tray-state {
+              display: flex;
+              flex-direction: column;
+              align-items: center;
+              justify-content: center;
+              padding: 32px 16px;
+              text-align: center;
+              gap: 8px;
+              margin: auto 0;
+
+              .empty-tray-icon {
+                width: 44px;
+                height: 44px;
+                border-radius: 50%;
+                background: var(--color-surface);
+                border: 1px solid var(--color-border);
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                color: var(--color-text-muted);
+                font-size: 1.25rem;
+              }
+
+              .empty-tray-title {
+                font-size: 0.875rem;
+                font-weight: 700;
+                color: var(--color-text-primary);
+                margin: 0;
+              }
+
+              .empty-tray-subtitle {
+                font-size: 0.75rem;
+                color: var(--color-text-muted);
+                margin: 0;
+                max-width: 260px;
+                line-height: 1.4;
+              }
+            }
+
+            .manual-items-table {
+              overflow-y: auto;
+              display: flex;
+              flex-direction: column;
+              gap: 8px;
+              padding: 10px 4px 10px 0;
+              flex: 1;
+              min-height: 0;
+
+              .m-item-row {
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                gap: 12px;
+                padding: 8px 12px;
+                background: var(--color-surface);
+                border: 1px solid var(--color-border);
+                border-radius: 8px;
+                box-shadow: 0 1px 2px rgba(0, 0, 0, 0.02);
+                transition: border-color 0.15s ease;
+
+                &:hover {
+                  border-color: rgba(220, 38, 38, 0.3);
+                }
+
+                .m-item-details {
+                  display: flex;
+                  flex-direction: column;
+                  gap: 2px;
+                  flex: 1;
+                  min-width: 0;
+
+                  .m-item-title {
+                    font-size: 0.8125rem;
+                    font-weight: 600;
+                    color: var(--color-text-primary);
+                    white-space: nowrap;
+                    overflow: hidden;
+                    text-overflow: ellipsis;
+                  }
+
+                  .m-item-rate {
+                    font-size: 0.6875rem;
+                    color: var(--color-text-muted);
+                    font-weight: 500;
+                  }
+                }
+
+                .m-qty-stepper {
+                  display: inline-flex;
+                  align-items: center;
+                  gap: 2px;
+                  background: var(--color-bone-light, #f1f5f9);
+                  border: 1px solid var(--color-border);
+                  border-radius: 6px;
+                  padding: 2px;
+
+                  .stepper-btn {
+                    width: 24px;
+                    height: 24px;
+                    border: none;
+                    background: transparent;
+                    color: var(--color-text-primary);
+                    border-radius: 4px;
+                    cursor: pointer;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    font-size: 0.75rem;
+                    transition: background 0.15s ease;
+
+                    &:hover {
+                      background: var(--color-surface);
+                      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+                    }
+                  }
+
+                  .stepper-count {
+                    min-width: 24px;
+                    text-align: center;
+                    font-size: 0.75rem;
+                    font-weight: 700;
+                    font-variant-numeric: tabular-nums;
+                    color: var(--color-text-primary);
+                  }
+                }
+
+                .m-item-right {
+                  display: flex;
+                  align-items: center;
+                  gap: 8px;
+                  flex-shrink: 0;
+
+                  .m-item-total {
+                    font-size: 0.8125rem;
+                    font-weight: 700;
+                    font-family: monospace;
+                    color: var(--color-text-primary);
+                    min-width: 54px;
+                    text-align: right;
+                  }
+
+                  .m-remove-btn {
+                    width: 22px;
+                    height: 22px;
+                    border-radius: 4px;
+                    border: none;
+                    background: transparent;
+                    color: var(--color-text-muted);
+                    cursor: pointer;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    font-size: 0.875rem;
+                    transition: all 0.15s ease;
+
+                    &:hover {
+                      background: rgba(220, 38, 38, 0.1);
+                      color: #dc2626;
+                    }
+                  }
+                }
+              }
+            }
+
+            .order-math-summary {
+              margin-top: auto;
+              padding: 12px 14px;
+              background: var(--color-surface);
+              border: 1px solid var(--color-border);
+              border-radius: 8px;
+              display: flex;
+              flex-direction: column;
+              gap: 6px;
+              flex-shrink: 0;
+
+              .math-row {
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                font-size: 0.75rem;
+                color: var(--color-text-secondary);
+
+                .math-label {
+                  display: inline-flex;
+                  align-items: center;
+                  gap: 6px;
+                }
+
+                .tax-rate-pill {
+                  font-size: 0.625rem;
+                  font-weight: 600;
+                  padding: 1px 5px;
+                  background: var(--color-bone-light, #f1f5f9);
+                  border: 1px solid var(--color-border);
+                  border-radius: 4px;
+                  color: var(--color-text-muted);
+                }
+
+                .math-value {
+                  font-weight: 600;
+                  color: var(--color-text-primary);
+                }
+
+                &.total-highlight {
+                  padding-top: 6px;
+                  border-top: 1px solid var(--color-border);
+                  margin-top: 2px;
+
+                  .total-text-group {
+                    display: flex;
+                    flex-direction: column;
+
+                    .total-main-label {
+                      font-size: 0.875rem;
+                      font-weight: 700;
+                      color: var(--color-text-primary);
+                    }
+
+                    .total-sub-label {
+                      font-size: 0.625rem;
+                      color: var(--color-text-muted);
+                    }
+                  }
+
+                  .total-grand-amount {
+                    font-size: 1.1875rem;
+                    font-weight: 800;
+                    color: var(--color-crimson, #dc2626);
+                    font-family: monospace;
+                    letter-spacing: -0.02em;
+                  }
+                }
+              }
+
+              .math-divider {
+                height: 1px;
+                background: var(--color-border-subtle, rgba(0, 0, 0, 0.05));
+                margin: 2px 0;
+              }
+            }
+          }
         }
 
-        &.is-out-of-stock {
-          opacity: 0.55;
-          cursor: not-allowed;
-          background: var(--color-bone);
-        }
-      }
+        .modal-footer {
+          display: flex;
+          align-items: center;
+          justify-content: flex-end;
+          gap: 10px;
+          padding: 14px 22px;
+          border-top: 1px solid var(--color-border);
+          background: var(--color-surface);
+          flex-shrink: 0;
 
-      .dish-card-details {
-        display: flex;
-        flex-direction: column;
-        gap: 3px;
-        flex: 1;
-        min-width: 0;
-      }
-
-      .dish-name-row {
-        display: flex;
-        align-items: center;
-        gap: 6px;
-      }
-
-      .dish-title {
-        font-size: 0.875rem;
-        font-weight: 700;
-        color: var(--color-text-primary);
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
-      }
-
-      .dish-sub-row {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-      }
-
-      .dish-cost {
-        font-size: 0.8125rem;
-        color: var(--color-onyx);
-      }
-
-      .stock-tag {
-        font-size: 0.625rem;
-        font-weight: 700;
-        padding: 1px 6px;
-        border-radius: var(--radius-xs);
-        text-transform: uppercase;
-
-        &.low {
-          background: var(--color-warning-bg);
-          color: var(--color-warning);
-        }
-        &.out {
-          background: var(--color-danger-bg);
-          color: var(--color-danger);
-        }
-      }
-
-      .dish-card-action {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        flex-shrink: 0;
-      }
-
-      .tray-counter-pill {
-        font-size: 0.6875rem;
-        font-weight: 700;
-        padding: 2px 7px;
-        border-radius: var(--radius-full);
-        background: #7d6514;
-        color: #ffffff;
-      }
-
-      .quick-add-btn {
-        width: 30px;
-        height: 30px;
-        border-radius: var(--radius-sm);
-        border: 1px solid var(--color-border);
-        background: var(--color-surface);
-        color: var(--color-crimson);
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-size: 1rem;
-        cursor: pointer;
-        transition: all var(--transition-fast);
-
-        &:hover:not(:disabled) {
-          background: var(--color-crimson);
-          color: #ffffff;
-          border-color: var(--color-crimson);
-        }
-      }
-
-      .empty-catalog-msg {
-        text-align: center;
-        padding: 30px 10px;
-        color: var(--color-text-muted);
-        font-size: 0.8125rem;
-
-        i {
-          font-size: 1.5rem;
-          margin-bottom: 6px;
-          display: block;
-        }
-      }
-
-      /* POS Order Summary Panel (Right) */
-      .pos-order-summary-panel {
-        display: flex;
-        flex-direction: column;
-        gap: 14px;
-      }
-
-      .manual-items-box {
-        border: 1px solid var(--color-border);
-        border-radius: var(--radius-sm);
-        padding: 14px;
-        background: var(--color-surface);
-      }
-
-      .box-title {
-        font-size: 0.8125rem;
-        font-weight: 700;
-        text-transform: uppercase;
-        letter-spacing: 0.05em;
-        color: var(--color-text-muted);
-        margin-bottom: 10px;
-      }
-
-      .empty-items-notice {
-        font-size: 0.8125rem;
-        color: var(--color-text-muted);
-        font-style: italic;
-        text-align: center;
-        padding: 12px 0;
-      }
-
-      .manual-items-table {
-        display: flex;
-        flex-direction: column;
-        gap: 8px;
-        margin-bottom: 12px;
-      }
-
-      .m-item-row {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: 12px;
-        padding: 8px 10px;
-        background: var(--color-surface-hover);
-        border-radius: var(--radius-xs);
-      }
-
-      .m-item-name {
-        flex: 1;
-        display: flex;
-        flex-direction: column;
-        gap: 2px;
-        font-size: 0.875rem;
-      }
-
-      .m-item-price {
-        font-size: 0.75rem;
-        color: var(--color-text-muted);
-      }
-
-      .m-qty-controls {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-      }
-
-      .qty-btn {
-        width: 24px;
-        height: 24px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        border: 1px solid var(--color-border);
-        background: var(--color-surface);
-        border-radius: 4px;
-        font-weight: 700;
-        cursor: pointer;
-        &:hover {
-          background: var(--color-border-subtle);
-        }
-      }
-
-      .qty-num {
-        font-weight: 700;
-        font-size: 0.875rem;
-        min-width: 16px;
-        text-align: center;
-      }
-
-      .m-item-total {
-        font-weight: 700;
-        font-size: 0.875rem;
-        min-width: 70px;
-        text-align: right;
-      }
-
-      .remove-btn {
-        color: var(--color-danger);
-        background: none;
-        font-size: 1rem;
-        cursor: pointer;
-        padding: 4px;
-        &:hover {
-          opacity: 0.8;
-        }
-      }
-
-      .order-math-summary {
-        border-top: 1px solid var(--color-border);
-        padding-top: 10px;
-        display: flex;
-        flex-direction: column;
-        gap: 4px;
-      }
-
-      .math-line {
-        display: flex;
-        justify-content: space-between;
-        font-size: 0.8125rem;
-        color: var(--color-text-secondary);
-
-        &.total {
-          font-size: 1rem;
-          font-weight: 800;
-          color: var(--color-text-primary);
-          border-top: 1px dashed var(--color-border);
-          padding-top: 6px;
-          margin-top: 2px;
+          .btn-primary {
+            min-width: 160px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            font-weight: 600;
+          }
         }
       }
 
@@ -4829,6 +6202,98 @@ import {
         flex-direction: column;
         gap: 8px;
         margin-bottom: 14px;
+      }
+
+      .settle-items-section {
+        background: var(--color-surface, #ffffff);
+        border: 1px solid var(--color-border, #e2e8f0);
+        border-radius: var(--radius-sm, 6px);
+        padding: 8px 10px;
+        margin: 2px 0 4px;
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+      }
+
+      .settle-items-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        font-size: 0.72rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: var(--color-text-muted, #94a3b8);
+        padding-bottom: 4px;
+        border-bottom: 1px solid var(--color-border, #f1f5f9);
+      }
+
+      .settle-items-list {
+        max-height: 160px;
+        overflow-y: auto;
+        display: flex;
+        flex-direction: column;
+        gap: 5px;
+        padding-right: 2px;
+      }
+
+      .settle-item-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        font-size: 0.8125rem;
+        padding: 2px 0;
+      }
+
+      .settle-item-left {
+        display: flex;
+        align-items: flex-start;
+        gap: 6px;
+        flex: 1;
+        min-width: 0;
+      }
+
+      .item-qty-pill {
+        font-size: 0.7rem;
+        font-weight: 700;
+        background: rgba(99, 102, 241, 0.1);
+        color: var(--color-primary, #6366f1);
+        padding: 1px 5px;
+        border-radius: 4px;
+        flex-shrink: 0;
+        margin-top: 1px;
+      }
+
+      .item-text-group {
+        display: flex;
+        flex-direction: column;
+        min-width: 0;
+      }
+
+      .item-name-text {
+        font-weight: 600;
+        color: var(--color-onyx, #1e293b);
+        line-height: 1.25;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .item-instruction-text {
+        font-size: 0.6875rem;
+        color: var(--color-text-muted, #64748b);
+        line-height: 1.2;
+        margin-top: 1px;
+        font-style: italic;
+      }
+
+      .item-total-price {
+        font-weight: 600;
+        color: var(--color-text-primary, #0f172a);
+        font-family: 'SF Mono', Consolas, monospace;
+        font-size: 0.8125rem;
+        flex-shrink: 0;
+        margin-left: 8px;
       }
 
       .settle-discount-card {
@@ -5746,67 +7211,200 @@ import {
       }
 
       .whatsapp-dialog-card {
-        max-width: 480px;
+        max-width: 540px;
+        border-radius: 20px;
+        overflow: hidden;
       }
 
-      .auth-icon-badge.whatsapp-badge {
-        background: rgba(37, 211, 102, 0.12) !important;
-        color: #25d366 !important;
+      .whatsapp-apple-header {
+        border-bottom: 1px solid var(--color-border);
+        padding-bottom: 12px;
       }
 
-      .whatsapp-preview-box {
-        margin: 0;
-        padding: 10px 12px;
-        background: #f8fafc;
-        border: 1px solid var(--color-border, #e2e8f0);
-        border-radius: 6px;
-        font-family: monospace;
-        font-size: 0.75rem;
-        line-height: 1.45;
-        color: #334155;
-        white-space: pre-wrap;
-        word-break: break-word;
-        max-height: 180px;
-        overflow-y: auto;
-      }
-
-      .btn-whatsapp-action {
-        display: inline-flex;
-        align-items: center;
-        gap: 6px;
-        background: #25d366;
-        color: #ffffff;
-        font-weight: 600;
-        font-size: 0.875rem;
-        padding: 8px 16px;
-        border-radius: var(--radius-sm, 6px);
-        border: none;
-        cursor: pointer;
-        transition: background 0.15s ease;
-
-        &:hover:not(:disabled) {
-          background: #20ba5a;
-        }
-
-        &:disabled {
-          opacity: 0.5;
-          cursor: not-allowed;
-        }
-
-        i {
-          font-size: 1.15rem;
-        }
-      }
-
-      .whatsapp-modal-footer {
+      .whatsapp-header-wrap {
         display: flex;
         align-items: center;
-        justify-content: flex-end;
-        gap: 8px;
-        flex-wrap: wrap;
+        gap: 12px;
+      }
 
-        a.btn {
-          text-decoration: none;
+      .whatsapp-icon-badge {
+        width: 42px;
+        height: 42px;
+        border-radius: 12px;
+        background: rgba(37, 211, 102, 0.12);
+        color: #25d366;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.5rem;
+      }
+
+      .badge-gateway-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        font-size: 0.65rem;
+        font-weight: 700;
+        padding: 2px 7px;
+        border-radius: 999px;
+        background: rgba(148, 163, 184, 0.15);
+        color: var(--color-text-secondary);
+        border: 1px solid rgba(148, 163, 184, 0.25);
+
+        .dot-indicator {
+          width: 6px;
+          height: 6px;
+          border-radius: 50%;
+          background: #94a3b8;
+        }
+
+        &.is-connected {
+          background: rgba(34, 197, 94, 0.12);
+          color: #16a34a;
+          border-color: rgba(34, 197, 94, 0.25);
+
+          .dot-indicator {
+            background: #22c55e;
+            box-shadow: 0 0 6px rgba(34, 197, 94, 0.6);
+          }
+        }
+      }
+
+      .whatsapp-apple-body {
+        display: flex;
+        flex-direction: column;
+        gap: 14px;
+        padding-top: 14px;
+      }
+
+      .label-cluster-between {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 4px;
+      }
+
+      .text-whatsapp {
+        color: #25d366;
+      }
+
+      .admin-verified-pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        font-size: 0.6875rem;
+        font-weight: 700;
+        padding: 2px 8px;
+        border-radius: 999px;
+        background: rgba(16, 185, 129, 0.12);
+        color: #059669;
+        border: 1px solid rgba(16, 185, 129, 0.25);
+      }
+
+      .admin-locked-pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        font-size: 0.6875rem;
+        font-weight: 700;
+        padding: 2px 8px;
+        border-radius: 999px;
+        background: rgba(245, 158, 11, 0.12);
+        color: #b45309;
+        border: 1px solid rgba(245, 158, 11, 0.25);
+      }
+
+      .input-locked {
+        background: rgba(0, 0, 0, 0.04) !important;
+        cursor: not-allowed;
+        color: var(--color-text-secondary);
+      }
+
+      .lock-status-icon {
+        position: absolute;
+        right: 12px;
+        color: var(--color-text-muted);
+        font-size: 1rem;
+      }
+
+      .char-counter-text {
+        font-size: 0.6875rem;
+        color: var(--color-text-muted);
+        font-family: var(--font-mono, monospace);
+      }
+
+      .whatsapp-composer-box {
+        font-family: var(--font-mono, monospace);
+        font-size: 0.75rem;
+        line-height: 1.5;
+        resize: vertical;
+        min-height: 140px;
+        background: var(--color-surface);
+        border: 1px solid var(--color-border);
+        border-radius: 12px;
+        padding: 10px 12px;
+        transition: border-color 0.15s ease;
+
+        &:focus {
+          border-color: #25d366;
+          box-shadow: 0 0 0 3px rgba(37, 211, 102, 0.15);
+        }
+      }
+
+      .whatsapp-apple-footer {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding-top: 14px;
+        border-top: 1px solid var(--color-border);
+
+        .footer-actions-group {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+        }
+
+        .btn-apple-cancel {
+          border-radius: 10px;
+          font-weight: 600;
+        }
+
+        .btn-apple-copy {
+          border-radius: 10px;
+          display: inline-flex;
+          align-items: center;
+          gap: 5px;
+          font-weight: 600;
+        }
+
+        .btn-whatsapp-direct {
+          display: inline-flex;
+          align-items: center;
+          gap: 6px;
+          background: #25d366;
+          color: #ffffff;
+          font-weight: 700;
+          font-size: 0.8125rem;
+          padding: 9px 18px;
+          border-radius: 12px;
+          border: none;
+          cursor: pointer;
+          box-shadow: 0 2px 10px rgba(37, 211, 102, 0.3);
+          transition: transform 0.15s cubic-bezier(0.16, 1, 0.3, 1), background-color 0.15s ease, opacity 0.15s ease;
+
+          &:hover:not(:disabled) {
+            background: #20ba5a;
+            box-shadow: 0 4px 14px rgba(37, 211, 102, 0.4);
+          }
+
+          &:active:not(:disabled) {
+            transform: scale(0.97);
+          }
+
+          &:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+          }
         }
       }
 
@@ -6080,85 +7678,6 @@ import {
         min-width: 140px;
       }
 
-      /* Horizontal Stepper */
-      .stepper-horizontal-bar {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        padding: 8px 4px 4px;
-      }
-
-      .step-point {
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        gap: 4px;
-        flex: 1;
-
-        .point-dot {
-          width: 28px;
-          height: 28px;
-          border-radius: var(--radius-full);
-          background: var(--color-surface);
-          border: 2px solid var(--color-border);
-          color: var(--color-text-muted);
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          font-size: 0.875rem;
-          transition: all var(--transition-fast);
-        }
-
-        .point-lbl {
-          font-size: 0.625rem;
-          font-weight: 700;
-          color: var(--color-text-muted);
-          text-transform: uppercase;
-          letter-spacing: 0.03em;
-          text-align: center;
-        }
-
-        &.done {
-          .point-dot {
-            background: #2e7d32;
-            border-color: #2e7d32;
-            color: #fff;
-          }
-          .point-lbl {
-            color: #2e7d32;
-          }
-        }
-
-        &.current {
-          .point-dot {
-            background: var(--color-crimson);
-            border-color: var(--color-crimson);
-            color: #fff;
-            box-shadow: 0 0 0 3px rgba(186, 12, 47, 0.2);
-          }
-          .point-lbl {
-            color: var(--color-crimson);
-            font-weight: 800;
-          }
-        }
-      }
-
-      .step-connector {
-        height: 2px;
-        flex: 1;
-        background: var(--color-border);
-        margin-top: -16px;
-        transition: background var(--transition-fast);
-
-        &.filled {
-          background: #2e7d32;
-        }
-      }
-
-      .drawer-dispatch-action-row {
-        margin-top: 4px;
-      }
-
       /* Billing Card */
       .payment-status-pill {
         display: inline-flex;
@@ -6427,8 +7946,10 @@ export class OrderQueueComponent {
   private dataService = inject(RestaurantDataService);
   private mock = this.dataService;
   private toastService = inject(ToastService);
-  private adminAuth = inject(AdminAuthService);
+  readonly authService = inject(AdminAuthService);
+  private adminAuth = this.authService;
   private router = inject(Router);
+  readonly whatsAppBridge = inject(WhatsAppBridgeService);
 
   restaurant = this.dataService.restaurant;
 
@@ -6485,11 +8006,39 @@ export class OrderQueueComponent {
   }
 
   printOrderReceipt(ord: Order): void {
-    if ((ord.printCount || 0) > 0) {
-      this.router.navigate(['/admin/billing', ord.id], { queryParams: { reprint: 'true' } });
-    } else {
-      this.router.navigate(['/admin/billing', ord.id]);
+    const freshOrd = this.mock.orders().find((o) => o.id === ord.id) || ord;
+    if (!this.isOrderPaid(freshOrd) || freshOrd.status === 'CANCELLED') {
+      this.toastService.warning('Cannot print bill for an unpaid or cancelled order.');
+      return;
     }
+    if ((freshOrd.printCount || 0) > 0) {
+      this.router.navigate(['/admin/billing', freshOrd.id], { queryParams: { reprint: 'true' } });
+    } else {
+      this.router.navigate(['/admin/billing', freshOrd.id], { queryParams: { preview: 'thermal' } });
+    }
+  }
+
+  handlePrintInvoice(ord: Order): void {
+    if (!this.isOrderPaid(ord) || ord.status === 'CANCELLED') {
+      this.toastService.warning('Cannot print bill for an unpaid or cancelled order.');
+      return;
+    }
+    if (this.isNavigatingToInvoice()) return;
+    this.isNavigatingToInvoice.set(ord.id);
+    this.printOrderReceipt(ord);
+    setTimeout(() => {
+      this.isNavigatingToInvoice.set(null);
+    }, 1200);
+  }
+
+  handleCheckoutAndPrint(session: any): void {
+    const ord = session.primaryOrder;
+    if (!ord) return;
+    if (session.isAllPaid || this.isOrderPaid(ord)) {
+      this.handlePrintInvoice(ord);
+      return;
+    }
+    this.openSettleModal(ord);
   }
 
   isOrderPaid(order: Order | null | undefined): boolean {
@@ -6603,6 +8152,7 @@ export class OrderQueueComponent {
   }
 
   constructor() {
+    this.dataService.loadStaff();
     let lastHandledEventTimestamp = 0;
     effect(() => {
       const ev = this.dataService.liveOrderEvent();
@@ -6632,7 +8182,13 @@ export class OrderQueueComponent {
   }
 
   showManualModal = false;
-  manualTableId = 'counter';
+  manualTableId = signal<string>('');
+  readonly selectedManualTable = computed(
+    () => this.tables().find((t) => t.id === this.manualTableId()) || null,
+  );
+  clearManualTray(): void {
+    this.manualItems = [];
+  }
   manualCustomerName = '';
   manualCustomerPhone = '';
   manualSelectedDishId = '';
@@ -6645,13 +8201,20 @@ export class OrderQueueComponent {
   settleMode = signal<'FULL' | 'SPLIT'>('FULL');
   splitCount = signal<number>(2);
   isSettling = signal<boolean>(false);
+  isProcessingCheckout = signal<string | null>(null);
+  isNavigatingToInvoice = signal<string | null>(null);
 
   // WhatsApp Delivery State
   showWhatsAppModal = signal<boolean>(false);
   whatsAppOrder = signal<Order | null>(null);
   whatsAppPhone = signal<string>('');
+  whatsAppCustomMessage = signal<string>('');
+  isDispatchingWhatsApp = signal<boolean>(false);
 
   whatsAppMessagePreview = computed(() => {
+    if (this.whatsAppCustomMessage()) {
+      return this.whatsAppCustomMessage();
+    }
     const ord = this.whatsAppOrder();
     if (!ord) return '';
     const restName = this.dataService.restaurant()?.name || 'GuruKripa Dhaba';
@@ -6764,35 +8327,194 @@ export class OrderQueueComponent {
     return false;
   }
 
+  groupOrdersIntoSessions(ordersList: Order[]): OrderSessionGroup[] {
+    const sessionMap = new Map<string, Order[]>();
+
+    for (const ord of ordersList) {
+      let key = '';
+      if (ord.seatingSessionId) {
+        key = `sess_${ord.seatingSessionId}`;
+      } else {
+        // No session ID → each order is its own standalone session.
+        // Never group by table alone: different customer visits at the same table
+        // must stay separate. seatingSessionId is the ONLY grouping key.
+        key = `single_${ord.id}`;
+      }
+
+      if (!sessionMap.has(key)) {
+        sessionMap.set(key, []);
+      }
+      sessionMap.get(key)!.push(ord);
+    }
+
+    const groups: OrderSessionGroup[] = [];
+
+    for (const [sId, groupOrders] of sessionMap.entries()) {
+      const sorted = [...groupOrders].sort(
+        (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
+      );
+      const primary = sorted[0];
+      const latest = sorted[sorted.length - 1];
+
+      const grandSubtotal =
+        Math.round(sorted.reduce((sum, r) => sum + (r.subtotal || 0), 0) * 100) / 100;
+      const grandTax =
+        Math.round(sorted.reduce((sum, r) => sum + (r.taxAmount || 0), 0) * 100) / 100;
+      const grandDiscount =
+        Math.round(sorted.reduce((sum, r) => sum + (r.discountAmount || 0), 0) * 100) / 100;
+      const grossTotal = Math.round((grandSubtotal + grandTax) * 100) / 100;
+      const grandTotal = Math.round(Math.max(0, grossTotal - grandDiscount));
+
+      const isAllCompleted = sorted.every((r) => r.status === 'COMPLETED');
+      const isAllPaid = sorted.every((r) => r.paymentStatus === 'PAID');
+
+      // Determine highest operational priority status across active rounds
+      let effectiveStatus: OrderStatus = latest.status;
+      if (sorted.some((r) => r.status === 'PENDING')) {
+        effectiveStatus = 'PENDING';
+      } else if (sorted.some((r) => r.status === 'ACCEPTED')) {
+        effectiveStatus = 'ACCEPTED';
+      } else if (sorted.some((r) => r.status === 'PREPARING')) {
+        effectiveStatus = 'PREPARING';
+      } else if (sorted.some((r) => r.status === 'READY')) {
+        effectiveStatus = 'READY';
+      } else if (sorted.some((r) => r.status === 'DISPATCHED')) {
+        effectiveStatus = 'DISPATCHED';
+      } else if (sorted.every((r) => r.status === 'SERVED')) {
+        effectiveStatus = 'SERVED';
+      } else if (isAllCompleted) {
+        effectiveStatus = 'COMPLETED';
+      } else if (sorted.every((r) => r.status === 'CANCELLED')) {
+        effectiveStatus = 'CANCELLED';
+      }
+
+      const maxPrint = Math.max(0, ...sorted.map((r) => r.printCount || 0));
+      const hasSplit = sorted.some((r) => r.isSplit);
+      const splitCnt = sorted.find((r) => r.isSplit)?.splitCount;
+
+      groups.push({
+        sessionId: sId,
+        primaryOrder: primary,
+        latestOrder: latest,
+        orders: sorted,
+        isMultiRound: sorted.length > 1,
+        orderCount: sorted.length,
+        tableNumber: primary.tableNumber,
+        tableId: primary.tableId,
+        orderType: primary.orderType || 'DINE_IN',
+        pickupReference: primary.pickupReference,
+        customerName: primary.customerName || 'Walk-in Guest',
+        customerPhone: primary.customerPhone,
+        serverStaffId: sorted.find((r) => r.serverStaffId)?.serverStaffId || primary.serverStaffId,
+        createdAt: primary.createdAt,
+        latestCreatedAt: latest.createdAt,
+        grandSubtotal,
+        grandTax,
+        grandDiscount,
+        grandTotal,
+        effectiveStatus,
+        isAllCompleted,
+        isAllPaid,
+        isSplit: hasSplit,
+        splitCount: splitCnt,
+        printCount: maxPrint,
+        paymentMethod: sorted.find((r) => r.paymentMethod)?.paymentMethod || primary.paymentMethod,
+      });
+    }
+
+    return groups;
+  }
+
+  isSessionNew(session: OrderSessionGroup): boolean {
+    const newId = this.latestNewOrderId();
+    if (!newId) return false;
+    return session.orders.some((o) => o.id === newId);
+  }
+
+  isSessionSelected(session: OrderSessionGroup): boolean {
+    const selId = this.selectedSidePanelOrderId();
+    if (!selId) return false;
+    return session.orders.some((o) => o.id === selId);
+  }
+
+  getSessionOrders(ord: Order | null): Order[] {
+    if (!ord) return [];
+    const groups = this.groupOrdersIntoSessions(this.orders());
+    const sess = groups.find((g) => g.orders.some((o) => o.id === ord.id));
+    return sess ? sess.orders : [ord];
+  }
+
+  getSettlementGrandTotal(ord: Order | null): number {
+    const rounds = this.getSessionOrders(ord);
+    if (rounds.length <= 1) return ord?.totalAmount !== undefined ? Math.round(ord.totalAmount) : 0;
+    const sub = Math.round(rounds.reduce((sum, r) => sum + (r.subtotal || 0), 0) * 100) / 100;
+    const tax = Math.round(rounds.reduce((sum, r) => sum + (r.taxAmount || 0), 0) * 100) / 100;
+    const disc = Math.round(rounds.reduce((sum, r) => sum + (r.discountAmount || 0), 0) * 100) / 100;
+    return Math.round(Math.max(0, sub + tax - disc));
+  }
+
+  getSettlementItemsCount(ord: Order | null): number {
+    const rounds = this.getSessionOrders(ord);
+    return rounds.reduce((sum, r) => sum + (r.items ? r.items.length : 0), 0);
+  }
+
+  selectedSessionOrders = computed<Order[]>(() => {
+    const selOrd = this.selectedSidePanelOrder();
+    if (!selOrd) return [];
+    return this.getSessionOrders(selOrd);
+  });
+
   activeOrdersCount = computed(() => {
-    return this.orders().filter((o) => this.isOrderActive(o)).length;
+    return this.groupOrdersIntoSessions(this.orders()).filter(
+      (g) => !g.isAllCompleted && !g.isAllPaid && g.effectiveStatus !== 'COMPLETED' && g.effectiveStatus !== 'CANCELLED',
+    ).length;
   });
 
   countByStatus(status: OrderStatus): number {
-    return this.orders().filter((o) => o.status === status).length;
+    const groups = this.groupOrdersIntoSessions(this.orders());
+    if (status === 'COMPLETED') {
+      return groups.filter((g) => g.isAllCompleted || g.isAllPaid || g.effectiveStatus === 'COMPLETED').length;
+    }
+    return groups.filter((g) => g.orders.some((o) => o.status === status)).length;
   }
 
-  filteredOrders = computed(() => {
-    let list = this.orders();
+  filteredOrderSessions = computed(() => {
+    const all = this.orders();
+    const groups = this.groupOrdersIntoSessions(all);
     const st = this.selectedStatus();
+
+    let list = groups;
+
     if (st === 'ACTIVE') {
-      list = list.filter((o) => this.isOrderActive(o));
-    } else if (st !== 'ALL') {
-      list = list.filter((o) => o.status === st);
+      list = list.filter(
+        (g) => !g.isAllCompleted && !g.isAllPaid && g.effectiveStatus !== 'COMPLETED' && g.effectiveStatus !== 'CANCELLED',
+      );
+    } else if (st === 'COMPLETED') {
+      list = list.filter((g) => g.isAllCompleted || g.isAllPaid || g.effectiveStatus === 'COMPLETED');
     }
 
     const q = this.searchQuery().toLowerCase().trim();
     if (q) {
       list = list.filter(
-        (o) =>
-          o.orderNumber.toLowerCase().includes(q) ||
-          o.customerName.toLowerCase().includes(q) ||
-          (o.pickupReference && o.pickupReference.toLowerCase().includes(q)) ||
-          (o.tableNumber && o.tableNumber.toLowerCase().includes(q)),
+        (g) =>
+          g.orders.some((o) => o.orderNumber.toLowerCase().includes(q)) ||
+          g.customerName.toLowerCase().includes(q) ||
+          (g.customerPhone && g.customerPhone.toLowerCase().includes(q)) ||
+          (g.pickupReference && g.pickupReference.toLowerCase().includes(q)) ||
+          (g.tableNumber && g.tableNumber.toLowerCase().includes(q)) ||
+          g.orders.some((o) =>
+            o.items.some((it) => it.name.toLowerCase().includes(q)),
+          ),
       );
     }
 
-    return list;
+    return list.sort(
+      (a, b) => new Date(b.latestCreatedAt).getTime() - new Date(a.latestCreatedAt).getTime(),
+    );
+  });
+
+  filteredOrders = computed(() => {
+    return this.filteredOrderSessions().flatMap((g) => g.orders);
   });
 
   categories = this.mock.categories;
@@ -6849,9 +8571,9 @@ export class OrderQueueComponent {
     const firstAvail = this.tables().find((t) => t.status === 'AVAILABLE');
     this.manualOrderType = 'DINE_IN';
     this.manualPickupRef = `TK-${Math.floor(100 + Math.random() * 900)}`;
-    this.manualTableId = firstAvail ? firstAvail.id : '';
+    this.manualTableId.set(firstAvail ? firstAvail.id : '');
     this.manualCustomerName = 'Walk-in Guest';
-    this.manualCustomerPhone = '+91 98765 00000';
+    this.manualCustomerPhone = '';
     this.manualDishSearch.set('');
     this.manualDishCategory.set('ALL');
     this.manualDishDietary.set('ALL');
@@ -6911,8 +8633,12 @@ export class OrderQueueComponent {
     return Math.round((this.manualSubtotal() + this.manualTax()) * 100) / 100;
   }
 
+  private isSubmittingManualOrder = false;
+
   submitManualOrder(): void {
-    if (this.manualItems.length === 0) return;
+    if (this.isSubmittingManualOrder || this.manualItems.length === 0) return;
+    this.isSubmittingManualOrder = true;
+    try {
 
     const isTakeaway = this.manualOrderType === 'TAKEAWAY';
 
@@ -6922,13 +8648,13 @@ export class OrderQueueComponent {
         return;
       }
     } else {
-      if (!this.manualTableId || this.manualTableId === 'counter') {
+      if (!this.manualTableId() || this.manualTableId() === 'counter') {
         const firstAvail = this.tables().find((t) => t.status === 'AVAILABLE');
         if (!firstAvail) {
           this.toastService.error('A dining table is required for dine-in orders.');
           return;
         }
-        this.manualTableId = firstAvail.id;
+        this.manualTableId.set(firstAvail.id);
       }
     }
 
@@ -6946,10 +8672,19 @@ export class OrderQueueComponent {
 
     const selectedTable = isTakeaway
       ? undefined
-      : this.tables().find((t) => t.id === this.manualTableId);
-    const orderNum = `#ORD-${Math.floor(100 + Math.random() * 900)}`;
+      : this.tables().find((t) => t.id === this.manualTableId());
 
-    const orderUuid =
+    const existingActiveTableOrder = !isTakeaway && selectedTable
+      ? this.orders().find(
+          (o) =>
+            (o.tableId === selectedTable.id || o.tableNumber === selectedTable.number) &&
+            o.status !== 'CANCELLED' &&
+            o.paymentStatus !== 'PAID' &&
+            o.seatingSessionId,
+        )
+      : undefined;
+
+    const generateUuid = () =>
       typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
         ? crypto.randomUUID()
         : 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
@@ -6957,6 +8692,19 @@ export class OrderQueueComponent {
             const v = c === 'x' ? r : (r & 0x3) | 0x8;
             return v.toString(16);
           });
+
+    const assignedSessionId =
+      existingActiveTableOrder?.seatingSessionId ||
+      selectedTable?.currentSeatingSessionId ||
+      (!isTakeaway && selectedTable ? generateUuid() : undefined);
+
+    if (!isTakeaway && selectedTable && !selectedTable.currentSeatingSessionId && assignedSessionId) {
+      selectedTable.currentSeatingSessionId = assignedSessionId;
+    }
+
+    const orderNum = `#ORD-${Math.floor(100 + Math.random() * 900)}`;
+
+    const orderUuid = generateUuid();
 
     const newOrder: Order = {
       id: orderUuid,
@@ -6966,9 +8714,10 @@ export class OrderQueueComponent {
       restaurantSlug: 'gurukripa-dhaba',
       tableId: !isTakeaway && selectedTable ? selectedTable.id : undefined,
       tableNumber: !isTakeaway && selectedTable ? selectedTable.number : undefined,
+      seatingSessionId: assignedSessionId,
       customerName:
         this.manualCustomerName.trim() || (isTakeaway ? 'Counter Guest' : 'Walk-in Guest'),
-      customerPhone: this.manualCustomerPhone.trim() || '',
+      customerPhone: this.manualCustomerPhone.replace(/\s+/g, '').trim() || '',
       items: [...this.manualItems],
       subtotal: sub,
       discountAmount: 0,
@@ -6993,15 +8742,11 @@ export class OrderQueueComponent {
       ],
     };
 
-    const updatedOrders = [newOrder, ...this.mock.orders()];
-    this.mock.orders.set(updatedOrders);
-    this.mock.saveLocal('orders', updatedOrders);
+    // Persist to backend database via API and record in memory/localStorage
+    this.dataService.addOrder(newOrder);
 
     // Reserve stock for the newly accepted manual order
     this.mock.reserveStockForOrder(newOrder.id);
-
-    // Persist to backend database via API
-    this.dataService.addOrder(newOrder);
 
     // If dining at a table, mark table as OCCUPIED and link activeOrderId
     if (!isTakeaway && selectedTable) {
@@ -7023,6 +8768,9 @@ export class OrderQueueComponent {
         : `Manual order ${newOrder.orderNumber} placed for Table ${newOrder.tableNumber}`,
     );
     this.showManualModal = false;
+    } finally {
+      this.isSubmittingManualOrder = false;
+    }
   }
 
   handleTableBadgeClick(event: Event, order: Order): void {
@@ -7120,6 +8868,11 @@ export class OrderQueueComponent {
     this.closeChangeTableModal();
   }
 
+  isStaffInList(staffId: string | undefined): boolean {
+    if (!staffId) return true;
+    return this.staffMembers().some((s) => s.id === staffId);
+  }
+
   getServerStaffName(staffId: string | undefined): string {
     if (!staffId) return '';
     const staff = this.staffMembers().find((s) => s.id === staffId);
@@ -7174,60 +8927,37 @@ export class OrderQueueComponent {
       return;
     }
     const staffId = staffIdStr && staffIdStr.trim().length > 0 ? staffIdStr : null;
-    const res = this.dataService.assignOrderServer(ord.id, staffId);
-    if (res.success) {
-      this.toastService.success('Order server assigned');
-    } else {
-      this.toastService.error(res.error || 'Could not assign server');
+    const sessionOrders = this.getSessionOrders(ord);
+    for (const s of sessionOrders) {
+      this.dataService.assignOrderServer(s.id, staffId);
     }
-  }
-
-  getOrderStageIndex(status: OrderStatus | string): number {
-    const s = (status || '').toUpperCase();
-    switch (s) {
-      case 'PENDING':
-      case 'DRAFT':
-        return 0;
-      case 'ACCEPTED':
-      case 'CONFIRMED':
-        return 1;
-      case 'PREPARING':
-      case 'IN_PREPARATION':
-        return 2;
-      case 'READY':
-        return 3;
-      case 'DISPATCHED':
-        return 4;
-      case 'SERVED':
-      case 'COMPLETED':
-        return 5;
-      default:
-        return 0;
-    }
-  }
-
-  advanceStatus(order: Order, nextStatus: OrderStatus): void {
-    const live = this.orders().find((o) => o.id === order.id) || order;
-    if (live.status === nextStatus) return;
-    const currentStage = this.getOrderStageIndex(live.status);
-    const targetStage = this.getOrderStageIndex(nextStatus);
-    if (targetStage >= 0 && targetStage < currentStage && nextStatus !== 'CANCELLED') return;
-
-    const res = this.mock.updateOrderStatusAtomic(order.id, nextStatus, {
-      note: `Updated to ${nextStatus} by Floor Dispatch`,
-    });
-
-    if (!res.success) {
-      this.toastService.error(res.error || `Could not advance order to ${nextStatus}`);
-      return;
-    }
-
-    this.toastService.success(`Order ${order.orderNumber} advanced to ${nextStatus}`);
+    this.toastService.success(`Server assigned for Table ${ord.tableNumber || ord.orderNumber}`);
   }
 
   // --- Settle Bill Modal Actions ---
   openSettleModal(order: Order): void {
-    this.selectedOrderForSettlement.set(order);
+    const sessionOrders = this.getSessionOrders(order);
+    if (sessionOrders.length > 1) {
+      const allItems = sessionOrders.flatMap((o) => o.items);
+      const sub = Math.round(sessionOrders.reduce((sum, o) => sum + (o.subtotal || 0), 0) * 100) / 100;
+      const tax = Math.round(sessionOrders.reduce((sum, o) => sum + (o.taxAmount || 0), 0) * 100) / 100;
+      const disc = Math.round(sessionOrders.reduce((sum, o) => sum + (o.discountAmount || 0), 0) * 100) / 100;
+      const tot = Math.max(0, Math.round((sub + tax - disc) * 100) / 100);
+      const consolidated: Order = {
+        ...order,
+        items: allItems,
+        subtotal: sub,
+        taxAmount: tax,
+        discountAmount: disc,
+        totalAmount: tot,
+        isSessionConsolidated: true,
+        sessionRoundsCount: sessionOrders.length,
+        sessionRounds: sessionOrders,
+      };
+      this.selectedOrderForSettlement.set(consolidated);
+    } else {
+      this.selectedOrderForSettlement.set(order);
+    }
     const defaultMethod =
       order.paymentMethod === 'CARD' ? 'CARD' : order.paymentMethod === 'UPI' ? 'UPI' : 'CASH';
     this.selectedPaymentMethod.set(defaultMethod);
@@ -7242,8 +8972,11 @@ export class OrderQueueComponent {
 
   getEffectiveDiscount(ord: Order | null): number {
     if (!ord) return 0;
-    const grossTotal = Math.round(((ord.subtotal || 0) + (ord.taxAmount || 0)) * 100) / 100;
+    const subtotal = ord.subtotal || 0;
+    const taxRate = (this.cgstRate || 2.5) + (this.sgstRate || 2.5);
     if (this.settleDiscountMode() === 'CUSTOM') {
+      const tax = Math.round(subtotal * (taxRate / 100) * 100) / 100;
+      const grossTotal = Math.round((subtotal + tax) * 100) / 100;
       const disc = Math.max(0, this.customDiscountRupees() || 0);
       return Math.min(grossTotal, Math.round(disc * 100) / 100);
     } else {
@@ -7251,31 +8984,62 @@ export class OrderQueueComponent {
       if (!code) return 0;
       const coup = this.activeCoupons().find((c) => c.code.toUpperCase() === code.toUpperCase());
       if (!coup) return 0;
-      if (coup.minOrderValue && ord.subtotal < coup.minOrderValue) return 0;
+      if (coup.minOrderValue && subtotal < coup.minOrderValue) return 0;
 
       let disc = 0;
       if (coup.discountType === 'PERCENTAGE') {
-        disc = (grossTotal * coup.discountValue) / 100;
+        // Coupon discount applies to total BEFORE taxes
+        disc = (subtotal * coup.discountValue) / 100;
         if (coup.maxDiscountAmount && disc > coup.maxDiscountAmount) {
           disc = coup.maxDiscountAmount;
         }
       } else {
         disc = coup.discountValue;
       }
-      return Math.min(grossTotal, Math.round(disc * 100) / 100);
+      return Math.min(subtotal, Math.round(disc * 100) / 100);
     }
+  }
+
+  getSettlementItems(ord: Order | null): OrderItem[] {
+    if (!ord) return [];
+    const rounds =
+      ord.sessionRounds && ord.sessionRounds.length > 0
+        ? ord.sessionRounds
+        : this.getSessionOrders(ord);
+    if (rounds.length > 1) {
+      return rounds.flatMap((r) => r.items || []);
+    }
+    return ord.items || [];
   }
 
   getSettlementTax(ord: Order | null): number {
     if (!ord) return 0;
-    return ord.taxAmount;
+    const subtotal = ord.subtotal || 0;
+    const taxRate = (this.cgstRate || 2.5) + (this.sgstRate || 2.5);
+    if (this.settleDiscountMode() === 'COUPON') {
+      const couponDisc = this.getEffectiveDiscount(ord);
+      const taxable = Math.max(0, subtotal - couponDisc);
+      return Math.round(taxable * (taxRate / 100) * 100) / 100;
+    } else {
+      return Math.round(subtotal * (taxRate / 100) * 100) / 100;
+    }
   }
 
   getSettlementTotal(ord: Order | null): number {
     if (!ord) return 0;
-    const grossTotal = Math.round(((ord.subtotal || 0) + (ord.taxAmount || 0)) * 100) / 100;
-    const effectiveDisc = this.getEffectiveDiscount(ord);
-    return Math.max(0, Math.round((grossTotal - effectiveDisc) * 100) / 100);
+    const subtotal = ord.subtotal || 0;
+    const tax = this.getSettlementTax(ord);
+    if (this.settleDiscountMode() === 'COUPON') {
+      const couponDisc = this.getEffectiveDiscount(ord);
+      const taxable = Math.max(0, subtotal - couponDisc);
+      // Chargeable amount never shows pointed/decimal value: rounded to whole integer
+      return Math.round(Math.max(0, taxable + tax));
+    } else {
+      const grossTotal = subtotal + tax;
+      const adminDisc = this.getEffectiveDiscount(ord);
+      // Chargeable amount never shows pointed/decimal value: rounded to whole integer
+      return Math.round(Math.max(0, grossTotal - adminDisc));
+    }
   }
 
   onCustomDiscountChange(event: Event, maxLimit: number): void {
@@ -7296,7 +9060,10 @@ export class OrderQueueComponent {
 
   applyRoundOffDiscount(ord: Order): void {
     this.settleDiscountMode.set('CUSTOM');
-    const grossTotal = Math.round(((ord.subtotal || 0) + (ord.taxAmount || 0)) * 100) / 100;
+    const subtotal = ord.subtotal || 0;
+    const taxRate = (this.cgstRate || 2.5) + (this.sgstRate || 2.5);
+    const tax = Math.round(subtotal * (taxRate / 100) * 100) / 100;
+    const grossTotal = Math.round((subtotal + tax) * 100) / 100;
     const roundedDown = Math.floor(grossTotal / 10) * 10;
     const neededOff = Math.max(0, Math.round((grossTotal - roundedDown) * 100) / 100);
     this.customDiscountRupees.set(neededOff);
@@ -7347,22 +9114,32 @@ export class OrderQueueComponent {
       }
     }
 
-    // 2. Advance operational status to COMPLETED
-    const completeRes = this.mock.updateOrderStatusAtomic(ord.id, 'COMPLETED', {
-      note: `Bill settled via ${method}${finalDiscount > 0 ? ` with ₹${finalDiscount} discount` : ''} & marked COMPLETED by Floor Dispatch`,
-    });
-
-    this.isSettling.set(false);
-    if (completeRes.success) {
-      this.toastService.success(
-        `Order ${ord.orderNumber} successfully settled & marked COMPLETED via ${method}`,
-      );
-      this.closeSettleModal();
-      this.printOrderReceipt(ord);
-    } else {
-      this.toastService.error(completeRes.error || `Could not complete order ${ord.orderNumber}`);
-      this.closeSettleModal();
+    // 2. Advance operational status to COMPLETED for this order and any sibling session rounds
+    const rounds =
+      ord.sessionRounds && ord.sessionRounds.length > 0
+        ? ord.sessionRounds
+        : this.getSessionOrders(ord);
+    for (const r of rounds) {
+      if (r.id !== ord.id) {
+        this.mock.updateOrderStatusAtomic(r.id, 'COMPLETED', {
+          note: `Consolidated & settled under Master Bill #${ord.orderNumber} via ${method}`,
+        });
+      }
     }
+
+    if (ord.tableId || ord.tableNumber) {
+      this.mock.recalculateTableStatus(ord.tableId || ord.tableNumber!);
+    }
+
+    this.toastService.success(
+      `Order ${ord.orderNumber} successfully settled & marked COMPLETED via ${method}`,
+    );
+    // Apple-style tactile settlement delay to display loading state clearly
+    setTimeout(() => {
+      this.isSettling.set(false);
+      this.closeSettleModal();
+      this.router.navigate(['/admin/billing', ord.id], { queryParams: { preview: 'thermal' } });
+    }, 400);
   }
 
   // --- Split Bill Helpers & Handlers ---
@@ -7456,10 +9233,16 @@ export class OrderQueueComponent {
         paymentMethod: tender,
       });
     }
-    this.isSettling.set(false);
-    this.toastService.success(`All remaining split parts settled via ${tender}.`);
-    this.closeSettleModal();
-    this.printOrderReceipt(order);
+    setTimeout(() => {
+      this.isSettling.set(false);
+      this.mock.updateOrderStatusAtomic(order.id, 'COMPLETED');
+      if (order.tableId || order.tableNumber) {
+        this.mock.recalculateTableStatus(order.tableId || order.tableNumber!);
+      }
+      this.toastService.success(`All remaining split parts settled via ${tender}.`);
+      this.closeSettleModal();
+      this.printOrderReceipt(order);
+    }, 400);
   }
 
   // --- Order Cancellation Handlers ---
@@ -7733,6 +9516,14 @@ export class OrderQueueComponent {
     this.mock.orders.set(updatedOrders);
     this.mock.saveLocal('orders', updatedOrders);
 
+    this.mock.updateOrderItems(ord.id, {
+      items: [...this.editItems()],
+      customerName: this.editCustomerName(),
+      customerPhone: this.editCustomerPhone(),
+      tableId: newTblId,
+      notes: ord.notes,
+    });
+
     this.isSavingEdit.set(false);
     this.showEditModal.set(false);
     this.isManagerOverrideActive.set(false);
@@ -7743,13 +9534,18 @@ export class OrderQueueComponent {
   openWhatsAppModal(ord: Order): void {
     this.whatsAppOrder.set(ord);
     this.whatsAppPhone.set(ord.customerPhone || '');
+    const restName = this.dataService.restaurant()?.name || 'GuruKripa Dhaba';
+    this.whatsAppCustomMessage.set(buildWhatsAppBillMessage(restName, ord, null));
     this.showWhatsAppModal.set(true);
+    this.whatsAppBridge.startStatusPoller();
   }
 
   closeWhatsAppModal(): void {
     this.showWhatsAppModal.set(false);
     this.whatsAppOrder.set(null);
     this.whatsAppPhone.set('');
+    this.whatsAppCustomMessage.set('');
+    this.isDispatchingWhatsApp.set(false);
   }
 
   copyBillToClipboard(): void {
@@ -7781,8 +9577,43 @@ export class OrderQueueComponent {
       return;
     }
     const restName = this.dataService.restaurant()?.name || 'GuruKripa Dhaba';
-    const ok = openWhatsAppBill(phone, restName, ord, null);
-    if (ok) {
+    const message = this.whatsAppMessagePreview();
+
+    this.isDispatchingWhatsApp.set(true);
+
+    if (this.whatsAppBridge.connectionStatus() === 'CONNECTED') {
+      this.toastService.info('Dispatching WhatsApp message in background...');
+      this.whatsAppBridge.sendBill(phone, restName, ord, null, message).subscribe({
+        next: (res) => {
+          this.isDispatchingWhatsApp.set(false);
+          if (res.success) {
+            this.toastService.success('WhatsApp bill delivered directly to customer!');
+            this.closeWhatsAppModal();
+          } else {
+            this.toastService.warning(res.error || 'Direct dispatch failed, opening WhatsApp fallback...');
+            launchExternalUrl(
+              `https://web.whatsapp.com/send?phone=${phone.replace(/\D/g, '')}&text=${encodeURIComponent(message)}`,
+            );
+            this.closeWhatsAppModal();
+          }
+        },
+        error: () => {
+          this.isDispatchingWhatsApp.set(false);
+          launchExternalUrl(
+            `https://web.whatsapp.com/send?phone=${phone.replace(/\D/g, '')}&text=${encodeURIComponent(message)}`,
+          );
+          this.closeWhatsAppModal();
+        },
+      });
+      return;
+    }
+
+    this.isDispatchingWhatsApp.set(false);
+    const cleanDigits = phone.replace(/\D/g, '');
+    if (cleanDigits.length >= 10) {
+      launchExternalUrl(
+        `https://web.whatsapp.com/send?phone=${cleanDigits}&text=${encodeURIComponent(message)}`,
+      );
       this.toastService.success('WhatsApp opened with customer bill!');
       this.closeWhatsAppModal();
     } else {

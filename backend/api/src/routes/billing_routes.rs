@@ -11,12 +11,25 @@ use crate::{
     error::AppError,
     models::{
         billing::{
-            CreateRefundRequest, SettleOrderRequest, SplitOrderRequest, UpdateRefundStatusRequest,
+            CreatePaymentRequest, CreateRefundRequest, SettleOrderRequest, SplitOrderRequest,
+            UpdateRefundStatusRequest,
         },
         common::ApiResponse,
     },
     repositories::BillingRepository,
 };
+
+pub async fn record_payment(
+    State(pool): State<PgPool>,
+    tenant: TenantContext,
+    Json(req): Json<CreatePaymentRequest>,
+) -> Result<impl IntoResponse, AppError> {
+    let payment = BillingRepository::record_payment(&pool, tenant.restaurant_id, req).await?;
+    Ok(Json(ApiResponse::with_message(
+        payment,
+        "Payment recorded successfully",
+    )))
+}
 
 pub async fn settle_order(
     State(pool): State<PgPool>,
@@ -33,6 +46,8 @@ pub async fn settle_order(
     )
     .await?;
 
+    crate::ws::broadcast_order_status(order_id, None, None, "COMPLETED", Some("PAID"));
+
     Ok(Json(ApiResponse::with_message(
         payment,
         "Order settled successfully",
@@ -46,6 +61,25 @@ pub async fn split_order(
     Json(req): Json<SplitOrderRequest>,
 ) -> Result<impl IntoResponse, AppError> {
     let splits = BillingRepository::split_order(&pool, tenant.restaurant_id, order_id, req).await?;
+    Ok(Json(ApiResponse::success(splits)))
+}
+
+pub async fn list_split_bills(
+    State(pool): State<PgPool>,
+    tenant: TenantContext,
+    axum::extract::Query(query): axum::extract::Query<std::collections::HashMap<String, String>>,
+) -> Result<impl IntoResponse, AppError> {
+    let order_id = query.get("order_id").and_then(|id| Uuid::parse_str(id).ok());
+    let splits = BillingRepository::get_split_bills(&pool, tenant.restaurant_id, order_id).await?;
+    Ok(Json(ApiResponse::success(splits)))
+}
+
+pub async fn get_order_split_bills(
+    State(pool): State<PgPool>,
+    tenant: TenantContext,
+    Path(order_id): Path<Uuid>,
+) -> Result<impl IntoResponse, AppError> {
+    let splits = BillingRepository::get_split_bills(&pool, tenant.restaurant_id, Some(order_id)).await?;
     Ok(Json(ApiResponse::success(splits)))
 }
 

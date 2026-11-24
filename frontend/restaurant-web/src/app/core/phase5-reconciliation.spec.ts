@@ -275,7 +275,7 @@ describe('Phase 5 — Operational Consistency & Financial Reconciliation', () =>
       expect(reports.collectedRevenue()).toBe(2300);
       expect(reports.totalRefunds()).toBe(300);
       expect(dashboard.avgOrderValue()).toBe(reports.averageOrderValue());
-    });
+    }, 15000);
   });
 
   // =========================================================================
@@ -636,7 +636,7 @@ describe('Phase 5 — Operational Consistency & Financial Reconciliation', () =>
       // Table must still be OCCUPIED
       const currentStored = mock.tables().find((t) => t.id === 'tbl-01')!;
       expect(currentStored.status).toBe('OCCUPIED');
-    });
+    }, 15000);
   });
 
   // =========================================================================

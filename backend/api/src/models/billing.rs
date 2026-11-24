@@ -7,13 +7,33 @@ pub struct SplitBill {
     pub id: Uuid,
     pub order_id: Uuid,
     pub split_number: i32,
+    #[sqlx(default)]
+    pub split_total_count: Option<i32>,
     pub split_type: String, // 'equal' | 'item' | 'percentage'
     pub amount_paise: i64,
     pub payment_status: String,
     pub settled_at: Option<DateTime<Utc>>,
     pub payment_id: Option<Uuid>,
+    #[sqlx(default)]
+    pub payment_method: Option<String>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
+    // Joined from orders (only populated by get_split_bills, not RETURNING clauses)
+    #[sqlx(default)]
+    pub order_number: Option<String>,
+    #[sqlx(default)]
+    pub order_type: Option<String>,
+    #[sqlx(default)]
+    pub customer_name: Option<String>,
+    #[sqlx(default)]
+    pub pickup_reference: Option<String>,
+    // Proportional financial values (computed in get_split_bills)
+    #[sqlx(default)]
+    pub subtotal_paise: Option<i64>,
+    #[sqlx(default)]
+    pub discount_paise: Option<i64>,
+    #[sqlx(default)]
+    pub tax_paise: Option<i64>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
@@ -82,6 +102,17 @@ pub struct Invoice {
 }
 
 #[derive(Debug, Clone, Deserialize)]
+pub struct CreatePaymentRequest {
+    pub order_id: Uuid,
+    pub amount_paise: i64,
+    pub payment_method: String,
+    pub split_bill_id: Option<Uuid>,
+    pub upi_transaction_ref: Option<String>,
+    pub idempotency_key: Option<String>,
+    pub notes: Option<String>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
 pub struct SettleOrderRequest {
     pub payment_method: String,
     pub amount_paise: i64,
@@ -92,9 +123,15 @@ pub struct SettleOrderRequest {
     pub applied_coupon_code: Option<String>,
 }
 
+fn default_split_type() -> String {
+    "equal".to_string()
+}
+
 #[derive(Debug, Clone, Deserialize)]
 pub struct SplitOrderRequest {
-    pub split_type: String,  // "equal" or "item"
+    #[serde(default = "default_split_type")]
+    pub split_type: String, // "equal" or "item"
+    #[serde(alias = "split_count")]
     pub ways: Option<usize>, // for equal split
     pub item_allocations: Option<Vec<SplitItemAllocationInput>>,
 }

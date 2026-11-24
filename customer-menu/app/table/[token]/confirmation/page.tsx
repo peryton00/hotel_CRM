@@ -41,6 +41,7 @@ function ConfirmationContent() {
   const token = (params?.token as string) || '';
 
   const [order, setOrder] = useState<StoredOrder | null>(null);
+  const [orderStatus, setOrderStatus] = useState<string>('CONFIRMED');
   const [pastOrders, setPastOrders] = useState<CustomerPastOrder[]>([]);
   const [selectedOrderForBill, setSelectedOrderForBill] = useState<CustomerPastOrder | null>(null);
   const [tableInfo, setTableInfo] = useState<TableInfo | null>(null);
@@ -90,6 +91,34 @@ function ConfirmationContent() {
       (sum, po) => sum + (po.total_amount_paise ?? (po.order?.total_amount_paise || 0)),
       0
     );
+
+  useEffect(() => {
+    if (!order?.order_id) return;
+
+    const apiBase = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000';
+    let sse: EventSource | null = null;
+    try {
+      sse = new EventSource(`${apiBase}/events`);
+      sse.onmessage = (ev) => {
+        try {
+          const data = JSON.parse(ev.data);
+          if (
+            (data.event === 'ORDER_STATUS_CHANGED' || data.type === 'ORDER_STATUS_CHANGED') &&
+            data.order_id === order.order_id
+          ) {
+            const newSt = (data.status || '').toUpperCase();
+            if (newSt) {
+              setOrderStatus(newSt);
+            }
+          }
+        } catch {}
+      };
+    } catch {}
+
+    return () => {
+      if (sse) sse.close();
+    };
+  }, [order?.order_id]);
 
   useEffect(() => {
     try {
@@ -160,14 +189,52 @@ function ConfirmationContent() {
           {/* Live Kitchen Status Steps */}
           <div className="mt-5 pt-4 border-t border-neutral-100 dark:border-white/10 flex items-center justify-between text-left px-2">
             <div className="flex items-center gap-2">
-              <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-ping" />
+              <span
+                className={`w-2.5 h-2.5 rounded-full ${
+                  orderStatus === 'COMPLETED'
+                    ? 'bg-blue-500'
+                    : orderStatus === 'SERVED'
+                    ? 'bg-purple-500'
+                    : orderStatus === 'READY' || orderStatus === 'DISPATCHED'
+                    ? 'bg-amber-500'
+                    : 'bg-emerald-500 animate-ping'
+                }`}
+              />
               <div>
-                <div className="text-[11px] font-black text-emerald-700 dark:text-emerald-400">Kitchen KOT Printed</div>
-                <div className="text-[10px] text-neutral-400 dark:text-neutral-500">Chef preparing your food</div>
+                <div className="text-[11px] font-black text-neutral-900 dark:text-neutral-100">
+                  {orderStatus === 'COMPLETED'
+                    ? 'Dining Concluded & Settled'
+                    : orderStatus === 'SERVED'
+                    ? 'Dishes Served at Table'
+                    : orderStatus === 'READY' || orderStatus === 'DISPATCHED'
+                    ? 'Dishes Ready for Serving'
+                    : orderStatus === 'IN_PREPARATION'
+                    ? 'Chef Cooking Your Dishes'
+                    : 'Kitchen KOT Printed'}
+                </div>
+                <div className="text-[10px] text-neutral-400 dark:text-neutral-500">
+                  {orderStatus === 'COMPLETED'
+                    ? 'Thank you for dining with us!'
+                    : orderStatus === 'SERVED'
+                    ? 'Enjoy your hot meal'
+                    : orderStatus === 'READY' || orderStatus === 'DISPATCHED'
+                    ? 'Waiter bringing items to your table'
+                    : orderStatus === 'IN_PREPARATION'
+                    ? 'Freshly cooking on order'
+                    : 'Order received and queued in kitchen'}
+                </div>
               </div>
             </div>
             <span className="text-xs bg-orange-50 dark:bg-orange-950/40 text-orange-700 dark:text-orange-300 border border-orange-200/60 dark:border-orange-800/40 font-bold px-2 py-0.5 rounded-full">
-              ~15-20 mins
+              {orderStatus === 'COMPLETED'
+                ? 'Completed'
+                : orderStatus === 'SERVED'
+                ? 'Served'
+                : orderStatus === 'READY' || orderStatus === 'DISPATCHED'
+                ? 'Ready'
+                : orderStatus === 'IN_PREPARATION'
+                ? '~10 mins'
+                : '~15-20 mins'}
             </span>
           </div>
         </div>

@@ -19,6 +19,7 @@ impl RestaurantRepository {
                    COALESCE(sgst_rate, gst_rate / 2.0, 2.5)::float8 AS sgst_rate,
                    COALESCE(service_charge_rate, 0.0)::float8 AS service_charge_rate,
                    google_review_url,
+                   COALESCE(whatsapp_templates, '{}'::jsonb) AS whatsapp_templates,
                    created_at, updated_at
             FROM restaurants
             WHERE id = $1
@@ -63,8 +64,9 @@ impl RestaurantRepository {
                 sgst_rate = COALESCE($14, sgst_rate),
                 service_charge_rate = COALESCE($15, service_charge_rate),
                 google_review_url = COALESCE($16, google_review_url),
+                whatsapp_templates = COALESCE($17, whatsapp_templates),
                 updated_at = NOW()
-            WHERE id = $17
+            WHERE id = $18
             RETURNING id, name, slug, tagline, description, phone, email, address, city, state, postal_code,
                       gstin, fssai_license, currency, timezone, is_active,
                       COALESCE(gst_rate, 5.0)::float8 AS gst_rate,
@@ -72,6 +74,7 @@ impl RestaurantRepository {
                       COALESCE(sgst_rate, gst_rate / 2.0, 2.5)::float8 AS sgst_rate,
                       COALESCE(service_charge_rate, 0.0)::float8 AS service_charge_rate,
                       google_review_url,
+                      COALESCE(whatsapp_templates, '{}'::jsonb) AS whatsapp_templates,
                       created_at, updated_at
             "#,
         )
@@ -91,6 +94,7 @@ impl RestaurantRepository {
         .bind(payload.sgst_rate)
         .bind(payload.service_charge_rate)
         .bind(&payload.google_review_url)
+        .bind(&payload.whatsapp_templates)
         .bind(id)
         .fetch_optional(pool)
         .await?;

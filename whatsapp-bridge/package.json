@@ -1,0 +1,14 @@
+{
+  "name": "whatsapp-bridge",
+  "version": "1.0.0",
+  "description": "Lightweight Baileys WhatsApp Gateway for HOTEL CRM Desktop",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "@whiskeysockets/baileys": "^6.7.19",
+    "qrcode": "^1.5.4",
+    "pino": "^9.6.0"
+  }
+}

@@ -175,12 +175,13 @@ impl CustomerRepository {
             r#"
             INSERT INTO reservations (
                 restaurant_id, table_id, customer_id, customer_name, customer_phone,
-                guest_count, reservation_time, status, special_requests
+                party_size, reservation_time, status, special_requests
             )
-            VALUES ($1, $2, $3, $4, $5, $6, $7, 'confirmed', $8)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, 'PENDING', $8)
             RETURNING id, restaurant_id, table_id, customer_id, customer_name,
                       COALESCE(customer_phone, '') AS customer_phone,
-                      guest_count, reservation_time, status::text AS status, special_requests,
+                      COALESCE(guest_count, party_size, 2) AS guest_count,
+                      reservation_time, status::text AS status, special_requests,
                       created_at, created_at AS updated_at
             "#,
         )
@@ -202,12 +203,15 @@ impl CustomerRepository {
         pool: &PgPool,
         restaurant_id: Uuid,
         reservation_id: Uuid,
-        new_status: &str,
+        new_status: Option<&str>,
+        table_id: Option<Uuid>,
     ) -> Result<Reservation, AppError> {
         let res = sqlx::query_as::<_, Reservation>(
             r#"
             UPDATE reservations
-            SET status = $3
+            SET status = COALESCE(UPPER($3), status),
+                table_id = COALESCE($4, table_id),
+                updated_at = NOW()
             WHERE restaurant_id = $1 AND id = $2
             RETURNING id, restaurant_id,
                       table_id,
@@ -215,12 +219,13 @@ impl CustomerRepository {
                       COALESCE(customer_phone, customer_phone_e164, '') AS customer_phone,
                       COALESCE(guest_count, party_size, 2) AS guest_count,
                       reservation_time, status::text AS status, special_requests,
-                      created_at, created_at AS updated_at
+                      created_at, updated_at
             "#,
         )
         .bind(restaurant_id)
         .bind(reservation_id)
         .bind(new_status)
+        .bind(table_id)
         .fetch_one(pool)
         .await?;
 

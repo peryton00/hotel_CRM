@@ -94,7 +94,36 @@ export class ApiRestaurantRepository implements IRestaurantRepository {
   }
 
   updateSettings(settings: Partial<Restaurant>): Observable<Restaurant> {
-    return this.api.put<Restaurant>('/restaurants/settings', settings);
+    const payload: any = { ...settings };
+    if (settings.contact) {
+      if (settings.contact.phone !== undefined) payload.phone = settings.contact.phone;
+      if (settings.contact.email !== undefined) payload.email = settings.contact.email;
+      if (settings.contact.googleReviewUrl !== undefined)
+        payload.google_review_url = settings.contact.googleReviewUrl;
+    }
+    if (settings.googleReviewUrl !== undefined) {
+      payload.google_review_url = settings.googleReviewUrl;
+    }
+    if (settings.address) {
+      if (settings.address.street !== undefined) payload.address = settings.address.street;
+      if (settings.address.city !== undefined) payload.city = settings.address.city;
+      if (settings.address.state !== undefined) payload.state = settings.address.state;
+      if (settings.address.zip !== undefined) payload.postal_code = settings.address.zip;
+    }
+    if (settings.taxSettings) {
+      if (settings.taxSettings.gstNumber !== undefined)
+        payload.gstin = settings.taxSettings.gstNumber;
+      if (settings.taxSettings.cgstRate !== undefined)
+        payload.cgst_rate = Number(settings.taxSettings.cgstRate);
+      if (settings.taxSettings.sgstRate !== undefined)
+        payload.sgst_rate = Number(settings.taxSettings.sgstRate);
+      if (settings.taxSettings.serviceChargeRate !== undefined)
+        payload.service_charge_rate = Number(settings.taxSettings.serviceChargeRate);
+      if (payload.cgst_rate !== undefined && payload.sgst_rate !== undefined) {
+        payload.gst_rate = payload.cgst_rate + payload.sgst_rate;
+      }
+    }
+    return this.api.put<Restaurant>('/restaurants/settings', payload);
   }
 }
 

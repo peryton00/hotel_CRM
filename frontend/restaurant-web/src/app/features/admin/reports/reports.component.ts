@@ -2116,6 +2116,11 @@ export class ReportsComponent {
   private mock = this.dataService;
   private toastService = inject(ToastService);
 
+  constructor() {
+    this.dataService.loadInventory();
+    this.dataService.loadCustomers();
+  }
+
   readonly isOrdersLoading = computed(
     () => this.dataService.isOrdersLoading() || !this.dataService.ordersLoaded(),
   );

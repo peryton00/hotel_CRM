@@ -25,12 +25,23 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     println!("Harmonizing restaurants and invoices table columns...");
+
+    let staff_list: Vec<(String, String, String, String, String)> = sqlx::query_as(
+        "SELECT id::text, name, role, COALESCE(login_id, ''), pin_hash FROM staff_members WHERE is_active = true"
+    )
+    .fetch_all(&pool)
+    .await?;
+    println!("\nActive Staff Members in DB:");
+    for (sid, sname, srole, slogin, spin) in staff_list {
+        println!(" - ID: {}, Name: {}, Role: {}, LoginID: '{}', PinHashPrefix: '{}'", sid, sname, srole, slogin, &spin[..std::cmp::min(10, spin.len())]);
+    }
     sqlx::raw_sql(
         r#"
-        -- Restaurants tax rates
+        -- Restaurants tax rates & templates
         ALTER TABLE restaurants ADD COLUMN IF NOT EXISTS cgst_rate NUMERIC(5,2);
         ALTER TABLE restaurants ADD COLUMN IF NOT EXISTS sgst_rate NUMERIC(5,2);
         ALTER TABLE restaurants ADD COLUMN IF NOT EXISTS gst_rate NUMERIC(5,2);
+        ALTER TABLE restaurants ADD COLUMN IF NOT EXISTS whatsapp_templates JSONB;
         UPDATE restaurants SET cgst_rate = COALESCE(cgst_rate, gst_rate / 2.0, 2.5) WHERE cgst_rate IS NULL;
         UPDATE restaurants SET sgst_rate = COALESCE(sgst_rate, gst_rate / 2.0, 2.5) WHERE sgst_rate IS NULL;
         UPDATE restaurants SET gst_rate = COALESCE(gst_rate, cgst_rate + sgst_rate, 5.0) WHERE gst_rate IS NULL;
@@ -43,8 +54,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         ALTER TABLE invoices ADD COLUMN IF NOT EXISTS print_count INT DEFAULT 0;
         ALTER TABLE invoices ADD COLUMN IF NOT EXISTS last_printed_at TIMESTAMPTZ;
         ALTER TABLE invoices ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW();
-        UPDATE invoices SET total_amount_paise = COALESCE(total_amount_paise, total_paise, 0) WHERE total_amount_paise IS NULL;
-        UPDATE invoices SET total_paise = COALESCE(total_paise, total_amount_paise, 0) WHERE total_paise IS NULL;
 
         ALTER TABLE orders ADD COLUMN IF NOT EXISTS cgst_rate NUMERIC(5,2);
         ALTER TABLE orders ADD COLUMN IF NOT EXISTS sgst_rate NUMERIC(5,2);
@@ -60,14 +69,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         );
 
         -- Customers compatibility & unique constraint
-        ALTER TABLE customers ADD COLUMN IF NOT EXISTS total_spent_paise BIGINT DEFAULT 0;
         ALTER TABLE customers ADD COLUMN IF NOT EXISTS total_spend_paise BIGINT DEFAULT 0;
         ALTER TABLE customers ADD COLUMN IF NOT EXISTS total_orders INT DEFAULT 0;
         ALTER TABLE customers ADD COLUMN IF NOT EXISTS visit_count INT DEFAULT 0;
-        UPDATE customers SET total_spent_paise = COALESCE(total_spent_paise, total_spend_paise, 0);
-        UPDATE customers SET total_spend_paise = COALESCE(total_spend_paise, total_spent_paise, 0);
-        UPDATE customers SET total_orders = COALESCE(total_orders, visit_count, 0);
-        UPDATE customers SET visit_count = COALESCE(visit_count, total_orders, 0);
         CREATE UNIQUE INDEX IF NOT EXISTS uq_customers_restaurant_phone ON customers(restaurant_id, phone);
         ALTER TABLE orders ALTER COLUMN order_number DROP NOT NULL;
         CREATE INDEX IF NOT EXISTS idx_orders_customer_phone ON orders(restaurant_id, customer_phone);

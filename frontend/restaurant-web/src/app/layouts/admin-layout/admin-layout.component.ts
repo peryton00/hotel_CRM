@@ -9,6 +9,7 @@ import { AdminThemeService } from '../../core/services/admin-theme.service';
 import { NetworkStatusService } from '../../core/services/network-status.service';
 import { SoundService } from '../../core/services/sound.service';
 import { ToastService } from '../../core/services/toast.service';
+import { WhatsAppBridgeService } from '../../core/services/whatsapp-bridge.service';
 
 @Component({
   selector: 'app-admin-layout',
@@ -29,15 +30,21 @@ import { ToastService } from '../../core/services/toast.service';
       <!-- Admin Sidebar -->
       <aside class="admin-sidebar" [class.mobile-open]="isMobileMenuOpen()">
         <div class="sidebar-brand">
-          <div class="brand-crest">
+          <div class="brand-crest" [attr.title]="restaurant()?.name || 'GuruKripa Dhaba'">
             <img [src]="logoUrl()" alt="Restaurant Logo" class="brand-logo-img" />
           </div>
-          @if (!isSidebarCollapsed()) {
-            <div class="brand-info">
-              <span class="brand-title">{{ restaurant()?.name || 'GuruKripa Dhaba' }}</span>
-              <span class="brand-badge">ADMIN CRM</span>
-            </div>
-          }
+          <div class="brand-info">
+            <span class="brand-title">{{ restaurant()?.name || 'GuruKripa Dhaba' }}</span>
+            <span class="brand-badge">ADMIN CRM</span>
+          </div>
+          <button
+            class="collapse-toggle"
+            (click)="toggleSidebar()"
+            [attr.title]="isSidebarCollapsed() ? 'Expand sidebar' : 'Collapse sidebar'"
+            [attr.aria-label]="isSidebarCollapsed() ? 'Expand sidebar' : 'Collapse sidebar'"
+          >
+            <i class="ph ph-sidebar-simple"></i>
+          </button>
           <button
             class="mobile-close-btn"
             (click)="toggleMobileMenu()"
@@ -48,7 +55,7 @@ import { ToastService } from '../../core/services/toast.service';
         </div>
 
         <nav class="sidebar-nav">
-          <div class="nav-group-label" *ngIf="!isSidebarCollapsed()">OPERATIONS</div>
+          <div class="nav-group-label">OPERATIONS</div>
 
           @if (auth.canAccess('dashboard')) {
             <a
@@ -59,7 +66,7 @@ import { ToastService } from '../../core/services/toast.service';
               [attr.title]="isSidebarCollapsed() ? 'Dashboard' : null"
             >
               <i class="ph ph-chart-pie-slice"></i>
-              <span class="nav-text" *ngIf="!isSidebarCollapsed()">Dashboard</span>
+              <span class="nav-text">Dashboard</span>
             </a>
           }
 
@@ -74,16 +81,14 @@ import { ToastService } from '../../core/services/toast.service';
               "
             >
               <i class="ph ph-receipt"></i>
-              <span class="nav-text" *ngIf="!isSidebarCollapsed()">Live Orders</span>
-              @if (activeOrdersCount() > 0 && !isSidebarCollapsed()) {
+              <span class="nav-text">Live Orders</span>
+              @if (activeOrdersCount() > 0) {
                 <span
                   class="live-pill"
                   [attr.title]="activeOrdersCount() + ' active orders in queue'"
                 >
                   {{ activeOrdersCount() }}
                 </span>
-              }
-              @if (activeOrdersCount() > 0 && isSidebarCollapsed()) {
                 <span class="live-dot" [attr.title]="activeOrdersCount() + ' active orders'"></span>
               }
             </a>
@@ -105,16 +110,14 @@ import { ToastService } from '../../core/services/toast.service';
               "
             >
               <i class="ph ph-qr-code"></i>
-              <span class="nav-text" *ngIf="!isSidebarCollapsed()">Tables & QR</span>
-              @if (incomingReservationsCount() > 0 && !isSidebarCollapsed()) {
+              <span class="nav-text">Tables & QR</span>
+              @if (incomingReservationsCount() > 0) {
                 <span
                   class="live-pill"
                   [attr.title]="incomingReservationsCount() + ' table reservations'"
                 >
                   {{ incomingReservationsCount() }}
                 </span>
-              }
-              @if (incomingReservationsCount() > 0 && isSidebarCollapsed()) {
                 <span
                   class="live-dot"
                   [attr.title]="incomingReservationsCount() + ' reservations'"
@@ -132,7 +135,7 @@ import { ToastService } from '../../core/services/toast.service';
               [attr.title]="isSidebarCollapsed() ? 'Menu Catalog' : null"
             >
               <i class="ph ph-book-open"></i>
-              <span class="nav-text" *ngIf="!isSidebarCollapsed()">Menu Catalog</span>
+              <span class="nav-text">Menu Catalog</span>
             </a>
           }
 
@@ -145,7 +148,7 @@ import { ToastService } from '../../core/services/toast.service';
               [attr.title]="isSidebarCollapsed() ? 'Inventory & Recipes' : null"
             >
               <i class="ph ph-package"></i>
-              <span class="nav-text" *ngIf="!isSidebarCollapsed()">Inventory & Recipes</span>
+              <span class="nav-text">Inventory & Recipes</span>
             </a>
           }
 
@@ -158,12 +161,12 @@ import { ToastService } from '../../core/services/toast.service';
               [attr.title]="isSidebarCollapsed() ? 'Billing & Invoices' : null"
             >
               <i class="ph ph-currency-inr"></i>
-              <span class="nav-text" *ngIf="!isSidebarCollapsed()">Billing & Invoices</span>
+              <span class="nav-text">Billing & Invoices</span>
             </a>
           }
 
           @if (hasGuestSection()) {
-            <div class="nav-group-label" *ngIf="!isSidebarCollapsed()">GUEST EXPERIENCE</div>
+            <div class="nav-group-label">GUEST EXPERIENCE</div>
 
             @if (auth.canAccess('customers')) {
               <a
@@ -174,7 +177,7 @@ import { ToastService } from '../../core/services/toast.service';
                 [attr.title]="isSidebarCollapsed() ? 'Customers' : null"
               >
                 <i class="ph ph-users"></i>
-                <span class="nav-text" *ngIf="!isSidebarCollapsed()">Customers</span>
+                <span class="nav-text">Customers</span>
               </a>
             }
 
@@ -187,7 +190,7 @@ import { ToastService } from '../../core/services/toast.service';
                 [attr.title]="isSidebarCollapsed() ? 'Coupons & Offers' : null"
               >
                 <i class="ph ph-tag"></i>
-                <span class="nav-text" *ngIf="!isSidebarCollapsed()">Coupons & Offers</span>
+                <span class="nav-text">Coupons & Offers</span>
               </a>
             }
 
@@ -207,16 +210,14 @@ import { ToastService } from '../../core/services/toast.service';
                 "
               >
                 <i class="ph ph-calendar-check"></i>
-                <span class="nav-text" *ngIf="!isSidebarCollapsed()">Reservations</span>
-                @if (incomingReservationsCount() > 0 && !isSidebarCollapsed()) {
+                <span class="nav-text">Reservations</span>
+                @if (incomingReservationsCount() > 0) {
                   <span
                     class="live-pill"
                     [attr.title]="incomingReservationsCount() + ' incoming reservations'"
                   >
                     {{ incomingReservationsCount() }}
                   </span>
-                }
-                @if (incomingReservationsCount() > 0 && isSidebarCollapsed()) {
                   <span
                     class="live-dot"
                     [attr.title]="incomingReservationsCount() + ' incoming reservations'"
@@ -234,7 +235,7 @@ import { ToastService } from '../../core/services/toast.service';
                 [attr.title]="isSidebarCollapsed() ? 'Loyalty Program' : null"
               >
                 <i class="ph ph-crown"></i>
-                <span class="nav-text" *ngIf="!isSidebarCollapsed()">Loyalty Program</span>
+                <span class="nav-text">Loyalty Program</span>
               </a>
             }
 
@@ -247,13 +248,13 @@ import { ToastService } from '../../core/services/toast.service';
                 [attr.title]="isSidebarCollapsed() ? 'Feedback & Reviews' : null"
               >
                 <i class="ph ph-star"></i>
-                <span class="nav-text" *ngIf="!isSidebarCollapsed()">Feedback & Reviews</span>
+                <span class="nav-text">Feedback & Reviews</span>
               </a>
             }
           }
 
           @if (hasManagementSection()) {
-            <div class="nav-group-label" *ngIf="!isSidebarCollapsed()">MANAGEMENT</div>
+            <div class="nav-group-label">MANAGEMENT</div>
 
             @if (auth.canAccess('reports')) {
               <a
@@ -264,7 +265,7 @@ import { ToastService } from '../../core/services/toast.service';
                 [attr.title]="isSidebarCollapsed() ? 'Reports & Analytics' : null"
               >
                 <i class="ph ph-chart-line-up"></i>
-                <span class="nav-text" *ngIf="!isSidebarCollapsed()">Reports & Analytics</span>
+                <span class="nav-text">Reports & Analytics</span>
               </a>
             }
 
@@ -277,7 +278,7 @@ import { ToastService } from '../../core/services/toast.service';
                 [attr.title]="isSidebarCollapsed() ? 'Staff Directory' : null"
               >
                 <i class="ph ph-identification-badge"></i>
-                <span class="nav-text" *ngIf="!isSidebarCollapsed()">Staff Directory</span>
+                <span class="nav-text">Staff Directory</span>
               </a>
             }
 
@@ -290,34 +291,20 @@ import { ToastService } from '../../core/services/toast.service';
                 [attr.title]="isSidebarCollapsed() ? 'Settings & Reset' : null"
               >
                 <i class="ph ph-gear"></i>
-                <span class="nav-text" *ngIf="!isSidebarCollapsed()">Settings & Reset</span>
+                <span class="nav-text">Settings & Reset</span>
               </a>
             }
           }
         </nav>
 
         <div class="sidebar-footer">
-          @if (!isSidebarCollapsed()) {
-            <div class="sidebar-footer-info">
-              <span class="terminal-tag">POS Terminal</span>
-              <span class="cloud-status">
-                <span class="status-pip"></span>
-                <span>{{ network.isOnline() ? 'Cloud Synced' : 'Offline' }}</span>
-              </span>
-            </div>
-          }
-          <button
-            class="collapse-toggle"
-            (click)="toggleSidebar()"
-            [attr.title]="isSidebarCollapsed() ? 'Expand sidebar' : 'Collapse sidebar'"
-            aria-label="Toggle sidebar collapse"
-          >
-            <i
-              class="ph"
-              [class.ph-caret-left]="!isSidebarCollapsed()"
-              [class.ph-caret-right]="isSidebarCollapsed()"
-            ></i>
-          </button>
+          <div class="sidebar-footer-info">
+            <span class="terminal-tag">POS Terminal</span>
+            <span class="cloud-status">
+              <span class="status-pip"></span>
+              <span>{{ network.isOnline() ? 'Cloud Synced' : 'Offline' }}</span>
+            </span>
+          </div>
         </div>
       </aside>
 
@@ -433,16 +420,31 @@ import { ToastService } from '../../core/services/toast.service';
                 ></i>
               </button>
 
-              <!-- Customer Mobile Preview Link -->
-              <a
-                href="/menu/gurukripa-dhaba/table/tbl-07"
-                target="_blank"
-                class="topbar-tool-btn preview-tool-btn"
-                title="Open Customer Mobile Menu View"
+              <!-- WhatsApp Gateway Live Status & Navigation -->
+              <button
+                type="button"
+                (click)="openWhatsAppSettings()"
+                class="topbar-tool-btn whatsapp-status-btn"
+                [class.status-connected]="whatsAppBridge.connectionStatus() === 'CONNECTED'"
+                [class.status-pairing]="whatsAppBridge.connectionStatus() === 'SCAN_QR' || whatsAppBridge.connectionStatus() === 'CONNECTING'"
+                [class.status-disconnected]="whatsAppBridge.connectionStatus() === 'DISCONNECTED'"
+                [attr.title]="whatsAppButtonTooltip()"
+                aria-label="WhatsApp Gateway Status"
               >
-                <i class="ph ph-device-mobile"></i>
-                <span class="preview-label">Preview</span>
-              </a>
+                <span
+                  class="wa-status-dot"
+                  [class.dot-connected]="whatsAppBridge.connectionStatus() === 'CONNECTED'"
+                  [class.dot-pairing]="whatsAppBridge.connectionStatus() === 'SCAN_QR' || whatsAppBridge.connectionStatus() === 'CONNECTING'"
+                  [class.dot-disconnected]="whatsAppBridge.connectionStatus() === 'DISCONNECTED'"
+                ></span>
+                <i
+                  class="ph"
+                  [class.ph-whatsapp-logo]="whatsAppBridge.connectionStatus() !== 'CONNECTED'"
+                  [class.ph-fill]="whatsAppBridge.connectionStatus() === 'CONNECTED'"
+                  [class.ph-whatsapp-logo]="whatsAppBridge.connectionStatus() === 'CONNECTED'"
+                ></i>
+                <span class="whatsapp-label">{{ whatsAppButtonLabel() }}</span>
+              </button>
             </div>
 
             <!-- Cluster 3: User Identity & Session Exit -->
@@ -635,14 +637,16 @@ import { ToastService } from '../../core/services/toast.service';
         top: 0;
         bottom: 0;
         left: 0;
-        z-index: 100;
-        transition: width var(--transition-normal);
+        z-index: 950;
+        overflow-x: hidden;
+        will-change: width;
+        transition: width 320ms cubic-bezier(0.2, 0.8, 0.2, 1);
         border-right: 1px solid rgba(255, 255, 255, 0.07);
         box-shadow: 2px 0 16px rgba(0, 0, 0, 0.3);
 
         @media (max-width: 1024px) {
           transform: translateX(-100%);
-          transition: transform var(--transition-normal);
+          transition: transform 320ms cubic-bezier(0.2, 0.8, 0.2, 1);
           width: 280px;
 
           &.mobile-open {
@@ -656,11 +660,74 @@ import { ToastService } from '../../core/services/toast.service';
 
         .sidebar-brand {
           padding: 0;
-          justify-content: center;
+          position: relative;
+        }
+
+        .brand-crest {
+          position: absolute;
+          left: calc(50% - 18px);
+          top: calc(50% - 18px);
+          margin: 0 !important;
+          opacity: 1;
+          transform: scale(1);
+          pointer-events: auto;
+        }
+
+        .brand-info {
+          opacity: 0;
+          max-width: 0;
+          pointer-events: none;
+          transform: translateX(-8px);
+        }
+
+        .collapse-toggle {
+          position: absolute;
+          left: calc(50% - 18px);
+          top: calc(50% - 18px);
+          margin: 0 !important;
+          width: 36px;
+          height: 36px;
+          border-radius: 9px;
+          background: rgba(255, 255, 255, 0.08);
+          border: 1px solid rgba(255, 255, 255, 0.14);
+          color: #ffffff;
+          box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+          opacity: 0;
+          transform: scale(0.85);
+          pointer-events: none;
+        }
+
+        &:hover {
+          .brand-crest {
+            opacity: 0;
+            transform: scale(0.85);
+            pointer-events: none;
+          }
+
+          .collapse-toggle {
+            opacity: 1;
+            transform: scale(1);
+            pointer-events: auto;
+            z-index: 2;
+
+            &:hover {
+              background: rgba(255, 255, 255, 0.16);
+              border-color: rgba(255, 255, 255, 0.24);
+              transform: scale(1.06);
+            }
+
+            &:active {
+              transform: scale(0.96);
+            }
+          }
         }
 
         .nav-group-label {
-          display: none;
+          opacity: 0;
+          max-height: 0;
+          padding: 0;
+          margin: 0;
+          pointer-events: none;
         }
 
         .sidebar-nav {
@@ -670,7 +737,7 @@ import { ToastService } from '../../core/services/toast.service';
 
         .nav-item {
           justify-content: center;
-          padding: 11px 0;
+          padding: 10px 0;
           width: 100%;
           gap: 0;
 
@@ -679,30 +746,31 @@ import { ToastService } from '../../core/services/toast.service';
           }
 
           &.active {
-            border-left: none;
             background: rgba(245, 158, 11, 0.16);
-
-            &::before {
-              content: '';
-              position: absolute;
-              left: 0;
-              top: 8px;
-              bottom: 8px;
-              width: 3px;
-              background: #f59e0b;
-              border-radius: 0 var(--radius-xs) var(--radius-xs) 0;
-            }
           }
         }
 
-        .sidebar-footer {
-          justify-content: center;
-          padding: 12px 6px;
+        .nav-text {
+          opacity: 0;
+          max-width: 0;
+          pointer-events: none;
+          transform: translateX(-8px);
+        }
 
-          .collapse-toggle {
-            width: 36px;
-            height: 36px;
-          }
+        .live-pill {
+          display: none;
+        }
+
+        .live-dot {
+          display: block;
+        }
+
+        .sidebar-footer {
+          opacity: 0;
+          max-height: 0;
+          padding: 0;
+          border-top-color: transparent;
+          pointer-events: none;
         }
       }
 
@@ -710,9 +778,12 @@ import { ToastService } from '../../core/services/toast.service';
         height: var(--topbar-height);
         display: flex;
         align-items: center;
-        padding: 0 18px;
+        padding: 0 16px;
         gap: 12px;
         border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+        position: relative;
+        overflow: hidden;
+        transition: padding 320ms cubic-bezier(0.2, 0.8, 0.2, 1);
       }
 
       .brand-crest {
@@ -725,6 +796,9 @@ import { ToastService } from '../../core/services/toast.service';
         justify-content: center;
         flex-shrink: 0;
         overflow: hidden;
+        transition:
+          opacity 0.2s cubic-bezier(0.16, 1, 0.3, 1),
+          transform 0.2s cubic-bezier(0.16, 1, 0.3, 1);
       }
 
       .brand-logo-img {
@@ -738,6 +812,13 @@ import { ToastService } from '../../core/services/toast.service';
         display: flex;
         flex-direction: column;
         overflow: hidden;
+        white-space: nowrap;
+        opacity: 1;
+        max-width: 170px;
+        transition:
+          opacity 0.2s ease,
+          max-width 320ms cubic-bezier(0.2, 0.8, 0.2, 1),
+          transform 0.2s ease;
       }
 
       .brand-title {
@@ -808,6 +889,14 @@ import { ToastService } from '../../core/services/toast.service';
         letter-spacing: 0.1em;
         text-transform: uppercase;
         padding: 14px 10px 4px;
+        white-space: nowrap;
+        overflow: hidden;
+        opacity: 1;
+        max-height: 28px;
+        transition:
+          opacity 0.18s ease,
+          max-height 320ms cubic-bezier(0.2, 0.8, 0.2, 1),
+          padding 320ms cubic-bezier(0.2, 0.8, 0.2, 1);
       }
 
       .nav-item {
@@ -819,16 +908,21 @@ import { ToastService } from '../../core/services/toast.service';
         color: #94a3b8;
         font-size: 0.8125rem;
         font-weight: 500;
-        transition: all var(--transition-fast);
+        white-space: nowrap;
         position: relative;
         cursor: pointer;
         text-decoration: none;
+        transition:
+          background-color 0.15s ease,
+          color 0.15s ease,
+          padding 320ms cubic-bezier(0.2, 0.8, 0.2, 1),
+          gap 320ms cubic-bezier(0.2, 0.8, 0.2, 1);
 
         i {
           font-size: 1.15rem;
           flex-shrink: 0;
           color: #94a3b8;
-          transition: color var(--transition-fast);
+          transition: color var(--transition-fast), font-size 320ms cubic-bezier(0.2, 0.8, 0.2, 1);
         }
 
         &:hover {
@@ -842,7 +936,6 @@ import { ToastService } from '../../core/services/toast.service';
 
         &.active {
           background: rgba(245, 158, 11, 0.12);
-          border-left: 2px solid #f59e0b;
           color: #ffffff;
           font-weight: 600;
           box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
@@ -853,7 +946,21 @@ import { ToastService } from '../../core/services/toast.service';
         }
       }
 
+      .nav-text {
+        white-space: nowrap;
+        overflow: hidden;
+        opacity: 1;
+        max-width: 180px;
+        transition:
+          opacity 0.2s ease,
+          max-width 320ms cubic-bezier(0.2, 0.8, 0.2, 1),
+          transform 0.2s ease;
+      }
+
       .live-pill {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
         margin-left: auto;
         background: #ef4444;
         color: #ffffff;
@@ -865,9 +972,11 @@ import { ToastService } from '../../core/services/toast.service';
         border-radius: var(--radius-full);
         box-shadow: 0 0 8px rgba(239, 68, 68, 0.4);
         animation: pulseGlow 1.8s infinite;
+        transition: opacity 0.2s ease;
       }
 
       .live-dot {
+        display: none;
         position: absolute;
         top: 8px;
         right: 18px;
@@ -887,6 +996,15 @@ import { ToastService } from '../../core/services/toast.service';
         justify-content: space-between;
         gap: 8px;
         background: rgba(255, 255, 255, 0.015);
+        white-space: nowrap;
+        overflow: hidden;
+        opacity: 1;
+        max-height: 48px;
+        transition:
+          opacity 0.18s ease,
+          max-height 320ms cubic-bezier(0.2, 0.8, 0.2, 1),
+          padding 320ms cubic-bezier(0.2, 0.8, 0.2, 1),
+          border-color 320ms cubic-bezier(0.2, 0.8, 0.2, 1);
       }
 
       .sidebar-footer-info {
@@ -919,27 +1037,52 @@ import { ToastService } from '../../core/services/toast.service';
       }
 
       .collapse-toggle {
+        margin-left: auto;
         color: #94a3b8;
-        font-size: 1.1rem;
-        width: 30px;
-        height: 30px;
-        border-radius: 6px;
-        background: rgba(255, 255, 255, 0.04);
-        border: 1px solid rgba(255, 255, 255, 0.08);
+        font-size: 1.15rem;
+        width: 32px;
+        height: 32px;
+        border-radius: 8px;
+        background: transparent;
+        border: 1px solid transparent;
         display: flex;
         align-items: center;
         justify-content: center;
         cursor: pointer;
-        transition: all var(--transition-fast);
+        flex-shrink: 0;
+        transition:
+          opacity 0.2s cubic-bezier(0.16, 1, 0.3, 1),
+          transform 0.2s cubic-bezier(0.16, 1, 0.3, 1),
+          background-color 0.15s ease,
+          border-color 0.15s ease,
+          color 0.15s ease;
 
         &:hover {
           color: #ffffff;
-          background: rgba(255, 255, 255, 0.1);
-          border-color: rgba(255, 255, 255, 0.18);
+          background: rgba(255, 255, 255, 0.08);
+          border-color: rgba(255, 255, 255, 0.14);
+        }
+
+        &:active {
+          transform: scale(0.94);
         }
 
         @media (max-width: 1024px) {
           display: none;
+        }
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        .brand-crest,
+        .collapse-toggle,
+        .admin-sidebar,
+        .admin-main,
+        .brand-info,
+        .nav-text,
+        .nav-item,
+        .nav-group-label,
+        .sidebar-footer {
+          transition: none !important;
         }
       }
 
@@ -949,7 +1092,8 @@ import { ToastService } from '../../core/services/toast.service';
         display: flex;
         flex-direction: column;
         min-width: 0;
-        transition: margin-left var(--transition-normal);
+        will-change: margin-left;
+        transition: margin-left 320ms cubic-bezier(0.2, 0.8, 0.2, 1);
 
         @media (max-width: 1024px) {
           margin-left: 0;
@@ -973,7 +1117,7 @@ import { ToastService } from '../../core/services/toast.service';
         padding: 0 28px;
         position: sticky;
         top: 0;
-        z-index: 90;
+        z-index: 850;
 
         @media (max-width: 768px) {
           padding: 0 16px;
@@ -1207,23 +1351,107 @@ import { ToastService } from '../../core/services/toast.service';
           color: #6366f1;
         }
 
-        &.preview-tool-btn {
-          gap: 5px;
+        &.whatsapp-status-btn {
+          gap: 6px;
           font-size: 0.72rem;
           font-weight: 600;
-          color: var(--color-text);
+          padding: 0 10px;
+          border-radius: 9999px;
+          border: 1px solid transparent;
+          cursor: pointer;
+          transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+          color: #475569;
+          background: rgba(148, 163, 184, 0.08);
 
           i {
-            font-size: 0.9rem;
-            color: #8b5cf6;
+            font-size: 0.95rem;
+            color: #64748b;
+            transition: color 0.2s ease;
+          }
+
+          .wa-status-dot {
+            width: 7px;
+            height: 7px;
+            border-radius: 50%;
+            background: #94a3b8;
+            flex-shrink: 0;
+            transition: background 0.3s ease, box-shadow 0.3s ease;
+
+            &.dot-connected {
+              background: #22c55e;
+              box-shadow: 0 0 0 2px rgba(34, 197, 94, 0.25);
+              animation: wa-pulse-green 2.5s infinite;
+            }
+
+            &.dot-pairing {
+              background: #f59e0b;
+              box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.25);
+              animation: wa-pulse-amber 1.5s infinite;
+            }
+
+            &.dot-disconnected {
+              background: #ef4444;
+              box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.25);
+              animation: wa-dot-blink-offline 1.8s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+            }
+          }
+
+          &.status-connected {
+            color: #15803d;
+            background: rgba(34, 197, 94, 0.1);
+            border-color: rgba(34, 197, 94, 0.22);
+
+            i {
+              color: #16a34a;
+            }
+
+            &:hover {
+              background: rgba(34, 197, 94, 0.18);
+              border-color: rgba(34, 197, 94, 0.38);
+              color: #166534;
+            }
+          }
+
+          &.status-pairing {
+            color: #b45309;
+            background: rgba(245, 158, 11, 0.1);
+            border-color: rgba(245, 158, 11, 0.28);
+
+            i {
+              color: #d97706;
+            }
+
+            &:hover {
+              background: rgba(245, 158, 11, 0.18);
+              border-color: rgba(245, 158, 11, 0.42);
+            }
+          }
+
+          &.status-disconnected {
+            color: #dc2626;
+            background: rgba(239, 68, 68, 0.08);
+            border-color: rgba(239, 68, 68, 0.22);
+            animation: wa-button-blink-offline 1.8s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+
+            i {
+              color: #ef4444;
+            }
+
+            &:hover {
+              animation-play-state: paused;
+              background: rgba(239, 68, 68, 0.2);
+              border-color: rgba(239, 68, 68, 0.45);
+              color: #b91c1c;
+            }
           }
 
           @media (max-width: 640px) {
-            .preview-label {
+            .whatsapp-label {
               display: none;
             }
-            width: 28px;
+            width: 32px;
             padding: 0;
+            justify-content: center;
           }
         }
       }
@@ -1250,10 +1478,59 @@ import { ToastService } from '../../core/services/toast.service';
             color: #facc15;
           }
 
-          &.preview-tool-btn {
-            color: #e2e8f0;
+          &.whatsapp-status-btn {
+            background: rgba(255, 255, 255, 0.06);
+            color: #cbd5e1;
+
             i {
-              color: #a78bfa;
+              color: #94a3b8;
+            }
+
+            &.status-connected {
+              color: #86efac;
+              background: rgba(34, 197, 94, 0.15);
+              border-color: rgba(34, 197, 94, 0.32);
+
+              i {
+                color: #4ade80;
+              }
+
+              &:hover {
+                background: rgba(34, 197, 94, 0.25);
+                border-color: rgba(34, 197, 94, 0.48);
+              }
+            }
+
+            &.status-pairing {
+              color: #fde68a;
+              background: rgba(245, 158, 11, 0.18);
+              border-color: rgba(245, 158, 11, 0.38);
+
+              i {
+                color: #fbbf24;
+              }
+
+              &:hover {
+                background: rgba(245, 158, 11, 0.28);
+              }
+            }
+
+            &.status-disconnected {
+              color: #fca5a5;
+              background: rgba(239, 68, 68, 0.12);
+              border-color: rgba(239, 68, 68, 0.3);
+              animation: wa-button-blink-offline-dark 1.8s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+
+              i {
+                color: #f87171;
+              }
+
+              &:hover {
+                animation-play-state: paused;
+                background: rgba(239, 68, 68, 0.28);
+                border-color: rgba(239, 68, 68, 0.55);
+                color: #ffffff;
+              }
             }
           }
         }
@@ -1522,7 +1799,7 @@ import { ToastService } from '../../core/services/toast.service';
         inset: 0;
         background: rgba(18, 18, 18, 0.6);
         backdrop-filter: blur(2px);
-        z-index: 99;
+        z-index: 940;
       }
 
       .pin-modal-backdrop {
@@ -1692,6 +1969,73 @@ import { ToastService } from '../../core/services/toast.service';
           }
         }
       }
+
+      @keyframes wa-pulse-green {
+        0% {
+          box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.6);
+        }
+        70% {
+          box-shadow: 0 0 0 5px rgba(34, 197, 94, 0);
+        }
+        100% {
+          box-shadow: 0 0 0 0 rgba(34, 197, 94, 0);
+        }
+      }
+
+      @keyframes wa-pulse-amber {
+        0% {
+          box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.65);
+        }
+        70% {
+          box-shadow: 0 0 0 5px rgba(245, 158, 11, 0);
+        }
+        100% {
+          box-shadow: 0 0 0 0 rgba(245, 158, 11, 0);
+        }
+      }
+
+      @keyframes wa-button-blink-offline {
+        0%, 100% {
+          background: rgba(239, 68, 68, 0.07);
+          border-color: rgba(239, 68, 68, 0.2);
+          color: #dc2626;
+          box-shadow: 0 0 0 0 rgba(239, 68, 68, 0);
+        }
+        50% {
+          background: rgba(239, 68, 68, 0.18);
+          border-color: rgba(239, 68, 68, 0.45);
+          color: #b91c1c;
+          box-shadow: 0 0 8px rgba(239, 68, 68, 0.25);
+        }
+      }
+
+      @keyframes wa-button-blink-offline-dark {
+        0%, 100% {
+          background: rgba(239, 68, 68, 0.1);
+          border-color: rgba(239, 68, 68, 0.25);
+          color: #fca5a5;
+          box-shadow: 0 0 0 0 rgba(239, 68, 68, 0);
+        }
+        50% {
+          background: rgba(239, 68, 68, 0.25);
+          border-color: rgba(239, 68, 68, 0.55);
+          color: #fecaca;
+          box-shadow: 0 0 10px rgba(239, 68, 68, 0.35);
+        }
+      }
+
+      @keyframes wa-dot-blink-offline {
+        0%, 100% {
+          background: #ef4444;
+          box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.6);
+          opacity: 0.6;
+        }
+        50% {
+          background: #dc2626;
+          box-shadow: 0 0 0 4px rgba(239, 68, 68, 0.2);
+          opacity: 1;
+        }
+      }
     `,
   ],
 })
@@ -1701,6 +2045,7 @@ export class AdminLayoutComponent {
   themeService = inject(AdminThemeService);
   network = inject(NetworkStatusService);
   soundService = inject(SoundService);
+  readonly whatsAppBridge = inject(WhatsAppBridgeService);
   private toastService = inject(ToastService);
   private router = inject(Router);
   private dataService = inject(RestaurantDataService);
@@ -1709,6 +2054,8 @@ export class AdminLayoutComponent {
   readonly currentUrl = signal<string>(this.router.url);
 
   constructor() {
+    this.whatsAppBridge.startStatusPoller();
+
     this.router.events.subscribe(() => {
       this.currentUrl.set(this.router.url);
     });
@@ -1850,6 +2197,45 @@ export class AdminLayoutComponent {
   isVerifyingPin = signal<boolean>(false);
   pinError = signal<string>('');
   adminPinInput = '';
+  private pendingAdminRedirect: string | null = null;
+
+  readonly whatsAppButtonLabel = computed(() => {
+    const status = this.whatsAppBridge.connectionStatus();
+    if (status === 'CONNECTED') return 'WhatsApp';
+    if (status === 'SCAN_QR') return 'Scan QR';
+    if (status === 'CONNECTING') return 'Connecting';
+    return 'WhatsApp';
+  });
+
+  readonly whatsAppButtonTooltip = computed(() => {
+    const status = this.whatsAppBridge.connectionStatus();
+    if (status === 'CONNECTED') {
+      const phone = this.whatsAppBridge.connectedPhone();
+      return phone
+        ? `WhatsApp Gateway Connected (+${phone}) • Click to configure`
+        : 'WhatsApp Gateway Connected & Ready • Click to configure';
+    }
+    if (status === 'SCAN_QR') {
+      return 'WhatsApp Pairing Required: QR Code Ready • Click to scan';
+    }
+    if (status === 'CONNECTING') {
+      return 'WhatsApp Gateway Connecting... • Click to view status';
+    }
+    return 'WhatsApp Gateway Disconnected • Click to open WhatsApp settings';
+  });
+
+  openWhatsAppSettings(): void {
+    if (this.auth.canAccess('settings')) {
+      this.router.navigate(['/admin/settings'], { queryParams: { tab: 'whatsapp' } });
+    } else {
+      this.pendingAdminRedirect = '/admin/settings?tab=whatsapp';
+      this.toastService.info(
+        'Admin PIN required to configure WhatsApp Gateway',
+        'Admin Authentication',
+      );
+      this.toggleRoleMode();
+    }
+  }
 
   toggleRoleMode(): void {
     if (this.auth.isAdmin()) {
@@ -1886,6 +2272,11 @@ export class AdminLayoutComponent {
             'Super Admin Mode unlocked. Full CRM access granted.',
             'Admin Mode',
           );
+          if (this.pendingAdminRedirect) {
+            const dest = this.pendingAdminRedirect;
+            this.pendingAdminRedirect = null;
+            this.router.navigateByUrl(dest);
+          }
         } else {
           this.pinError.set('Incorrect Admin PIN or password. Access denied.');
         }
@@ -1900,6 +2291,11 @@ export class AdminLayoutComponent {
             'Super Admin Mode unlocked. Full CRM access granted.',
             'Admin Mode',
           );
+          if (this.pendingAdminRedirect) {
+            const dest = this.pendingAdminRedirect;
+            this.pendingAdminRedirect = null;
+            this.router.navigateByUrl(dest);
+          }
         } else {
           this.pinError.set('Incorrect Admin PIN or password. Access denied.');
         }

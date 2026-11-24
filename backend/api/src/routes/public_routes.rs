@@ -63,7 +63,11 @@ pub async fn get_public_table(
                t.section,
                t.status::text AS status,
                t.ordering_enabled,
-               t.current_seating_session_id,
+               CASE 
+                   WHEN t.current_seating_session_id::text ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$' 
+                   THEN t.current_seating_session_id::uuid 
+                   ELSE NULL 
+               END AS current_seating_session_id,
                COALESCE(r.gst_rate, 5.0)::float8 AS gst_rate,
                COALESCE(r.cgst_rate, r.gst_rate / 2.0, 2.5)::float8 AS cgst_rate,
                COALESCE(r.sgst_rate, r.gst_rate / 2.0, 2.5)::float8 AS sgst_rate,
@@ -301,7 +305,13 @@ pub async fn create_public_order(
     // Pattern 3 Host-Seated Verification + PentAGI Session Pinning
     if let Some(tbl_id) = req.table_id {
         let table_record: Option<(String, bool, Option<Uuid>)> = sqlx::query_as(
-            "SELECT status::text, ordering_enabled, current_seating_session_id FROM tables WHERE id = $1 AND restaurant_id = $2",
+            r#"SELECT status::text, ordering_enabled,
+                      CASE 
+                          WHEN current_seating_session_id::text ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$' 
+                          THEN current_seating_session_id::uuid 
+                          ELSE NULL 
+                      END AS current_seating_session_id
+               FROM tables WHERE id = $1 AND restaurant_id = $2"#,
         )
         .bind(tbl_id)
         .bind(req.restaurant_id)
@@ -338,7 +348,13 @@ pub async fn create_public_order(
         }
     } else if let Some(ref num) = req.table_number {
         let table_record: Option<(String, bool, Option<Uuid>)> = sqlx::query_as(
-            "SELECT status::text, ordering_enabled, current_seating_session_id FROM tables WHERE (number = $1 OR table_number = $1) AND restaurant_id = $2",
+            r#"SELECT status::text, ordering_enabled,
+                      CASE 
+                          WHEN current_seating_session_id::text ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$' 
+                          THEN current_seating_session_id::uuid 
+                          ELSE NULL 
+                      END AS current_seating_session_id
+               FROM tables WHERE (number = $1 OR table_number = $1) AND restaurant_id = $2"#,
         )
         .bind(num)
         .bind(req.restaurant_id)
@@ -376,7 +392,8 @@ pub async fn create_public_order(
     }
 
     let create_req = CreateOrderRequest {
-        order_type: "dine_in".to_string(),
+        id: None,
+        order_type: "DINE_IN".to_string(),
         table_id: req.table_id,
         customer_name: Some(req.customer_name),
         customer_phone: Some(req.customer_phone),
@@ -546,6 +563,33 @@ pub async fn create_public_reservation(
 
     let reservation =
         CustomerRepository::create_reservation(&pool, req.restaurant_id, create_req).await?;
+
+    // WhatsApp Notification: Instant customer acknowledgement of pending request
+    let restaurant = crate::repositories::restaurant_repo::RestaurantRepository::get_by_id(&pool, req.restaurant_id)
+        .await
+        .ok()
+        .flatten();
+
+    let restaurant_name = restaurant.as_ref().map(|r| r.name.as_str()).unwrap_or("The Restaurant");
+    let custom_template = restaurant
+        .as_ref()
+        .and_then(|r| r.whatsapp_templates.as_ref())
+        .and_then(|t| t.get("pending"))
+        .and_then(|v| v.as_str());
+
+    let date_str = reservation.reservation_time.format("%d %b %Y").to_string();
+    let time_str = reservation.reservation_time.format("%I:%M %p").to_string();
+
+    crate::services::WhatsAppService::notify_reservation_pending(
+        restaurant_name,
+        &reservation.customer_name,
+        &reservation.customer_phone,
+        &date_str,
+        &time_str,
+        reservation.guest_count,
+        reservation.special_requests.as_deref(),
+        custom_template,
+    );
 
     crate::ws::broadcast_new_reservation(&reservation);
 

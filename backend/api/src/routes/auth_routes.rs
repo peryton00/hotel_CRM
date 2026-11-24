@@ -60,12 +60,23 @@ pub fn verify_password(stored: &str, entered: &str) -> bool {
     if stored.is_empty() || entered.is_empty() {
         return false;
     }
+    // Bcrypt match if stored as $2a$ / $2b$ / $2y$ hash (e.g. from crypt('...', gen_salt('bf')))
+    if stored.starts_with("$2") {
+        if let Ok(valid) = bcrypt::verify(entered, stored) {
+            if valid {
+                return true;
+            }
+        }
+    }
     // Argon2 match if stored as Argon2 hash
     if stored.starts_with("$argon2") {
         if let Ok(parsed_hash) = argon2::PasswordHash::new(stored) {
-            return argon2::Argon2::default()
+            if argon2::Argon2::default()
                 .verify_password(entered.as_bytes(), &parsed_hash)
-                .is_ok();
+                .is_ok()
+            {
+                return true;
+            }
         }
     }
     // Backward compatibility match for legacy unhashed entries

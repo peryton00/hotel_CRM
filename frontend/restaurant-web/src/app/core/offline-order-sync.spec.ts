@@ -141,4 +141,88 @@ describe('Offline Order System & Auto-Sync Resilience', () => {
     expect(service.offlineOutbox().length).toBe(1);
     expect(networkService.isOnline()).toBe(false);
   });
+
+  it('queues table status update when offline and flushes when reconnected', () => {
+    const tableId = '11111111-2222-3333-4444-555555555555';
+    service.tables.set([
+      {
+        id: tableId,
+        number: 'T-01',
+        capacity: 4,
+        section: 'MAIN',
+        status: 'AVAILABLE',
+        qrToken: 'tbl-1',
+        qrUrl: '/menu/table/1',
+        orderingEnabled: true,
+      },
+    ]);
+
+    networkService.isOnline.set(false);
+    const res = service.updateTableStatus(tableId, 'OCCUPIED');
+
+    expect(res.success).toBe(true);
+    expect(service.tables().find((t) => t.id === tableId)?.status).toBe('OCCUPIED');
+    expect(service.offlineOutbox().some((a) => a.type === 'UPDATE_TABLE_STATUS')).toBe(true);
+
+    // Bring online and flush
+    networkService.isOnline.set(true);
+    service.flushOfflineQueue();
+
+    const req = httpMock.expectOne((r) => r.url.includes(`/tables/${tableId}/status`));
+    expect(req.request.method).toBe('PUT');
+    expect(req.request.body.status).toBe('OCCUPIED');
+    req.flush({ success: true });
+
+    expect(service.offlineOutbox().some((a) => a.type === 'UPDATE_TABLE_STATUS')).toBe(false);
+  });
+
+  it('queues menu item availability toggle when offline and flushes when reconnected', () => {
+    const itemId = '22222222-3333-4444-5555-666666666666';
+    service.menuItems.set([
+      {
+        id: itemId,
+        name: 'Paneer Butter Masala',
+        description: '',
+        price: 250,
+        categoryId: 'cat-1',
+        isAvailable: true,
+        dietary: 'VEG',
+        imageUrl: '',
+        prepTimeMinutes: 15,
+      },
+    ]);
+
+    networkService.isOnline.set(false);
+    service.toggleMenuItemAvailability(itemId, false);
+
+    expect(service.menuItems().find((m) => m.id === itemId)?.isAvailable).toBe(false);
+    expect(service.offlineOutbox().some((a) => a.type === 'TOGGLE_MENU_AVAILABILITY')).toBe(true);
+
+    // Bring online and flush
+    networkService.isOnline.set(true);
+    service.flushOfflineQueue();
+
+    const req = httpMock.expectOne((r) => r.url.includes(`/menu/items/${itemId}/availability`));
+    expect(req.request.method).toBe('PUT');
+    expect(req.request.body.is_available).toBe(false);
+    req.flush({ success: true });
+
+    expect(service.offlineOutbox().some((a) => a.type === 'TOGGLE_MENU_AVAILABILITY')).toBe(false);
+  });
+
+  it('attaches idempotency_key to settlement payload', () => {
+    networkService.isOnline.set(false);
+    service.orders.set([testOrder]);
+
+    service.settleOrder({
+      orderId: testOrder.id,
+      paymentMethod: 'UPI',
+    });
+
+    const action = service.offlineOutbox().find((a) => a.type === 'SETTLE_ORDER');
+    expect(action).toBeDefined();
+    expect(action?.payload.idempotency_key).toBeDefined();
+    expect(typeof action?.payload.idempotency_key).toBe('string');
+    expect(action?.payload.idempotency_key.length).toBeGreaterThan(5);
+  });
 });

@@ -205,8 +205,8 @@ export default function CustomerFrontHomeScreen() {
       });
 
       dynaura.success({
-        title: 'Reservation Confirmed',
-        description: `Table reserved for ${reserveGuests} on ${reserveDate} at ${reserveTime}.`,
+        title: 'Reservation Request Sent',
+        description: `Thank you for choosing us! We received your request for ${reserveGuests} guests on ${reserveDate} at ${reserveTime}. You will receive a WhatsApp message once your table is confirmed.`,
       });
       setIsReserveSheetOpen(false);
       setReserveNotes('');
@@ -918,13 +918,18 @@ export default function CustomerFrontHomeScreen() {
                 />
               </div>
 
+              <div className="text-[11px] text-neutral-500 dark:text-neutral-400 text-center flex items-center justify-center gap-1.5 py-0.5">
+                <ChatCircleDots size={14} className="text-emerald-500 shrink-0" />
+                <span>We review table availability and notify you directly on WhatsApp.</span>
+              </div>
+
               <button
                 type="submit"
                 disabled={isSubmittingReservation || !reserveName.trim() || !reservePhone.trim()}
                 className="touch-tactile w-full bg-emerald-600 hover:bg-emerald-700 active:scale-95 disabled:opacity-40 text-white font-bold py-3 rounded-2xl transition-all shadow-md flex items-center justify-center gap-2 cursor-pointer"
               >
                 <CalendarCheck size={16} weight="bold" />
-                <span>{isSubmittingReservation ? 'Submitting...' : 'Confirm Table Reservation'}</span>
+                <span>{isSubmittingReservation ? 'Sending Request...' : 'Request Table Reservation'}</span>
               </button>
             </form>
           </div>

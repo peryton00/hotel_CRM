@@ -6,6 +6,8 @@
   "scripts": {
     "start": "npm --prefix frontend/restaurant-web start",
     "start:admin": "npm --prefix frontend/restaurant-web start",
+    "start:whatsapp": "node whatsapp-bridge/index.js",
+    "dev:all": "powershell -Command \"Start-Process node -ArgumentList 'whatsapp-bridge/index.js' -NoNewWindow; npm --prefix frontend/restaurant-web start\"",
     "start:customer": "npm --prefix customer-menu run dev",
     "start:server": "cargo run --manifest-path backend/api/Cargo.toml",
     "build": "npm --prefix frontend/restaurant-web run build",

@@ -914,6 +914,11 @@ export class CouponManagementComponent {
   private mock = this.dataService;
   private toastService = inject(ToastService);
 
+  constructor() {
+    this.dataService.loadCoupons();
+    this.dataService.loadCustomers();
+  }
+
   activeTab: ViewTab = 'campaigns';
 
   readonly isLoading = computed(

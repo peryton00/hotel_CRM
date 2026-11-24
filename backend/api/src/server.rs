@@ -246,13 +246,15 @@ pub async fn ensure_schema_and_seed(pool: &sqlx::PgPool) {
         UPDATE restaurants SET cgst_rate = COALESCE(cgst_rate, gst_rate / 2.0, 2.5) WHERE cgst_rate IS NULL;
         UPDATE restaurants SET sgst_rate = COALESCE(sgst_rate, gst_rate / 2.0, 2.5) WHERE sgst_rate IS NULL;
         UPDATE restaurants SET gst_rate = COALESCE(gst_rate, cgst_rate + sgst_rate, 5.0) WHERE gst_rate IS NULL;
+        ALTER TABLE restaurants ADD COLUMN IF NOT EXISTS whatsapp_templates JSONB;
         ALTER TABLE tables ADD COLUMN IF NOT EXISTS number VARCHAR(20);
         ALTER TABLE tables ADD COLUMN IF NOT EXISTS qr_token VARCHAR(64);
         ALTER TABLE tables ADD COLUMN IF NOT EXISTS table_number VARCHAR(20);
         ALTER TABLE tables ADD COLUMN IF NOT EXISTS qr_code_identifier VARCHAR(64);
         ALTER TABLE tables ADD COLUMN IF NOT EXISTS active_order_id UUID;
         ALTER TABLE tables ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW();
-        UPDATE tables SET table_number = COALESCE(table_number, number), qr_code_identifier = COALESCE(qr_code_identifier, qr_token);
+        UPDATE tables SET table_number = COALESCE(number, table_number) WHERE table_number IS NULL;
+        UPDATE tables SET qr_code_identifier = COALESCE(qr_token, qr_code_identifier) WHERE qr_code_identifier IS NULL;
         ALTER TABLE menu_categories ADD COLUMN IF NOT EXISTS description TEXT;
         ALTER TABLE menu_categories ADD COLUMN IF NOT EXISTS display_order INT DEFAULT 0;
         ALTER TABLE menu_categories ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW();
@@ -273,6 +275,23 @@ pub async fn ensure_schema_and_seed(pool: &sqlx::PgPool) {
         ALTER TABLE staff_members ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW();
         ALTER TABLE tables ADD COLUMN IF NOT EXISTS assigned_staff_id UUID;
         ALTER TABLE tables ADD COLUMN IF NOT EXISTS current_seating_session_id UUID;
+        DO $$
+        BEGIN
+            IF EXISTS (
+                SELECT 1 FROM information_schema.columns
+                WHERE table_name = 'tables' AND column_name = 'current_seating_session_id' AND data_type != 'uuid'
+            ) THEN
+                ALTER TABLE tables ALTER COLUMN current_seating_session_id TYPE UUID USING NULLIF(current_seating_session_id, '')::uuid;
+            END IF;
+            IF EXISTS (
+                SELECT 1 FROM information_schema.columns
+                WHERE table_name = 'orders' AND column_name = 'seating_session_id' AND data_type != 'uuid'
+            ) THEN
+                ALTER TABLE orders ALTER COLUMN seating_session_id TYPE UUID USING NULLIF(seating_session_id, '')::uuid;
+            END IF;
+        EXCEPTION WHEN OTHERS THEN
+            NULL;
+        END $$;
         ALTER TABLE orders ADD COLUMN IF NOT EXISTS seating_session_id UUID;
         CREATE INDEX IF NOT EXISTS idx_orders_seating_session_id ON orders(seating_session_id);
         CREATE TABLE IF NOT EXISTS restaurant_heartbeats (
@@ -397,6 +416,10 @@ pub async fn ensure_schema_and_seed(pool: &sqlx::PgPool) {
         ALTER TABLE order_items ADD COLUMN IF NOT EXISTS discount_paise BIGINT DEFAULT 0;
         ALTER TABLE order_items ADD COLUMN IF NOT EXISTS total_paise BIGINT DEFAULT 0;
         ALTER TABLE order_items ADD COLUMN IF NOT EXISTS notes TEXT;
+        ALTER TABLE order_items ADD COLUMN IF NOT EXISTS name VARCHAR(150);
+        ALTER TABLE order_items ADD COLUMN IF NOT EXISTS item_name VARCHAR(150);
+        UPDATE order_items SET name = COALESCE(name, item_name, 'Item') WHERE name IS NULL;
+        UPDATE order_items SET item_name = COALESCE(item_name, name, 'Item') WHERE item_name IS NULL;
         ALTER TABLE order_items ADD COLUMN IF NOT EXISTS status VARCHAR(50) DEFAULT 'confirmed';
         ALTER TABLE order_items ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT NOW();
         ALTER TABLE order_items ALTER COLUMN menu_item_id DROP NOT NULL;
@@ -425,9 +448,38 @@ pub async fn ensure_schema_and_seed(pool: &sqlx::PgPool) {
         ALTER TABLE payments ALTER COLUMN legacy_unknown_timestamp TYPE BOOLEAN USING FALSE;
         ALTER TABLE payments ALTER COLUMN legacy_unknown_timestamp SET DEFAULT FALSE;
         CREATE UNIQUE INDEX IF NOT EXISTS idx_payments_idempotency ON payments(idempotency_key) WHERE idempotency_key IS NOT NULL;
+        ALTER TABLE orders ADD COLUMN IF NOT EXISTS is_split BOOLEAN NOT NULL DEFAULT FALSE;
+        ALTER TABLE orders ADD COLUMN IF NOT EXISTS split_count INT NOT NULL DEFAULT 1;
+        ALTER TABLE split_bills ADD COLUMN IF NOT EXISTS restaurant_id UUID;
+        ALTER TABLE split_bills ALTER COLUMN restaurant_id DROP NOT NULL;
+        ALTER TABLE split_bills ADD COLUMN IF NOT EXISTS amount_paise BIGINT DEFAULT 0;
+        DO $$
+        BEGIN
+            IF EXISTS (
+                SELECT 1 FROM information_schema.columns
+                WHERE table_name = 'split_bills' AND column_name = 'total_amount_paise' AND is_generated = 'NEVER'
+            ) THEN
+                ALTER TABLE split_bills ALTER COLUMN total_amount_paise DROP NOT NULL;
+                ALTER TABLE split_bills ALTER COLUMN total_amount_paise SET DEFAULT 0;
+                UPDATE split_bills SET total_amount_paise = amount_paise WHERE total_amount_paise IS NULL OR total_amount_paise = 0;
+            END IF;
+        EXCEPTION WHEN OTHERS THEN
+            NULL;
+        END $$;
+        ALTER TABLE split_bills ADD COLUMN IF NOT EXISTS split_number INT;
+        ALTER TABLE split_bills ADD COLUMN IF NOT EXISTS split_index INT;
+        ALTER TABLE split_bills ADD COLUMN IF NOT EXISTS split_total_count INT DEFAULT 1;
+        ALTER TABLE split_bills ADD COLUMN IF NOT EXISTS payment_id UUID;
+        ALTER TABLE split_bills ADD COLUMN IF NOT EXISTS payment_status VARCHAR(50) DEFAULT 'pending';
+        ALTER TABLE split_bills ADD COLUMN IF NOT EXISTS payment_method VARCHAR(50);
+        ALTER TABLE split_bills ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW();
         ALTER TABLE split_bills ADD COLUMN IF NOT EXISTS settled_at TIMESTAMPTZ;
         ALTER TABLE split_bills ADD COLUMN IF NOT EXISTS total_refunded_paise BIGINT DEFAULT 0;
         ALTER TABLE split_bills ADD COLUMN IF NOT EXISTS print_count INT DEFAULT 0;
+        UPDATE split_bills sb
+        SET payment_status = 'paid', settled_at = o.settled_at, updated_at = NOW()
+        FROM orders o
+        WHERE sb.order_id = o.id AND o.payment_status = 'paid' AND sb.payment_status != 'paid';
 
         CREATE TABLE IF NOT EXISTS refunds (
             id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -517,6 +569,8 @@ pub async fn ensure_schema_and_seed(pool: &sqlx::PgPool) {
         CREATE INDEX IF NOT EXISTS idx_orders_customer_phone_e164 ON orders(restaurant_id, customer_phone_e164);
         CREATE INDEX IF NOT EXISTS idx_orders_table_created ON orders(restaurant_id, table_id, created_at);
         CREATE INDEX IF NOT EXISTS idx_order_items_order_id ON order_items(order_id);
+        CREATE INDEX IF NOT EXISTS idx_orders_restaurant_status ON orders(restaurant_id, status);
+        CREATE INDEX IF NOT EXISTS idx_orders_restaurant_id_pk ON orders(restaurant_id, id);
 
         CREATE TABLE IF NOT EXISTS sync_outbox (
             event_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

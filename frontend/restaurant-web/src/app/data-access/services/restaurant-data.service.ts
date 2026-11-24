@@ -50,8 +50,21 @@ import { environment } from '../../../environments/environment';
 
 export interface OfflineSyncAction {
   id: string;
-  type: 'CREATE_ORDER' | 'SETTLE_ORDER' | 'UPDATE_ORDER_STATUS' | 'ASSIGN_SERVER';
-  orderId: string;
+  type:
+    | 'CREATE_ORDER'
+    | 'SETTLE_ORDER'
+    | 'UPDATE_ORDER_STATUS'
+    | 'ASSIGN_SERVER'
+    | 'UPDATE_ORDER_ITEMS'
+    | 'UPDATE_TABLE_STATUS'
+    | 'TRANSFER_TABLE'
+    | 'TOGGLE_MENU_AVAILABILITY'
+    | 'UPDATE_RESERVATION_STATUS'
+    | 'MARK_ATTENDANCE'
+    | 'CREATE_CUSTOMER'
+    | 'RECORD_WASTAGE';
+  orderId?: string;
+  entityId?: string;
   payload: any;
   createdAt: number;
 }
@@ -165,6 +178,22 @@ export class RestaurantDataService {
     const cached = this.readLocal<Restaurant | null>('restaurant', null);
     if (cached) {
       cached.logoUrl = this.sanitizeLogo(cached.logoUrl);
+      if (typeof localStorage !== 'undefined') {
+        const localFssai = localStorage.getItem('hotel_crm_fssai_number');
+        const localFooter = localStorage.getItem('hotel_crm_invoice_footer');
+        const localBuffer = localStorage.getItem('hotel_crm_pickup_buffer_minutes');
+        if (localFssai && !cached.fssaiNumber) {
+          cached.fssaiNumber = localFssai;
+          if (cached.taxSettings) cached.taxSettings.fssaiNumber = localFssai;
+        }
+        if (localFooter && !cached.invoiceFooter) {
+          cached.invoiceFooter = localFooter;
+          if (cached.taxSettings) cached.taxSettings.invoiceFooter = localFooter;
+        }
+        if (localBuffer && cached.orderingSettings && !cached.orderingSettings.pickupBufferMinutes) {
+          cached.orderingSettings.pickupBufferMinutes = Number(localBuffer);
+        }
+      }
       return cached;
     }
     return null;
@@ -674,6 +703,10 @@ export class RestaurantDataService {
       if (cachedRecipes.length > 0 && this.recipes().length === 0) {
         this.recipes.set(cachedRecipes);
       }
+      const cachedSplitBills = this.readLocal<SplitBill[]>('split_bills', []);
+      if (cachedSplitBills.length > 0 && this.splitBills().length === 0) {
+        this.splitBills.set(cachedSplitBills);
+      }
 
       this.loadAuthoritativeData();
 
@@ -683,8 +716,11 @@ export class RestaurantDataService {
         const online = this.isOnline();
         if (online && !wasOnline) {
           wasOnline = true;
-          this.flushOfflineQueue();
-          this.loadAuthoritativeData();
+          if (this.offlineOutbox().length > 0) {
+            this.flushOfflineQueue();
+          } else {
+            this.loadAuthoritativeData();
+          }
         } else if (!online) {
           wasOnline = false;
         }
@@ -771,6 +807,24 @@ export class RestaurantDataService {
               cached?.openingHours || [{ days: 'Mon - Sun', hours: '11:00 AM - 11:00 PM' }],
             currency: res.currency || cached?.currency || 'INR',
             currencySymbol: res.currency_symbol || cached?.currencySymbol || '₹',
+            googleReviewUrl:
+              res.google_review_url ||
+              cached?.googleReviewUrl ||
+              cached?.contact?.googleReviewUrl ||
+              (typeof localStorage !== 'undefined' ? localStorage.getItem('hotel_crm_google_review_url') : null) ||
+              '',
+            fssaiNumber:
+              res.fssai_license ||
+              cached?.fssaiNumber ||
+              cached?.taxSettings?.fssaiNumber ||
+              (typeof localStorage !== 'undefined' ? localStorage.getItem('hotel_crm_fssai_number') : null) ||
+              '11223344556677',
+            invoiceFooter:
+              (res as any)?.invoice_footer ||
+              cached?.invoiceFooter ||
+              cached?.taxSettings?.invoiceFooter ||
+              (typeof localStorage !== 'undefined' ? localStorage.getItem('hotel_crm_invoice_footer') : null) ||
+              'Thank you for dining with GuruKripa Dhaba! Please visit again.',
             taxSettings: {
               enableGst: true,
               cgstRate:
@@ -790,12 +844,29 @@ export class RestaurantDataService {
                   ? Number(res.service_charge_rate)
                   : (cached?.taxSettings?.serviceChargeRate ?? 0),
               gstNumber: res.gstin || cached?.taxSettings?.gstNumber || '',
+              fssaiNumber:
+                res.fssai_license ||
+                cached?.taxSettings?.fssaiNumber ||
+                cached?.fssaiNumber ||
+                (typeof localStorage !== 'undefined' ? localStorage.getItem('hotel_crm_fssai_number') : null) ||
+                '11223344556677',
+              invoiceFooter:
+                (res as any)?.invoice_footer ||
+                cached?.taxSettings?.invoiceFooter ||
+                cached?.invoiceFooter ||
+                (typeof localStorage !== 'undefined' ? localStorage.getItem('hotel_crm_invoice_footer') : null) ||
+                'Thank you for dining with GuruKripa Dhaba! Please visit again.',
             },
-            orderingSettings: cached?.orderingSettings || {
-              dineInEnabled: true,
-              takeawayEnabled: true,
-              minOrderAmount: 0,
-              estimatedPrepMinutes: 20,
+            orderingSettings: {
+              dineInEnabled: cached?.orderingSettings?.dineInEnabled !== false,
+              takeawayEnabled: cached?.orderingSettings?.takeawayEnabled !== false,
+              minOrderAmount: cached?.orderingSettings?.minOrderAmount || 0,
+              estimatedPrepMinutes: cached?.orderingSettings?.estimatedPrepMinutes || 20,
+              pickupBufferMinutes:
+                cached?.orderingSettings?.pickupBufferMinutes ??
+                (typeof localStorage !== 'undefined' && localStorage.getItem('hotel_crm_pickup_buffer_minutes')
+                  ? Number(localStorage.getItem('hotel_crm_pickup_buffer_minutes'))
+                  : 20),
             },
           };
           this.restaurant.set(mapped);
@@ -840,6 +911,12 @@ export class RestaurantDataService {
           if (localStr) {
             const localTables: Table[] = JSON.parse(localStr);
             if (Array.isArray(localTables)) {
+              const pendingTableUpdates = new Set(
+                this.offlineOutbox()
+                  .filter((a) => a.type === 'UPDATE_TABLE_STATUS')
+                  .map((a) => a.entityId || a.orderId)
+                  .filter(Boolean),
+              );
               for (const lt of localTables) {
                 const existing = mapped.find((m) => m.id === lt.id || m.number === lt.number);
                 if (!existing) {
@@ -849,6 +926,15 @@ export class RestaurantDataService {
                   if (lt.posX !== undefined) existing.posX = lt.posX;
                   if (lt.posY !== undefined) existing.posY = lt.posY;
                   if (lt.shape) existing.shape = lt.shape;
+                  if (
+                    pendingTableUpdates.has(existing.id) ||
+                    pendingTableUpdates.has(lt.id) ||
+                    (!this.isOnline() && lt.status !== existing.status)
+                  ) {
+                    existing.status = lt.status;
+                    existing.currentSeatingSessionId = lt.currentSeatingSessionId;
+                    existing.activeOrderId = lt.activeOrderId;
+                  }
                 }
               }
             }
@@ -912,6 +998,22 @@ export class RestaurantDataService {
             i.image_url || 'https://images.unsplash.com/photo-1546833999-b9f581a1996d?w=400',
           prepTimeMinutes: i.preparation_time_minutes || 15,
         }));
+
+        // Preserve menu items toggled while offline
+        const pendingMenuToggles = new Map<string, boolean>();
+        for (const a of this.offlineOutbox()) {
+          if (a.type === 'TOGGLE_MENU_AVAILABILITY' && (a.entityId || a.orderId)) {
+            pendingMenuToggles.set(a.entityId || a.orderId!, a.payload?.is_available);
+          }
+        }
+        if (pendingMenuToggles.size > 0) {
+          for (const item of mapped) {
+            if (pendingMenuToggles.has(item.id)) {
+              item.isAvailable = pendingMenuToggles.get(item.id)!;
+            }
+          }
+        }
+
         this.menuItems.set(mapped);
         this.saveLocal('menuItems', mapped);
         this.isMenuLoading.set(false);
@@ -956,6 +1058,7 @@ export class RestaurantDataService {
         }
         // Start background polling for real-time live incoming orders from backend
         this.startOrderLivePolling();
+        this.fetchSplitBills();
       },
       error: (err) => {
         this.isOrdersLoading.set(false);
@@ -1189,6 +1292,292 @@ export class RestaurantDataService {
     });
   }
 
+  loadCustomers(): void {
+    this.isCustomersLoading.set(true);
+    this.api.get<any[]>('/customers').subscribe({
+      next: (data) => {
+        const mapped = (data || []).map((c) => ({
+          id: c.id,
+          name: c.name,
+          phone: c.phone,
+          email: c.email || '',
+          customerSince: c.created_at,
+          visitCount: c.visit_count || 1,
+          lastVisit: c.updated_at || c.created_at || new Date().toISOString(),
+          totalSpend: (c.total_spend_paise || 0) / 100,
+          avgOrderValue: c.visit_count ? (c.total_spend_paise || 0) / (c.visit_count * 100) : 0,
+          loyaltyPoints: c.loyalty_points ?? 0,
+          loyaltyTier: (c.loyalty_tier || 'BRONZE') as any,
+          status: (c.status || 'ACTIVE').toUpperCase() as any,
+          assignedCouponIds: [],
+        }));
+        this.customers.set(mapped);
+        this.saveLocal('customers', mapped);
+        this.isCustomersLoading.set(false);
+        this.customersLoaded.set(true);
+      },
+      error: () => {
+        this.isCustomersLoading.set(false);
+        this.customersLoaded.set(true);
+      },
+    });
+  }
+
+  loadStaff(): void {
+    this.isStaffLoading.set(true);
+    this.api.get<any[]>('/restaurants/staff').subscribe({
+      next: (data) => {
+        const mapped = (data || []).map((s) => ({
+          id: s.id,
+          name: s.name,
+          role: (s.role || 'STAFF') as any,
+          email: s.email || '',
+          phone: s.phone || '',
+          shift: s.shift || 'General Shift',
+          status: s.is_active ? ('ACTIVE' as any) : ('INACTIVE' as any),
+          assignedSection: s.assigned_section || 'Main Dining Floor',
+          loginId:
+            s.login_id ||
+            (s.email ? s.email.split('@')[0] : s.name.toLowerCase().replace(/ /g, '.')),
+          joinedAt: s.created_at,
+          monthlySalary: (s.monthly_salary_paise || 1500000) / 100,
+          payrollCycleStartDay: s.payroll_cycle_start_day || 1,
+        }));
+        this.staffMembers.set(mapped);
+        this.loadStaffPerformance();
+        this.loadStaffAttendance();
+        this.isStaffLoading.set(false);
+        this.staffLoaded.set(true);
+      },
+      error: () => {
+        this.isStaffLoading.set(false);
+        this.staffLoaded.set(true);
+      },
+    });
+  }
+
+  loadInventory(): void {
+    this.isInventoryLoading.set(true);
+    this.api.get<any[]>('/inventory/items').subscribe({
+      next: (data) => {
+        const now = new Date().toISOString();
+        const mapped: Ingredient[] = (data || []).map((item) => ({
+          id: item.id,
+          name: item.name,
+          unit: (item.unit_of_measure || item.unit || 'kg') as any,
+          currentStock: parseFloat(item.current_stock || '0'),
+          minThreshold: parseFloat(item.reorder_level || item.minimum_stock || '0'),
+          costUnit: (item.unit_of_measure || item.unit || 'kg') as any,
+          costPerUnit: (item.cost_per_unit_paise || 0) / 100,
+          isActive: item.is_active !== false,
+          category: (item.category || 'PRODUCE').toUpperCase() as any,
+          supplierName: item.sku || '',
+          createdAt: item.created_at || now,
+          updatedAt: item.updated_at || now,
+        }));
+        this.ingredients.set(mapped);
+        this.saveLocal('ingredients', mapped);
+        this.isInventoryLoading.set(false);
+        this.inventoryLoaded.set(true);
+      },
+      error: () => {
+        this.isInventoryLoading.set(false);
+        this.inventoryLoaded.set(true);
+      },
+    });
+  }
+
+  loadCoupons(): void {
+    this.isCouponsLoading.set(true);
+    this.api.get<any[]>('/coupons').subscribe({
+      next: (data) => {
+        const mapped = (data || []).map((c) => ({
+          id: c.id,
+          code: c.code,
+          name: c.description || c.code,
+          description: c.description || '',
+          discountType: (c.discount_type === 'percentage' ? 'PERCENTAGE' : 'FIXED') as any,
+          discountValue: c.discount_value,
+          minOrderValue: (c.min_order_amount_paise || 0) / 100,
+          maxDiscountAmount: c.max_discount_amount_paise
+            ? c.max_discount_amount_paise / 100
+            : undefined,
+          validFrom: c.start_date || '2026-01-01T00:00:00Z',
+          validUntil: c.end_date || '2026-12-31T23:59:59Z',
+          usageLimit: 1000,
+          perCustomerLimit: c.one_time_per_customer ? 1 : 10,
+          redemptionCount: 0,
+          isActive: c.is_active,
+        }));
+        this.coupons.set(mapped);
+        this.saveLocal('coupons', mapped);
+        this.isCouponsLoading.set(false);
+        this.couponsLoaded.set(true);
+      },
+      error: () => {
+        this.isCouponsLoading.set(false);
+        this.couponsLoaded.set(true);
+      },
+    });
+  }
+
+  loadFeedback(): void {
+    this.api.get<any[]>('/feedback').subscribe({
+      next: (data) => {
+        const mapped = (data || []).map((f) => ({
+          id: f.id,
+          orderId: f.order_id,
+          orderNumber: f.order_number,
+          customerName: f.customer_name || 'Guest',
+          rating: f.rating,
+          comment: f.comments || '',
+          createdAt: f.created_at,
+          status: 'PUBLISHED' as const,
+          adminResponse: f.resolution_note || undefined,
+        }));
+        this.feedbacks.set(mapped);
+        this.saveLocal('feedbacks', mapped);
+      },
+      error: () => {},
+    });
+  }
+
+  loadReservations(): void {
+    this.isReservationsLoading.set(true);
+    this.api.get<any[]>('/reservations').subscribe({
+      next: (data) => {
+        const mapped = (data || []).map((r) => ({
+          id: r.id,
+          customerName: r.customer_name,
+          customerPhone: r.customer_phone,
+          partySize: r.guest_count,
+          reservationTime: r.reservation_time,
+          reservationDate: r.reservation_time || r.reservation_date || new Date().toISOString(),
+          status: (r.status || 'CONFIRMED').toUpperCase() as ReservationStatus,
+          tableId: r.table_id,
+          specialRequests: r.special_requests,
+          createdAt: r.created_at,
+        }));
+        this.reservations.set(mapped);
+        this.isReservationsLoading.set(false);
+        this.reservationsLoaded.set(true);
+      },
+      error: () => {
+        this.isReservationsLoading.set(false);
+        this.reservationsLoaded.set(true);
+      },
+    });
+  }
+
+  updateOrderItems(
+    orderId: string,
+    reqOrItems:
+      | OrderItem[]
+      | {
+          items: OrderItem[];
+          customerName?: string;
+          customerPhone?: string;
+          tableId?: string;
+          notes?: string;
+        },
+  ): { success: boolean; error?: string; order?: Order } {
+    if (this.testMock) {
+      const items = Array.isArray(reqOrItems) ? reqOrItems : reqOrItems.items;
+      return (this.testMock as any).updateOrderItems
+        ? (this.testMock as any).updateOrderItems(orderId, items)
+        : { success: true };
+    }
+
+    const order = this.orders().find((o) => o.id === orderId || o.orderNumber === orderId);
+    if (!order) return { success: false, error: 'Order not found' };
+
+    const items = Array.isArray(reqOrItems) ? reqOrItems : reqOrItems.items;
+    const subtotal =
+      Math.round(
+        items.reduce((s, it) => s + (it.itemTotal || it.unitPrice * it.quantity), 0) * 100,
+      ) / 100;
+    const cgstRate = order.cgstRate ?? (this.restaurant()?.taxSettings?.cgstRate ?? 2.5);
+    const sgstRate = order.sgstRate ?? (this.restaurant()?.taxSettings?.sgstRate ?? 2.5);
+    const cgstAmount = Math.round(subtotal * (cgstRate / 100) * 100) / 100;
+    const sgstAmount = Math.round(subtotal * (sgstRate / 100) * 100) / 100;
+    const taxAmount = Math.round((cgstAmount + sgstAmount) * 100) / 100;
+    const discount = order.discountAmount || 0;
+    const totalAmount = Math.max(0, Math.round((subtotal + taxAmount - discount) * 100) / 100);
+
+    const updatedOrder: Order = {
+      ...order,
+      items,
+      subtotal,
+      cgstRate,
+      sgstRate,
+      cgstAmount,
+      sgstAmount,
+      taxAmount,
+      totalAmount,
+      customerName:
+        (!Array.isArray(reqOrItems) && reqOrItems.customerName) || order.customerName,
+      customerPhone:
+        (!Array.isArray(reqOrItems) && reqOrItems.customerPhone) || order.customerPhone,
+      tableId: (!Array.isArray(reqOrItems) && reqOrItems.tableId) || order.tableId,
+      notes:
+        !Array.isArray(reqOrItems) && reqOrItems.notes !== undefined
+          ? reqOrItems.notes
+          : order.notes,
+      updatedAt: new Date().toISOString(),
+    };
+
+    const updatedOrders = this.orders().map((o) => (o.id === order.id ? updatedOrder : o));
+    this.orders.set(updatedOrders);
+    this.saveLocal('orders', updatedOrders);
+
+    this.broadcastRealtimeOrderEvent({
+      type: 'ORDER_UPDATED',
+      order: updatedOrder,
+    });
+
+    const payload = {
+      items: items.map((it) => ({
+        menu_item_id: this.isValidUuid(it.menuItemId) ? it.menuItemId : undefined,
+        item_name: it.name || 'Dish',
+        quantity: it.quantity,
+        unit_price_paise: Math.round((it.unitPrice || 0) * 100),
+        notes: it.specialInstructions || it.notes || '',
+        selected_variants: it.selectedVariants,
+        selected_addons: it.selectedAddons,
+      })),
+      customer_name: updatedOrder.customerName,
+      customer_phone: updatedOrder.customerPhone,
+      table_id: this.isValidUuid(updatedOrder.tableId) ? updatedOrder.tableId : undefined,
+      notes: updatedOrder.notes,
+    };
+
+    if (!this.isOnline() || !this.isValidUuid(order.id)) {
+      this.queueOfflineAction({
+        type: 'UPDATE_ORDER_ITEMS',
+        orderId: order.id,
+        payload,
+      });
+      return { success: true, order: updatedOrder };
+    }
+
+    this.api.put<any>(`/orders/${order.id}/items`, payload).subscribe({
+      next: () => {},
+      error: (err) => {
+        if (this.isConnectionOffline(err)) {
+          this.queueOfflineAction({
+            type: 'UPDATE_ORDER_ITEMS',
+            orderId: order.id,
+            payload,
+          });
+        } else {
+          this.handleApiError('Failed to update order items', err);
+        }
+      },
+    });
+
+    return { success: true, order: updatedOrder };
+  }
+
   // Real-time on-demand refresh triggers
   refreshOrders(): void {
     this.isOrdersLoading.set(true);
@@ -1214,9 +1603,13 @@ export class RestaurantDataService {
               if (loc) {
                 const locStage = this.getOrderStageIndex(loc.status);
                 const mStage = this.getOrderStageIndex(m.status);
-                if (locStage > mStage) {
-                  return { ...m, status: loc.status };
-                }
+                const status = locStage > mStage ? loc.status : m.status;
+                return {
+                  ...m,
+                  status,
+                  isSplit: m.isSplit || loc.isSplit,
+                  splitCount: m.splitCount || loc.splitCount,
+                };
               }
               return m;
             }),
@@ -1224,6 +1617,7 @@ export class RestaurantDataService {
         this.orders.set(merged);
         this.isOrdersLoading.set(false);
         this.ordersLoaded.set(true);
+        this.fetchSplitBills();
       },
       error: () => {
         this.isOrdersLoading.set(false);
@@ -1378,6 +1772,14 @@ export class RestaurantDataService {
       rateSum > 0 ? Math.round(totalTax * (orderCgstRate / rateSum) * 100) / 100 : totalTax / 2;
     const calculatedSgst = Math.round((totalTax - calculatedCgst) * 100) / 100;
 
+    const discountPaise =
+      base.discount_paise !== undefined && base.discount_paise !== null
+        ? Number(base.discount_paise)
+        : base.discountAmount !== undefined
+          ? Math.round(Number(base.discountAmount) * 100)
+          : 0;
+    const discountAmount = discountPaise / 100;
+
     return {
       id: base.id,
       orderNumber:
@@ -1394,12 +1796,16 @@ export class RestaurantDataService {
       customerPhoneE164:
         base.customer_phone_e164 || base.customer_phone || base.customerPhone || '',
       status: this.mapApiStatus(base.status),
-      paymentStatus: ((base.payment_status || '').toUpperCase() === 'PAID' ||
-      (base.payment_status || '').toUpperCase() === 'COMPLETED' ||
-      (base.status || '').toUpperCase() === 'COMPLETED' ||
-      !!base.settled_at
-        ? 'PAID'
-        : 'UNPAID') as PaymentStatus,
+      paymentStatus: ((base.payment_status || '').toUpperCase() === 'PARTIALLY_PAID'
+        ? 'PARTIALLY_PAID'
+        : (base.payment_status || '').toUpperCase() === 'PAID' ||
+            (base.payment_status || '').toUpperCase() === 'COMPLETED'
+          ? 'PAID'
+          : 'UNPAID') as PaymentStatus,
+      isSplit: Boolean(
+        base.is_split ?? base.isSplit ?? this.splitBills().some((s) => s.orderId === base.id),
+      ),
+      splitCount: base.split_count ?? base.splitCount ?? 1,
       paymentMethod: (base.payment_method?.toUpperCase() ||
         this.orders().find((ord) => ord.id === base.id)?.paymentMethod ||
         undefined) as any,
@@ -1430,7 +1836,7 @@ export class RestaurantDataService {
       sgstRate: orderSgstRate,
       cgstAmount: calculatedCgst,
       sgstAmount: calculatedSgst,
-      discountAmount: (base.discount_paise || base.discountAmount || 0) / 100,
+      discountAmount,
       appliedCouponCode: base.applied_coupon_code || base.appliedCouponCode || undefined,
       totalAmount: totalAmountPaise / 100,
       notes: base.notes || '',
@@ -1462,6 +1868,15 @@ export class RestaurantDataService {
     this.saveLocal('tables', updated);
 
     if (!this.isOnline()) {
+      if (this.isValidUuid(table.id)) {
+        this.queueOfflineAction({
+          type: 'UPDATE_TABLE_STATUS',
+          entityId: table.id,
+          payload: {
+            status: newStatus.toUpperCase(),
+          },
+        });
+      }
       return { success: true, status: newStatus, table: { ...table, status: newStatus } };
     }
 
@@ -1479,6 +1894,15 @@ export class RestaurantDataService {
             console.warn(
               '[RestaurantDataService] Database offline during table status update; preserved locally.',
             );
+            if (this.isValidUuid(table.id)) {
+              this.queueOfflineAction({
+                type: 'UPDATE_TABLE_STATUS',
+                entityId: table.id,
+                payload: {
+                  status: newStatus.toUpperCase(),
+                },
+              });
+            }
           } else {
             this.handleApiError('Failed to update table status', err);
           }
@@ -1811,6 +2235,17 @@ export class RestaurantDataService {
     this.menuItems.set(updated);
     this.saveLocal('menuItems', updated);
 
+    if (!this.isOnline()) {
+      if (this.isValidUuid(id)) {
+        this.queueOfflineAction({
+          type: 'TOGGLE_MENU_AVAILABILITY',
+          entityId: id,
+          payload: { is_available: isAvailable },
+        });
+      }
+      return { success: true };
+    }
+
     this.api.put<any>(`/menu/items/${id}/availability`, { is_available: isAvailable }).subscribe({
       next: () => {},
       error: (err) => {
@@ -1818,6 +2253,13 @@ export class RestaurantDataService {
           console.warn(
             '[RestaurantDataService] Database offline during toggleMenuItemAvailability; preserved locally.',
           );
+          if (this.isValidUuid(id)) {
+            this.queueOfflineAction({
+              type: 'TOGGLE_MENU_AVAILABILITY',
+              entityId: id,
+              payload: { is_available: isAvailable },
+            });
+          }
         } else {
           this.handleApiError('Failed to toggle menu item availability', err);
         }
@@ -2569,7 +3011,22 @@ export class RestaurantDataService {
                 // Keep local status if newer status was requested or if mappedStage is behind
                 const finalStatus =
                   !isLatest || mappedStage < oStage ? o.status : mapped.status || nextStatus;
-                return { ...o, ...mapped, items: preservedItems, status: finalStatus };
+                const preservedDiscount =
+                  mapped.discountAmount !== undefined && mapped.discountAmount > 0
+                    ? mapped.discountAmount
+                    : o.discountAmount || 0;
+                const preservedCoupon = mapped.appliedCouponCode || o.appliedCouponCode;
+                const preservedPaymentStatus =
+                  o.paymentStatus === 'PAID' ? 'PAID' : mapped.paymentStatus || o.paymentStatus;
+                return {
+                  ...o,
+                  ...mapped,
+                  items: preservedItems,
+                  status: finalStatus,
+                  discountAmount: preservedDiscount,
+                  appliedCouponCode: preservedCoupon,
+                  paymentStatus: preservedPaymentStatus,
+                };
               }
               return o;
             });
@@ -2741,8 +3198,64 @@ export class RestaurantDataService {
         return;
       }
       const current = this.orders();
-      if (!current.some((o) => o.id === incoming.id)) {
-        this.orders.set([incoming, ...current]);
+      const existingById = current.findIndex((o) => o.id === incoming.id);
+      if (existingById !== -1) {
+        // Already present - update in-place without duplicating
+        const updated = [...current];
+        updated[existingById] = {
+          ...updated[existingById],
+          ...incoming,
+          customerName:
+            updated[existingById].customerName && updated[existingById].customerName !== 'Walk-in Guest'
+              ? updated[existingById].customerName
+              : incoming.customerName,
+          customerPhone: updated[existingById].customerPhone || incoming.customerPhone,
+          tableNumber: updated[existingById].tableNumber || incoming.tableNumber,
+        };
+        this.orders.set(updated);
+        this.saveLocal('orders', updated);
+        return;
+      }
+
+      // Check if an existing optimistic/manual order matches this incoming server order
+      // to avoid duplicating orders created locally on this POS device
+      const matchIdx = current.findIndex((o) => {
+        const matchTable =
+          Boolean(incoming.tableId && o.tableId === incoming.tableId) ||
+          Boolean(incoming.tableNumber && o.tableNumber === incoming.tableNumber);
+        const matchPickup =
+          Boolean(incoming.pickupReference && o.pickupReference === incoming.pickupReference);
+        const matchCustomer =
+          Boolean(incoming.customerPhone && o.customerPhone && o.customerPhone === incoming.customerPhone);
+        const isRecent =
+          Math.abs(new Date(o.createdAt || Date.now()).getTime() - new Date(incoming.createdAt || Date.now()).getTime()) <
+          120000;
+
+        return (matchTable || matchPickup || matchCustomer) && isRecent;
+      });
+
+      if (matchIdx !== -1) {
+        // Harmonize and replace optimistic local entry with server authoritative order
+        const existing = current[matchIdx];
+        const updated = [...current];
+        updated[matchIdx] = {
+          ...existing,
+          ...incoming,
+          id: incoming.id,
+          customerName:
+            existing.customerName && existing.customerName !== 'Walk-in Guest'
+              ? existing.customerName
+              : incoming.customerName,
+          customerPhone: existing.customerPhone || incoming.customerPhone,
+          tableNumber: existing.tableNumber || incoming.tableNumber,
+        };
+        const deduped = updated.filter((o, idx, arr) => arr.findIndex((x) => x.id === o.id) === idx);
+        this.orders.set(deduped);
+        this.saveLocal('orders', deduped);
+      } else {
+        const deduped = [incoming, ...current.filter((o) => o.id !== incoming.id)];
+        this.orders.set(deduped);
+        this.saveLocal('orders', deduped);
         this.liveOrderEvent.set({ type: 'ORDER_CREATED', order: incoming, timestamp: Date.now() });
         this.soundService?.playOrderArrivalSound();
         this.syncCustomerFromOrder(incoming);
@@ -2770,21 +3283,45 @@ export class RestaurantDataService {
         resData.reservation_time || resData.reservationDate || new Date().toISOString(),
       status: (resData.status || 'CONFIRMED').toUpperCase() as ReservationStatus,
       tableId: resData.table_id || resData.tableId,
+      tableNumber:
+        resData.table_number ||
+        resData.tableNumber ||
+        this.tables().find((t) => t.id === (resData.table_id || resData.tableId))?.number,
       specialRequests: resData.special_requests || resData.specialRequests,
       createdAt: resData.created_at || new Date().toISOString(),
     };
     const current = this.reservations();
-    if (!current.some((r) => r.id === incoming.id)) {
-      const updated = [incoming, ...current];
-      this.reservations.set(updated);
-      this.saveLocal('reservations', updated);
-      this.soundService?.playOrderArrivalSound();
-      this.liveReservationEvent.set({
-        type: 'RESERVATION_CREATED',
-        reservation: incoming,
-        timestamp: Date.now(),
-      });
+    if (current.some((r) => r.id === incoming.id)) {
+      return;
     }
+
+    // Check if an optimistic temporary reservation matches this incoming reservation
+    const tempIndex = current.findIndex(
+      (r) =>
+        r.id.startsWith('res-') &&
+        r.customerPhone === incoming.customerPhone &&
+        (!incoming.tableId || r.tableId === incoming.tableId),
+    );
+
+    let updated: Reservation[];
+    if (tempIndex !== -1) {
+      updated = [...current];
+      updated[tempIndex] = {
+        ...incoming,
+        tableNumber: incoming.tableNumber || current[tempIndex].tableNumber,
+      };
+    } else {
+      updated = [incoming, ...current];
+    }
+
+    this.reservations.set(updated);
+    this.saveLocal('reservations', updated);
+    this.soundService?.playOrderArrivalSound();
+    this.liveReservationEvent.set({
+      type: 'RESERVATION_CREATED',
+      reservation: incoming,
+      timestamp: Date.now(),
+    });
   }
 
   assignTableToReservation(
@@ -2792,18 +3329,25 @@ export class RestaurantDataService {
     tableId: string,
     tableNumber?: string,
   ): { success: boolean; error?: string } {
-    const table = this.tables().find((t) => t.id === tableId);
-    const resolvedNumber = tableNumber || table?.number;
+    const table = tableId ? this.tables().find((t) => t.id === tableId) : undefined;
+    const resolvedNumber = tableId ? (tableNumber || table?.number) : undefined;
     const updated = this.reservations().map((r) =>
       r.id === reservationId
-        ? { ...r, tableId, tableNumber: resolvedNumber, section: table?.section }
+        ? {
+            ...r,
+            tableId: tableId || undefined,
+            tableNumber: resolvedNumber,
+            section: table?.section,
+          }
         : r,
     );
     this.reservations.set(updated);
     this.saveLocal('reservations', updated);
-    this.api.put<any>(`/reservations/${reservationId}/status`, { table_id: tableId }).subscribe({
-      error: () => {},
-    });
+    this.api
+      .put<any>(`/reservations/${reservationId}/status`, { table_id: tableId || null })
+      .subscribe({
+        error: () => {},
+      });
     return { success: true };
   }
 
@@ -2824,8 +3368,26 @@ export class RestaurantDataService {
             .map((o: any) => this.mapApiOrder(o))
             .filter((m: any) => m.id && (m.items || []).length > 0);
 
-          // Detect brand new orders arrived from external devices/customers
-          const newOrders = mappedOrders.filter((m: any) => !currentIds.has(m.id));
+          // Detect brand new orders arrived from external devices/customers, filtering out any matching local optimistic orders
+          const newOrders = mappedOrders.filter((m: any) => {
+            if (currentIds.has(m.id)) return false;
+            // Also check for matching optimistic local order (table/pickup, amount, items count, timestamp within 30s)
+            const matchesLocal = currentOrders.some((o) => {
+              const matchTable =
+                Boolean(m.tableId && o.tableId === m.tableId) ||
+                Boolean(m.tableNumber && o.tableNumber === m.tableNumber);
+              const matchPickup =
+                Boolean(m.pickupReference && o.pickupReference === m.pickupReference);
+              const matchCustomer =
+                m.customerPhone && o.customerPhone === m.customerPhone;
+              const matchAmount = Math.abs((o.totalAmount || 0) - (m.totalAmount || 0)) < 0.01;
+              const matchItemsCount = (o.items || []).length === (m.items || []).length;
+              const isRecent =
+                Math.abs(new Date(o.createdAt).getTime() - new Date(m.createdAt).getTime()) < 30000;
+              return (matchTable || matchPickup || matchCustomer) && matchAmount && matchItemsCount && isRecent;
+            });
+            return !matchesLocal;
+          });
           if (newOrders.length > 0) {
             newOrders.forEach((m: any) => this.syncCustomerFromOrder(m));
             const pendingOutbox = this.offlineOutbox();
@@ -2841,12 +3403,18 @@ export class RestaurantDataService {
                   if (loc) {
                     const locStage = this.getOrderStageIndex(loc.status);
                     const mStage = this.getOrderStageIndex(m.status);
-                    if (locStage > mStage) {
-                      return { ...m, status: loc.status };
-                    }
+                    const status = locStage > mStage ? loc.status : m.status;
+                    return {
+                      ...m,
+                      status,
+                      isSplit: m.isSplit || loc.isSplit,
+                      splitCount: m.splitCount || loc.splitCount,
+                    };
                   }
                   return m;
-                }),
+                })
+                // Only retain un-synced local orders that are still pending in the offline outbox
+                .concat(pendingLocalOrders.filter((p) => !mappedOrders.some((m: any) => m.id === p.id))),
             ];
             this.orders.set(merged);
             this.saveLocal('orders', merged);
@@ -2866,6 +3434,13 @@ export class RestaurantDataService {
         },
       });
     }, 6000);
+  }
+
+  private removeLocalOrder(orderId?: string): void {
+    if (!orderId) return;
+    const updated = this.orders().filter((o) => o.id !== orderId);
+    this.orders.set(updated);
+    this.saveLocal('orders', updated);
   }
 
   addOrder(order: Order): void {
@@ -2906,6 +3481,7 @@ export class RestaurantDataService {
     this.soundService?.playOrderArrivalSound();
 
     const payload = {
+      id: this.isValidUuid(order.id) ? order.id : undefined,
       order_type: (order.orderType || 'dine_in').toLowerCase(),
       pickup_reference: order.pickupReference,
       table_id: this.isValidUuid(order.tableId) ? order.tableId : undefined,
@@ -2914,9 +3490,9 @@ export class RestaurantDataService {
       customer_phone: customerPhone,
       items: (order.items || []).map((it) => ({
         menu_item_id: this.isValidUuid(it.menuItemId) ? it.menuItemId : undefined,
-        item_name: it.name,
+        item_name: it.name || 'Dish',
         quantity: it.quantity,
-        unit_price_paise: Math.round(it.unitPrice * 100),
+        unit_price_paise: Math.round((it.unitPrice || 0) * 100),
         notes: (it as any).notes || (it as any).specialInstructions || '',
       })),
       notes: (order as any).notes || '',
@@ -2940,12 +3516,11 @@ export class RestaurantDataService {
       next: (res) => {
         const mapped = this.mapApiOrder(res.order || res);
         const currentList = this.orders();
-        const existing = currentList.find((o) => o.id === order.id);
+        const existing = currentList.find((o) => o.id === order.id || o.id === mapped.id);
         const preservedItems =
           mapped.items && mapped.items.length > 0
             ? mapped.items
             : existing?.items || order.items || [];
-        const existingIdx = currentList.findIndex((o) => o.id === order.id);
         const preservedCustomerName =
           order.customerName && order.customerName.trim() && order.customerName !== 'Walk-in Guest'
             ? order.customerName.trim()
@@ -2962,37 +3537,24 @@ export class RestaurantDataService {
         const preservedNotes = order.notes || mapped.notes || '';
         const preservedCoupon = order.appliedCouponCode || mapped.appliedCouponCode;
 
-        const updated =
-          existingIdx > -1
-            ? currentList.map((o) =>
-                o.id === order.id
-                  ? {
-                      ...o,
-                      ...mapped,
-                      customerName: preservedCustomerName,
-                      customerPhone: preservedCustomerPhone,
-                      pickupReference: preservedPickupRef,
-                      appliedCouponCode: preservedCoupon,
-                      notes: preservedNotes,
-                      timeline: preservedTimeline,
-                      items: preservedItems,
-                      id: mapped.id,
-                    }
-                  : o,
-              )
-            : [
-                {
-                  ...mapped,
-                  customerName: preservedCustomerName,
-                  customerPhone: preservedCustomerPhone,
-                  pickupReference: preservedPickupRef,
-                  appliedCouponCode: preservedCoupon,
-                  notes: preservedNotes,
-                  timeline: preservedTimeline,
-                  items: preservedItems,
-                },
-                ...currentList,
-              ];
+        const merged: Order = {
+          ...(existing || {}),
+          ...mapped,
+          customerName: preservedCustomerName,
+          customerPhone: preservedCustomerPhone,
+          pickupReference: preservedPickupRef,
+          appliedCouponCode: preservedCoupon,
+          notes: preservedNotes,
+          timeline: preservedTimeline,
+          items: preservedItems,
+          id: mapped.id,
+        };
+
+        // Strictly deduplicate: remove any old occurrences of order.id or mapped.id
+        const remaining = currentList.filter(
+          (o) => o.id !== order.id && o.id !== mapped.id,
+        );
+        const updated = [merged, ...remaining];
         this.orders.set(updated);
         this.saveLocal('orders', updated);
       },
@@ -3008,6 +3570,7 @@ export class RestaurantDataService {
             'Offline Mode',
           );
         } else {
+          this.removeLocalOrder(order.id);
           this.handleApiError('Failed to create order', err);
         }
       },
@@ -3053,8 +3616,7 @@ export class RestaurantDataService {
     }
 
     // 1. Optimistic / Instant update in memory & local storage so UI reflects PAID immediately
-    const isPrinted = (order.printCount || 0) > 0;
-    const targetStatus = isPrinted ? 'COMPLETED' : order.status;
+    const targetStatus: OrderStatus = 'COMPLETED';
 
     // Detect if this table has multiple rounds/orders that must be unified into one bill
     const siblingOrders =
@@ -3120,14 +3682,28 @@ export class RestaurantDataService {
     this.orders.set(updatedOrders);
     this.saveLocal('orders', updatedOrders);
 
+    const updatedSplits = this.splitBills().map((b) =>
+      b.orderId === req.orderId
+        ? {
+            ...b,
+            paymentStatus: 'PAID' as PaymentStatus,
+            paymentMethod: req.paymentMethod,
+            settledAt: now,
+          }
+        : b,
+    );
+    this.splitBills.set(updatedSplits);
+    this.saveLocal('split_bills', updatedSplits);
+
     this.broadcastRealtimeOrderEvent({
       type: 'ORDER_UPDATED',
       order: settledOrder,
     });
 
-    if (isPrinted && order.status !== 'COMPLETED') {
-      this.updateOrderStatusAtomic(order.id, 'COMPLETED');
-    }
+    const idempotencyKey =
+      typeof crypto !== 'undefined' && crypto.randomUUID
+        ? crypto.randomUUID()
+        : 'idemp-' + Date.now() + '-' + Math.random().toString(36).slice(2, 10);
 
     const payload = {
       payment_method: req.paymentMethod.toLowerCase(),
@@ -3135,6 +3711,7 @@ export class RestaurantDataService {
       discount_paise: Math.round(finalDiscount * 100),
       applied_coupon_code: settledOrder.appliedCouponCode,
       notes: req.notes,
+      idempotency_key: idempotencyKey,
     };
 
     if (!this.isOnline() || !this.isValidUuid(req.orderId)) {
@@ -3153,7 +3730,24 @@ export class RestaurantDataService {
     // 2. Persist settlement to Backend API
     this.api.post<any>(`/orders/${req.orderId}/settle`, payload).subscribe({
       next: () => {
-        // Confirmed by backend
+        // Confirmed by backend: ensure authoritative discount & payment state remain locked in
+        const current = this.orders();
+        const updated = current.map((o) =>
+          o.id === req.orderId
+            ? {
+                ...o,
+                status: 'COMPLETED' as const,
+                paymentStatus: 'PAID' as const,
+                paymentMethod: req.paymentMethod,
+                discountAmount: finalDiscount,
+                appliedCouponCode: settledOrder.appliedCouponCode,
+                totalAmount,
+                settledAt: now,
+              }
+            : o,
+        );
+        this.orders.set(updated);
+        this.saveLocal('orders', updated);
       },
       error: (err) => {
         if (this.isConnectionOffline(err)) {
@@ -3188,20 +3782,269 @@ export class RestaurantDataService {
         splitCount: req.splitCount ?? req.sharesCount ?? 2,
       });
     }
-    const order = this.orders().find((o) => o.id === req.orderId);
-    if (order && order.status === 'CANCELLED') {
+    const order = this.orders().find((o) => o.id === req.orderId || o.orderNumber === req.orderId);
+    if (!order) return { success: false, error: 'Order not found' };
+    if (order.status === 'CANCELLED') {
       return { success: false, error: 'Cannot split a cancelled order' };
     }
-    const count = req.splitCount ?? req.sharesCount ?? 2;
+    if (order.paymentStatus === 'PAID') {
+      return { success: false, error: 'Cannot split an already settled bill' };
+    }
+    if (order.isSplit || this.splitBills().some((b) => b.orderId === order.id)) {
+      return {
+        success: false,
+        error:
+          'Cannot re-split an order with existing split bills. Please settle the remaining parts.',
+      };
+    }
+    if (order.paymentStatus === 'PARTIALLY_PAID') {
+      return { success: false, error: 'Cannot split an order that has already been partially settled' };
+    }
+
+    const n = Math.max(2, Math.min(20, Math.floor(req.splitCount ?? req.sharesCount ?? 2)));
+
+    // Allocate in integer paise (cents) to guarantee zero arithmetic discrepancies
+    const totalCents = Math.round(order.totalAmount * 100);
+    const baseTotalCents = Math.floor(totalCents / n);
+    const remTotalCents = totalCents % n;
+
+    const subtotalCents = Math.round(order.subtotal * 100);
+    const discountCents = Math.round(order.discountAmount * 100);
+    const taxCents = Math.round(order.taxAmount * 100);
+
+    const hasConsistentComponents =
+      Math.abs(subtotalCents - discountCents + taxCents - totalCents) <= 1;
+
+    let effSubCents = subtotalCents;
+    let effDiscCents = discountCents;
+
+    if (!hasConsistentComponents) {
+      effSubCents = totalCents;
+      effDiscCents = 0;
+    }
+
+    const baseSubCents = Math.floor(effSubCents / n);
+    const remSubCents = effSubCents % n;
+
+    const baseDiscCents = Math.floor(effDiscCents / n);
+    const remDiscCents = effDiscCents % n;
+
+    const splits: SplitBill[] = [];
+    for (let i = 0; i < n; i++) {
+      const tCents = baseTotalCents + (i < remTotalCents ? 1 : 0);
+      const sCents = baseSubCents + (i < remSubCents ? 1 : 0);
+      const dCents = baseDiscCents + (i < remDiscCents ? 1 : 0);
+      const xCents = tCents - sCents + dCents;
+      const cCents = Math.round(xCents / 2);
+      const gCents = xCents - cCents;
+
+      const billSubtotal = sCents / 100;
+      const billDiscount = dCents / 100;
+      const billTax = xCents / 100;
+      const billTotal = tCents / 100;
+
+      splits.push({
+        id: `split-${order.id}-${i + 1}-${Math.random().toString(36).slice(2, 6)}`,
+        orderId: order.id,
+        orderNumber: order.orderNumber,
+        orderType: order.orderType,
+        pickupReference: order.pickupReference,
+        tableNumber: order.tableNumber,
+        customerName: order.customerName,
+        splitIndex: i + 1,
+        splitTotalCount: n,
+        splitType: 'EQUAL',
+        subtotal: billSubtotal,
+        discountAmount: billDiscount,
+        taxAmount: billTax,
+        totalAmount: billTotal,
+        paymentStatus: 'UNPAID',
+        totalRefunded: 0,
+        taxBreakdown: [
+          {
+            name: `CGST (${this.restaurant()?.taxSettings?.cgstRate ?? 2.5}%)`,
+            rate: this.restaurant()?.taxSettings?.cgstRate ?? 2.5,
+            amount: cCents / 100,
+          },
+          {
+            name: `SGST (${this.restaurant()?.taxSettings?.sgstRate ?? 2.5}%)`,
+            rate: this.restaurant()?.taxSettings?.sgstRate ?? 2.5,
+            amount: gCents / 100,
+          },
+        ],
+      });
+    }
+
+    // Persist split bills optimistically
+    const existingOtherSplits = this.splitBills().filter((b) => b.orderId !== order.id);
+    const updatedSplitBills = [...splits, ...existingOtherSplits];
+    this.splitBills.set(updatedSplitBills);
+    this.saveLocal('split_bills', updatedSplitBills);
+
+    // Update parent order
+    const now = new Date().toISOString();
+    const updatedOrder: Order = {
+      ...order,
+      isSplit: true,
+      splitCount: n,
+      paymentStatus: 'PARTIALLY_PAID',
+      updatedAt: now,
+      timeline: [
+        ...order.timeline,
+        {
+          status: 'BILL_SPLIT',
+          timestamp: now,
+          note: `Bill split into ${n} equal parts of approx ₹${splits[0].totalAmount}`,
+        },
+      ],
+    };
+    const updatedOrders = this.orders().map((o) => (o.id === order.id ? updatedOrder : o));
+    this.orders.set(updatedOrders);
+    this.saveLocal('orders', updatedOrders);
+    this.broadcastRealtimeOrderEvent({ type: 'ORDER_UPDATED', order: updatedOrder });
+
     this.api
-      .post<any>(`/orders/${req.orderId}/split`, {
-        split_count: count,
+      .post<any>(`/orders/${order.id}/split`, {
+        split_type: 'equal',
+        ways: n,
       })
       .subscribe({
+        next: (res) => {
+          const apiSplits = res?.data || res;
+          if (Array.isArray(apiSplits) && apiSplits.length === splits.length) {
+            const serverUpdated = this.splitBills().map((sb) => {
+              if (sb.orderId !== order.id) return sb;
+              const match = apiSplits[sb.splitIndex - 1];
+              return match?.id ? { ...sb, id: match.id } : sb;
+            });
+            this.splitBills.set(serverUpdated);
+            this.saveLocal('split_bills', serverUpdated);
+          }
+        },
         error: (err) => this.handleApiError('Failed to split order', err),
       });
 
-    return { success: true };
+    return { success: true, splitBills: splits };
+  }
+
+  fetchSplitBills(): void {
+    if (!this.isOnline()) return;
+    this.api.get<any>('/split-bills').subscribe({
+      next: (res) => {
+        const rawSplits = Array.isArray(res) ? res : res?.data || [];
+        if (rawSplits && rawSplits.length > 0) {
+          const currentSplits = this.splitBills();
+          const mapped = rawSplits.map((sb: any) => this.mapApiSplitBill(sb));
+          const merged = [
+            ...mapped,
+            ...currentSplits.filter(
+              (local: SplitBill) =>
+                !mapped.some(
+                  (m: SplitBill) =>
+                    m.id === local.id ||
+                    (m.orderId === local.orderId && m.splitIndex === local.splitIndex),
+                ),
+            ),
+          ];
+          this.splitBills.set(merged);
+          this.saveLocal('split_bills', merged);
+        }
+      },
+      error: () => {
+        // Silent catch: local storage cache continues to serve splits offline
+      },
+    });
+  }
+
+  private mapApiSplitBill(sb: any): SplitBill {
+    const orderId = sb.order_id || sb.orderId || '';
+    const parentOrder = this.orders().find((o) => o.id === orderId);
+    const splitIndex = sb.split_number ?? sb.split_index ?? sb.splitIndex ?? 1;
+    // DM-1 fix: split_total_count now comes from the backend; fall back to parent's splitCount
+    const splitTotalCount =
+      sb.split_total_count ?? sb.splitTotalCount ?? parentOrder?.splitCount ?? 1;
+    const totalAmount =
+      typeof sb.totalAmount === 'number'
+        ? sb.totalAmount
+        : typeof sb.amount_paise === 'number'
+          ? sb.amount_paise / 100
+          : 0;
+
+    // DM-2 fix: use backend proportional values when available
+    const subtotal =
+      typeof sb.subtotal_paise === 'number' && sb.subtotal_paise > 0
+        ? sb.subtotal_paise / 100
+        : typeof sb.subtotal === 'number'
+          ? sb.subtotal
+          : totalAmount;
+    const discountAmount =
+      typeof sb.discount_paise === 'number' ? sb.discount_paise / 100 : (sb.discountAmount ?? 0);
+    const taxAmount =
+      typeof sb.tax_paise === 'number' ? sb.tax_paise / 100 : (sb.taxAmount ?? 0);
+
+    const rawStatus = (sb.payment_status || sb.paymentStatus || 'pending').toUpperCase();
+    const paymentStatus: PaymentStatus =
+      parentOrder?.paymentStatus === 'PAID' ||
+      rawStatus === 'PAID' ||
+      rawStatus === 'COMPLETED'
+        ? 'PAID'
+        : rawStatus === 'REFUNDED'
+          ? 'REFUNDED'
+          : rawStatus === 'PARTIALLY_PAID'
+            ? 'PARTIALLY_PAID'
+            : 'UNPAID';
+
+    const existing = this.splitBills().find(
+      (b) => b.id === sb.id || (b.orderId === orderId && b.splitIndex === splitIndex),
+    );
+
+    // DM-6 fix: uppercase payment_method consistently
+    const rawMethod = sb.payment_method || sb.paymentMethod || existing?.paymentMethod;
+    const paymentMethod = rawMethod ? (rawMethod.toUpperCase() as any) : undefined;
+
+    // DM-3 fix: use joined order fields from backend when available
+    const orderNumber =
+      sb.order_number ||
+      parentOrder?.orderNumber ||
+      existing?.orderNumber ||
+      'ORD-' + (orderId || '').substring(0, 8).toUpperCase();
+    const orderType = sb.order_type || parentOrder?.orderType || existing?.orderType;
+    const customerName = sb.customer_name || parentOrder?.customerName || existing?.customerName;
+    const pickupReference =
+      sb.pickup_reference || parentOrder?.pickupReference || existing?.pickupReference;
+    const tableNumber = parentOrder?.tableNumber || existing?.tableNumber;
+
+    return {
+      id: sb.id || existing?.id || `split-${orderId}-${splitIndex}`,
+      orderId,
+      orderNumber,
+      orderType,
+      pickupReference,
+      tableNumber,
+      customerName,
+      splitIndex,
+      splitTotalCount,
+      splitType:
+        ((sb.split_type || sb.splitType || 'equal').toUpperCase() === 'ITEM_BASED'
+          ? 'ITEM_BASED'
+          : 'EQUAL') as 'EQUAL' | 'ITEM_BASED',
+      allocatedItems: existing?.allocatedItems || [],
+      subtotal,
+      discountAmount,
+      taxAmount,
+      taxBreakdown: existing?.taxBreakdown || [],
+      totalAmount,
+      paymentStatus,
+      paymentMethod,
+      settledAt: sb.settled_at || sb.settledAt || existing?.settledAt,
+      createdAt: sb.created_at || sb.createdAt || existing?.createdAt || new Date().toISOString(),
+      totalRefunded:
+        typeof sb.total_refunded_paise === 'number'
+          ? sb.total_refunded_paise / 100
+          : existing?.totalRefunded ?? 0,
+      // DM-9 fix: printCount preserved from API; existing takes priority so refresh doesn't reset it
+      printCount: existing?.printCount ?? sb.print_count ?? sb.printCount ?? 0,
+    };
   }
 
   settleSplitBill(req: {
@@ -3209,7 +4052,7 @@ export class RestaurantDataService {
     orderId?: string;
     paymentMethod: 'UPI' | 'CASH' | 'CARD';
     splitIndex?: number;
-  }): { success: boolean; error?: string } {
+  }): { success: boolean; error?: string; splitBill?: SplitBill } {
     if (this.testMock) {
       const orderId =
         req.orderId ||
@@ -3222,7 +4065,62 @@ export class RestaurantDataService {
         paymentMethod: req.paymentMethod,
       });
     }
-    return { success: true };
+
+    const splitBill = this.splitBills().find((b) => b.id === req.splitBillId);
+    if (!splitBill) return { success: false, error: 'Split bill not found' };
+
+    if (splitBill.paymentStatus === 'PAID') {
+      return { success: false, error: 'This split bill is already settled' };
+    }
+    if (splitBill.paymentStatus === 'REFUNDED') {
+      return { success: false, error: 'Cannot settle a refunded split bill' };
+    }
+
+    const now = new Date().toISOString();
+    const settledBill: SplitBill = {
+      ...splitBill,
+      paymentStatus: 'PAID',
+      paymentMethod: req.paymentMethod,
+      settledAt: now,
+    };
+
+    const updatedSplits = this.splitBills().map((b) => (b.id === settledBill.id ? settledBill : b));
+    this.splitBills.set(updatedSplits);
+    this.saveLocal('split_bills', updatedSplits);
+
+    // Check sibling splits for this order
+    const orderSplits = updatedSplits.filter((b) => b.orderId === settledBill.orderId);
+    const allSettled = orderSplits.every((b) => b.paymentStatus === 'PAID');
+
+    const order = this.orders().find((o) => o.id === settledBill.orderId);
+    if (order) {
+      const updatedOrder: Order = {
+        ...order,
+        paymentStatus: allSettled ? 'PAID' : 'PARTIALLY_PAID',
+        status: allSettled ? 'COMPLETED' : order.status,
+        updatedAt: now,
+      };
+      const updatedOrders = this.orders().map((o) => (o.id === order.id ? updatedOrder : o));
+      this.orders.set(updatedOrders);
+      this.saveLocal('orders', updatedOrders);
+      this.broadcastRealtimeOrderEvent({ type: 'ORDER_UPDATED', order: updatedOrder });
+
+      // Call payment API if live ID
+      if (this.isValidUuid(order.id)) {
+        this.api
+          .post<any>('/payments', {
+            order_id: order.id,
+            amount_paise: Math.round(settledBill.totalAmount * 100),
+            payment_method: req.paymentMethod.toLowerCase(),
+            split_bill_id: this.isValidUuid(settledBill.id) ? settledBill.id : undefined,
+          })
+          .subscribe({
+            error: (err) => this.handleApiError('Failed to record split payment', err),
+          });
+      }
+    }
+
+    return { success: true, splitBill: settledBill };
   }
 
   assignTableStaff(tableId: string, staffId: string | null): void {
@@ -3355,10 +4253,16 @@ export class RestaurantDataService {
             this.saveLocal('orders', updated);
 
             // Remap any subsequent queued actions pointing to the oldId
+            let remappedCount = 0;
             for (let j = index + 1; j < queue.length; j++) {
               if (queue[j].orderId === oldId) {
                 queue[j].orderId = newId;
+                remappedCount++;
               }
+            }
+            if (remappedCount > 0) {
+              this.saveLocal('hotel_crm_offline_outbox', queue);
+              this.offlineOutbox.set([...queue]);
             }
 
             this.clearOfflineAction(item.id);
@@ -3376,6 +4280,7 @@ export class RestaurantDataService {
               '[RestaurantDataService] Offline create order dropped due to server error:',
               err,
             );
+            this.removeLocalOrder(item.orderId);
             this.clearOfflineAction(item.id);
             processNext(index + 1);
           },
@@ -3426,6 +4331,29 @@ export class RestaurantDataService {
             processNext(index + 1);
           },
         });
+      } else if (item.type === 'UPDATE_ORDER_ITEMS') {
+        if (!this.isValidUuid(item.orderId)) {
+          this.clearOfflineAction(item.id);
+          processNext(index + 1);
+          return;
+        }
+        this.api.put<any>(`/orders/${item.orderId}/items`, item.payload).subscribe({
+          next: () => {
+            this.clearOfflineAction(item.id);
+            processNext(index + 1);
+          },
+          error: (err) => {
+            if (this.isConnectionOffline(err)) {
+              console.warn(
+                '[RestaurantDataService] Database offline during order items sync; keeping action in outbox.',
+              );
+              this.isSyncingOffline.set(false);
+              return;
+            }
+            this.clearOfflineAction(item.id);
+            processNext(index + 1);
+          },
+        });
       } else if (item.type === 'ASSIGN_SERVER') {
         if (!this.isValidUuid(item.orderId)) {
           this.clearOfflineAction(item.id);
@@ -3449,6 +4377,159 @@ export class RestaurantDataService {
             processNext(index + 1);
           },
         });
+      } else if (item.type === 'UPDATE_TABLE_STATUS') {
+        const tableId = item.entityId || item.orderId;
+        if (!this.isValidUuid(tableId)) {
+          this.clearOfflineAction(item.id);
+          processNext(index + 1);
+          return;
+        }
+        this.api.put<any>(`/tables/${tableId}/status`, item.payload).subscribe({
+          next: () => {
+            this.clearOfflineAction(item.id);
+            processNext(index + 1);
+          },
+          error: (err) => {
+            if (this.isConnectionOffline(err)) {
+              console.warn(
+                '[RestaurantDataService] Database offline during table status sync; keeping action in outbox.',
+              );
+              this.isSyncingOffline.set(false);
+              return;
+            }
+            this.clearOfflineAction(item.id);
+            processNext(index + 1);
+          },
+        });
+      } else if (item.type === 'TRANSFER_TABLE') {
+        this.api.post<any>('/tables/transfer', item.payload).subscribe({
+          next: () => {
+            this.clearOfflineAction(item.id);
+            processNext(index + 1);
+          },
+          error: (err) => {
+            if (this.isConnectionOffline(err)) {
+              console.warn(
+                '[RestaurantDataService] Database offline during table transfer sync; keeping action in outbox.',
+              );
+              this.isSyncingOffline.set(false);
+              return;
+            }
+            this.clearOfflineAction(item.id);
+            processNext(index + 1);
+          },
+        });
+      } else if (item.type === 'TOGGLE_MENU_AVAILABILITY') {
+        const itemId = item.entityId || item.orderId;
+        if (!this.isValidUuid(itemId)) {
+          this.clearOfflineAction(item.id);
+          processNext(index + 1);
+          return;
+        }
+        this.api.put<any>(`/menu/items/${itemId}/availability`, item.payload).subscribe({
+          next: () => {
+            this.clearOfflineAction(item.id);
+            processNext(index + 1);
+          },
+          error: (err) => {
+            if (this.isConnectionOffline(err)) {
+              console.warn(
+                '[RestaurantDataService] Database offline during menu availability sync; keeping action in outbox.',
+              );
+              this.isSyncingOffline.set(false);
+              return;
+            }
+            this.clearOfflineAction(item.id);
+            processNext(index + 1);
+          },
+        });
+      } else if (item.type === 'UPDATE_RESERVATION_STATUS') {
+        const resId = item.entityId || item.orderId;
+        if (!this.isValidUuid(resId)) {
+          this.clearOfflineAction(item.id);
+          processNext(index + 1);
+          return;
+        }
+        this.api.put<any>(`/reservations/${resId}/status`, item.payload).subscribe({
+          next: () => {
+            this.clearOfflineAction(item.id);
+            processNext(index + 1);
+          },
+          error: (err) => {
+            if (this.isConnectionOffline(err)) {
+              console.warn(
+                '[RestaurantDataService] Database offline during reservation status sync; keeping action in outbox.',
+              );
+              this.isSyncingOffline.set(false);
+              return;
+            }
+            this.clearOfflineAction(item.id);
+            processNext(index + 1);
+          },
+        });
+      } else if (item.type === 'CREATE_CUSTOMER') {
+        this.api.post<any>('/customers', item.payload).subscribe({
+          next: (res) => {
+            const tempId = item.entityId;
+            if (res?.id && tempId) {
+              const currentCusts = this.customers();
+              const confirmed = currentCusts.map((c) =>
+                c.id === tempId ? { ...c, id: res.id } : c,
+              );
+              this.customers.set(confirmed);
+              this.saveLocal('customers', confirmed);
+            }
+            this.clearOfflineAction(item.id);
+            processNext(index + 1);
+          },
+          error: (err) => {
+            if (this.isConnectionOffline(err)) {
+              console.warn(
+                '[RestaurantDataService] Database offline during customer sync; keeping action in outbox.',
+              );
+              this.isSyncingOffline.set(false);
+              return;
+            }
+            this.clearOfflineAction(item.id);
+            processNext(index + 1);
+          },
+        });
+      } else if (item.type === 'MARK_ATTENDANCE') {
+        this.api.post<any>('/restaurants/staff/attendance', item.payload).subscribe({
+          next: () => {
+            this.clearOfflineAction(item.id);
+            processNext(index + 1);
+          },
+          error: (err) => {
+            if (this.isConnectionOffline(err)) {
+              console.warn(
+                '[RestaurantDataService] Database offline during attendance sync; keeping action in outbox.',
+              );
+              this.isSyncingOffline.set(false);
+              return;
+            }
+            this.clearOfflineAction(item.id);
+            processNext(index + 1);
+          },
+        });
+      } else if (item.type === 'RECORD_WASTAGE') {
+        this.api.post<any>('/inventory/wastage', item.payload).subscribe({
+          next: () => {
+            this.clearOfflineAction(item.id);
+            processNext(index + 1);
+          },
+          error: (err) => {
+            if (this.isConnectionOffline(err)) {
+              console.warn(
+                '[RestaurantDataService] Database offline during wastage sync; keeping action in outbox.',
+              );
+              this.isSyncingOffline.set(false);
+              return;
+            }
+            this.clearOfflineAction(item.id);
+            processNext(index + 1);
+          },
+        });
       } else {
         this.clearOfflineAction(item.id);
         processNext(index + 1);
@@ -3464,17 +4545,37 @@ export class RestaurantDataService {
     status: string,
     notes?: string,
   ): Observable<any> {
+    const payload = {
+      staff_id: staffId,
+      attendance_date: date,
+      status: status.toUpperCase(),
+      notes: notes || '',
+    };
+    if (!this.isOnline()) {
+      this.queueOfflineAction({
+        type: 'MARK_ATTENDANCE',
+        entityId: staffId,
+        payload,
+      });
+      return of({ success: true, offline: true });
+    }
     return this.api
-      .post<any>('/restaurants/staff/attendance', {
-        staff_id: staffId,
-        attendance_date: date,
-        status: status.toUpperCase(),
-        notes: notes || '',
-      })
+      .post<any>('/restaurants/staff/attendance', payload)
       .pipe(
         tap(() => {
           this.loadStaffPerformance();
           this.loadStaffAttendance();
+        }),
+        catchError((err) => {
+          if (this.isConnectionOffline(err)) {
+            this.queueOfflineAction({
+              type: 'MARK_ATTENDANCE',
+              entityId: staffId,
+              payload,
+            });
+            return of({ success: true, offline: true });
+          }
+          throw err;
         }),
       );
   }
@@ -3511,13 +4612,22 @@ export class RestaurantDataService {
     idempotencyKey?: string;
   }): { success: boolean; error?: string } {
     if (this.testMock) return this.testMock.recordWastage(req as any);
+    const payload = {
+      inventory_item_id: req.ingredientId,
+      quantity: req.quantity,
+      reason: req.reason,
+      notes: req.notes,
+    };
+    if (!this.isOnline()) {
+      this.queueOfflineAction({
+        type: 'RECORD_WASTAGE',
+        entityId: req.ingredientId,
+        payload,
+      });
+      return { success: true };
+    }
     this.api
-      .post<any>('/inventory/wastage', {
-        inventory_item_id: req.ingredientId,
-        quantity: req.quantity,
-        reason: req.reason,
-        notes: req.notes,
-      })
+      .post<any>('/inventory/wastage', payload)
       .subscribe({
         next: () => {
           // Re-fetch movements
@@ -3546,7 +4656,18 @@ export class RestaurantDataService {
             }
           });
         },
-        error: (err) => this.handleApiError('Failed to record wastage', err),
+        error: (err) => {
+          if (this.isConnectionOffline(err)) {
+            console.warn('[RestaurantDataService] Database offline during wastage; preserved locally.');
+            this.queueOfflineAction({
+              type: 'RECORD_WASTAGE',
+              entityId: req.ingredientId,
+              payload,
+            });
+          } else {
+            this.handleApiError('Failed to record wastage', err);
+          }
+        },
       });
 
     return { success: true };
@@ -3595,11 +4716,20 @@ export class RestaurantDataService {
       .subscribe({
         next: (res) => {
           if (res?.id) {
-            const confirmed = this.reservations().map((r) =>
-              r.id === tempId ? { ...r, id: res.id } : r,
-            );
-            this.reservations.set(confirmed);
-            this.saveLocal('reservations', confirmed);
+            const current = this.reservations();
+            if (current.some((r) => r.id === res.id)) {
+              const cleaned = current.filter((r) => r.id !== tempId);
+              if (cleaned.length !== current.length) {
+                this.reservations.set(cleaned);
+                this.saveLocal('reservations', cleaned);
+              }
+            } else {
+              const confirmed = current.map((r) =>
+                r.id === tempId ? { ...r, id: res.id } : r,
+              );
+              this.reservations.set(confirmed);
+              this.saveLocal('reservations', confirmed);
+            }
           }
         },
         error: (err) => {
@@ -3619,22 +4749,47 @@ export class RestaurantDataService {
   updateReservationStatus(
     reservationId: string,
     status: ReservationStatus,
+    tableId?: string,
+    tableNumber?: string,
   ): { success: boolean; error?: string } {
     if (this.testMock) {
       const updated = this.testMock
         .reservations()
-        .map((r) => (r.id === reservationId ? { ...r, status } : r));
+        .map((r) =>
+          r.id === reservationId
+            ? { ...r, status, ...(tableId ? { tableId, tableNumber } : {}) }
+            : r,
+        );
       this.testMock.reservations.set(updated);
       return { success: true };
     }
 
     // 1. Optimistically update local signal and cache
-    const updated = this.reservations().map((r) => (r.id === reservationId ? { ...r, status } : r));
+    const updated = this.reservations().map((r) =>
+      r.id === reservationId
+        ? { ...r, status, ...(tableId ? { tableId, tableNumber } : {}) }
+        : r,
+    );
     this.reservations.set(updated);
     this.saveLocal('reservations', updated);
 
+    const payload: { status: string; table_id?: string } = { status };
+    if (tableId) {
+      payload.table_id = tableId;
+    }
+    if (!this.isOnline()) {
+      if (this.isValidUuid(reservationId)) {
+        this.queueOfflineAction({
+          type: 'UPDATE_RESERVATION_STATUS',
+          entityId: reservationId,
+          payload,
+        });
+      }
+      return { success: true };
+    }
+
     // 2. Persist status change to backend API
-    this.api.put<any>(`/reservations/${reservationId}/status`, { status }).subscribe({
+    this.api.put<any>(`/reservations/${reservationId}/status`, payload).subscribe({
       next: (res) => {
         console.log(
           `[RestaurantDataService] Reservation ${reservationId} status confirmed on backend: ${status}`,
@@ -3645,6 +4800,13 @@ export class RestaurantDataService {
           console.warn(
             `[RestaurantDataService] Database offline: reservation ${reservationId} status preserved locally.`,
           );
+          if (this.isValidUuid(reservationId)) {
+            this.queueOfflineAction({
+              type: 'UPDATE_RESERVATION_STATUS',
+              entityId: reservationId,
+              payload,
+            });
+          }
         } else {
           this.handleApiError('Failed to update reservation status', err);
         }
@@ -3682,14 +4844,25 @@ export class RestaurantDataService {
     this.customers.set(updated);
     this.saveLocal('customers', updated);
 
+    const payload = {
+      name: newCust.name,
+      phone: newCust.phone,
+      email: newCust.email,
+      address: dto.address,
+      notes: dto.notes,
+    };
+
+    if (!this.isOnline()) {
+      this.queueOfflineAction({
+        type: 'CREATE_CUSTOMER',
+        entityId: tempId,
+        payload,
+      });
+      return { success: true, customer: newCust };
+    }
+
     this.api
-      .post<any>('/customers', {
-        name: newCust.name,
-        phone: newCust.phone,
-        email: newCust.email,
-        address: dto.address,
-        notes: dto.notes,
-      })
+      .post<any>('/customers', payload)
       .subscribe({
         next: (res) => {
           if (res?.id) {
@@ -3705,6 +4878,11 @@ export class RestaurantDataService {
             console.warn(
               '[RestaurantDataService] Database offline during createCustomer; preserved locally.',
             );
+            this.queueOfflineAction({
+              type: 'CREATE_CUSTOMER',
+              entityId: tempId,
+              payload,
+            });
           } else {
             this.handleApiError('Failed to create customer', err);
           }
@@ -3845,16 +5023,37 @@ export class RestaurantDataService {
         ),
       );
       if (sourceTable && this.isValidUuid(sourceTable.id) && this.isValidUuid(destTable.id)) {
-        this.api
-          .post<any>('/tables/transfer', {
-            from_table_id: sourceTable.id,
-            to_table_id: destTable.id,
-            reason: req.staffName || 'Table transfer',
-          })
-          .subscribe({
-            error: (err) =>
-              console.warn('[RestaurantDataService] transferTable backend warning:', err),
+        const payload = {
+          from_table_id: sourceTable.id,
+          to_table_id: destTable.id,
+          reason: req.staffName || 'Table transfer',
+        };
+        if (!this.isOnline()) {
+          this.queueOfflineAction({
+            type: 'TRANSFER_TABLE',
+            entityId: sourceTable.id,
+            payload,
           });
+        } else {
+          this.api
+            .post<any>('/tables/transfer', payload)
+            .subscribe({
+              error: (err) => {
+                if (this.isConnectionOffline(err)) {
+                  console.warn(
+                    '[RestaurantDataService] Database offline during transferTable; preserved locally.',
+                  );
+                  this.queueOfflineAction({
+                    type: 'TRANSFER_TABLE',
+                    entityId: sourceTable.id,
+                    payload,
+                  });
+                } else {
+                  console.warn('[RestaurantDataService] transferTable backend warning:', err);
+                }
+              },
+            });
+        }
       }
     }
 
@@ -4334,6 +5533,16 @@ export class RestaurantDataService {
    * Persists restaurant profile and configuration changes to backend and Supabase.
    */
   updateRestaurantSettings(updated: Restaurant): Observable<Restaurant> {
+    const localFssai = updated.fssaiNumber || updated.taxSettings?.fssaiNumber || '';
+    const localFooter = updated.invoiceFooter || updated.taxSettings?.invoiceFooter || '';
+    const localBuffer = updated.orderingSettings?.pickupBufferMinutes || 20;
+
+    if (typeof localStorage !== 'undefined') {
+      if (localFssai) localStorage.setItem('hotel_crm_fssai_number', localFssai);
+      if (localFooter) localStorage.setItem('hotel_crm_invoice_footer', localFooter);
+      localStorage.setItem('hotel_crm_pickup_buffer_minutes', String(localBuffer));
+    }
+
     this.restaurant.set(updated);
     this.saveLocal('restaurant', updated);
 
@@ -4351,10 +5560,12 @@ export class RestaurantDataService {
       state: updated.address?.state,
       postal_code: updated.address?.zip,
       gstin: updated.taxSettings?.gstNumber,
+      fssai_license: localFssai,
       gst_rate: cgst + sgst,
       cgst_rate: cgst,
       sgst_rate: sgst,
       service_charge_rate: Number(updated.taxSettings?.serviceChargeRate) || 0,
+      whatsapp_templates: updated.whatsappTemplates,
     };
 
     return this.api.put<any>('/restaurants', payload).pipe(
@@ -4367,6 +5578,8 @@ export class RestaurantDataService {
               name: res.name || current.name,
               tagline: res.tagline !== undefined ? res.tagline : current.tagline,
               description: res.description !== undefined ? res.description : current.description,
+              fssaiNumber: res.fssai_license || updated.fssaiNumber || current.fssaiNumber,
+              invoiceFooter: (res as any)?.invoice_footer || updated.invoiceFooter || current.invoiceFooter,
               contact: {
                 ...current.contact,
                 phone: res.phone || current.contact.phone,
@@ -4390,6 +5603,8 @@ export class RestaurantDataService {
               taxSettings: {
                 ...current.taxSettings,
                 gstNumber: res.gstin || current.taxSettings.gstNumber,
+                fssaiNumber: res.fssai_license || updated.taxSettings?.fssaiNumber || current.taxSettings?.fssaiNumber,
+                invoiceFooter: (res as any)?.invoice_footer || updated.taxSettings?.invoiceFooter || current.taxSettings?.invoiceFooter,
                 cgstRate:
                   res.cgst_rate !== undefined && res.cgst_rate !== null
                     ? Number(res.cgst_rate)
@@ -4402,7 +5617,17 @@ export class RestaurantDataService {
                     : res.gst_rate !== undefined
                       ? Number(res.gst_rate) / 2
                       : current.taxSettings.sgstRate,
+                serviceChargeRate:
+                  res.service_charge_rate !== undefined && res.service_charge_rate !== null
+                    ? Number(res.service_charge_rate)
+                    : (current.taxSettings?.serviceChargeRate ?? 0),
               },
+              orderingSettings: {
+                ...current.orderingSettings,
+                ...updated.orderingSettings,
+              },
+              whatsappTemplates:
+                res.whatsapp_templates || updated.whatsappTemplates || current.whatsappTemplates,
             };
             this.restaurant.set(merged);
             this.saveLocal('restaurant', merged);

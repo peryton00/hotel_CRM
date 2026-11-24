@@ -25,6 +25,8 @@ export interface TaxSettings {
   sgstRate: number; // e.g. 2.5
   serviceChargeRate: number; // e.g. 5.0
   gstNumber: string;
+  fssaiNumber?: string;
+  invoiceFooter?: string;
 }
 
 export interface OrderingSettings {
@@ -32,6 +34,13 @@ export interface OrderingSettings {
   takeawayEnabled: boolean;
   minOrderAmount: number;
   estimatedPrepMinutes: number;
+  pickupBufferMinutes?: number;
+}
+
+export interface WhatsAppTemplates {
+  pending?: string;
+  confirmed?: string;
+  cancelled?: string;
 }
 
 export interface Restaurant {
@@ -53,4 +62,7 @@ export interface Restaurant {
   taxSettings: TaxSettings;
   orderingSettings: OrderingSettings;
   googleReviewUrl?: string;
+  fssaiNumber?: string;
+  invoiceFooter?: string;
+  whatsappTemplates?: WhatsAppTemplates;
 }

@@ -71,3 +71,11 @@ pub struct CreateMenuCategoryRequest {
     pub slug: Option<String>,
     pub display_order: Option<i32>,
 }
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct UpdateMenuCategoryRequest {
+    pub name: Option<String>,
+    pub slug: Option<String>,
+    pub display_order: Option<i32>,
+    pub is_active: Option<bool>,
+}

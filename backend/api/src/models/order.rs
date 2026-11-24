@@ -133,6 +133,10 @@ pub struct Order {
     pub server_staff_id: Option<Uuid>,
     #[sqlx(default)]
     pub seating_session_id: Option<Uuid>,
+    #[sqlx(default)]
+    pub is_split: Option<bool>,
+    #[sqlx(default)]
+    pub split_count: Option<i32>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
     pub settled_at: Option<DateTime<Utc>>,
@@ -167,14 +171,17 @@ pub struct OrderWithItems {
 #[derive(Debug, Clone, Deserialize)]
 pub struct CreateOrderItemInput {
     pub menu_item_id: Option<Uuid>,
+    #[serde(default)]
     pub item_name: String,
     pub quantity: i32,
+    #[serde(default)]
     pub unit_price_paise: i64,
     pub notes: Option<String>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct CreateOrderRequest {
+    pub id: Option<Uuid>,
     pub order_type: String,
     pub pickup_reference: Option<String>,
     pub table_id: Option<Uuid>,
@@ -191,6 +198,15 @@ pub struct CreateOrderRequest {
 #[derive(Debug, Clone, Deserialize)]
 pub struct UpdateOrderStatusRequest {
     pub status: String,
+    pub notes: Option<String>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct UpdateOrderItemsRequest {
+    pub items: Vec<CreateOrderItemInput>,
+    pub customer_name: Option<String>,
+    pub customer_phone: Option<String>,
+    pub table_id: Option<Uuid>,
     pub notes: Option<String>,
 }
 

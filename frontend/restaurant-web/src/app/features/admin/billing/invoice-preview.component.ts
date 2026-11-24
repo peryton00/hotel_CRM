@@ -1,8 +1,9 @@
-import { Component, inject, signal, computed, OnInit } from '@angular/core';
+import { Component, inject, signal, computed, OnInit, effect } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { RouterModule, ActivatedRoute, Router } from '@angular/router';
 import { FormsModule } from '@angular/forms';
 import { Order } from '../../../core/models/order.model';
+import { SplitBill } from '../../../core/models/billing.model';
 import { RestaurantDataService } from '../../../data-access/services/restaurant-data.service';
 import { CurrencyInrPipe } from '../../../shared/pipes/currency-inr.pipe';
 import { ToastService } from '../../../core/services/toast.service';
@@ -19,6 +20,7 @@ import {
   getWhatsAppAppUrl,
   launchExternalUrl,
 } from '../../../core/utils/whatsapp-bill.util';
+import { WhatsAppBridgeService } from '../../../core/services/whatsapp-bridge.service';
 
 @Component({
   selector: 'app-invoice-preview',
@@ -58,53 +60,102 @@ import {
                 <i class="ph ph-receipt"></i>
                 <span>View Full Order</span>
               </a>
+            } @else if (ord.isSplit && getOrderSplitBills(ord.id).length > 0) {
+              <div class="split-slips-nav-menu">
+                <button
+                  type="button"
+                  class="split-view-full-btn"
+                  (click)="showSplitDropdown.set(!showSplitDropdown())"
+                  title="View individual split slips for this order"
+                >
+                  <i class="ph ph-split-horizontal"></i>
+                  <span>Split Slips ({{ getOrderSplitBills(ord.id).length }})</span>
+                  <i class="ph" [class.ph-caret-down]="!showSplitDropdown()" [class.ph-caret-up]="showSplitDropdown()"></i>
+                </button>
+                @if (showSplitDropdown()) {
+                  <div class="split-dropdown-box">
+                    @for (s of getOrderSplitBills(ord.id); track s.id) {
+                      <a
+                        [routerLink]="['/admin/billing', ord.id]"
+                        [queryParams]="{ splitId: s.id }"
+                        class="split-dropdown-link"
+                        (click)="showSplitDropdown.set(false)"
+                      >
+                        <div class="split-link-info">
+                          <span class="split-link-title">Bill #{{ s.splitIndex }}/{{ s.splitTotalCount }}</span>
+                          <span class="split-link-status" [class.paid]="s.paymentStatus === 'PAID'">{{ s.paymentStatus }}</span>
+                        </div>
+                        <strong class="split-link-amt">{{ s.totalAmount | currencyInr }}</strong>
+                      </a>
+                    }
+                  </div>
+                }
+              </div>
             }
           </div>
 
           <div class="actions-right">
-            <button
-              type="button"
-              class="btn btn-secondary btn-action-tool"
-              (click)="openThermalPreviewModal()"
-              title="Preview ESC/POS thermal receipt tape & printer hardware connection"
-            >
-              <i class="ph ph-receipt"></i>
-              <span>Thermal Slip</span>
-            </button>
-
-            <button
-              type="button"
-              class="btn btn-whatsapp btn-action-share"
-              (click)="openWhatsAppModal()"
-              title="Share Digital Invoice to customer on WhatsApp"
-            >
-              <i class="ph ph-whatsapp-logo"></i>
-              <span>WhatsApp</span>
-            </button>
-
-            @if (effectivePrintCount() === 0) {
+            @if (isCurrentTargetPaid() && ord.status !== 'CANCELLED') {
               <button
                 type="button"
-                class="btn btn-primary btn-action-print"
+                class="btn btn-secondary btn-action-tool"
                 (click)="openThermalPreviewModal()"
-                [title]="splitBill() ? 'Print Split Bill Receipt' : 'Print Original Tax Invoice'"
+                title="Preview ESC/POS thermal receipt tape & printer hardware connection"
               >
-                <i class="ph ph-printer"></i>
-                <span>{{ splitBill() ? 'Print Split Slip' : 'Print Tax Invoice' }}</span>
+                <i class="ph ph-receipt"></i>
+                <span>Thermal Slip</span>
               </button>
-            } @else {
-              <div class="print-count-indicator print-badge-pill" title="Invoice print history">
-                <span class="badge-dot"></span>
-                <span>Printed {{ effectivePrintCount() }}×</span>
-              </div>
+
               <button
                 type="button"
-                class="btn btn-primary btn-reprint btn-action-reprint"
-                (click)="openReprintModal()"
-                title="Admin Password required to reprint bill"
+                class="btn btn-whatsapp btn-action-share"
+                (click)="openWhatsAppModal()"
+                title="Share Digital Invoice to customer on WhatsApp"
               >
-                <i class="ph ph-lock-key"></i>
-                <span>Reprint</span>
+                <i class="ph ph-whatsapp-logo"></i>
+                <span>WhatsApp</span>
+              </button>
+
+              @if (effectivePrintCount() === 0) {
+                <button
+                  type="button"
+                  class="btn btn-primary btn-action-print"
+                  (click)="openThermalPreviewModal()"
+                  [disabled]="isPrinting()"
+                  [title]="splitBill() ? 'Print Split Bill Receipt' : 'Print Original Tax Invoice'"
+                >
+                  @if (isPrinting()) {
+                    <i class="ph ph-spinner ph-spin"></i>
+                    <span>Printing Slip...</span>
+                  } @else {
+                    <i class="ph ph-printer"></i>
+                    <span>{{ splitBill() ? 'Print Split Slip' : 'Print Tax Invoice' }}</span>
+                  }
+                </button>
+              } @else {
+                <div class="print-count-indicator print-badge-pill" title="Invoice print history">
+                  <span class="badge-dot"></span>
+                  <span>Printed {{ effectivePrintCount() }}×</span>
+                </div>
+                <button
+                  type="button"
+                  class="btn btn-primary btn-reprint btn-action-reprint"
+                  (click)="openReprintModal()"
+                  title="Admin Password required to reprint bill"
+                >
+                  <i class="ph ph-lock-key"></i>
+                  <span>Reprint</span>
+                </button>
+              }
+            } @else if (ord.status !== 'CANCELLED') {
+              <button
+                type="button"
+                class="btn btn-primary btn-action-settle"
+                (click)="settleCurrentTarget()"
+                title="Settle bill payment"
+              >
+                <i class="ph ph-credit-card"></i>
+                <span>Settle Bill</span>
               </button>
             }
           </div>
@@ -184,9 +235,7 @@ import {
                 <div class="meta-field-row">
                   <span class="m-label">Receipt Slip ID:</span>
                   <strong class="m-val mono"
-                    >SPLIT-{{ split.orderNumber.replace(/[^0-9]/g, '') }}-{{
-                      split.splitIndex
-                    }}</strong
+                    >{{ split.id.substring(0, 12).toUpperCase() }}</strong
                   >
                 </div>
                 <div class="meta-field-row">
@@ -196,8 +245,12 @@ import {
                 <div class="meta-field-row">
                   <span class="m-label">Settlement Date:</span>
                   <span class="m-val"
-                    >{{ split.settledAt || ord.createdAt | date: 'mediumDate' }},
-                    {{ split.settledAt || ord.createdAt | date: 'shortTime' }}</span
+                    >@if (split.settledAt) {
+                      {{ split.settledAt | date: 'mediumDate' }},
+                      {{ split.settledAt | date: 'shortTime' }}
+                    } @else {
+                      <span class="text-muted" style="font-style: italic;">Pending Settlement</span>
+                    }</span
                   >
                 </div>
                 <div class="meta-field-row">
@@ -364,7 +417,7 @@ import {
                   }
                   <div class="totals-separator"></div>
                   <div class="total-line grand-total-line">
-                    <span class="grand-label">SPLIT SHARE TOTAL:</span>
+                    <span class="grand-label">NET PAYABLE:</span>
                     <span class="grand-val">{{ split.totalAmount | currencyInr }}</span>
                   </div>
                 </div>
@@ -404,7 +457,7 @@ import {
               >
                 *** CANCELLED / VOID ORDER — NOT PAYABLE ***
               </div>
-            } @else if (ord.paymentStatus !== 'PAID') {
+            } @else if (!isPaid(ord)) {
               <div class="invoice-banner-ribbon proforma">
                 *** PRO-FORMA INVOICE • PENDING PAYMENT SETTLEMENT ***
               </div>
@@ -440,7 +493,9 @@ import {
                 </div>
 
                 <div class="brand-legal-badge-col">
-                  <div class="tax-document-tag">TAX INVOICE</div>
+                  <div class="tax-document-tag" [class.consolidated-tag]="sessionRounds().length > 1">
+                    {{ sessionRounds().length > 1 ? 'CONSOLIDATED TAX INVOICE' : 'TAX INVOICE' }}
+                  </div>
                   <div class="legal-id-card">
                     <div class="legal-id-row">
                       <span class="legal-lbl">GSTIN:</span>
@@ -457,6 +512,15 @@ import {
 
             <div class="header-rule"></div>
 
+            @if (sessionRounds().length > 1) {
+              <div class="session-consolidated-badge-banner">
+                <div class="consolidated-badge-content">
+                  <i class="ph ph-receipt"></i>
+                  <span>CONSOLIDATED DINING SESSION BILL — {{ sessionRounds().length }} SERVICE ROUNDS UNIFIED</span>
+                </div>
+              </div>
+            }
+
             <!-- Two-Column Particulars Section -->
             <section class="invoice-meta-section">
               <div class="meta-card invoice-meta-card">
@@ -467,8 +531,16 @@ import {
                 </div>
                 <div class="meta-field-row">
                   <span class="m-label">Order Ref No:</span>
-                  <span class="m-val">{{ ord.orderNumber }}</span>
+                  <span class="m-val mono">{{ ord.orderNumber }}</span>
                 </div>
+                @if (sessionRounds().length > 1) {
+                  <div class="meta-field-row">
+                    <span class="m-label">Session Rounds:</span>
+                    <span class="m-val session-badge-pill">
+                      <i class="ph ph-stack"></i> {{ sessionRounds().length }} Orders Unified
+                    </span>
+                  </div>
+                }
                 <div class="meta-field-row">
                   <span class="m-label">Invoice Date:</span>
                   <span class="m-val"
@@ -509,15 +581,21 @@ import {
                   <span class="m-label">Payment Status:</span>
                   <span
                     class="m-val payment-status-pill"
-                    [class.paid]="ord.paymentStatus === 'PAID'"
+                    [class.paid]="isPaid(ord)"
                   >
                     {{
-                      ord.paymentStatus === 'PAID'
+                      isPaid(ord)
                         ? 'PAID (' + (ord.paymentMethod || 'SETTLED') + ')'
                         : 'UNPAID'
                     }}
                   </span>
                 </div>
+                @if (sessionRounds().length > 1) {
+                  <div class="meta-field-row">
+                    <span class="m-label">Total Ordered:</span>
+                    <span class="m-val font-semibold">{{ ord.items.length }} Items across {{ sessionRounds().length }} Rounds</span>
+                  </div>
+                }
                 @if (ord.printCount && ord.printCount > 0) {
                   <div class="meta-field-row">
                     <span class="m-label">Print Copy:</span>
@@ -529,6 +607,26 @@ import {
                 }
               </div>
             </section>
+
+            <!-- Session Rounds Quick Progression Strip (When multi-round session) -->
+            @if (sessionRounds().length > 1) {
+              <div class="session-timeline-strip">
+                <div class="strip-header">
+                  <span class="strip-title"><i class="ph ph-clock-counter-clockwise"></i> SESSION ROUNDS BREAKDOWN</span>
+                  <span class="strip-total-badge">{{ sessionRounds().length }} Rounds • {{ ord.items.length }} Items • {{ ord.subtotal | currencyInr }}</span>
+                </div>
+                <div class="rounds-pills-row">
+                  @for (rnd of sessionRounds(); track rnd.order.id) {
+                    <div class="round-summary-chip">
+                      <span class="chip-rnd-idx">ROUND {{ rnd.roundIndex }}</span>
+                      <span class="chip-ord-no">{{ rnd.order.orderNumber }}</span>
+                      <span class="chip-time">{{ rnd.order.createdAt | date: 'shortTime' }}</span>
+                      <span class="chip-subtotal">{{ rnd.roundSubtotal | currencyInr }}</span>
+                    </div>
+                  }
+                </div>
+              </div>
+            }
 
             <!-- Line Items Table -->
             <section class="invoice-table-section">
@@ -549,20 +647,19 @@ import {
                       <tr class="round-separator-row">
                         <td colspan="6">
                           <div class="invoice-round-header">
-                            <span class="rnd-tag">ORDER {{ rnd.roundIndex }}</span>
+                            <span class="rnd-tag">ROUND {{ rnd.roundIndex }}</span>
                             <span class="rnd-ord-no">{{ rnd.order.orderNumber }}</span>
-                            <span class="rnd-time">{{
-                              rnd.order.createdAt | date: 'shortTime'
-                            }}</span>
-                            <span class="rnd-subtotal"
-                              >Round Subtotal: {{ rnd.order.subtotal | currencyInr }}</span
-                            >
+                            <span class="rnd-time">
+                              <i class="ph ph-clock"></i> {{ rnd.order.createdAt | date: 'shortTime' }}
+                            </span>
+                            <span class="rnd-count">{{ rnd.itemsCount }} item{{ rnd.itemsCount > 1 ? 's' : '' }}</span>
+                            <span class="rnd-subtotal">Round Subtotal: {{ rnd.roundSubtotal | currencyInr }}</span>
                           </div>
                         </td>
                       </tr>
                       @for (item of rnd.order.items; track item.id; let i = $index) {
                         <tr>
-                          <td class="col-num">{{ i + 1 }}</td>
+                          <td class="col-num">{{ rnd.itemStartIndex + i }}</td>
                           <td class="col-desc">
                             <div class="item-primary-name">{{ item.name }}</div>
                             @if (item.selectedPortion) {
@@ -591,6 +688,14 @@ import {
                           </td>
                         </tr>
                       }
+                      <tr class="round-subtotal-footer-row">
+                        <td colspan="4" class="round-subtotal-label">
+                          Subtotal for Round {{ rnd.roundIndex }} ({{ rnd.order.orderNumber }}):
+                        </td>
+                        <td colspan="2" class="round-subtotal-amount">
+                          {{ rnd.roundSubtotal | currencyInr }}
+                        </td>
+                      </tr>
                     }
                   } @else {
                     @for (item of ord.items; track item.id; let i = $index) {
@@ -649,9 +754,15 @@ import {
                       {{ ord.settledAt || ord.createdAt | date: 'shortTime' }}</span
                     >
                   </div>
+                  @if (sessionRounds().length > 1) {
+                    <div class="settlement-row">
+                      <span>Dining Rounds:</span>
+                      <strong>{{ sessionRounds().length }} Service Rounds ({{ ord.items.length }} Items)</strong>
+                    </div>
+                  }
                   <div
                     class="settlement-badge"
-                    [class.paid]="ord.paymentStatus === 'PAID'"
+                    [class.paid]="isPaid(ord)"
                     [class.cancelled]="ord.status === 'CANCELLED'"
                   >
                     <i
@@ -664,7 +775,7 @@ import {
                     <span>{{
                       ord.status === 'CANCELLED'
                         ? 'ORDER CANCELLED (VOID)'
-                        : ord.paymentStatus === 'PAID'
+                        : isPaid(ord)
                           ? 'TRANSACTION SETTLED & VERIFIED'
                           : 'PAYMENT PENDING SETTLEMENT'
                     }}</span>
@@ -675,10 +786,12 @@ import {
               <div class="summary-right-block">
                 <div class="totals-table">
                   <div class="total-line">
-                    <span class="t-label">Items Subtotal:</span>
+                    <span class="t-label">
+                      {{ sessionRounds().length > 1 ? 'Consolidated Subtotal (' + sessionRounds().length + ' Rounds):' : 'Items Subtotal:' }}
+                    </span>
                     <span class="t-val">{{ ord.subtotal | currencyInr }}</span>
                   </div>
-                  @if (ord.discountAmount > 0) {
+                  @if (ord.discountAmount > 0 && ord.appliedCouponCode) {
                     <div class="total-line discount-line">
                       <span class="t-label">Coupon Discount ({{ ord.appliedCouponCode }}):</span>
                       <span class="t-val">-{{ ord.discountAmount | currencyInr }}</span>
@@ -686,9 +799,7 @@ import {
                   }
                   <div class="total-line">
                     <span class="t-label">Taxable Value:</span>
-                    <span class="t-val">{{
-                      ord.subtotal - (ord.discountAmount || 0) | currencyInr
-                    }}</span>
+                    <span class="t-val">{{ getTaxableValue(ord) | currencyInr }}</span>
                   </div>
                   <div class="total-line tax-line">
                     <span class="t-label">CGST ({{ getOrderCgstRate(ord) }}%):</span>
@@ -698,6 +809,12 @@ import {
                     <span class="t-label">SGST ({{ getOrderSgstRate(ord) }}%):</span>
                     <span class="t-val">{{ ord.sgstAmount | currencyInr }}</span>
                   </div>
+                  @if (ord.discountAmount > 0 && !ord.appliedCouponCode) {
+                    <div class="total-line discount-line">
+                      <span class="t-label">Admin Discount / Round-off:</span>
+                      <span class="t-val">-{{ ord.discountAmount | currencyInr }}</span>
+                    </div>
+                  }
                   <div class="totals-separator"></div>
                   <div class="total-line grand-total-line">
                     <span class="grand-label">NET PAYABLE:</span>
@@ -839,25 +956,30 @@ import {
           </div>
         }
 
-        <!-- WhatsApp Delivery Modal -->
-        @if (showWhatsAppModal()) {
+        <!-- WhatsApp Delivery Modal (Apple Fluid Design) -->
+        @if (showWhatsAppModal() && effectiveOrder(); as ord) {
           <div class="modal-overlay" (click)="onBackdropClick($event)">
-            <div
-              class="modal-card auth-modal-card whatsapp-dialog-card"
-              role="dialog"
-              aria-modal="true"
-              aria-labelledby="whatsapp-dialog-title"
-            >
-              <div class="modal-header">
-                <div class="auth-modal-title-wrap">
-                  <div class="auth-icon-badge whatsapp-badge">
-                    <i class="ph ph-whatsapp-logo"></i>
+            <div class="modal-card settle-modal whatsapp-dialog-card" role="dialog" aria-modal="true">
+              <!-- Modal Header -->
+              <div class="modal-header whatsapp-apple-header">
+                <div class="whatsapp-header-wrap">
+                  <div class="whatsapp-icon-badge">
+                    <i class="ph-fill ph-whatsapp-logo"></i>
                   </div>
                   <div>
-                    <h3 id="whatsapp-dialog-title" class="heading-card">Send Bill via WhatsApp</h3>
-                    <span class="text-xs text-muted"
-                      >Instant digital bill delivery to guest's phone</span
-                    >
+                    <div class="flex items-center gap-2">
+                      <h3 class="heading-card">Send Bill via WhatsApp</h3>
+                      <span class="badge-gateway-chip" [class.is-connected]="whatsAppBridge.connectionStatus() === 'CONNECTED'">
+                        <span class="dot-indicator"></span>
+                        {{ whatsAppBridge.connectionStatus() === 'CONNECTED' ? 'DIRECT GATEWAY' : 'WEB FALLBACK' }}
+                      </span>
+                    </div>
+                    <span class="text-xs text-muted">
+                      {{ ord.orderNumber }} • Table {{ ord.tableNumber || 'Dine-In' }}
+                      @if (splitBill(); as split) {
+                        (Split Bill #{{ split.splitIndex }}/{{ split.splitTotalCount }})
+                      }
+                    </span>
                   </div>
                 </div>
                 <button class="close-btn" (click)="closeWhatsAppModal()" aria-label="Close dialog">
@@ -865,80 +987,105 @@ import {
                 </button>
               </div>
 
-              <div class="modal-body auth-dialog-body">
+              <!-- Modal Body -->
+              <div class="modal-body whatsapp-apple-body">
+                <!-- Customer WhatsApp Phone Number (Admin Gated) -->
                 <div class="form-group">
-                  <label class="form-label" for="whatsappPhoneInput"
-                    >Customer WhatsApp Number</label
-                  >
+                  <div class="label-cluster-between">
+                    <label class="form-label font-bold" for="inv-wa-phone">
+                      <i class="ph ph-phone text-whatsapp"></i> Customer WhatsApp Number
+                    </label>
+                    @if (authService.isAdmin()) {
+                      <span class="admin-verified-pill" title="Administrator access permitted to change recipient">
+                        <i class="ph ph-shield-check"></i> Admin Editable
+                      </span>
+                    } @else {
+                      <span class="admin-locked-pill" title="Only Admin can modify customer phone number">
+                        <i class="ph ph-lock-key"></i> Admin Protected
+                      </span>
+                    }
+                  </div>
+                  
                   <div class="input-with-icon">
                     <i class="ph ph-phone"></i>
                     <input
-                      id="whatsappPhoneInput"
+                      id="inv-wa-phone"
                       type="tel"
                       class="form-input"
+                      [class.input-locked]="!authService.isAdmin()"
+                      [readonly]="!authService.isAdmin()"
                       placeholder="e.g. 9876543210 or +91 98765 43210"
                       [value]="whatsAppPhone()"
                       (input)="whatsAppPhone.set($any($event.target).value)"
-                      (keyup.enter)="sendWhatsApp()"
-                      autofocus
+                      (keyup.enter)="sendWhatsAppBill()"
                     />
+                    @if (!authService.isAdmin()) {
+                      <i class="ph ph-lock-key lock-status-icon" title="Only Admins can modify phone number"></i>
+                    }
                   </div>
-                  <span class="hint-text"
-                    >Enter 10-digit mobile number. Country code defaults to +91 (India) if
-                    omitted.</span
-                  >
+                  <span class="hint-text">
+                    @if (authService.isAdmin()) {
+                      Enter 10-digit customer mobile number. Country code defaults to +91 (India).
+                    } @else {
+                      Recipient phone is locked to registered customer. Contact Admin to modify.
+                    }
+                  </span>
                 </div>
 
+                <!-- Message Composer (Editable) -->
                 <div class="form-group">
-                  <label class="form-label">Message Preview</label>
-                  <pre class="whatsapp-preview-box">{{ whatsAppMessagePreview() }}</pre>
+                  <div class="label-cluster-between">
+                    <label class="form-label font-bold">
+                      <i class="ph ph-pencil-simple-line text-whatsapp"></i> Message Text (Editable)
+                    </label>
+                    <span class="char-counter-text">
+                      {{ whatsAppMessagePreview().length }} characters
+                    </span>
+                  </div>
+                  <textarea
+                    class="form-input whatsapp-composer-box"
+                    rows="7"
+                    [ngModel]="whatsAppMessagePreview()"
+                    (ngModelChange)="whatsAppCustomMessage.set($event)"
+                    placeholder="Enter message to send..."
+                  ></textarea>
                 </div>
               </div>
 
-              <div class="modal-footer whatsapp-modal-footer">
-                <button type="button" class="btn btn-secondary" (click)="closeWhatsAppModal()">
+              <!-- Modal Footer: Single Primary Action & Secondary Utils -->
+              <div class="modal-footer whatsapp-apple-footer">
+                <button type="button" class="btn btn-secondary btn-apple-cancel" (click)="closeWhatsAppModal()">
                   Cancel
                 </button>
-                <button
-                  type="button"
-                  class="btn btn-secondary"
-                  (click)="copyBillToClipboard()"
-                  title="Copy formatted bill text to clipboard"
-                >
-                  <i class="ph ph-copy"></i>
-                  <span>Copy Text</span>
-                </button>
-                @if (whatsAppAppUrl()) {
-                  <a
-                    [href]="whatsAppAppUrl()"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    class="btn btn-secondary"
-                    (click)="onWhatsAppLinkClicked(whatsAppAppUrl())"
-                    title="Open in WhatsApp Desktop App or Mobile"
+
+                <div class="footer-actions-group">
+                  <button
+                    type="button"
+                    class="btn btn-secondary btn-apple-copy"
+                    (click)="copyBillToClipboard()"
+                    title="Copy formatted bill text to clipboard"
                   >
-                    <i class="ph ph-device-mobile"></i>
-                    <span>WhatsApp App</span>
-                  </a>
-                }
-                @if (whatsAppWebUrl()) {
-                  <a
-                    [href]="whatsAppWebUrl()"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    class="btn btn-whatsapp-action"
-                    (click)="onWhatsAppLinkClicked(whatsAppWebUrl())"
-                    title="Directly launch WhatsApp Web in a new tab"
-                  >
-                    <i class="ph ph-whatsapp-logo"></i>
-                    <span>Open WhatsApp Web</span>
-                  </a>
-                } @else {
-                  <button type="button" class="btn btn-whatsapp-action" disabled>
-                    <i class="ph ph-whatsapp-logo"></i>
-                    <span>Enter Valid 10-Digit Mobile</span>
+                    <i class="ph ph-copy"></i>
+                    <span>Copy Text</span>
                   </button>
-                }
+
+                  <!-- Single Embedded WhatsApp Send Button -->
+                  <button
+                    type="button"
+                    class="btn btn-whatsapp-direct"
+                    (click)="sendWhatsAppBill()"
+                    [disabled]="isDispatchingWhatsApp() || !whatsAppPhone().trim()"
+                    title="Send bill directly via embedded WhatsApp"
+                  >
+                    @if (isDispatchingWhatsApp()) {
+                      <i class="ph ph-spinner ph-spin"></i>
+                      <span>Sending in background...</span>
+                    } @else {
+                      <i class="ph-bold ph-paper-plane-tilt"></i>
+                      <span>Send Bill via WhatsApp</span>
+                    }
+                  </button>
+                </div>
               </div>
             </div>
           </div>
@@ -997,6 +1144,19 @@ import {
   `,
   styles: [
     `
+      .ph-spin {
+        animation: spin 0.8s linear infinite;
+        display: inline-block;
+      }
+      @keyframes spin {
+        from { transform: rotate(0deg); }
+        to { transform: rotate(360deg); }
+      }
+      button:active:not(:disabled) {
+        transform: scale(0.98);
+        transition: transform 0.08s cubic-bezier(0.2, 0.8, 0.2, 1);
+      }
+
       .invoice-page {
         display: flex;
         flex-direction: column;
@@ -1020,7 +1180,7 @@ import {
           0 1px 3px rgba(15, 23, 42, 0.03);
         box-sizing: border-box;
 
-        @media (max-width: 680px) {
+        @media (max-width: 679px) {
           flex-direction: column;
           align-items: stretch;
           gap: 10px;
@@ -1076,11 +1236,74 @@ import {
         padding: 4px 10px;
         border-radius: 6px;
         text-decoration: none;
+        cursor: pointer;
         transition: all 0.15s ease;
 
         &:hover {
           background: #fde68a;
           color: #92400e;
+        }
+      }
+
+      .split-slips-nav-menu {
+        position: relative;
+      }
+
+      .split-dropdown-box {
+        position: absolute;
+        top: calc(100% + 6px);
+        left: 0;
+        z-index: 100;
+        min-width: 220px;
+        background: var(--color-surface, #ffffff);
+        border: 1px solid var(--color-border);
+        border-radius: var(--radius-sm, 10px);
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15);
+        padding: 6px;
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        animation: fadeIn 0.15s ease-out;
+      }
+
+      .split-dropdown-link {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 8px 10px;
+        border-radius: var(--radius-xs, 6px);
+        text-decoration: none;
+        color: var(--color-text-primary);
+        font-size: 0.8125rem;
+        transition: background 0.15s ease;
+
+        &:hover {
+          background: var(--color-bone-light);
+        }
+
+        .split-link-info {
+          display: flex;
+          flex-direction: column;
+          gap: 2px;
+        }
+
+        .split-link-title {
+          font-weight: 600;
+        }
+
+        .split-link-status {
+          font-size: 0.6875rem;
+          font-weight: 700;
+          color: #dc2626;
+
+          &.paid {
+            color: #16a34a;
+          }
+        }
+
+        .split-link-amt {
+          font-family: var(--font-mono, monospace);
+          color: var(--color-crimson);
         }
       }
 
@@ -1220,9 +1443,11 @@ import {
       }
 
       .invoice-paper {
+        color-scheme: light !important;
         width: 100%;
         max-width: 680px;
         background: #ffffff !important;
+        background-color: #ffffff !important;
         color: #0f172a !important;
         border: 1px solid #e2e8f0;
         border-radius: 12px;
@@ -1232,6 +1457,7 @@ import {
           -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
         position: relative;
         overflow: hidden;
+        isolation: isolate;
 
         // Prevent theme inversion: invoice sheet always maintains sharp print contrast
         h1,
@@ -1366,6 +1592,11 @@ import {
           &.split-tag {
             background: #b45309;
           }
+
+          &.consolidated-tag {
+            background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+            box-shadow: 0 1px 3px rgba(15, 23, 42, 0.2);
+          }
         }
 
         .legal-id-card {
@@ -1413,6 +1644,127 @@ import {
           font-weight: 700;
           color: #92400e;
         }
+      }
+
+      .session-consolidated-badge-banner {
+        background: #f8fafc;
+        border: 1px solid #cbd5e1;
+        border-radius: 8px;
+        padding: 6px 14px;
+        margin-bottom: 14px;
+        text-align: center;
+
+        .consolidated-badge-content {
+          display: inline-flex;
+          align-items: center;
+          gap: 7px;
+          font-size: 0.75rem;
+          font-weight: 700;
+          letter-spacing: 0.04em;
+          color: #1e293b;
+
+          i {
+            font-size: 0.95rem;
+            color: #0284c7;
+          }
+        }
+      }
+
+      .session-timeline-strip {
+        background: #f8fafc;
+        border: 1px solid #e2e8f0;
+        border-radius: 8px;
+        padding: 8px 12px;
+        margin-bottom: 14px;
+
+        .strip-header {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          margin-bottom: 6px;
+
+          .strip-title {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            font-size: 0.6875rem;
+            font-weight: 800;
+            color: #64748b;
+            letter-spacing: 0.05em;
+            text-transform: uppercase;
+
+            i {
+              color: #0284c7;
+            }
+          }
+
+          .strip-total-badge {
+            font-size: 0.6875rem;
+            font-weight: 700;
+            color: #0f172a;
+            background: #ffffff;
+            border: 1px solid #e2e8f0;
+            padding: 2px 8px;
+            border-radius: 4px;
+          }
+        }
+
+        .rounds-pills-row {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 6px;
+
+          .round-summary-chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            background: #ffffff;
+            border: 1px solid #cbd5e1;
+            border-radius: 6px;
+            padding: 3px 8px;
+            font-size: 0.6875rem;
+
+            .chip-rnd-idx {
+              font-weight: 800;
+              background: #0f172a;
+              color: #ffffff;
+              border-radius: 3px;
+              padding: 1px 5px;
+              font-size: 0.625rem;
+            }
+
+            .chip-ord-no {
+              font-family: 'SF Mono', Consolas, monospace;
+              font-weight: 700;
+              color: #334155;
+            }
+
+            .chip-time {
+              color: #64748b;
+              font-size: 0.625rem;
+            }
+
+            .chip-subtotal {
+              font-family: 'SF Mono', Consolas, monospace;
+              font-weight: 800;
+              color: #0f172a;
+              margin-left: 2px;
+            }
+          }
+        }
+      }
+
+      .session-badge-pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        padding: 2px 7px;
+        border-radius: 4px;
+        background: #eff6ff;
+        border: 1px solid #bfdbfe;
+        color: #1d4ed8;
+        font-size: 0.6875rem;
+        font-weight: 700;
       }
 
       /* Metadata Section */
@@ -1534,18 +1886,18 @@ import {
         }
 
         .round-separator-row {
-          background: #f8fafc !important;
+          background: #f1f5f9 !important;
           border-top: 2px solid #cbd5e1;
-          border-bottom: 1px solid #e2e8f0;
+          border-bottom: 1px solid #cbd5e1;
 
           td {
-            padding: 6px 8px !important;
+            padding: 6px 10px !important;
           }
 
           .invoice-round-header {
             display: flex;
             align-items: center;
-            gap: 8px;
+            gap: 10px;
             font-size: 0.75rem;
 
             .rnd-tag {
@@ -1553,13 +1905,13 @@ import {
               color: #ffffff;
               font-weight: 800;
               font-size: 0.625rem;
-              padding: 2px 6px;
+              padding: 2px 8px;
               border-radius: 4px;
-              letter-spacing: 0.04em;
+              letter-spacing: 0.05em;
             }
 
             .rnd-ord-no {
-              font-family: monospace;
+              font-family: 'SF Mono', Consolas, monospace;
               font-weight: 700;
               color: #0f172a;
             }
@@ -1567,14 +1919,56 @@ import {
             .rnd-time {
               color: #64748b;
               font-size: 0.6875rem;
+              display: inline-flex;
+              align-items: center;
+              gap: 3px;
+
+              i {
+                font-size: 0.8rem;
+              }
+            }
+
+            .rnd-count {
+              color: #475569;
+              font-size: 0.6875rem;
+              font-weight: 600;
+              background: #e2e8f0;
+              padding: 1px 6px;
+              border-radius: 3px;
             }
 
             .rnd-subtotal {
               margin-left: auto;
-              font-weight: 700;
-              color: #be185d;
+              font-weight: 800;
+              color: #0f172a;
               font-family: 'SF Mono', Consolas, monospace;
+              font-size: 0.75rem;
             }
+          }
+        }
+
+        .round-subtotal-footer-row {
+          background: #fafafa !important;
+          border-bottom: 2px solid #e2e8f0;
+
+          td {
+            padding: 5px 8px !important;
+          }
+
+          .round-subtotal-label {
+            text-align: right;
+            font-size: 0.72rem;
+            font-weight: 600;
+            color: #64748b;
+            font-style: italic;
+          }
+
+          .round-subtotal-amount {
+            text-align: right;
+            font-size: 0.75rem;
+            font-weight: 800;
+            color: #0f172a;
+            font-family: 'SF Mono', Consolas, monospace;
           }
         }
 
@@ -2190,67 +2584,200 @@ import {
       }
 
       .whatsapp-dialog-card {
-        max-width: 480px;
+        max-width: 540px;
+        border-radius: 20px;
+        overflow: hidden;
       }
 
-      .auth-icon-badge.whatsapp-badge {
+      .whatsapp-apple-header {
+        border-bottom: 1px solid var(--color-border);
+        padding-bottom: 12px;
+      }
+
+      .whatsapp-header-wrap {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+      }
+
+      .whatsapp-icon-badge {
+        width: 42px;
+        height: 42px;
+        border-radius: 12px;
         background: rgba(37, 211, 102, 0.12);
+        color: #25d366;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.5rem;
+      }
+
+      .badge-gateway-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        font-size: 0.65rem;
+        font-weight: 700;
+        padding: 2px 7px;
+        border-radius: 999px;
+        background: rgba(148, 163, 184, 0.15);
+        color: var(--color-text-secondary);
+        border: 1px solid rgba(148, 163, 184, 0.25);
+
+        .dot-indicator {
+          width: 6px;
+          height: 6px;
+          border-radius: 50%;
+          background: #94a3b8;
+        }
+
+        &.is-connected {
+          background: rgba(34, 197, 94, 0.12);
+          color: #16a34a;
+          border-color: rgba(34, 197, 94, 0.25);
+
+          .dot-indicator {
+            background: #22c55e;
+            box-shadow: 0 0 6px rgba(34, 197, 94, 0.6);
+          }
+        }
+      }
+
+      .whatsapp-apple-body {
+        display: flex;
+        flex-direction: column;
+        gap: 14px;
+        padding-top: 14px;
+      }
+
+      .label-cluster-between {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 4px;
+      }
+
+      .text-whatsapp {
         color: #25d366;
       }
 
-      .whatsapp-preview-box {
-        margin: 0;
-        padding: 12px;
-        background: #f8fafc;
-        border: 1px solid var(--color-border, #e2e8f0);
-        border-radius: 6px;
-        font-family: monospace;
-        font-size: 0.75rem;
-        line-height: 1.45;
-        color: #334155;
-        white-space: pre-wrap;
-        word-break: break-word;
-        max-height: 180px;
-        overflow-y: auto;
-      }
-
-      .btn-whatsapp-action {
+      .admin-verified-pill {
         display: inline-flex;
         align-items: center;
-        gap: 6px;
-        background: #25d366;
-        color: #ffffff;
-        font-weight: 600;
-        font-size: 0.875rem;
-        padding: 8px 16px;
-        border-radius: var(--radius-sm, 6px);
-        border: none;
-        cursor: pointer;
-        transition: background 0.15s ease;
+        gap: 4px;
+        font-size: 0.6875rem;
+        font-weight: 700;
+        padding: 2px 8px;
+        border-radius: 999px;
+        background: rgba(16, 185, 129, 0.12);
+        color: #059669;
+        border: 1px solid rgba(16, 185, 129, 0.25);
+      }
 
-        &:hover:not(:disabled) {
-          background: #20ba5a;
-        }
+      .admin-locked-pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        font-size: 0.6875rem;
+        font-weight: 700;
+        padding: 2px 8px;
+        border-radius: 999px;
+        background: rgba(245, 158, 11, 0.12);
+        color: #b45309;
+        border: 1px solid rgba(245, 158, 11, 0.25);
+      }
 
-        &:disabled {
-          opacity: 0.5;
-          cursor: not-allowed;
-        }
+      .input-locked {
+        background: rgba(0, 0, 0, 0.04) !important;
+        cursor: not-allowed;
+        color: var(--color-text-secondary);
+      }
 
-        i {
-          font-size: 1.15rem;
+      .lock-status-icon {
+        position: absolute;
+        right: 12px;
+        color: var(--color-text-muted);
+        font-size: 1rem;
+      }
+
+      .char-counter-text {
+        font-size: 0.6875rem;
+        color: var(--color-text-muted);
+        font-family: var(--font-mono, monospace);
+      }
+
+      .whatsapp-composer-box {
+        font-family: var(--font-mono, monospace);
+        font-size: 0.75rem;
+        line-height: 1.5;
+        resize: vertical;
+        min-height: 140px;
+        background: var(--color-surface);
+        border: 1px solid var(--color-border);
+        border-radius: 12px;
+        padding: 10px 12px;
+        transition: border-color 0.15s ease;
+
+        &:focus {
+          border-color: #25d366;
+          box-shadow: 0 0 0 3px rgba(37, 211, 102, 0.15);
         }
       }
 
-      .whatsapp-modal-footer {
+      .whatsapp-apple-footer {
         display: flex;
         align-items: center;
-        justify-content: flex-end;
-        gap: 8px;
-        flex-wrap: wrap;
+        justify-content: space-between;
+        padding-top: 14px;
+        border-top: 1px solid var(--color-border);
 
-        a.btn {
-          text-decoration: none;
+        .footer-actions-group {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+        }
+
+        .btn-apple-cancel {
+          border-radius: 10px;
+          font-weight: 600;
+        }
+
+        .btn-apple-copy {
+          border-radius: 10px;
+          display: inline-flex;
+          align-items: center;
+          gap: 5px;
+          font-weight: 600;
+        }
+
+        .btn-whatsapp-direct {
+          display: inline-flex;
+          align-items: center;
+          gap: 6px;
+          background: #25d366;
+          color: #ffffff;
+          font-weight: 700;
+          font-size: 0.8125rem;
+          padding: 9px 18px;
+          border-radius: 12px;
+          border: none;
+          cursor: pointer;
+          box-shadow: 0 2px 10px rgba(37, 211, 102, 0.3);
+          transition: transform 0.15s cubic-bezier(0.16, 1, 0.3, 1), background-color 0.15s ease, opacity 0.15s ease;
+
+          &:hover:not(:disabled) {
+            background: #20ba5a;
+            box-shadow: 0 4px 14px rgba(37, 211, 102, 0.4);
+          }
+
+          &:active:not(:disabled) {
+            transform: scale(0.97);
+          }
+
+          &:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+          }
         }
       }
     `,
@@ -2262,10 +2789,36 @@ export class InvoicePreviewComponent implements OnInit {
   private dataService = inject(RestaurantDataService);
   private mock = this.dataService;
   private toastService = inject(ToastService);
-  private adminAuth = inject(AdminAuthService);
+  readonly authService = inject(AdminAuthService);
+  private adminAuth = this.authService;
   private thermalPrinter = inject(ThermalPrinterService);
+  readonly whatsAppBridge = inject(WhatsAppBridgeService);
 
   isFromCanvas = signal<boolean>(false);
+  private hasAutoOpenedThermal = false;
+
+  constructor() {
+    // Automatically trigger thermal preview once the order is loaded and verified paid if preview=thermal is requested
+    effect(() => {
+      const ord = this.effectiveOrder();
+      const s = this.splitBill();
+      const q = this.route.snapshot.queryParamMap;
+      const shouldAutoPreview =
+        q.get('preview') === 'thermal' ||
+        q.get('thermal') === 'true' ||
+        q.get('print') === 'true';
+
+      if (ord && shouldAutoPreview && !this.hasAutoOpenedThermal) {
+        const isPaidTarget = s ? s.paymentStatus === 'PAID' : this.isPaid(ord);
+        if (isPaidTarget && ord.status !== 'CANCELLED') {
+          this.hasAutoOpenedThermal = true;
+          setTimeout(() => {
+            this.showThermalPreviewModal.set(true);
+          }, 150);
+        }
+      }
+    });
+  }
 
   readonly isLoading = computed(
     () => this.dataService.isOrdersLoading() || !this.dataService.ordersLoaded(),
@@ -2275,43 +2828,48 @@ export class InvoicePreviewComponent implements OnInit {
 
   getOrderCgstRate(ord: Order | null | undefined): number {
     if (!ord) return this.restaurant()?.taxSettings?.cgstRate ?? 2.5;
-    if (typeof (ord as any).cgstRate === 'number') return (ord as any).cgstRate;
-    if (typeof (ord as any).cgst_rate === 'number') return (ord as any).cgst_rate;
-    if (ord.subtotal > 0 && ord.cgstAmount) {
-      return Math.round((ord.cgstAmount / ord.subtotal) * 1000) / 10;
-    }
+    if (typeof (ord as any).cgstRate === 'number' && (ord as any).cgstRate > 0) return (ord as any).cgstRate;
+    if (typeof (ord as any).cgst_rate === 'number' && (ord as any).cgst_rate > 0) return (ord as any).cgst_rate;
     return this.restaurant()?.taxSettings?.cgstRate ?? 2.5;
   }
 
   getOrderSgstRate(ord: Order | null | undefined): number {
     if (!ord) return this.restaurant()?.taxSettings?.sgstRate ?? 2.5;
-    if (typeof (ord as any).sgstRate === 'number') return (ord as any).sgstRate;
-    if (typeof (ord as any).sgst_rate === 'number') return (ord as any).sgst_rate;
-    if (ord.subtotal > 0 && ord.sgstAmount) {
-      return Math.round((ord.sgstAmount / ord.subtotal) * 1000) / 10;
-    }
+    if (typeof (ord as any).sgstRate === 'number' && (ord as any).sgstRate > 0) return (ord as any).sgstRate;
+    if (typeof (ord as any).sgst_rate === 'number' && (ord as any).sgst_rate > 0) return (ord as any).sgst_rate;
     return this.restaurant()?.taxSettings?.sgstRate ?? 2.5;
   }
 
   orderId = signal<string>('');
   splitBillId = signal<string>('');
+  showSplitDropdown = signal<boolean>(false);
+
+  getOrderSplitBills(orderId: string): SplitBill[] {
+    return this.mock.splitBills ? this.mock.splitBills().filter((b) => b.orderId === orderId) : [];
+  }
 
   showThermalPreviewModal = signal<boolean>(false);
+  isPrinting = signal<boolean>(false);
   showAdminReprintModal = signal<boolean>(false);
   adminPasswordInput = signal<string>('');
   adminPasswordError = signal<string>('');
 
   showWhatsAppModal = signal<boolean>(false);
   whatsAppPhone = signal<string>('');
+  whatsAppCustomMessage = signal<string>('');
+  isDispatchingWhatsApp = signal<boolean>(false);
 
   whatsAppMessagePreview = computed(() => {
-    const ord = this.order();
+    if (this.whatsAppCustomMessage()) {
+      return this.whatsAppCustomMessage();
+    }
+    const ord = this.effectiveOrder();
     if (!ord) return '';
     return buildWhatsAppBillMessage(this.restaurant()?.name || 'Restaurant', ord, this.splitBill());
   });
 
   whatsAppWebUrl = computed(() => {
-    const ord = this.order();
+    const ord = this.effectiveOrder();
     if (!ord) return '';
     return getWhatsAppWebUrl(
       this.whatsAppPhone(),
@@ -2322,7 +2880,7 @@ export class InvoicePreviewComponent implements OnInit {
   });
 
   whatsAppAppUrl = computed(() => {
-    const ord = this.order();
+    const ord = this.effectiveOrder();
     if (!ord) return '';
     return getWhatsAppAppUrl(
       this.whatsAppPhone(),
@@ -2339,67 +2897,230 @@ export class InvoicePreviewComponent implements OnInit {
     );
   });
 
+  sessionRounds = computed<
+    {
+      roundIndex: number;
+      order: Order;
+      itemStartIndex: number;
+      roundSubtotal: number;
+      itemsCount: number;
+    }[]
+  >(() => {
+    const raw = this.order();
+    if (!raw) return [];
+    if (raw.orderType === 'TAKEAWAY' || (!raw.tableId && !raw.tableNumber)) {
+      const roundSub =
+        Math.round(
+          (raw.items?.reduce((s, it) => s + (it.unitPrice || 0) * (it.quantity || 1), 0) ??
+            raw.subtotal ??
+            0) * 100,
+        ) / 100;
+      return [
+        {
+          roundIndex: 1,
+          order: raw,
+          itemStartIndex: 1,
+          roundSubtotal: roundSub,
+          itemsCount: raw.items?.length || 0,
+        },
+      ];
+    }
+
+    // 1. If pre-attached sessionRounds exists on order
+    let allOrders: Order[] = [];
+    if (raw.sessionRounds && raw.sessionRounds.length > 0) {
+      allOrders = [...raw.sessionRounds];
+      if (!allOrders.some((o) => o.id === raw.id)) {
+        allOrders.push(raw);
+      }
+    } else {
+      // 2. Discover all sibling orders belonging to this dining session
+      const siblings = this.mock
+        .orders()
+        .filter((o) => {
+          if (o.id === raw.id || o.status === 'CANCELLED' || o.orderType === 'TAKEAWAY') {
+            return false;
+          }
+
+          // Seating session match if available on both
+          if (raw.seatingSessionId && o.seatingSessionId) {
+            return o.seatingSessionId === raw.seatingSessionId;
+          }
+
+          // Exact table matching (must match tableId if both present)
+          if (raw.tableId && o.tableId && raw.tableId !== o.tableId) {
+            return false;
+          }
+          const sameTable =
+            (raw.tableId && o.tableId === raw.tableId) ||
+            (raw.tableNumber &&
+              o.tableNumber &&
+              raw.tableNumber.trim().toLowerCase() === o.tableNumber.trim().toLowerCase());
+          if (!sameTable) return false;
+
+          // Time guard: Never mix orders across different dining times (> 3 hours apart)
+          const timeDiff = Math.abs(
+            new Date(raw.createdAt).getTime() - new Date(o.createdAt).getTime(),
+          );
+          if (timeDiff > 3 * 60 * 60 * 1000) return false;
+
+          // If raw is settled, siblings must either be settled around the same time or absorbed
+          if (raw.paymentStatus === 'PAID') {
+            if (o.paymentStatus === 'PAID') {
+              if (raw.settledAt && o.settledAt) {
+                const diffMs = Math.abs(
+                  new Date(raw.settledAt).getTime() - new Date(o.settledAt).getTime(),
+                );
+                return diffMs <= 10 * 60 * 1000;
+              }
+              return o.totalAmount === 0 || raw.totalAmount === 0;
+            }
+            return false;
+          }
+
+          // Both unpaid on same table within 3 hours
+          return o.paymentStatus === 'UNPAID';
+        });
+
+      allOrders = [raw, ...siblings];
+    }
+
+    const sorted = allOrders.sort(
+      (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
+    );
+
+    let runningIndex = 1;
+    return sorted.map((ord, idx) => {
+      const itemsCount = ord.items?.length || 0;
+      const startIndex = runningIndex;
+      runningIndex += itemsCount;
+
+      const roundSubtotal =
+        Math.round(
+          (ord.items?.reduce((s, it) => s + (it.unitPrice || 0) * (it.quantity || 1), 0) ??
+            ord.subtotal ??
+            0) * 100,
+        ) / 100;
+
+      return {
+        roundIndex: idx + 1,
+        order: ord,
+        itemStartIndex: startIndex,
+        roundSubtotal,
+        itemsCount,
+      };
+    });
+  });
+
+  getTaxableValue(ord: Order | null): number {
+    if (!ord) return 0;
+    if (ord.appliedCouponCode) {
+      return Math.max(0, Math.round((ord.subtotal - (ord.discountAmount || 0)) * 100) / 100);
+    }
+    return ord.subtotal || 0;
+  }
+
   effectiveOrder = computed(() => {
     const raw = this.order();
     if (!raw) return null;
-    if (raw.orderType === 'TAKEAWAY' || (!raw.tableId && !raw.tableNumber)) return raw;
 
-    // Detect multi-round session orders for this table
-    const siblings = this.mock
-      .orders()
-      .filter(
-        (o) =>
-          o.id !== raw.id &&
-          o.status !== 'CANCELLED' &&
-          ((raw.seatingSessionId && o.seatingSessionId === raw.seatingSessionId) ||
-            (raw.paymentStatus === 'UNPAID' &&
-              o.paymentStatus === 'UNPAID' &&
-              ((raw.tableId && o.tableId === raw.tableId) ||
-                (raw.tableNumber && o.tableNumber === raw.tableNumber)))),
-      );
+    const rounds = this.sessionRounds();
+    if (rounds.length <= 1) {
+      const itemsSum = raw.items?.reduce((s, it) => s + (it.unitPrice || 0) * (it.quantity || 1), 0);
+      const subtotal = itemsSum !== undefined && itemsSum > 0 ? Math.round(itemsSum * 100) / 100 : raw.subtotal;
+      const discountAmount = raw.discountAmount || 0;
+      const hasCoupon = !!raw.appliedCouponCode;
 
-    if (siblings.length === 0) return raw;
+      const cgstRate = this.getOrderCgstRate(raw);
+      const sgstRate = this.getOrderSgstRate(raw);
 
-    const allItems = [...raw.items, ...siblings.flatMap((s) => s.items)];
-    const subtotal =
-      Math.round((raw.subtotal + siblings.reduce((sum, s) => sum + (s.subtotal || 0), 0)) * 100) /
-      100;
-    const taxAmount =
-      Math.round((raw.taxAmount + siblings.reduce((sum, s) => sum + (s.taxAmount || 0), 0)) * 100) /
-      100;
-    const gross = Math.round((subtotal + taxAmount) * 100) / 100;
-    const discountAmount = raw.discountAmount || 0;
-    const totalAmount = Math.max(0, Math.round((gross - discountAmount) * 100) / 100);
+      let taxableValue: number;
+      let cgstAmount: number;
+      let sgstAmount: number;
+      let taxAmount: number;
+      let totalAmount: number;
+
+      if (hasCoupon) {
+        // Coupon discount applies to total BEFORE taxes
+        taxableValue = Math.max(0, Math.round((subtotal - discountAmount) * 100) / 100);
+        cgstAmount = Math.round(taxableValue * (cgstRate / 100) * 100) / 100;
+        sgstAmount = Math.round(taxableValue * (sgstRate / 100) * 100) / 100;
+        taxAmount = Math.round((cgstAmount + sgstAmount) * 100) / 100;
+        // Chargeable amount never shows pointed/decimal value: rounded to whole rupee
+        totalAmount = Math.round(Math.max(0, taxableValue + taxAmount));
+      } else {
+        // Admin / round-off discount applies to total AFTER taxes
+        taxableValue = subtotal;
+        cgstAmount = Math.round(taxableValue * (cgstRate / 100) * 100) / 100;
+        sgstAmount = Math.round(taxableValue * (sgstRate / 100) * 100) / 100;
+        taxAmount = Math.round((cgstAmount + sgstAmount) * 100) / 100;
+        const grossTotal = Math.round((taxableValue + taxAmount) * 100) / 100;
+        // Chargeable amount never shows pointed/decimal value: rounded to whole rupee
+        totalAmount = Math.round(Math.max(0, grossTotal - discountAmount));
+      }
+
+      return {
+        ...raw,
+        subtotal,
+        discountAmount,
+        cgstRate,
+        sgstRate,
+        cgstAmount,
+        sgstAmount,
+        taxAmount,
+        totalAmount,
+      };
+    }
+
+    // Consolidated multi-round session order
+    const allItems = rounds.flatMap((r) => r.order.items || []);
+    const subtotal = Math.round(rounds.reduce((sum, r) => sum + r.roundSubtotal, 0) * 100) / 100;
+
+    const discountAmount = Math.round(
+      (raw.discountAmount ||
+        rounds.reduce((sum, r) => sum + (r.order.discountAmount || 0), 0)) * 100,
+    ) / 100;
+
+    const hasCoupon = !!(raw.appliedCouponCode || rounds.some((r) => r.order.appliedCouponCode));
+    const cgstRate = this.getOrderCgstRate(raw);
+    const sgstRate = this.getOrderSgstRate(raw);
+
+    let taxableValue: number;
+    let cgstAmount: number;
+    let sgstAmount: number;
+    let taxAmount: number;
+    let totalAmount: number;
+
+    if (hasCoupon) {
+      taxableValue = Math.max(0, Math.round((subtotal - discountAmount) * 100) / 100);
+      cgstAmount = Math.round(taxableValue * (cgstRate / 100) * 100) / 100;
+      sgstAmount = Math.round(taxableValue * (sgstRate / 100) * 100) / 100;
+      taxAmount = Math.round((cgstAmount + sgstAmount) * 100) / 100;
+      totalAmount = Math.round(Math.max(0, taxableValue + taxAmount));
+    } else {
+      taxableValue = subtotal;
+      cgstAmount = Math.round(taxableValue * (cgstRate / 100) * 100) / 100;
+      sgstAmount = Math.round(taxableValue * (sgstRate / 100) * 100) / 100;
+      taxAmount = Math.round((cgstAmount + sgstAmount) * 100) / 100;
+      const grossTotal = Math.round((taxableValue + taxAmount) * 100) / 100;
+      totalAmount = Math.round(Math.max(0, grossTotal - discountAmount));
+    }
 
     return {
       ...raw,
       items: allItems,
       subtotal,
+      discountAmount,
+      cgstRate,
+      sgstRate,
+      cgstAmount,
+      sgstAmount,
       taxAmount,
       totalAmount,
+      isSessionConsolidated: true,
+      sessionRoundsCount: rounds.length,
+      sessionRounds: rounds.map((r) => r.order),
     };
-  });
-
-  sessionRounds = computed<{ roundIndex: number; order: Order }[]>(() => {
-    const raw = this.order();
-    if (!raw) return [];
-    if (raw.orderType === 'TAKEAWAY' || (!raw.tableId && !raw.tableNumber)) {
-      return [{ roundIndex: 1, order: raw }];
-    }
-    const siblings = this.mock
-      .orders()
-      .filter(
-        (o) =>
-          o.id !== raw.id &&
-          o.status !== 'CANCELLED' &&
-          ((raw.seatingSessionId && o.seatingSessionId === raw.seatingSessionId) ||
-            (raw.tableId && o.tableId === raw.tableId) ||
-            (raw.tableNumber && o.tableNumber === raw.tableNumber)),
-      );
-    const all = [raw, ...siblings].sort(
-      (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
-    );
-    return all.map((ord, idx) => ({ roundIndex: idx + 1, order: ord }));
   });
 
   splitBill = computed(() => {
@@ -2414,39 +3135,50 @@ export class InvoicePreviewComponent implements OnInit {
     return this.order()?.printCount || 0;
   });
 
+  // DC-10 fix: settledAt alone is not authoritative — trust paymentStatus
+  isPaid(ord: Order | null | undefined): boolean {
+    if (!ord) return false;
+    return (
+      ord.paymentStatus === 'PAID' ||
+      (ord.paymentStatus as string)?.toUpperCase() === 'PAID' ||
+      ord.status === 'COMPLETED'
+    );
+  }
+
   get restaurantAddress(): string {
     const r = this.restaurant();
-    if (!r?.address) return '14 Heritage Promenade, Civil Lines, MG Road, Bengaluru - 560001';
+    // DC-4 fix: return empty string when restaurant data not loaded; never show another brand's address
+    if (!r?.address) return '';
     const parts = [r.address.street, r.address.area, r.address.city, r.address.zip].filter(Boolean);
-    return parts.length > 0
-      ? parts.join(', ')
-      : '14 Heritage Promenade, Civil Lines, MG Road, Bengaluru - 560001';
+    return parts.join(', ');
   }
 
   get restaurantContactInfo(): string {
     const r = this.restaurant();
-    const phone = r?.contact?.phone || '+91 80 4912 8800';
-    const gstin = r?.taxSettings?.gstNumber || '29AAAAA0000A1Z5';
-    return `Tel: ${phone} • GSTIN: ${gstin}`;
+    const phone = r?.contact?.phone || '';
+    const gstin = r?.taxSettings?.gstNumber || '';
+    return phone && gstin ? `Tel: ${phone} • GSTIN: ${gstin}` : phone || '';
   }
 
   get fssaiLicense(): string {
     const r = this.restaurant() as any;
-    return r?.taxSettings?.fssaiNumber || r?.fssaiNumber || '11223344556677';
+    // DC-4 fix: return empty string when not configured; never show a fake license number
+    return r?.taxSettings?.fssaiNumber || r?.fssaiNumber || '';
   }
 
   logoFailed = signal<boolean>(false);
 
   get restaurantPhone(): string {
-    return this.restaurant()?.contact?.phone || '+91 80 4912 8800';
+    return this.restaurant()?.contact?.phone || '';
   }
 
   get restaurantEmail(): string {
-    return this.restaurant()?.contact?.email || 'billing@gurukripadhaba.in';
+    return this.restaurant()?.contact?.email || '';
   }
 
   get restaurantGstin(): string {
-    return this.restaurant()?.taxSettings?.gstNumber || '29AAAAA0000A1Z5';
+    // DC-4 fix: return empty string when not configured
+    return this.restaurant()?.taxSettings?.gstNumber || '';
   }
 
   amountInWords(amount: number): string {
@@ -2454,6 +3186,10 @@ export class InvoicePreviewComponent implements OnInit {
   }
 
   getBilledByStaff(ord: Order): string {
+    if (ord?.serverStaffId) {
+      const staff = this.mock.staffMembers().find((s) => s.id === ord.serverStaffId);
+      if (staff) return `${staff.name} (${staff.role})`;
+    }
     return (
       (ord as any)?.serverStaffName ||
       (ord as any)?.server_staff_name ||
@@ -2461,10 +3197,11 @@ export class InvoicePreviewComponent implements OnInit {
     );
   }
 
+  // DM-4 fix: prefer backend invoice_number if available; synthesise from order number otherwise
   getInvoiceNumber(ord: Order): string {
-    const year = ord.createdAt ? new Date(ord.createdAt).getFullYear() : new Date().getFullYear();
-    const ref = (ord.orderNumber || '').replace('#ORD-', '').replace('ORD-', '');
-    return `INV-${year}-${ref}`;
+    if ((ord as any).invoiceNumber) return (ord as any).invoiceNumber;
+    if ((ord as any).invoice_number) return (ord as any).invoice_number;
+    return `INV-${ord.orderNumber || ''}`;
   }
 
   ngOnInit(): void {
@@ -2476,6 +3213,20 @@ export class InvoicePreviewComponent implements OnInit {
       this.isFromCanvas.set(q.get('from') === 'canvas');
       if (q.get('reprint') === 'true') {
         setTimeout(() => this.openReprintModal(), 50);
+      }
+      if (
+        (q.get('preview') === 'thermal' ||
+          q.get('thermal') === 'true' ||
+          q.get('print') === 'true') &&
+        !this.hasAutoOpenedThermal
+      ) {
+        const ord = this.effectiveOrder();
+        const s = this.splitBill();
+        const isPaidTarget = s ? s.paymentStatus === 'PAID' : this.isPaid(ord);
+        if (ord && isPaidTarget && ord.status !== 'CANCELLED') {
+          this.hasAutoOpenedThermal = true;
+          setTimeout(() => this.showThermalPreviewModal.set(true), 150);
+        }
       }
     });
   }
@@ -2511,8 +3262,56 @@ export class InvoicePreviewComponent implements OnInit {
     });
   }
 
+  isCurrentTargetPaid(): boolean {
+    const s = this.splitBill();
+    if (s) return s.paymentStatus === 'PAID';
+    return this.isPaid(this.order());
+  }
+
+  settleCurrentTarget(): void {
+    const s = this.splitBill();
+    const ord = this.order();
+    if (!ord) return;
+    if (s) {
+      const res = this.mock.settleSplitBill({
+        orderId: ord.id,
+        splitBillId: s.id,
+        paymentMethod: 'CASH',
+      });
+      if (res.success) {
+        this.toastService.success(`Split bill #${s.splitIndex} settled successfully.`);
+      } else {
+        this.toastService.error(res.error || 'Failed to settle split bill');
+      }
+    } else {
+      const res = this.mock.settleOrder({
+        orderId: ord.id,
+        paymentMethod: 'CASH',
+      });
+      if (res.success) {
+        this.toastService.success(`Order #${ord.orderNumber} settled successfully.`);
+      } else {
+        this.toastService.error(res.error || 'Failed to settle order');
+      }
+    }
+  }
+
   openThermalPreviewModal(): void {
-    this.showThermalPreviewModal.set(true);
+    if (this.isPrinting()) return;
+    const ord = this.order();
+    if (!ord || ord.status === 'CANCELLED') {
+      this.toastService.warning('Cannot print bill for a cancelled order.');
+      return;
+    }
+    if (!this.isCurrentTargetPaid()) {
+      this.toastService.warning('Cannot print bill for an unpaid or incomplete order.');
+      return;
+    }
+    this.isPrinting.set(true);
+    setTimeout(() => {
+      this.showThermalPreviewModal.set(true);
+      this.isPrinting.set(false);
+    }, 250);
   }
 
   onThermalReceiptPrinted(event: { method: 'THERMAL' | 'BROWSER'; printCount: number }): void {
@@ -2595,14 +3394,19 @@ export class InvoicePreviewComponent implements OnInit {
   }
 
   openWhatsAppModal(): void {
-    const ord = this.order();
+    const ord = this.effectiveOrder();
     const existingPhone = ord?.customerPhone || '';
     this.whatsAppPhone.set(existingPhone);
+    const restName = this.restaurant()?.name || 'GuruKripa Dhaba';
+    this.whatsAppCustomMessage.set(ord ? buildWhatsAppBillMessage(restName, ord, this.splitBill()) : '');
     this.showWhatsAppModal.set(true);
+    this.whatsAppBridge.startStatusPoller();
   }
 
   closeWhatsAppModal(): void {
     this.showWhatsAppModal.set(false);
+    this.whatsAppCustomMessage.set('');
+    this.isDispatchingWhatsApp.set(false);
   }
 
   copyBillToClipboard(): void {
@@ -2625,7 +3429,7 @@ export class InvoicePreviewComponent implements OnInit {
     setTimeout(() => this.closeWhatsAppModal(), 400);
   }
 
-  sendWhatsApp(): void {
+  sendWhatsAppBill(): void {
     const ord = this.order();
     if (!ord) return;
     const phone = this.whatsAppPhone().trim();
@@ -2633,18 +3437,53 @@ export class InvoicePreviewComponent implements OnInit {
       this.toastService.warning('Please enter customer WhatsApp phone number.');
       return;
     }
-    const opened = openWhatsAppBill(
-      phone,
-      this.restaurant()?.name || 'GuruKripa Dhaba',
-      ord,
-      this.splitBill(),
-    );
-    if (opened) {
+    const message = this.whatsAppMessagePreview();
+    const restName = this.restaurant()?.name || 'GuruKripa Dhaba';
+
+    this.isDispatchingWhatsApp.set(true);
+
+    if (this.whatsAppBridge.connectionStatus() === 'CONNECTED') {
+      this.toastService.info('Dispatching WhatsApp message in background...');
+      this.whatsAppBridge.sendBill(phone, restName, ord, this.splitBill(), message).subscribe({
+        next: (res) => {
+          this.isDispatchingWhatsApp.set(false);
+          if (res.success) {
+            this.toastService.success('WhatsApp bill delivered directly to customer!');
+            this.closeWhatsAppModal();
+          } else {
+            this.toastService.warning(res.error || 'Direct dispatch failed, opening WhatsApp fallback...');
+            launchExternalUrl(
+              `https://web.whatsapp.com/send?phone=${phone.replace(/\D/g, '')}&text=${encodeURIComponent(message)}`,
+            );
+            this.closeWhatsAppModal();
+          }
+        },
+        error: () => {
+          this.isDispatchingWhatsApp.set(false);
+          launchExternalUrl(
+            `https://web.whatsapp.com/send?phone=${phone.replace(/\D/g, '')}&text=${encodeURIComponent(message)}`,
+          );
+          this.closeWhatsAppModal();
+        },
+      });
+      return;
+    }
+
+    this.isDispatchingWhatsApp.set(false);
+    const cleanDigits = phone.replace(/\D/g, '');
+    if (cleanDigits.length >= 10) {
+      launchExternalUrl(
+        `https://web.whatsapp.com/send?phone=${cleanDigits}&text=${encodeURIComponent(message)}`,
+      );
       this.toastService.success('WhatsApp opened with customer bill!');
       this.closeWhatsAppModal();
     } else {
       this.toastService.error('Invalid phone number format. Please provide at least 10 digits.');
     }
+  }
+
+  sendWhatsApp(): void {
+    this.sendWhatsAppBill();
   }
 
   onBackdropClick(event: MouseEvent): void {

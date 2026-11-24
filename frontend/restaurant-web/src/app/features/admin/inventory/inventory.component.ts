@@ -39,8 +39,14 @@ type InventoryTab = 'INGREDIENTS' | 'RECIPES' | 'LEDGER';
     <div class="inventory-page">
       <!-- Page Header -->
       <div class="page-header">
-        <div>
-          <h1 class="heading-display">Inventory & Recipe Management</h1>
+        <div class="header-left">
+          <div class="header-title-row">
+            <h1 class="heading-display">Inventory &amp; Recipes</h1>
+            <span class="apple-status-chip">
+              <span class="dot-indicator"></span>
+              Live Stock
+            </span>
+          </div>
           <p class="text-muted">
             Track ingredient stock levels, recipe costs, restock orders, and stock adjustments.
           </p>
@@ -48,7 +54,7 @@ type InventoryTab = 'INGREDIENTS' | 'RECIPES' | 'LEDGER';
 
         <div class="header-actions">
           <button
-            class="btn btn-secondary"
+            class="apple-btn-secondary"
             (click)="openRestockModal()"
             title="Record fresh ingredient shipment"
           >
@@ -56,7 +62,7 @@ type InventoryTab = 'INGREDIENTS' | 'RECIPES' | 'LEDGER';
             <span>Record Restock</span>
           </button>
           <button
-            class="btn btn-secondary"
+            class="apple-btn-secondary"
             (click)="openAdjustmentModal()"
             title="Record wastage or manual stock adjustment"
           >
@@ -64,20 +70,20 @@ type InventoryTab = 'INGREDIENTS' | 'RECIPES' | 'LEDGER';
             <span>Adjust / Waste</span>
           </button>
           <button
-            class="btn btn-secondary"
-            (click)="openIngredientModal()"
-            title="Register a new tracked kitchen raw material"
-          >
-            <i class="ph ph-plus"></i>
-            <span>New Ingredient</span>
-          </button>
-          <button
-            class="btn btn-primary"
+            class="apple-btn-secondary"
             (click)="openRecipeModal()"
             title="Define or edit recipe formulation"
           >
             <i class="ph ph-book-open"></i>
             <span>New Recipe</span>
+          </button>
+          <button
+            class="apple-btn-primary"
+            (click)="openIngredientModal()"
+            title="Register a new tracked kitchen raw material"
+          >
+            <i class="ph ph-plus"></i>
+            <span>New Ingredient</span>
           </button>
         </div>
       </div>
@@ -85,77 +91,96 @@ type InventoryTab = 'INGREDIENTS' | 'RECIPES' | 'LEDGER';
       <!-- KPI Summary Cards -->
       <div class="kpi-grid">
         <div class="kpi-card">
-          <div class="kpi-icon"><i class="ph ph-package"></i></div>
+          <div class="kpi-icon icon-blue"><i class="ph ph-package"></i></div>
           <div class="kpi-content">
-            <span class="kpi-label">Tracked Ingredients</span>
+            <span class="kpi-label">Tracked Items</span>
             <strong class="kpi-value">
               @if (isLoading()) {
-                <app-skeleton variant="text" width="45px" height="1.8rem" />
+                <app-skeleton variant="text" width="45px" height="1.6rem" />
               } @else {
                 {{ valuationSummary().totalTracked }}
               }
             </strong>
-            <span class="kpi-hint">Active raw materials</span>
           </div>
         </div>
 
         <div class="kpi-card" [class.kpi-alert]="valuationSummary().lowStockCount > 0">
-          <div class="kpi-icon alert-icon"><i class="ph ph-warning-circle"></i></div>
+          <div
+            class="kpi-icon"
+            [class.alert-icon]="valuationSummary().lowStockCount > 0"
+            [class.icon-emerald]="valuationSummary().lowStockCount === 0"
+          >
+            <i
+              class="ph"
+              [class.ph-warning-circle]="valuationSummary().lowStockCount > 0"
+              [class.ph-check-circle]="valuationSummary().lowStockCount === 0"
+            ></i>
+          </div>
           <div class="kpi-content">
-            <span class="kpi-label">Low Stock Alerts</span>
-            <strong class="kpi-value text-amber">
+            <span class="kpi-label">Low Stock</span>
+            <strong
+              class="kpi-value"
+              [class.text-amber]="valuationSummary().lowStockCount > 0"
+              [class.text-emerald]="valuationSummary().lowStockCount === 0"
+            >
               @if (isLoading()) {
-                <app-skeleton variant="text" width="45px" height="1.8rem" />
+                <app-skeleton variant="text" width="45px" height="1.6rem" />
               } @else {
                 {{ valuationSummary().lowStockCount }}
               }
             </strong>
-            <span class="kpi-hint">Below reorder threshold</span>
           </div>
         </div>
 
         <div class="kpi-card" [class.kpi-danger]="valuationSummary().outOfStockCount > 0">
-          <div class="kpi-icon danger-icon"><i class="ph ph-x-circle"></i></div>
+          <div
+            class="kpi-icon"
+            [class.danger-icon]="valuationSummary().outOfStockCount > 0"
+            [class.icon-slate]="valuationSummary().outOfStockCount === 0"
+          >
+            <i
+              class="ph"
+              [class.ph-x-circle]="valuationSummary().outOfStockCount > 0"
+              [class.ph-shield-check]="valuationSummary().outOfStockCount === 0"
+            ></i>
+          </div>
           <div class="kpi-content">
             <span class="kpi-label">Out of Stock</span>
-            <strong class="kpi-value text-crimson">
+            <strong class="kpi-value" [class.text-crimson]="valuationSummary().outOfStockCount > 0">
               @if (isLoading()) {
-                <app-skeleton variant="text" width="45px" height="1.8rem" />
+                <app-skeleton variant="text" width="45px" height="1.6rem" />
               } @else {
                 {{ valuationSummary().outOfStockCount }}
               }
             </strong>
-            <span class="kpi-hint">Dishes unable to prepare</span>
           </div>
         </div>
 
         <div class="kpi-card">
-          <div class="kpi-icon value-icon"><i class="ph ph-currency-inr"></i></div>
+          <div class="kpi-icon icon-emerald"><i class="ph ph-currency-inr"></i></div>
           <div class="kpi-content">
-            <span class="kpi-label">Estimated Stock Value</span>
+            <span class="kpi-label">Inventory Value</span>
             <strong class="kpi-value">
               @if (isLoading()) {
-                <app-skeleton variant="text" width="90px" height="1.8rem" />
+                <app-skeleton variant="text" width="90px" height="1.6rem" />
               } @else {
                 {{ valuationSummary().estimatedValue | currencyInr }}
               }
             </strong>
-            <span class="kpi-hint">Based on purchase costs</span>
           </div>
         </div>
 
         <div class="kpi-card">
-          <div class="kpi-icon waste-icon"><i class="ph ph-trash"></i></div>
+          <div class="kpi-icon icon-rose"><i class="ph ph-trash"></i></div>
           <div class="kpi-content">
             <span class="kpi-label">Recorded Wastage</span>
-            <strong class="kpi-value text-crimson">
+            <strong class="kpi-value" [class.text-crimson]="valuationSummary().totalWastageCost > 0">
               @if (isLoading()) {
-                <app-skeleton variant="text" width="90px" height="1.8rem" />
+                <app-skeleton variant="text" width="90px" height="1.6rem" />
               } @else {
                 {{ valuationSummary().totalWastageCost | currencyInr }}
               }
             </strong>
-            <span class="kpi-hint">Cumulative kitchen loss</span>
           </div>
         </div>
       </div>
@@ -291,14 +316,14 @@ type InventoryTab = 'INGREDIENTS' | 'RECIPES' | 'LEDGER';
             <table class="data-table">
               <thead>
                 <tr>
-                  <th>Ingredient & Spec</th>
+                  <th>Ingredient &amp; Spec</th>
                   <th>Category</th>
                   <th>Current Stock</th>
                   <th>Min Threshold</th>
                   <th>Unit Rate</th>
                   <th>Stock Valuation</th>
                   <th>Status</th>
-                  <th>Actions</th>
+                  <th class="text-right">Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -318,19 +343,22 @@ type InventoryTab = 'INGREDIENTS' | 'RECIPES' | 'LEDGER';
                     >
                       <td>
                         <div class="ing-meta-cell">
-                          <strong>{{ ing.name }}</strong>
-                          @if (ing.description) {
-                            <span class="text-xs text-muted">{{ ing.description }}</span>
-                          }
-                          @if (ing.supplierName) {
-                            <span class="text-xs text-secondary"
-                              ><i class="ph ph-storefront"></i> {{ ing.supplierName }}</span
-                            >
-                          }
+                          <strong class="ing-name">{{ ing.name }}</strong>
+                          <div class="ing-sub-meta">
+                            @if (ing.supplierName) {
+                              <span class="supplier-tag">
+                                <i class="ph ph-storefront"></i>
+                                {{ ing.supplierName }}
+                              </span>
+                            }
+                            @if (ing.description) {
+                              <span class="desc-tag">{{ ing.description }}</span>
+                            }
+                          </div>
                         </div>
                       </td>
                       <td>
-                        <span class="category-pill">{{ ing.category }}</span>
+                        <span class="category-pill" [attr.data-cat]="ing.category">{{ ing.category }}</span>
                       </td>
                       <td>
                         <div class="stock-qty-cell">
@@ -346,8 +374,7 @@ type InventoryTab = 'INGREDIENTS' | 'RECIPES' | 'LEDGER';
                           @if (getReservedQuantity(ing.id); as resQty) {
                             @if (resQty > 0) {
                               <span class="text-xs text-muted" title="Active order reservations">
-                                (Avail: {{ getAvailableStock(ing.id) }} {{ ing.unit }} • Res:
-                                {{ resQty }} {{ ing.unit }})
+                                Avail: {{ getAvailableStock(ing.id) }} • Res: {{ resQty }} {{ ing.unit }}
                               </span>
                             }
                           }
@@ -372,24 +399,37 @@ type InventoryTab = 'INGREDIENTS' | 'RECIPES' | 'LEDGER';
                           }
                         </div>
                       </td>
-                      <td>{{ ing.minThreshold }} {{ ing.unit }}</td>
-                      <td>{{ ing.costPerUnit | currencyInr }}/{{ ing.costUnit }}</td>
                       <td>
-                        <strong>{{ calcIngredientValue(ing) | currencyInr }}</strong>
+                        <span class="threshold-val">{{ ing.minThreshold }} {{ ing.unit }}</span>
+                      </td>
+                      <td>
+                        <span class="unit-rate-val">{{ ing.costPerUnit | currencyInr }}/{{ ing.costUnit }}</span>
+                      </td>
+                      <td>
+                        <strong class="valuation-val">{{ calcIngredientValue(ing) | currencyInr }}</strong>
                       </td>
                       <td>
                         @if (ing.currentStock <= 0) {
-                          <span class="badge badge-danger">Out of Stock</span>
+                          <span class="badge-status-pill is-danger">
+                            <span class="status-dot"></span>
+                            Out of Stock
+                          </span>
                         } @else if (ing.currentStock <= ing.minThreshold) {
-                          <span class="badge badge-warning">Low Stock</span>
+                          <span class="badge-status-pill is-warning">
+                            <span class="status-dot"></span>
+                            Low Stock
+                          </span>
                         } @else {
-                          <span class="badge badge-success">In Stock</span>
+                          <span class="badge-status-pill is-success">
+                            <span class="status-dot"></span>
+                            In Stock
+                          </span>
                         }
                       </td>
-                      <td>
-                        <div class="row-actions">
+                      <td class="text-right">
+                        <div class="row-actions justify-end">
                           <button
-                            class="btn-icon"
+                            class="apple-row-btn"
                             (click)="quickRestock(ing)"
                             title="Quick Restock"
                             aria-label="Quick Restock"
@@ -397,7 +437,7 @@ type InventoryTab = 'INGREDIENTS' | 'RECIPES' | 'LEDGER';
                             <i class="ph ph-plus-circle"></i>
                           </button>
                           <button
-                            class="btn-icon"
+                            class="apple-row-btn"
                             (click)="quickAdjust(ing)"
                             title="Adjust or Record Wastage"
                             aria-label="Adjust or Record Wastage"
@@ -405,7 +445,7 @@ type InventoryTab = 'INGREDIENTS' | 'RECIPES' | 'LEDGER';
                             <i class="ph ph-arrows-clockwise"></i>
                           </button>
                           <button
-                            class="btn-icon"
+                            class="apple-row-btn"
                             (click)="openIngredientModal(ing)"
                             title="Edit Ingredient Settings"
                             aria-label="Edit Ingredient Settings"
@@ -1342,7 +1382,7 @@ type InventoryTab = 'INGREDIENTS' | 'RECIPES' | 'LEDGER';
       .inventory-page {
         display: flex;
         flex-direction: column;
-        gap: var(--space-lg);
+        gap: 20px;
       }
 
       .page-header {
@@ -1352,83 +1392,183 @@ type InventoryTab = 'INGREDIENTS' | 'RECIPES' | 'LEDGER';
         flex-wrap: wrap;
         gap: var(--space-md);
 
+        .header-title-row {
+          display: flex;
+          align-items: center;
+          gap: 10px;
+          margin-bottom: 3px;
+        }
+
         .heading-display {
-          margin: 0 0 4px 0;
-          font-size: 2rem;
+          margin: 0;
+          font-size: 1.875rem;
+          font-weight: 800;
+          letter-spacing: -0.02em;
           color: var(--color-onyx);
+        }
+
+        .apple-status-chip {
+          display: inline-flex;
+          align-items: center;
+          gap: 6px;
+          font-size: 0.6875rem;
+          font-weight: 700;
+          text-transform: uppercase;
+          letter-spacing: 0.05em;
+          padding: 3px 8px;
+          border-radius: 9999px;
+          background: rgba(16, 185, 129, 0.1);
+          color: #059669;
+          border: 1px solid rgba(16, 185, 129, 0.22);
+
+          .dot-indicator {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: #10b981;
+            box-shadow: 0 0 6px rgba(16, 185, 129, 0.6);
+          }
         }
       }
 
       .header-actions {
         display: flex;
-        gap: var(--space-sm);
+        align-items: center;
+        gap: 8px;
         flex-wrap: wrap;
+      }
+
+      .apple-btn-primary {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 8px 14px;
+        border-radius: 8px;
+        background: var(--color-primary);
+        color: #ffffff;
+        font-size: 0.8125rem;
+        font-weight: 600;
+        border: 1px solid var(--color-primary);
+        cursor: pointer;
+        transition: all 0.16s cubic-bezier(0.16, 1, 0.3, 1);
+        box-shadow: 0 1px 3px rgba(194, 65, 12, 0.25);
+
+        &:hover {
+          background: #b23b0a;
+          transform: translateY(-1px);
+          box-shadow: 0 4px 10px rgba(194, 65, 12, 0.35);
+        }
+
+        &:active {
+          transform: scale(0.97);
+        }
+      }
+
+      .apple-btn-secondary {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 8px 12px;
+        border-radius: 8px;
+        background: var(--color-surface);
+        color: var(--color-text-primary);
+        font-size: 0.8125rem;
+        font-weight: 600;
+        border: 1px solid var(--color-border);
+        cursor: pointer;
+        transition: all 0.16s cubic-bezier(0.16, 1, 0.3, 1);
+        box-shadow: 0 1px 2px rgba(0, 0, 0, 0.02);
+
+        &:hover {
+          background: var(--color-bone-light);
+          border-color: var(--color-border-subtle);
+          color: var(--color-text-primary);
+          transform: translateY(-1px);
+        }
+
+        &:active {
+          transform: scale(0.97);
+        }
       }
 
       /* KPI Cards */
       .kpi-grid {
         display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
-        gap: var(--space-md);
+        grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+        gap: 12px;
       }
 
       .kpi-card {
         background: var(--color-surface);
         border: 1px solid var(--color-border);
-        border-radius: var(--radius-md);
-        padding: var(--space-md);
+        border-radius: 12px;
+        padding: 12px 14px;
         display: flex;
         align-items: center;
-        gap: var(--space-md);
-        box-shadow: var(--shadow-xs);
-        transition:
-          transform var(--transition-fast),
-          box-shadow var(--transition-fast),
-          border-color var(--transition-fast);
+        gap: 12px;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.02);
+        transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
 
         &:hover {
-          transform: translateY(-2px);
-          box-shadow: var(--shadow-sm);
+          transform: translateY(-1.5px);
+          box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+          border-color: var(--color-border-subtle);
         }
 
         &.kpi-alert {
-          border-color: rgba(133, 83, 0, 0.35);
-          background: var(--color-warning-bg);
+          border-color: rgba(245, 158, 11, 0.35);
+          background: rgba(245, 158, 11, 0.03);
         }
 
         &.kpi-danger {
-          border-color: rgba(169, 28, 18, 0.35);
-          background: var(--color-danger-bg);
+          border-color: rgba(239, 68, 68, 0.35);
+          background: rgba(239, 68, 68, 0.03);
         }
       }
 
       .kpi-icon {
-        width: 44px;
-        height: 44px;
-        border-radius: var(--radius-sm);
-        background: rgba(18, 18, 18, 0.05);
+        width: 38px;
+        height: 38px;
+        border-radius: 9px;
+        background: rgba(18, 18, 18, 0.04);
         display: flex;
         align-items: center;
         justify-content: center;
-        font-size: 1.4rem;
+        font-size: 1.15rem;
         color: var(--color-onyx);
         flex-shrink: 0;
 
         &.alert-icon {
-          background: rgba(133, 83, 0, 0.12);
-          color: var(--color-warning);
+          background: rgba(245, 158, 11, 0.12);
+          color: #d97706;
         }
         &.danger-icon {
-          background: rgba(169, 28, 18, 0.12);
-          color: var(--color-danger);
+          background: rgba(239, 68, 68, 0.12);
+          color: #dc2626;
         }
         &.value-icon {
-          background: rgba(27, 79, 126, 0.1);
-          color: var(--color-info);
+          background: rgba(59, 130, 246, 0.1);
+          color: #2563eb;
         }
         &.waste-icon {
-          background: rgba(169, 28, 18, 0.1);
-          color: var(--color-danger);
+          background: rgba(239, 68, 68, 0.1);
+          color: #dc2626;
+        }
+        &.icon-blue {
+          background: rgba(59, 130, 246, 0.1);
+          color: #2563eb;
+        }
+        &.icon-emerald {
+          background: rgba(16, 185, 129, 0.1);
+          color: #059669;
+        }
+        &.icon-rose {
+          background: rgba(239, 68, 68, 0.1);
+          color: #dc2626;
+        }
+        &.icon-slate {
+          background: rgba(100, 116, 139, 0.1);
+          color: #475569;
         }
       }
 
@@ -1436,61 +1576,60 @@ type InventoryTab = 'INGREDIENTS' | 'RECIPES' | 'LEDGER';
         display: flex;
         flex-direction: column;
         gap: 2px;
+        min-width: 0;
       }
 
       .kpi-label {
-        font-size: 0.75rem;
-        font-weight: 600;
-        color: var(--color-text-secondary);
+        font-size: 0.6875rem;
+        font-weight: 700;
+        color: var(--color-text-muted);
         text-transform: uppercase;
         letter-spacing: 0.05em;
+        white-space: nowrap;
       }
 
       .kpi-value {
-        font-size: 1.35rem;
+        font-size: 1.3125rem;
         font-weight: 800;
         color: var(--color-text-primary);
+        letter-spacing: -0.02em;
+        line-height: 1.2;
       }
 
-      .kpi-hint {
-        font-size: 0.6875rem;
-        color: var(--color-text-muted);
-      }
-
-      /* Tabs Bar */
+      /* Apple Segmented Tabs Bar */
       .tabs-nav-bar {
         display: inline-flex;
-        gap: 6px;
-        background: var(--color-surface);
+        background: var(--color-bone-light);
         border: 1px solid var(--color-border);
-        border-radius: var(--radius-md);
-        padding: 5px;
-        box-shadow: var(--shadow-xs);
+        border-radius: 10px;
+        padding: 4px;
+        gap: 3px;
+        box-shadow: 0 1px 2px rgba(0, 0, 0, 0.02);
         overflow-x: auto;
         max-width: 100%;
-        margin-bottom: var(--space-xs);
+        margin-bottom: 4px;
       }
 
       .tab-btn {
         display: inline-flex;
         align-items: center;
         gap: 8px;
-        padding: 9px 16px;
+        padding: 8px 14px;
         background: transparent;
-        border: 1px solid transparent;
-        border-radius: var(--radius-sm);
+        border: none;
+        border-radius: 7px;
         font-weight: 600;
-        font-size: 0.875rem;
+        font-size: 0.8125rem;
         color: var(--color-text-secondary);
         cursor: pointer;
         white-space: nowrap;
-        transition: all var(--transition-fast);
+        transition: all 0.18s cubic-bezier(0.16, 1, 0.3, 1);
         user-select: none;
 
         .tab-icon {
-          font-size: 1.15rem;
+          font-size: 1.05rem;
           color: var(--color-taupe);
-          transition: all var(--transition-fast);
+          transition: all 0.18s cubic-bezier(0.16, 1, 0.3, 1);
         }
 
         .tab-title {
@@ -1501,16 +1640,15 @@ type InventoryTab = 'INGREDIENTS' | 'RECIPES' | 'LEDGER';
           font-size: 0.6875rem;
           font-weight: 700;
           padding: 2px 7px;
-          border-radius: var(--radius-full);
-          background: var(--color-bone-light);
+          border-radius: 9999px;
+          background: rgba(0, 0, 0, 0.05);
           color: var(--color-text-muted);
-          border: 1px solid var(--color-border-subtle);
-          transition: all var(--transition-fast);
+          transition: all 0.18s cubic-bezier(0.16, 1, 0.3, 1);
         }
 
         &:hover:not(.active) {
-          background: var(--color-bone-light);
-          color: var(--color-onyx);
+          color: var(--color-text-primary);
+          background: rgba(0, 0, 0, 0.03);
 
           .tab-icon {
             color: var(--color-onyx);
@@ -1518,25 +1656,24 @@ type InventoryTab = 'INGREDIENTS' | 'RECIPES' | 'LEDGER';
         }
 
         &.active {
-          background: var(--color-onyx);
-          color: #ffffff;
-          border-color: var(--color-onyx);
-          box-shadow: 0 4px 12px rgba(18, 18, 18, 0.2);
+          background: var(--color-surface);
+          color: var(--color-text-primary);
+          box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08), 0 0 1px rgba(0, 0, 0, 0.1);
 
           .tab-icon {
-            color: var(--color-gold);
-            transform: scale(1.08);
+            color: var(--color-primary);
+            transform: scale(1.05);
           }
 
           .tab-title {
-            color: #ffffff;
+            color: var(--color-text-primary);
             font-weight: 700;
           }
 
           .tab-count-pill {
-            background: rgba(255, 255, 255, 0.16);
-            color: #ffffff;
-            border-color: rgba(255, 255, 255, 0.22);
+            background: rgba(194, 65, 12, 0.12);
+            color: var(--color-primary);
+            font-weight: 700;
           }
         }
       }
@@ -1584,24 +1721,25 @@ type InventoryTab = 'INGREDIENTS' | 'RECIPES' | 'LEDGER';
 
         .search-input {
           width: 100%;
-          height: 40px;
+          height: 44px;
           padding-left: 42px;
           padding-right: 38px;
-          border-radius: var(--radius-sm);
+          border-radius: var(--radius-md, 10px);
           border: 1px solid var(--color-border);
-          background: var(--color-bone-light);
+          background: var(--color-surface);
           font-size: 0.875rem;
           color: var(--color-text-primary);
           transition: all var(--transition-fast);
+          box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
 
           &:focus {
             background: var(--color-surface);
-            border-color: var(--color-crimson);
-            box-shadow: var(--shadow-focus);
+            border-color: var(--color-primary);
+            box-shadow: 0 0 0 3px rgba(194, 65, 12, 0.12);
             outline: none;
 
             & ~ .search-icon {
-              color: var(--color-crimson);
+              color: var(--color-primary);
             }
           }
 
@@ -1824,10 +1962,32 @@ type InventoryTab = 'INGREDIENTS' | 'RECIPES' | 'LEDGER';
       .ing-meta-cell {
         display: flex;
         flex-direction: column;
-        gap: 3px;
+        gap: 2px;
 
-        strong {
-          color: var(--color-onyx);
+        .ing-name {
+          color: var(--color-text-primary);
+          font-weight: 700;
+          font-size: 0.875rem;
+        }
+
+        .ing-sub-meta {
+          display: flex;
+          align-items: center;
+          gap: 6px;
+          flex-wrap: wrap;
+
+          .supplier-tag {
+            font-size: 0.6875rem;
+            color: var(--color-text-secondary);
+            display: inline-flex;
+            align-items: center;
+            gap: 3px;
+          }
+
+          .desc-tag {
+            font-size: 0.6875rem;
+            color: var(--color-text-muted);
+          }
         }
       }
 
@@ -1835,50 +1995,170 @@ type InventoryTab = 'INGREDIENTS' | 'RECIPES' | 'LEDGER';
         font-size: 0.6875rem;
         font-weight: 700;
         padding: 3px 8px;
-        border-radius: var(--radius-xs);
-        background: var(--color-bone-light);
-        border: 1px solid var(--color-border);
-        color: var(--color-text-secondary);
+        border-radius: 6px;
+        background: rgba(100, 116, 139, 0.08);
+        border: 1px solid rgba(100, 116, 139, 0.16);
+        color: #475569;
         letter-spacing: 0.04em;
         display: inline-block;
+
+        &[data-cat="DAIRY"] {
+          background: rgba(59, 130, 246, 0.1);
+          color: #2563eb;
+          border-color: rgba(59, 130, 246, 0.2);
+        }
+        &[data-cat="MEAT"] {
+          background: rgba(239, 68, 68, 0.1);
+          color: #dc2626;
+          border-color: rgba(239, 68, 68, 0.2);
+        }
+        &[data-cat="PRODUCE"] {
+          background: rgba(16, 185, 129, 0.1);
+          color: #059669;
+          border-color: rgba(16, 185, 129, 0.2);
+        }
+        &[data-cat="GRAINS"],
+        &[data-cat="PULSES"] {
+          background: rgba(245, 158, 11, 0.1);
+          color: #d97706;
+          border-color: rgba(245, 158, 11, 0.2);
+        }
+        &[data-cat="SPICES"] {
+          background: rgba(249, 115, 22, 0.1);
+          color: #ea580c;
+          border-color: rgba(249, 115, 22, 0.2);
+        }
+        &[data-cat="FLOUR"],
+        &[data-cat="OTHER"] {
+          background: rgba(100, 116, 139, 0.1);
+          color: #475569;
+          border-color: rgba(100, 116, 139, 0.2);
+        }
       }
 
       .stock-qty-cell {
         display: flex;
         flex-direction: column;
-        gap: 5px;
+        gap: 4px;
         min-width: 110px;
       }
 
       .stock-num {
         font-weight: 700;
+        font-size: 0.875rem;
+      }
+
+      .threshold-val,
+      .unit-rate-val {
+        font-size: 0.8125rem;
+        color: var(--color-text-secondary);
+      }
+
+      .valuation-val {
+        font-size: 0.875rem;
+        font-weight: 700;
+        color: var(--color-text-primary);
       }
 
       .stock-bar-track {
         width: 100%;
-        height: 6px;
-        background: rgba(18, 18, 18, 0.08);
-        border-radius: var(--radius-full);
+        height: 5px;
+        background: rgba(18, 18, 18, 0.06);
+        border-radius: 9999px;
         overflow: hidden;
       }
 
       .stock-bar-fill {
         height: 100%;
-        background: var(--color-success);
-        border-radius: var(--radius-full);
-        transition: width 0.3s ease;
+        background: #10b981;
+        border-radius: 9999px;
+        transition: width 0.3s cubic-bezier(0.16, 1, 0.3, 1);
 
         &.fill-warning {
-          background: var(--color-warning);
+          background: #f59e0b;
         }
         &.fill-danger {
-          background: var(--color-danger);
+          background: #ef4444;
+        }
+      }
+
+      .badge-status-pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 3px 9px;
+        border-radius: 9999px;
+        font-size: 0.75rem;
+        font-weight: 600;
+        white-space: nowrap;
+
+        .status-dot {
+          width: 6px;
+          height: 6px;
+          border-radius: 50%;
+        }
+
+        &.is-success {
+          background: rgba(16, 185, 129, 0.1);
+          color: #059669;
+          border: 1px solid rgba(16, 185, 129, 0.22);
+          .status-dot {
+            background: #10b981;
+          }
+        }
+        &.is-warning {
+          background: rgba(245, 158, 11, 0.1);
+          color: #d97706;
+          border: 1px solid rgba(245, 158, 11, 0.22);
+          .status-dot {
+            background: #f59e0b;
+          }
+        }
+        &.is-danger {
+          background: rgba(239, 68, 68, 0.1);
+          color: #dc2626;
+          border: 1px solid rgba(239, 68, 68, 0.22);
+          .status-dot {
+            background: #ef4444;
+          }
         }
       }
 
       .row-actions {
         display: flex;
+        align-items: center;
         gap: 6px;
+
+        &.justify-end {
+          justify-content: flex-end;
+        }
+      }
+
+      .apple-row-btn {
+        width: 30px;
+        height: 30px;
+        border-radius: 7px;
+        border: 1px solid var(--color-border);
+        background: var(--color-surface);
+        color: var(--color-text-secondary);
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        transition: all 0.15s cubic-bezier(0.16, 1, 0.3, 1);
+        font-size: 0.95rem;
+
+        &:hover {
+          background: var(--color-bone-light);
+          border-color: var(--color-text-muted);
+          color: var(--color-text-primary);
+          transform: translateY(-1px);
+          box-shadow: 0 2px 5px rgba(0, 0, 0, 0.04);
+        }
+
+        &:active {
+          transform: scale(0.94);
+        }
       }
 
       .btn-icon {
@@ -2502,22 +2782,28 @@ type InventoryTab = 'INGREDIENTS' | 'RECIPES' | 'LEDGER';
 
             .search-ico {
               position: absolute;
-              left: 12px;
+              left: 14px;
               color: var(--color-text-muted);
-              font-size: 1rem;
+              font-size: 1.125rem;
               pointer-events: none;
             }
 
             .search-input {
               width: 100%;
-              padding: 9px 34px 9px 34px;
+              height: 44px;
+              padding-left: 42px;
+              padding-right: 36px;
               font-size: 0.875rem;
               border: 1px solid var(--color-border);
-              border-radius: var(--radius-sm);
+              border-radius: var(--radius-md, 10px);
               background: var(--color-surface);
+              color: var(--color-text-primary);
+              transition: all var(--transition-fast, 0.15s ease);
+              box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
 
               &:focus {
-                border-color: var(--color-gold);
+                border-color: var(--color-primary);
+                box-shadow: 0 0 0 3px rgba(194, 65, 12, 0.12);
                 outline: none;
               }
             }
@@ -2732,6 +3018,10 @@ export class InventoryComponent {
   private dataService = inject(RestaurantDataService);
   private mock = this.dataService;
   private toastService = inject(ToastService);
+
+  constructor() {
+    this.dataService.loadInventory();
+  }
 
   readonly isLoading = computed(
     () => this.dataService.isInventoryLoading() || !this.dataService.inventoryLoaded(),

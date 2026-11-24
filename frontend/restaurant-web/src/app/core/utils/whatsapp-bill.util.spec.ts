@@ -63,13 +63,37 @@ describe('whatsapp-bill.util', () => {
       expect(msg).toContain('*Service:* Table 5');
     });
 
-    it('itemizes dishes and specifies Net Total and payment status', () => {
+    it('itemizes dishes and specifies subtotal, discount, CGST, SGST, Net Total and payment status in clean structured layout', () => {
       const msg = buildWhatsAppBillMessage('GuruKripa Bistro', dummyOrder);
-      expect(msg).toContain('• Dal Makhani x 2 = ₹400');
-      expect(msg).toContain('• Butter Naan x 2 = ₹100');
-      expect(msg).toContain('*Net Total:* *₹472.5*');
+      expect(msg).toContain('• Dal Makhani x 2 = ₹400.00');
+      expect(msg).toContain('• Butter Naan x 2 = ₹100.00');
+      expect(msg).toContain('*Subtotal:* ₹500.00');
+      expect(msg).toContain('*Discount:* -₹50.00');
+      expect(msg).toContain('*CGST (2.5%):* ₹11.25');
+      expect(msg).toContain('*SGST (2.5%):* ₹11.25');
+      expect(msg).toContain('*Net Total:* *₹472.50*');
       expect(msg).toContain('*Payment Status:* *PAID (UPI)*');
       expect(msg).toContain('✨ *Thank you for dining with GuruKripa Bistro!*');
+    });
+
+    it('formats coupon discount code when appliedCouponCode is present', () => {
+      const couponOrder: Order = {
+        ...dummyOrder,
+        appliedCouponCode: 'WELCOME50',
+      };
+      const msg = buildWhatsAppBillMessage('GuruKripa Bistro', couponOrder);
+      expect(msg).toContain('*Discount (WELCOME50):* -₹50.00');
+      expect(msg).toContain('*CGST (2.5%):* ₹11.25');
+      expect(msg).toContain('*SGST (2.5%):* ₹11.25');
+    });
+
+    it('formats integer net total as whole rupees without decimal trailing zeros', () => {
+      const wholeRupeeOrder: Order = {
+        ...dummyOrder,
+        totalAmount: 850,
+      };
+      const msg = buildWhatsAppBillMessage('Gurukripa Dhaba', wholeRupeeOrder);
+      expect(msg).toContain('*Net Total:* *₹850*');
     });
 
     it('supports split bills properly', () => {
