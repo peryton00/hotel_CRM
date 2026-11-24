@@ -564,39 +564,7 @@ pub async fn create_public_reservation(
     let reservation =
         CustomerRepository::create_reservation(&pool, req.restaurant_id, create_req).await?;
 
-    // WhatsApp Notification: Instant customer acknowledgement of pending request
-    let restaurant = crate::repositories::restaurant_repo::RestaurantRepository::get_by_id(
-        &pool,
-        req.restaurant_id,
-    )
-    .await
-    .ok()
-    .flatten();
-
-    let restaurant_name = restaurant
-        .as_ref()
-        .map(|r| r.name.as_str())
-        .unwrap_or("The Restaurant");
-    let custom_template = restaurant
-        .as_ref()
-        .and_then(|r| r.whatsapp_templates.as_ref())
-        .and_then(|t| t.get("pending"))
-        .and_then(|v| v.as_str());
-
-    let date_str = reservation.reservation_time.format("%d %b %Y").to_string();
-    let time_str = reservation.reservation_time.format("%I:%M %p").to_string();
-
-    crate::services::WhatsAppService::notify_reservation_pending(
-        restaurant_name,
-        &reservation.customer_name,
-        &reservation.customer_phone,
-        &date_str,
-        &time_str,
-        reservation.guest_count,
-        reservation.special_requests.as_deref(),
-        custom_template,
-    );
-
+    // Real-time broadcast to connected local Admin CRM instances (which handle local WhatsApp dispatch)
     crate::ws::broadcast_new_reservation(&reservation);
 
     Ok(Json(ApiResponse::success(reservation)))

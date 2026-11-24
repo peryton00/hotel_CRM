@@ -1,4 +1,4 @@
-import { Component, inject, signal, computed } from '@angular/core';
+import { Component, inject, signal, computed, effect } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { RestaurantDataService } from '../../../data-access/services/restaurant-data.service';
@@ -9,6 +9,7 @@ import { SkeletonLoaderComponent } from '../../../shared/components/loading/skel
 import { LoadingButtonDirective } from '../../../shared/components/loading/loading-button.directive';
 import { EmptyStateComponent } from '../../../shared/components/empty-state/empty-state.component';
 import { ToastService } from '../../../core/services/toast.service';
+import { WhatsAppBridgeService } from '../../../core/services/whatsapp-bridge.service';
 
 @Component({
   selector: 'app-reservation-list',
@@ -168,6 +169,14 @@ import { ToastService } from '../../../core/services/toast.service';
                         >
                           <i class="ph ph-x"></i>
                           <span>Decline</span>
+                        </button>
+                        <button
+                          class="btn btn-outline-wa btn-sm"
+                          (click)="sendPendingWhatsAppNotice(res)"
+                          title="Send 'Request Received / Under Review' WhatsApp message via local bridge"
+                        >
+                          <i class="ph ph-whatsapp-logo"></i>
+                          <span>Send Notice</span>
                         </button>
                       } @else if (res.status === 'CONFIRMED') {
                         <button
@@ -677,6 +686,26 @@ import { ToastService } from '../../../core/services/toast.service';
       .modal-body {
         padding: 20px;
       }
+      .btn-outline-wa {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        background: rgba(34, 197, 94, 0.08);
+        border: 1px solid rgba(34, 197, 94, 0.3);
+        color: #16a34a;
+        font-weight: 600;
+        font-size: 0.75rem;
+        padding: 6px 10px;
+        border-radius: 8px;
+        cursor: pointer;
+        transition: all 0.15s ease;
+
+        &:hover {
+          background: #16a34a;
+          color: #ffffff;
+          border-color: #16a34a;
+        }
+      }
       .close-btn {
         font-size: 1.25rem;
         color: var(--color-text-muted);
@@ -691,9 +720,39 @@ export class ReservationListComponent {
   private dataService = inject(RestaurantDataService);
   private mock = this.dataService;
   private toastService = inject(ToastService);
+  readonly whatsAppBridge = inject(WhatsAppBridgeService);
 
   constructor() {
     this.dataService.loadReservations();
+
+    // Auto-acknowledge newly arrived pending customer reservations via local WhatsApp bridge
+    effect(() => {
+      const list = this.reservations();
+      if (!list || list.length === 0) return;
+
+      const pendingList = list.filter((r) => r.status === 'PENDING');
+      for (const res of pendingList) {
+        const key = `hotel_crm_wa_ack_${res.id}`;
+        if (typeof localStorage !== 'undefined' && !localStorage.getItem(key)) {
+          localStorage.setItem(key, 'sent');
+          this.whatsAppBridge
+            .sendReservationPending(
+              res,
+              this.getRestaurantName(),
+              this.getWhatsAppTemplate('pending'),
+            )
+            .subscribe({
+              next: (waRes) => {
+                if (waRes.success) {
+                  this.toastService.info(
+                    `Dispatched local WhatsApp acknowledgment to ${res.customerName} (${res.customerPhone})`,
+                  );
+                }
+              },
+            });
+        }
+      }
+    });
   }
 
   readonly isLoading = computed(
@@ -877,6 +936,48 @@ export class ReservationListComponent {
     return this.tables().find((t) => t.id === this.selectedAllocateTableId());
   }
 
+  private getRestaurantName(): string {
+    return this.mock.restaurant()?.name || 'GuruKripa Dhaba';
+  }
+
+  private getWhatsAppTemplate(type: 'pending' | 'confirmed' | 'cancelled'): string | undefined {
+    const tpls = this.mock.restaurant()?.whatsappTemplates;
+    if (tpls && tpls[type]) return tpls[type];
+    if (typeof localStorage !== 'undefined') {
+      const local = localStorage.getItem(`hotel_crm_wa_tpl_${type}`);
+      if (local) return local;
+    }
+    return undefined;
+  }
+
+  sendPendingWhatsAppNotice(res: Reservation): void {
+    this.toastService.info(`Sending WhatsApp acknowledgment to ${res.customerName}...`);
+    this.whatsAppBridge
+      .sendReservationPending(
+        res,
+        this.getRestaurantName(),
+        this.getWhatsAppTemplate('pending'),
+      )
+      .subscribe({
+        next: (waRes) => {
+          if (waRes.success) {
+            this.toastService.success(
+              `WhatsApp acknowledgment sent to ${res.customerName} (${res.customerPhone})!`,
+            );
+          } else {
+            this.toastService.warning(
+              `Could not send WhatsApp notice: ${waRes.error || 'Bridge offline'}. Check WhatsApp Gateway in Settings.`,
+            );
+          }
+        },
+        error: () => {
+          this.toastService.error(
+            'Local WhatsApp bridge is not reachable on 127.0.0.1:3001. Ensure WhatsApp bridge is running.',
+          );
+        },
+      });
+  }
+
   confirmAllocation(): void {
     if (!this.allocatingReservation || this.isSaving()) return;
     const targetTable = this.getSelectedTable();
@@ -894,9 +995,33 @@ export class ReservationListComponent {
         targetTable.id,
         targetTable.number,
       );
-      this.toastService.success(
-        `Reservation confirmed for ${res.customerName} on Table ${targetTable.number}. WhatsApp confirmation dispatched!`,
-      );
+
+      // Locally dispatch WhatsApp confirmation directly from Admin CRM via local bridge
+      const restaurantName = this.getRestaurantName();
+      const customTpl = this.getWhatsAppTemplate('confirmed');
+      const tableSection = targetTable.section || 'Main Dining Floor';
+
+      this.whatsAppBridge
+        .sendReservationConfirmed(res, targetTable.number, tableSection, restaurantName, customTpl)
+        .subscribe({
+          next: (waRes) => {
+            if (waRes.success) {
+              this.toastService.success(
+                `Reservation confirmed! WhatsApp confirmation sent to ${res.customerName} on Table ${targetTable.number}.`,
+              );
+            } else {
+              this.toastService.warning(
+                `Reservation confirmed in CRM, but WhatsApp message could not be sent: ${waRes.error || 'Bridge offline'}.`,
+              );
+            }
+          },
+          error: () => {
+            this.toastService.warning(
+              'Reservation confirmed, but local WhatsApp bridge at 127.0.0.1:3001 is unreachable.',
+            );
+          },
+        });
+
       this.showAllocateModal = false;
       this.allocatingReservation = null;
     } finally {
@@ -916,9 +1041,32 @@ export class ReservationListComponent {
     this.isSaving.set(true);
     try {
       this.updateStatus(res, 'CANCELLED');
-      this.toastService.info(
-        `Reservation for ${res.customerName} cancelled. WhatsApp notification dispatched.`,
-      );
+
+      // Locally dispatch WhatsApp cancellation directly from Admin CRM via local bridge
+      const restaurantName = this.getRestaurantName();
+      const customTpl = this.getWhatsAppTemplate('cancelled');
+
+      this.whatsAppBridge
+        .sendReservationCancelled(res, restaurantName, customTpl)
+        .subscribe({
+          next: (waRes) => {
+            if (waRes.success) {
+              this.toastService.info(
+                `Reservation cancelled. Cancellation WhatsApp message sent to ${res.customerName}.`,
+              );
+            } else {
+              this.toastService.warning(
+                `Reservation cancelled, but WhatsApp message could not be sent: ${waRes.error || 'Bridge offline'}.`,
+              );
+            }
+          },
+          error: () => {
+            this.toastService.warning(
+              'Reservation cancelled, but local WhatsApp bridge at 127.0.0.1:3001 is unreachable.',
+            );
+          },
+        });
+
       this.showCancelModal = false;
       this.cancellingReservation = null;
     } finally {

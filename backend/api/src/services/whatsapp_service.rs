@@ -88,6 +88,7 @@ impl WhatsAppService {
     }
 
     /// Template 1: Sent to customer upon submitting reservation request from their device
+    #[allow(clippy::too_many_arguments)]
     pub fn notify_reservation_pending(
         restaurant_name: &str,
         customer_name: &str,
@@ -142,6 +143,7 @@ impl WhatsAppService {
     }
 
     /// Template 2: Sent to customer when Admin CRM confirms & allocates a table
+    #[allow(clippy::too_many_arguments)]
     pub fn notify_reservation_confirmed(
         restaurant_name: &str,
         customer_name: &str,
