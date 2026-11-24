@@ -953,11 +953,7 @@ export class ReservationListComponent {
   sendPendingWhatsAppNotice(res: Reservation): void {
     this.toastService.info(`Sending WhatsApp acknowledgment to ${res.customerName}...`);
     this.whatsAppBridge
-      .sendReservationPending(
-        res,
-        this.getRestaurantName(),
-        this.getWhatsAppTemplate('pending'),
-      )
+      .sendReservationPending(res, this.getRestaurantName(), this.getWhatsAppTemplate('pending'))
       .subscribe({
         next: (waRes) => {
           if (waRes.success) {
@@ -1046,26 +1042,24 @@ export class ReservationListComponent {
       const restaurantName = this.getRestaurantName();
       const customTpl = this.getWhatsAppTemplate('cancelled');
 
-      this.whatsAppBridge
-        .sendReservationCancelled(res, restaurantName, customTpl)
-        .subscribe({
-          next: (waRes) => {
-            if (waRes.success) {
-              this.toastService.info(
-                `Reservation cancelled. Cancellation WhatsApp message sent to ${res.customerName}.`,
-              );
-            } else {
-              this.toastService.warning(
-                `Reservation cancelled, but WhatsApp message could not be sent: ${waRes.error || 'Bridge offline'}.`,
-              );
-            }
-          },
-          error: () => {
-            this.toastService.warning(
-              'Reservation cancelled, but local WhatsApp bridge at 127.0.0.1:3001 is unreachable.',
+      this.whatsAppBridge.sendReservationCancelled(res, restaurantName, customTpl).subscribe({
+        next: (waRes) => {
+          if (waRes.success) {
+            this.toastService.info(
+              `Reservation cancelled. Cancellation WhatsApp message sent to ${res.customerName}.`,
             );
-          },
-        });
+          } else {
+            this.toastService.warning(
+              `Reservation cancelled, but WhatsApp message could not be sent: ${waRes.error || 'Bridge offline'}.`,
+            );
+          }
+        },
+        error: () => {
+          this.toastService.warning(
+            'Reservation cancelled, but local WhatsApp bridge at 127.0.0.1:3001 is unreachable.',
+          );
+        },
+      });
 
       this.showCancelModal = false;
       this.cancellingReservation = null;
