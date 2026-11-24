@@ -254,13 +254,28 @@ impl SyncWorker {
                             .and_then(|v| v.as_str())
                             .unwrap_or("Dish");
                         let qty = item.get("quantity").and_then(|v| v.as_i64()).unwrap_or(1) as i32;
-                        let unit_price = item.get("unit_price_paise").and_then(|v| v.as_i64()).unwrap_or(0);
-                        let item_sub = item.get("subtotal_paise").and_then(|v| v.as_i64()).unwrap_or(unit_price * qty as i64);
+                        let unit_price = item
+                            .get("unit_price_paise")
+                            .and_then(|v| v.as_i64())
+                            .unwrap_or(0);
+                        let item_sub = item
+                            .get("subtotal_paise")
+                            .and_then(|v| v.as_i64())
+                            .unwrap_or(unit_price * qty as i64);
                         let item_tax = item.get("tax_paise").and_then(|v| v.as_i64()).unwrap_or(0);
-                        let item_disc = item.get("discount_paise").and_then(|v| v.as_i64()).unwrap_or(0);
-                        let item_tot = item.get("total_paise").and_then(|v| v.as_i64()).unwrap_or(item_sub + item_tax - item_disc);
+                        let item_disc = item
+                            .get("discount_paise")
+                            .and_then(|v| v.as_i64())
+                            .unwrap_or(0);
+                        let item_tot = item
+                            .get("total_paise")
+                            .and_then(|v| v.as_i64())
+                            .unwrap_or(item_sub + item_tax - item_disc);
                         let item_notes = item.get("notes").and_then(|v| v.as_str());
-                        let item_status = item.get("status").and_then(|v| v.as_str()).unwrap_or("confirmed");
+                        let item_status = item
+                            .get("status")
+                            .and_then(|v| v.as_str())
+                            .unwrap_or("confirmed");
 
                         sqlx::query(
                             r#"

@@ -26,8 +26,8 @@ impl WhatsAppService {
         }
 
         // WhatsApp Bridge URL parse (default: 127.0.0.1:3001)
-        let bridge_addr = std::env::var("WHATSAPP_BRIDGE_ADDR")
-            .unwrap_or_else(|_| "127.0.0.1:3001".to_string());
+        let bridge_addr =
+            std::env::var("WHATSAPP_BRIDGE_ADDR").unwrap_or_else(|_| "127.0.0.1:3001".to_string());
 
         let payload = serde_json::json!({
             "phone": clean_digits,
@@ -46,7 +46,12 @@ impl WhatsAppService {
         let mut stream = tokio::time::timeout(Duration::from_secs(3), stream_future)
             .await
             .map_err(|_| format!("Connection timeout to WhatsApp Bridge ({})", bridge_addr))?
-            .map_err(|e| format!("Failed to connect to WhatsApp Bridge ({}): {}", bridge_addr, e))?;
+            .map_err(|e| {
+                format!(
+                    "Failed to connect to WhatsApp Bridge ({}): {}",
+                    bridge_addr, e
+                )
+            })?;
 
         stream
             .write_all(request.as_bytes())
@@ -59,12 +64,18 @@ impl WhatsAppService {
 
         let res_str = String::from_utf8_lossy(&response);
         if res_str.contains(" 200 OK") {
-            tracing::info!("[WhatsAppService] Successfully dispatched message to {}", clean_digits);
+            tracing::info!(
+                "[WhatsAppService] Successfully dispatched message to {}",
+                clean_digits
+            );
             Ok(())
         } else if res_str.contains("503") || res_str.contains("not connected") {
             Err("WhatsApp socket is not connected or QR not scanned".to_string())
         } else {
-            Err(format!("Bridge response: {}", res_str.lines().next().unwrap_or("Unknown error")))
+            Err(format!(
+                "Bridge response: {}",
+                res_str.lines().next().unwrap_or("Unknown error")
+            ))
         }
     }
 

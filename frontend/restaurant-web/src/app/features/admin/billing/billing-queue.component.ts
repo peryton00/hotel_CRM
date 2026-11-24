@@ -178,7 +178,11 @@ import { AdminAuthService } from '../../../core/services/admin-auth.service';
               </tr>
             } @else {
               @for (ord of filteredOrders(); track ord.id) {
-                <tr class="clickable-order-row" (click)="onOrderRowClick(ord, $event)" title="Click row to open bill preview">
+                <tr
+                  class="clickable-order-row"
+                  (click)="onOrderRowClick(ord, $event)"
+                  title="Click row to open bill preview"
+                >
                   <td>
                     <div class="ord-tbl-cell">
                       @if (ord.orderType === 'TAKEAWAY') {
@@ -201,18 +205,29 @@ import { AdminAuthService } from '../../../core/services/admin-auth.service';
                       <span class="order-id-text">
                         {{ ord.orderNumber }}
                         @if (ord.printCount && ord.printCount > 0) {
-                          <span class="badge badge-subtle print-count-badge" title="Printed {{ ord.printCount }} times">
+                          <span
+                            class="badge badge-subtle print-count-badge"
+                            title="Printed {{ ord.printCount }} times"
+                          >
                             {{ ord.printCount }}x
                           </span>
                         }
                       </span>
                       @if (isOrderCompletedOrSettled(ord)) {
-                        <div class="timing-badge-wrap" [title]="'Completion / Settlement: ' + (getOrderCompletionDate(ord) | date: 'medium')">
+                        <div
+                          class="timing-badge-wrap"
+                          [title]="
+                            'Completion / Settlement: ' +
+                            (getOrderCompletionDate(ord) | date: 'medium')
+                          "
+                        >
                           <span class="time-text completion-badge">
                             <i class="ph ph-check-circle"></i>
                             <span>{{ getOrderCompletionDate(ord) | date: 'd MMM, h:mm a' }}</span>
                           </span>
-                          <span class="created-subtime text-xs text-muted">Created {{ ord.createdAt | date: 'shortTime' }}</span>
+                          <span class="created-subtime text-xs text-muted"
+                            >Created {{ ord.createdAt | date: 'shortTime' }}</span
+                          >
                         </div>
                       } @else {
                         <div class="timing-badge-wrap">
@@ -298,16 +313,26 @@ import { AdminAuthService } from '../../../core/services/admin-auth.service';
                           class="btn btn-secondary btn-sm split-parts-toggle-btn"
                           [class.btn-active-toggle]="isSplitBillsExpanded(ord.id)"
                           (click)="toggleSplitBills(ord.id)"
-                          [title]="isSplitBillsExpanded(ord.id) ? 'Hide split bills breakdown' : 'Show split bills breakdown'"
+                          [title]="
+                            isSplitBillsExpanded(ord.id)
+                              ? 'Hide split bills breakdown'
+                              : 'Show split bills breakdown'
+                          "
                         >
-                          <i class="ph" [class.ph-caret-down]="!isSplitBillsExpanded(ord.id)" [class.ph-caret-up]="isSplitBillsExpanded(ord.id)"></i>
-                          <span>{{ isSplitBillsExpanded(ord.id) ? 'Hide Splits' : 'Split Bills (' + getOrderSplitBills(ord.id).length + ')' }}</span>
+                          <i
+                            class="ph"
+                            [class.ph-caret-down]="!isSplitBillsExpanded(ord.id)"
+                            [class.ph-caret-up]="isSplitBillsExpanded(ord.id)"
+                          ></i>
+                          <span>{{
+                            isSplitBillsExpanded(ord.id)
+                              ? 'Hide Splits'
+                              : 'Split Bills (' + getOrderSplitBills(ord.id).length + ')'
+                          }}</span>
                         </button>
                       }
 
-                      @if (
-                        ord.paymentStatus !== 'PAID' && ord.status !== 'CANCELLED'
-                      ) {
+                      @if (ord.paymentStatus !== 'PAID' && ord.status !== 'CANCELLED') {
                         <!-- DC-2: Split Bill option only if not already split -->
                         @if (!ord.isSplit && getOrderSplitBills(ord.id).length === 0) {
                           <button
@@ -344,7 +369,10 @@ import { AdminAuthService } from '../../../core/services/admin-auth.service';
                 </tr>
 
                 <!-- Nested Split Bills Breakdown if Order is Split -->
-                @if ((ord.isSplit || getOrderSplitBills(ord.id).length > 0) && isSplitBillsExpanded(ord.id)) {
+                @if (
+                  (ord.isSplit || getOrderSplitBills(ord.id).length > 0) &&
+                  isSplitBillsExpanded(ord.id)
+                ) {
                   <tr class="split-bills-row">
                     <td colspan="8">
                       <div class="split-bills-container">
@@ -562,7 +590,9 @@ import { AdminAuthService } from '../../../core/services/admin-auth.service';
                 <div class="settle-items-section">
                   <div class="settle-items-header">
                     <span>Ordered Dishes</span>
-                    <span class="text-xs text-muted">{{ getSettlementItems(ord).length }} items</span>
+                    <span class="text-xs text-muted"
+                      >{{ getSettlementItems(ord).length }} items</span
+                    >
                   </div>
                   <div class="settle-items-list">
                     @for (item of getSettlementItems(ord); track $index) {
@@ -572,11 +602,15 @@ import { AdminAuthService } from '../../../core/services/admin-auth.service';
                           <div class="item-text-group">
                             <span class="item-name-text">{{ item.name }}</span>
                             @if (item.notes || item.specialInstructions) {
-                              <span class="item-instruction-text">{{ item.notes || item.specialInstructions }}</span>
+                              <span class="item-instruction-text">{{
+                                item.notes || item.specialInstructions
+                              }}</span>
                             }
                           </div>
                         </div>
-                        <span class="item-total-price">{{ (item.itemTotal || (item.unitPrice * item.quantity)) | currencyInr }}</span>
+                        <span class="item-total-price">{{
+                          item.itemTotal || item.unitPrice * item.quantity | currencyInr
+                        }}</span>
                       </div>
                     }
                   </div>
@@ -1247,9 +1281,16 @@ import { AdminAuthService } from '../../../core/services/admin-auth.service';
                 <div>
                   <div class="flex items-center gap-2">
                     <h3 class="heading-card">Send Bill via WhatsApp</h3>
-                    <span class="badge-gateway-chip" [class.is-connected]="whatsAppBridge.connectionStatus() === 'CONNECTED'">
+                    <span
+                      class="badge-gateway-chip"
+                      [class.is-connected]="whatsAppBridge.connectionStatus() === 'CONNECTED'"
+                    >
                       <span class="dot-indicator"></span>
-                      {{ whatsAppBridge.connectionStatus() === 'CONNECTED' ? 'DIRECT GATEWAY' : 'WEB FALLBACK' }}
+                      {{
+                        whatsAppBridge.connectionStatus() === 'CONNECTED'
+                          ? 'DIRECT GATEWAY'
+                          : 'WEB FALLBACK'
+                      }}
                     </span>
                   </div>
                   <span class="text-xs text-muted">
@@ -1274,16 +1315,22 @@ import { AdminAuthService } from '../../../core/services/admin-auth.service';
                     <i class="ph ph-phone text-whatsapp"></i> Customer WhatsApp Number
                   </label>
                   @if (authService.isAdmin()) {
-                    <span class="admin-verified-pill" title="Administrator access permitted to change recipient">
+                    <span
+                      class="admin-verified-pill"
+                      title="Administrator access permitted to change recipient"
+                    >
                       <i class="ph ph-shield-check"></i> Admin Editable
                     </span>
                   } @else {
-                    <span class="admin-locked-pill" title="Only Admin can modify customer phone number">
+                    <span
+                      class="admin-locked-pill"
+                      title="Only Admin can modify customer phone number"
+                    >
                       <i class="ph ph-lock-key"></i> Admin Protected
                     </span>
                   }
                 </div>
-                
+
                 <div class="input-with-icon">
                   <i class="ph ph-phone"></i>
                   <input
@@ -1298,7 +1345,10 @@ import { AdminAuthService } from '../../../core/services/admin-auth.service';
                     (keyup.enter)="sendWhatsAppBill()"
                   />
                   @if (!authService.isAdmin()) {
-                    <i class="ph ph-lock-key lock-status-icon" title="Only Admins can modify phone number"></i>
+                    <i
+                      class="ph ph-lock-key lock-status-icon"
+                      title="Only Admins can modify phone number"
+                    ></i>
                   }
                 </div>
                 <span class="hint-text">
@@ -1332,7 +1382,11 @@ import { AdminAuthService } from '../../../core/services/admin-auth.service';
 
             <!-- Modal Footer: Single Primary Action & Secondary Utils -->
             <div class="modal-footer whatsapp-apple-footer">
-              <button type="button" class="btn btn-secondary btn-apple-cancel" (click)="closeWhatsAppModal()">
+              <button
+                type="button"
+                class="btn btn-secondary btn-apple-cancel"
+                (click)="closeWhatsAppModal()"
+              >
                 Cancel
               </button>
 
@@ -2623,7 +2677,9 @@ import { AdminAuthService } from '../../../core/services/admin-auth.service';
         font-weight: 500;
         border: none;
         cursor: pointer;
-        transition: background 0.15s ease, transform 0.1s ease;
+        transition:
+          background 0.15s ease,
+          transform 0.1s ease;
 
         &:hover {
           background: #20ba5a;
@@ -2837,7 +2893,10 @@ import { AdminAuthService } from '../../../core/services/admin-auth.service';
           border: none;
           cursor: pointer;
           box-shadow: 0 2px 10px rgba(37, 211, 102, 0.3);
-          transition: transform 0.15s cubic-bezier(0.16, 1, 0.3, 1), background-color 0.15s ease, opacity 0.15s ease;
+          transition:
+            transform 0.15s cubic-bezier(0.16, 1, 0.3, 1),
+            background-color 0.15s ease,
+            opacity 0.15s ease;
 
           &:hover:not(:disabled) {
             background: #20ba5a;
@@ -2877,7 +2936,9 @@ export class BillingQueueComponent {
   selectedTab = signal<string>('ALL');
   searchQuery = signal<string>('');
   dateFilter = signal<'ALL' | 'TODAY' | 'YESTERDAY' | 'THIS_WEEK'>('ALL');
-  sortOption = signal<'COMPLETION_DESC' | 'COMPLETION_ASC' | 'CREATED_DESC' | 'AMOUNT_DESC'>('COMPLETION_DESC');
+  sortOption = signal<'COMPLETION_DESC' | 'COMPLETION_ASC' | 'CREATED_DESC' | 'AMOUNT_DESC'>(
+    'COMPLETION_DESC',
+  );
 
   get cgstRate(): number {
     return this.dataService.restaurant()?.taxSettings?.cgstRate ?? 2.5;
@@ -3365,11 +3426,15 @@ export class BillingQueueComponent {
     list = [...list].sort((a, b) => {
       if (sort === 'COMPLETION_DESC') {
         const diff = this.getOrderCompletionTimestamp(b) - this.getOrderCompletionTimestamp(a);
-        return diff !== 0 ? diff : new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+        return diff !== 0
+          ? diff
+          : new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
       }
       if (sort === 'COMPLETION_ASC') {
         const diff = this.getOrderCompletionTimestamp(a) - this.getOrderCompletionTimestamp(b);
-        return diff !== 0 ? diff : new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+        return diff !== 0
+          ? diff
+          : new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
       }
       if (sort === 'CREATED_DESC') {
         return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
@@ -3608,7 +3673,9 @@ export class BillingQueueComponent {
         `Split Bill #${split.splitIndex} (₹${split.totalAmount}) settled via ${method}.`,
       );
       this.closeSettleSplitModal();
-      this.router.navigate(['/admin/billing', ord.id], { queryParams: { splitId: split.id, preview: 'thermal' } });
+      this.router.navigate(['/admin/billing', ord.id], {
+        queryParams: { splitId: split.id, preview: 'thermal' },
+      });
     } else {
       this.toastService.error(res.error || 'Failed to settle split bill');
     }
@@ -3625,7 +3692,9 @@ export class BillingQueueComponent {
       return;
     }
     if (order.isSplit || this.getOrderSplitBills(order.id).length > 0) {
-      this.toastService.warning('This order has already been split. Please settle the existing split bills.');
+      this.toastService.warning(
+        'This order has already been split. Please settle the existing split bills.',
+      );
       return;
     }
     if (order.paymentStatus === 'PARTIALLY_PAID') {
@@ -3923,14 +3992,20 @@ export class BillingQueueComponent {
             this.toastService.success('WhatsApp bill delivered directly to customer!');
             this.closeWhatsAppModal();
           } else {
-            this.toastService.warning(res.error || 'Direct dispatch failed, opening WhatsApp Web fallback...');
-            launchExternalUrl(`https://web.whatsapp.com/send?phone=${phone.replace(/\D/g, '')}&text=${encodeURIComponent(message)}`);
+            this.toastService.warning(
+              res.error || 'Direct dispatch failed, opening WhatsApp Web fallback...',
+            );
+            launchExternalUrl(
+              `https://web.whatsapp.com/send?phone=${phone.replace(/\D/g, '')}&text=${encodeURIComponent(message)}`,
+            );
             this.closeWhatsAppModal();
           }
         },
         error: () => {
           this.isDispatchingWhatsApp.set(false);
-          launchExternalUrl(`https://web.whatsapp.com/send?phone=${phone.replace(/\D/g, '')}&text=${encodeURIComponent(message)}`);
+          launchExternalUrl(
+            `https://web.whatsapp.com/send?phone=${phone.replace(/\D/g, '')}&text=${encodeURIComponent(message)}`,
+          );
           this.closeWhatsAppModal();
         },
       });
@@ -3941,7 +4016,9 @@ export class BillingQueueComponent {
     this.isDispatchingWhatsApp.set(false);
     const cleanDigits = phone.replace(/\D/g, '');
     if (cleanDigits.length >= 10) {
-      launchExternalUrl(`https://web.whatsapp.com/send?phone=${cleanDigits}&text=${encodeURIComponent(message)}`);
+      launchExternalUrl(
+        `https://web.whatsapp.com/send?phone=${cleanDigits}&text=${encodeURIComponent(message)}`,
+      );
       this.toastService.success('WhatsApp opened with customer bill!');
       this.closeWhatsAppModal();
     } else {

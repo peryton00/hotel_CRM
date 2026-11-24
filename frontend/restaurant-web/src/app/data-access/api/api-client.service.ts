@@ -147,10 +147,7 @@ export class ApiClientService {
 
           if (!isConnErr) {
             const fallback = this.fallbackSupabasePost<T>(endpoint, body);
-            if (
-              fallback &&
-              (err.status === 0 || err.status === 502 || err.status === 503)
-            ) {
+            if (fallback && (err.status === 0 || err.status === 502 || err.status === 503)) {
               return fallback;
             }
           }
@@ -168,10 +165,7 @@ export class ApiClientService {
         map((res) => res.data),
         catchError((err) => {
           const fallback = this.fallbackSupabasePut<T>(endpoint, body);
-          if (
-            fallback &&
-            (err.status === 0 || err.status === 502 || err.status === 503)
-          ) {
+          if (fallback && (err.status === 0 || err.status === 502 || err.status === 503)) {
             return fallback;
           }
           return this.handleError(err);
@@ -480,10 +474,7 @@ export class ApiClientService {
         map((res) => res.data),
         catchError((err) => {
           const fallback = this.fallbackSupabaseDelete<T>(endpoint);
-          if (
-            fallback &&
-            (err.status === 0 || err.status === 502 || err.status === 503)
-          ) {
+          if (fallback && (err.status === 0 || err.status === 502 || err.status === 503)) {
             return fallback;
           }
           return this.handleError(err);

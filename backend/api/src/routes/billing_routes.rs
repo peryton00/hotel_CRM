@@ -69,7 +69,9 @@ pub async fn list_split_bills(
     tenant: TenantContext,
     axum::extract::Query(query): axum::extract::Query<std::collections::HashMap<String, String>>,
 ) -> Result<impl IntoResponse, AppError> {
-    let order_id = query.get("order_id").and_then(|id| Uuid::parse_str(id).ok());
+    let order_id = query
+        .get("order_id")
+        .and_then(|id| Uuid::parse_str(id).ok());
     let splits = BillingRepository::get_split_bills(&pool, tenant.restaurant_id, order_id).await?;
     Ok(Json(ApiResponse::success(splits)))
 }
@@ -79,7 +81,8 @@ pub async fn get_order_split_bills(
     tenant: TenantContext,
     Path(order_id): Path<Uuid>,
 ) -> Result<impl IntoResponse, AppError> {
-    let splits = BillingRepository::get_split_bills(&pool, tenant.restaurant_id, Some(order_id)).await?;
+    let splits =
+        BillingRepository::get_split_bills(&pool, tenant.restaurant_id, Some(order_id)).await?;
     Ok(Json(ApiResponse::success(splits)))
 }
 

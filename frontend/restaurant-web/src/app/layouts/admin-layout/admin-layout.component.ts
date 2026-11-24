@@ -426,7 +426,10 @@ import { WhatsAppBridgeService } from '../../core/services/whatsapp-bridge.servi
                 (click)="openWhatsAppSettings()"
                 class="topbar-tool-btn whatsapp-status-btn"
                 [class.status-connected]="whatsAppBridge.connectionStatus() === 'CONNECTED'"
-                [class.status-pairing]="whatsAppBridge.connectionStatus() === 'SCAN_QR' || whatsAppBridge.connectionStatus() === 'CONNECTING'"
+                [class.status-pairing]="
+                  whatsAppBridge.connectionStatus() === 'SCAN_QR' ||
+                  whatsAppBridge.connectionStatus() === 'CONNECTING'
+                "
                 [class.status-disconnected]="whatsAppBridge.connectionStatus() === 'DISCONNECTED'"
                 [attr.title]="whatsAppButtonTooltip()"
                 aria-label="WhatsApp Gateway Status"
@@ -434,7 +437,10 @@ import { WhatsAppBridgeService } from '../../core/services/whatsapp-bridge.servi
                 <span
                   class="wa-status-dot"
                   [class.dot-connected]="whatsAppBridge.connectionStatus() === 'CONNECTED'"
-                  [class.dot-pairing]="whatsAppBridge.connectionStatus() === 'SCAN_QR' || whatsAppBridge.connectionStatus() === 'CONNECTING'"
+                  [class.dot-pairing]="
+                    whatsAppBridge.connectionStatus() === 'SCAN_QR' ||
+                    whatsAppBridge.connectionStatus() === 'CONNECTING'
+                  "
                   [class.dot-disconnected]="whatsAppBridge.connectionStatus() === 'DISCONNECTED'"
                 ></span>
                 <i
@@ -922,7 +928,9 @@ import { WhatsAppBridgeService } from '../../core/services/whatsapp-bridge.servi
           font-size: 1.15rem;
           flex-shrink: 0;
           color: #94a3b8;
-          transition: color var(--transition-fast), font-size 320ms cubic-bezier(0.2, 0.8, 0.2, 1);
+          transition:
+            color var(--transition-fast),
+            font-size 320ms cubic-bezier(0.2, 0.8, 0.2, 1);
         }
 
         &:hover {
@@ -1375,7 +1383,9 @@ import { WhatsAppBridgeService } from '../../core/services/whatsapp-bridge.servi
             border-radius: 50%;
             background: #94a3b8;
             flex-shrink: 0;
-            transition: background 0.3s ease, box-shadow 0.3s ease;
+            transition:
+              background 0.3s ease,
+              box-shadow 0.3s ease;
 
             &.dot-connected {
               background: #22c55e;
@@ -1995,7 +2005,8 @@ import { WhatsAppBridgeService } from '../../core/services/whatsapp-bridge.servi
       }
 
       @keyframes wa-button-blink-offline {
-        0%, 100% {
+        0%,
+        100% {
           background: rgba(239, 68, 68, 0.07);
           border-color: rgba(239, 68, 68, 0.2);
           color: #dc2626;
@@ -2010,7 +2021,8 @@ import { WhatsAppBridgeService } from '../../core/services/whatsapp-bridge.servi
       }
 
       @keyframes wa-button-blink-offline-dark {
-        0%, 100% {
+        0%,
+        100% {
           background: rgba(239, 68, 68, 0.1);
           border-color: rgba(239, 68, 68, 0.25);
           color: #fca5a5;
@@ -2025,7 +2037,8 @@ import { WhatsAppBridgeService } from '../../core/services/whatsapp-bridge.servi
       }
 
       @keyframes wa-dot-blink-offline {
-        0%, 100% {
+        0%,
+        100% {
           background: #ef4444;
           box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.6);
           opacity: 0.6;

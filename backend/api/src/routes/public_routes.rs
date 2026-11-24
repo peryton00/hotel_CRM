@@ -565,12 +565,18 @@ pub async fn create_public_reservation(
         CustomerRepository::create_reservation(&pool, req.restaurant_id, create_req).await?;
 
     // WhatsApp Notification: Instant customer acknowledgement of pending request
-    let restaurant = crate::repositories::restaurant_repo::RestaurantRepository::get_by_id(&pool, req.restaurant_id)
-        .await
-        .ok()
-        .flatten();
+    let restaurant = crate::repositories::restaurant_repo::RestaurantRepository::get_by_id(
+        &pool,
+        req.restaurant_id,
+    )
+    .await
+    .ok()
+    .flatten();
 
-    let restaurant_name = restaurant.as_ref().map(|r| r.name.as_str()).unwrap_or("The Restaurant");
+    let restaurant_name = restaurant
+        .as_ref()
+        .map(|r| r.name.as_str())
+        .unwrap_or("The Restaurant");
     let custom_template = restaurant
         .as_ref()
         .and_then(|r| r.whatsapp_templates.as_ref())

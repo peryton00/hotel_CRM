@@ -48,7 +48,8 @@ pub async fn update_category(
     Path(category_id): Path<Uuid>,
     Json(req): Json<crate::models::menu::UpdateMenuCategoryRequest>,
 ) -> Result<impl IntoResponse, AppError> {
-    let category = MenuRepository::update_category(&pool, tenant.restaurant_id, category_id, req).await?;
+    let category =
+        MenuRepository::update_category(&pool, tenant.restaurant_id, category_id, req).await?;
     Ok(Json(ApiResponse::success(category)))
 }
 

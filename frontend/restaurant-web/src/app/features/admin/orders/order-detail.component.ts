@@ -404,7 +404,8 @@ import { ThermalReceiptModalComponent } from '../../../shared/components/thermal
                     <div class="invoice-status-info">
                       <span class="text-xs text-muted">
                         @if (!isOrderPaid(ord)) {
-                          <i class="ph ph-clock text-amber"></i> Payment incomplete — Settle bill to enable tax invoice printing
+                          <i class="ph ph-clock text-amber"></i> Payment incomplete — Settle bill to
+                          enable tax invoice printing
                         } @else if (!ord.printCount || ord.printCount === 0) {
                           <i class="ph ph-receipt"></i> Ready to print Original Invoice
                         } @else {

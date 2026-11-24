@@ -240,7 +240,8 @@ export interface OrderSessionGroup {
                     <span
                       class="server-name-text"
                       [title]="
-                        'Serving Staff: ' + (getServerStaffName(session.serverStaffId) || 'Unassigned')
+                        'Serving Staff: ' +
+                        (getServerStaffName(session.serverStaffId) || 'Unassigned')
                       "
                     >
                       {{ getServerStaffName(session.serverStaffId) || 'Unassigned' }}
@@ -248,7 +249,9 @@ export interface OrderSessionGroup {
                     <button
                       type="button"
                       class="btn-unlock-server-xs"
-                      (click)="$event.stopPropagation(); promptChangeCompletedServer(session.primaryOrder)"
+                      (click)="
+                        $event.stopPropagation(); promptChangeCompletedServer(session.primaryOrder)
+                      "
                       title="Change serving staff for paid order (Admin Password required)"
                     >
                       <i class="ph ph-pencil-simple"></i>
@@ -302,8 +305,12 @@ export interface OrderSessionGroup {
                     @for (rnd of session.orders; track rnd.id; let idx = $index) {
                       <div class="completed-round-section">
                         <div class="completed-round-bar">
-                          <span class="completed-round-title">Round {{ idx + 1 }} ({{ rnd.orderNumber }})</span>
-                          <span class="completed-round-total">{{ rnd.totalAmount | currencyInr }}</span>
+                          <span class="completed-round-title"
+                            >Round {{ idx + 1 }} ({{ rnd.orderNumber }})</span
+                          >
+                          <span class="completed-round-total">{{
+                            rnd.totalAmount | currencyInr
+                          }}</span>
                         </div>
                         <div class="items-summary-list">
                           @for (item of rnd.items; track item.id) {
@@ -312,7 +319,9 @@ export interface OrderSessionGroup {
                                 <span class="qty-pill">{{ item.quantity }}×</span>
                                 <span class="dish-name" [title]="item.name">{{ item.name }}</span>
                                 @if (item.selectedPortion) {
-                                  <span class="portion-label">{{ item.selectedPortion.label }}</span>
+                                  <span class="portion-label">{{
+                                    item.selectedPortion.label
+                                  }}</span>
                                 }
                               </div>
                               <span class="line-cost">{{ item.itemTotal | currencyInr }}</span>
@@ -355,7 +364,9 @@ export interface OrderSessionGroup {
                   </div>
                   <div class="total-amount-box">
                     <span class="total-label-compact">Grand Total:</span>
-                    <span class="payable-val-highlight">{{ session.grandTotal | currencyInr }}</span>
+                    <span class="payable-val-highlight">{{
+                      session.grandTotal | currencyInr
+                    }}</span>
                   </div>
                 </div>
               </div>
@@ -386,16 +397,24 @@ export interface OrderSessionGroup {
                         class="apple-table-pill reallot-clickable"
                         [disabled]="session.isAllPaid"
                         (click)="handleTableBadgeClick($event, session.primaryOrder)"
-                        [title]="session.isAllPaid ? 'Table ' + (session.tableNumber || 'Unassigned') : 'Click to reallot table'"
+                        [title]="
+                          session.isAllPaid
+                            ? 'Table ' + (session.tableNumber || 'Unassigned')
+                            : 'Click to reallot table'
+                        "
                       >
                         <i class="ph ph-table"></i>
-                        <span>{{ session.tableNumber ? 'Table ' + session.tableNumber : 'Allot Table' }}</span>
+                        <span>{{
+                          session.tableNumber ? 'Table ' + session.tableNumber : 'Allot Table'
+                        }}</span>
                         @if (!session.isAllPaid) {
                           <i class="ph ph-caret-down text-micro"></i>
                         }
                       </button>
                     }
-                    <span class="ord-num apple-ord-num">{{ session.primaryOrder.orderNumber }}</span>
+                    <span class="ord-num apple-ord-num">{{
+                      session.primaryOrder.orderNumber
+                    }}</span>
                     @if (session.isMultiRound) {
                       <span class="session-rounds-chip" title="Multi-round dining session">
                         <i class="ph ph-stack"></i> {{ session.orders.length }}R
@@ -419,9 +438,13 @@ export interface OrderSessionGroup {
                 <!-- 2. Guest & Server Info Strip (Apple Recessed Surface) -->
                 <div class="guest-server-recessed">
                   <div class="guest-compact-meta">
-                    <div class="guest-avatar-disc">{{ (session.customerName || 'G').charAt(0).toUpperCase() }}</div>
+                    <div class="guest-avatar-disc">
+                      {{ (session.customerName || 'G').charAt(0).toUpperCase() }}
+                    </div>
                     <div class="guest-text-col truncate">
-                      <span class="cust-name-clean truncate" [title]="session.customerName">{{ session.customerName || 'Walk-in Guest' }}</span>
+                      <span class="cust-name-clean truncate" [title]="session.customerName">{{
+                        session.customerName || 'Walk-in Guest'
+                      }}</span>
                       @if (session.customerPhone) {
                         <span class="phone-sub-clean">
                           <i class="ph ph-phone"></i> {{ session.customerPhone }}
@@ -434,11 +457,16 @@ export interface OrderSessionGroup {
                     @if (session.isAllPaid) {
                       <div class="server-completed-pill" title="Serving Staff">
                         <i class="ph ph-lock-key"></i>
-                        <span class="truncate">{{ getServerStaffName(session.serverStaffId) || 'Staff' }}</span>
+                        <span class="truncate">{{
+                          getServerStaffName(session.serverStaffId) || 'Staff'
+                        }}</span>
                         <button
                           type="button"
                           class="btn-unlock-inline"
-                          (click)="$event.stopPropagation(); promptChangeCompletedServer(session.primaryOrder)"
+                          (click)="
+                            $event.stopPropagation();
+                            promptChangeCompletedServer(session.primaryOrder)
+                          "
                           title="Change serving staff"
                         >
                           <i class="ph ph-pencil-simple"></i>
@@ -460,7 +488,9 @@ export interface OrderSessionGroup {
                             <option [value]="s.id">{{ s.name }} ({{ s.role }})</option>
                           }
                           @if (session.serverStaffId && !isStaffInList(session.serverStaffId)) {
-                            <option [value]="session.serverStaffId">{{ session.serverStaffId }}</option>
+                            <option [value]="session.serverStaffId">
+                              {{ session.serverStaffId }}
+                            </option>
                           }
                         </select>
                         <i class="ph ph-caret-down pill-caret"></i>
@@ -474,7 +504,8 @@ export interface OrderSessionGroup {
                   <div class="receipt-stream-header">
                     <span class="receipt-stream-title">
                       <i class="ph ph-receipt"></i>
-                      Ordered Items ({{ session.orders.length }} {{ session.orders.length === 1 ? 'Round' : 'Rounds' }})
+                      Ordered Items ({{ session.orders.length }}
+                      {{ session.orders.length === 1 ? 'Round' : 'Rounds' }})
                     </span>
                     <span class="receipt-stream-subtotal">
                       {{ session.grandSubtotal | currencyInr }}
@@ -483,7 +514,10 @@ export interface OrderSessionGroup {
 
                   <div class="receipt-rounds-body">
                     @for (roundOrd of session.orders; track roundOrd.id; let roundIdx = $index) {
-                      <div class="receipt-round-segment" [class.round-pending-soft]="roundOrd.status === 'PENDING'">
+                      <div
+                        class="receipt-round-segment"
+                        [class.round-pending-soft]="roundOrd.status === 'PENDING'"
+                      >
                         <!-- Round Mini Meta Bar (only if multi-round) -->
                         @if (session.isMultiRound) {
                           <div class="round-mini-bar">
@@ -492,7 +526,10 @@ export interface OrderSessionGroup {
                               <span class="round-mini-ord-num">#{{ roundOrd.orderNumber }}</span>
                             </div>
                             <div class="round-mini-right">
-                              <span class="round-mini-time"><i class="ph ph-clock"></i> {{ roundOrd.createdAt | date: 'shortTime' }}</span>
+                              <span class="round-mini-time"
+                                ><i class="ph ph-clock"></i>
+                                {{ roundOrd.createdAt | date: 'shortTime' }}</span
+                              >
                               <app-status-badge [status]="roundOrd.status"></app-status-badge>
                             </div>
                           </div>
@@ -504,7 +541,9 @@ export interface OrderSessionGroup {
                             <div class="receipt-item-row">
                               <div class="item-name-cluster">
                                 <span class="qty-bubble">{{ item.quantity }}×</span>
-                                <span class="item-title truncate" [title]="item.name">{{ item.name }}</span>
+                                <span class="item-title truncate" [title]="item.name">{{
+                                  item.name
+                                }}</span>
                                 @if (item.selectedPortion) {
                                   <span class="portion-tag">{{ item.selectedPortion.label }}</span>
                                 }
@@ -521,19 +560,29 @@ export interface OrderSessionGroup {
                 <!-- 4. Grand Total Financial Breakdown Strip -->
                 <div class="bill-strip grand-bill-strip-apple">
                   <div class="sub-line">
-                    <span class="bill-label">Subtotal ({{ session.orderCount }} {{ session.orderCount === 1 ? 'order' : 'orders' }})</span>
+                    <span class="bill-label"
+                      >Subtotal ({{ session.orderCount }}
+                      {{ session.orderCount === 1 ? 'order' : 'orders' }})</span
+                    >
                     <span class="bill-val">{{ session.grandSubtotal | currencyInr }}</span>
                   </div>
                   @if (session.grandDiscount > 0) {
                     <div class="sub-line discount">
-                      <span class="bill-label"><i class="ph ph-tag"></i> {{ session.primaryOrder.appliedCouponCode || 'Discount' }}</span>
+                      <span class="bill-label"
+                        ><i class="ph ph-tag"></i>
+                        {{ session.primaryOrder.appliedCouponCode || 'Discount' }}</span
+                      >
                       <span class="bill-val">-{{ session.grandDiscount | currencyInr }}</span>
                     </div>
                   }
                   @if (session.isSplit && session.splitCount) {
                     <div class="sub-line split-note">
-                      <span class="bill-label"><i class="ph ph-users"></i> Split ({{ session.splitCount }} ways)</span>
-                      <span class="bill-val">{{ session.grandTotal / session.splitCount | currencyInr }}/pers</span>
+                      <span class="bill-label"
+                        ><i class="ph ph-users"></i> Split ({{ session.splitCount }} ways)</span
+                      >
+                      <span class="bill-val"
+                        >{{ session.grandTotal / session.splitCount | currencyInr }}/pers</span
+                      >
                     </div>
                   }
                   <div class="total-row-apple">
@@ -553,7 +602,10 @@ export interface OrderSessionGroup {
                       type="button"
                       (click)="$event.stopPropagation(); handleCheckoutAndPrint(session)"
                       class="apple-btn-primary"
-                      [disabled]="isProcessingCheckout() === session.primaryOrder.id || isNavigatingToInvoice() === session.primaryOrder.id"
+                      [disabled]="
+                        isProcessingCheckout() === session.primaryOrder.id ||
+                        isNavigatingToInvoice() === session.primaryOrder.id
+                      "
                     >
                       @if (isProcessingCheckout() === session.primaryOrder.id) {
                         <i class="ph ph-spinner ph-spin"></i>
@@ -588,8 +640,15 @@ export interface OrderSessionGroup {
                         type="button"
                         class="apple-util-btn"
                         [class.paid-locked]="session.isAllPaid"
-                        (click)="$event.stopPropagation(); openEditOrderModal(session.latestOrder || session.primaryOrder)"
-                        [title]="session.isAllPaid ? 'Order is PAID — Admin Password required to edit' : 'Edit Order & Add Further Dishes'"
+                        (click)="
+                          $event.stopPropagation();
+                          openEditOrderModal(session.latestOrder || session.primaryOrder)
+                        "
+                        [title]="
+                          session.isAllPaid
+                            ? 'Order is PAID — Admin Password required to edit'
+                            : 'Edit Order & Add Further Dishes'
+                        "
                       >
                         <i
                           class="ph"
@@ -606,14 +665,22 @@ export interface OrderSessionGroup {
                         (click)="$event.stopPropagation(); handlePrintInvoice(session.primaryOrder)"
                         class="apple-util-btn"
                         [disabled]="isNavigatingToInvoice() === session.primaryOrder.id"
-                        [title]="session.printCount && session.printCount > 0 ? 'Tax Invoice printed ' + session.printCount + ' time(s)' : 'Print Tax Invoice'"
+                        [title]="
+                          session.printCount && session.printCount > 0
+                            ? 'Tax Invoice printed ' + session.printCount + ' time(s)'
+                            : 'Print Tax Invoice'
+                        "
                       >
                         @if (isNavigatingToInvoice() === session.primaryOrder.id) {
                           <i class="ph ph-spinner ph-spin"></i>
                           <span>Opening...</span>
                         } @else {
                           <i class="ph ph-printer"></i>
-                          <span>{{ session.printCount && session.printCount > 0 ? 'Invoice (' + session.printCount + 'x)' : 'Invoice' }}</span>
+                          <span>{{
+                            session.printCount && session.printCount > 0
+                              ? 'Invoice (' + session.printCount + 'x)'
+                              : 'Invoice'
+                          }}</span>
                         }
                       </button>
                     }
@@ -703,15 +770,25 @@ export interface OrderSessionGroup {
           <!-- Drawer Body (Scrollable) -->
           <div class="drawer-body">
             @if (selectedSessionOrders().length > 1) {
-              <div class="drawer-session-banner" style="margin-bottom: 14px; background: rgba(37, 99, 235, 0.08); border: 1px solid rgba(37, 99, 235, 0.2); border-radius: 8px; padding: 10px 12px; display: flex; align-items: center; justify-content: space-between;">
+              <div
+                class="drawer-session-banner"
+                style="margin-bottom: 14px; background: rgba(37, 99, 235, 0.08); border: 1px solid rgba(37, 99, 235, 0.2); border-radius: 8px; padding: 10px 12px; display: flex; align-items: center; justify-content: space-between;"
+              >
                 <div style="display: flex; align-items: center; gap: 8px;">
                   <i class="ph ph-stack" style="color: #2563eb; font-size: 1.1rem;"></i>
                   <div>
-                    <strong style="font-size: 0.8125rem; color: #1e40af;">CONSOLIDATED DINING SESSION</strong>
-                    <div style="font-size: 0.75rem; color: var(--color-text-muted);">{{ selectedSessionOrders().length }} Orders unified for Table {{ sideOrd.tableNumber }}</div>
+                    <strong style="font-size: 0.8125rem; color: #1e40af;"
+                      >CONSOLIDATED DINING SESSION</strong
+                    >
+                    <div style="font-size: 0.75rem; color: var(--color-text-muted);">
+                      {{ selectedSessionOrders().length }} Orders unified for Table
+                      {{ sideOrd.tableNumber }}
+                    </div>
                   </div>
                 </div>
-                <span style="font-size: 0.875rem; font-weight: 800; color: #1e40af;">{{ getSettlementGrandTotal(sideOrd) | currencyInr }}</span>
+                <span style="font-size: 0.875rem; font-weight: 800; color: #1e40af;">{{
+                  getSettlementGrandTotal(sideOrd) | currencyInr
+                }}</span>
               </div>
             }
 
@@ -819,7 +896,9 @@ export interface OrderSessionGroup {
                           <option [value]="s.id">{{ s.name }} ({{ s.role }})</option>
                         }
                         @if (sideOrd.serverStaffId && !isStaffInList(sideOrd.serverStaffId)) {
-                          <option [value]="sideOrd.serverStaffId">{{ sideOrd.serverStaffId }}</option>
+                          <option [value]="sideOrd.serverStaffId">
+                            {{ sideOrd.serverStaffId }}
+                          </option>
                         }
                       </select>
                     </div>
@@ -1283,7 +1362,9 @@ export interface OrderSessionGroup {
                       </div>
 
                       <div class="table-picker-control">
-                        <label class="picker-label" for="manualOrderTableSelect">Change Table</label>
+                        <label class="picker-label" for="manualOrderTableSelect"
+                          >Change Table</label
+                        >
                         <select
                           id="manualOrderTableSelect"
                           class="form-select custom-table-select"
@@ -1293,7 +1374,8 @@ export interface OrderSessionGroup {
                           <option value="" disabled>-- Select Table --</option>
                           @for (tbl of tables(); track tbl.id) {
                             <option [value]="tbl.id">
-                              Table {{ tbl.number }} ({{ tbl.section }} • {{ tbl.capacity }}p) — {{ tbl.status }}
+                              Table {{ tbl.number }} ({{ tbl.section }} • {{ tbl.capacity }}p) —
+                              {{ tbl.status }}
                             </option>
                           }
                         </select>
@@ -1641,7 +1723,9 @@ export interface OrderSessionGroup {
                   <div class="settle-items-section">
                     <div class="settle-items-header">
                       <span>Ordered Dishes</span>
-                      <span class="text-xs text-muted">{{ getSettlementItems(ord).length }} items</span>
+                      <span class="text-xs text-muted"
+                        >{{ getSettlementItems(ord).length }} items</span
+                      >
                     </div>
                     <div class="settle-items-list">
                       @for (item of getSettlementItems(ord); track $index) {
@@ -1651,11 +1735,15 @@ export interface OrderSessionGroup {
                             <div class="item-text-group">
                               <span class="item-name-text">{{ item.name }}</span>
                               @if (item.notes || item.specialInstructions) {
-                                <span class="item-instruction-text">{{ item.notes || item.specialInstructions }}</span>
+                                <span class="item-instruction-text">{{
+                                  item.notes || item.specialInstructions
+                                }}</span>
                               }
                             </div>
                           </div>
-                          <span class="item-total-price">{{ (item.itemTotal || (item.unitPrice * item.quantity)) | currencyInr }}</span>
+                          <span class="item-total-price">{{
+                            item.itemTotal || item.unitPrice * item.quantity | currencyInr
+                          }}</span>
                         </div>
                       }
                     </div>
@@ -2639,9 +2727,16 @@ export interface OrderSessionGroup {
                 <div>
                   <div class="flex items-center gap-2">
                     <h3 class="heading-card">Send Bill via WhatsApp</h3>
-                    <span class="badge-gateway-chip" [class.is-connected]="whatsAppBridge.connectionStatus() === 'CONNECTED'">
+                    <span
+                      class="badge-gateway-chip"
+                      [class.is-connected]="whatsAppBridge.connectionStatus() === 'CONNECTED'"
+                    >
                       <span class="dot-indicator"></span>
-                      {{ whatsAppBridge.connectionStatus() === 'CONNECTED' ? 'DIRECT GATEWAY' : 'WEB FALLBACK' }}
+                      {{
+                        whatsAppBridge.connectionStatus() === 'CONNECTED'
+                          ? 'DIRECT GATEWAY'
+                          : 'WEB FALLBACK'
+                      }}
                     </span>
                   </div>
                   <span class="text-xs text-muted">
@@ -2663,16 +2758,22 @@ export interface OrderSessionGroup {
                     <i class="ph ph-phone text-whatsapp"></i> Customer WhatsApp Number
                   </label>
                   @if (authService.isAdmin()) {
-                    <span class="admin-verified-pill" title="Administrator access permitted to change recipient">
+                    <span
+                      class="admin-verified-pill"
+                      title="Administrator access permitted to change recipient"
+                    >
                       <i class="ph ph-shield-check"></i> Admin Editable
                     </span>
                   } @else {
-                    <span class="admin-locked-pill" title="Only Admin can modify customer phone number">
+                    <span
+                      class="admin-locked-pill"
+                      title="Only Admin can modify customer phone number"
+                    >
                       <i class="ph ph-lock-key"></i> Admin Protected
                     </span>
                   }
                 </div>
-                
+
                 <div class="input-with-icon">
                   <i class="ph ph-phone"></i>
                   <input
@@ -2687,7 +2788,10 @@ export interface OrderSessionGroup {
                     (keyup.enter)="sendWhatsAppBill()"
                   />
                   @if (!authService.isAdmin()) {
-                    <i class="ph ph-lock-key lock-status-icon" title="Only Admins can modify phone number"></i>
+                    <i
+                      class="ph ph-lock-key lock-status-icon"
+                      title="Only Admins can modify phone number"
+                    ></i>
                   }
                 </div>
                 <span class="hint-text">
@@ -2721,7 +2825,11 @@ export interface OrderSessionGroup {
 
             <!-- Modal Footer: Single Primary Action & Secondary Utils -->
             <div class="modal-footer whatsapp-apple-footer">
-              <button type="button" class="btn btn-secondary btn-apple-cancel" (click)="closeWhatsAppModal()">
+              <button
+                type="button"
+                class="btn btn-secondary btn-apple-cancel"
+                (click)="closeWhatsAppModal()"
+              >
                 Cancel
               </button>
 
@@ -2766,8 +2874,12 @@ export interface OrderSessionGroup {
         display: inline-block;
       }
       @keyframes spin {
-        from { transform: rotate(0deg); }
-        to { transform: rotate(360deg); }
+        from {
+          transform: rotate(0deg);
+        }
+        to {
+          transform: rotate(360deg);
+        }
       }
       button:active:not(:disabled) {
         transform: scale(0.98);
@@ -4216,12 +4328,17 @@ export interface OrderSessionGroup {
         overflow: hidden;
         background: var(--color-surface, #ffffff);
         border: 1px solid rgba(0, 0, 0, 0.08);
-        box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.05), 0 1px 3px rgba(0, 0, 0, 0.03);
+        box-shadow:
+          0 4px 20px -2px rgba(0, 0, 0, 0.05),
+          0 1px 3px rgba(0, 0, 0, 0.03);
         padding: 16px;
         display: flex;
         flex-direction: column;
         gap: 12px;
-        transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.2s ease, border-color 0.2s ease;
+        transition:
+          transform 0.2s cubic-bezier(0.16, 1, 0.3, 1),
+          box-shadow 0.2s ease,
+          border-color 0.2s ease;
 
         &:hover {
           transform: translateY(-2px);
@@ -4279,7 +4396,9 @@ export interface OrderSessionGroup {
         padding: 3px 9px;
         border-radius: 999px;
         cursor: pointer;
-        transition: transform 0.15s cubic-bezier(0.16, 1, 0.3, 1), background-color 0.15s ease;
+        transition:
+          transform 0.15s cubic-bezier(0.16, 1, 0.3, 1),
+          background-color 0.15s ease;
 
         &:hover:not(:disabled) {
           background: rgba(16, 185, 129, 0.18);
@@ -4686,7 +4805,10 @@ export interface OrderSessionGroup {
           border: none;
           cursor: pointer;
           box-shadow: 0 2px 8px rgba(186, 12, 47, 0.25);
-          transition: transform 0.15s cubic-bezier(0.16, 1, 0.3, 1), background-color 0.15s ease, opacity 0.15s ease;
+          transition:
+            transform 0.15s cubic-bezier(0.16, 1, 0.3, 1),
+            background-color 0.15s ease,
+            opacity 0.15s ease;
 
           &:hover:not(:disabled) {
             background: #960a26;
@@ -4726,7 +4848,10 @@ export interface OrderSessionGroup {
             font-size: 0.6875rem;
             font-weight: 600;
             cursor: pointer;
-            transition: transform 0.15s cubic-bezier(0.16, 1, 0.3, 1), background-color 0.15s ease, color 0.15s ease;
+            transition:
+              transform 0.15s cubic-bezier(0.16, 1, 0.3, 1),
+              background-color 0.15s ease,
+              color 0.15s ease;
 
             i {
               font-size: 0.875rem;
@@ -4767,7 +4892,9 @@ export interface OrderSessionGroup {
         .session-parent-card {
           background: var(--color-surface-card, #161920);
           border: 1px solid rgba(255, 255, 255, 0.09);
-          box-shadow: 0 4px 24px -2px rgba(0, 0, 0, 0.5), 0 1px 3px rgba(0, 0, 0, 0.3);
+          box-shadow:
+            0 4px 24px -2px rgba(0, 0, 0, 0.5),
+            0 1px 3px rgba(0, 0, 0, 0.3);
 
           &:hover {
             box-shadow: 0 12px 32px -4px rgba(0, 0, 0, 0.7);
@@ -5072,7 +5199,9 @@ export interface OrderSessionGroup {
         font-weight: 600;
         border: none;
         cursor: pointer;
-        transition: background 0.15s ease, transform 0.1s ease;
+        transition:
+          background 0.15s ease,
+          transform 0.1s ease;
         padding: 0 10px;
         height: 32px;
         min-width: 34px;
@@ -5248,7 +5377,9 @@ export interface OrderSessionGroup {
               border: 1px solid var(--color-border);
               background: var(--color-surface);
               color: var(--color-text-primary);
-              transition: border-color 0.15s ease, box-shadow 0.15s ease;
+              transition:
+                border-color 0.15s ease,
+                box-shadow 0.15s ease;
 
               &:focus {
                 border-color: var(--color-crimson, #dc2626);
@@ -5344,8 +5475,12 @@ export interface OrderSessionGroup {
                 width: 7px;
                 height: 7px;
                 border-radius: 50%;
-                &.veg { background: #16a34a; }
-                &.non-veg { background: #dc2626; }
+                &.veg {
+                  background: #16a34a;
+                }
+                &.non-veg {
+                  background: #dc2626;
+                }
               }
             }
           }
@@ -5428,8 +5563,14 @@ export interface OrderSessionGroup {
                     border-radius: 4px;
                     text-transform: uppercase;
                     letter-spacing: 0.03em;
-                    &.low { background: #fef3c7; color: #b45309; }
-                    &.out { background: #fee2e2; color: #b91c1c; }
+                    &.low {
+                      background: #fef3c7;
+                      color: #b45309;
+                    }
+                    &.out {
+                      background: #fee2e2;
+                      color: #b91c1c;
+                    }
                   }
                 }
               }
@@ -5580,7 +5721,9 @@ export interface OrderSessionGroup {
                 .takeaway-pill {
                   background: rgba(30, 41, 59, 0.12);
                   color: var(--color-onyx);
-                  .status-dot { background: var(--color-onyx); }
+                  .status-dot {
+                    background: var(--color-onyx);
+                  }
                 }
 
                 .takeaway-ref-badge {
@@ -5643,25 +5786,33 @@ export interface OrderSessionGroup {
                     &.available {
                       background: rgba(22, 163, 74, 0.12);
                       color: #16a34a;
-                      .status-dot { background: #16a34a; }
+                      .status-dot {
+                        background: #16a34a;
+                      }
                     }
 
                     &.occupied {
                       background: rgba(220, 38, 38, 0.12);
                       color: #dc2626;
-                      .status-dot { background: #dc2626; }
+                      .status-dot {
+                        background: #dc2626;
+                      }
                     }
 
                     &.reserved {
                       background: rgba(217, 119, 6, 0.12);
                       color: #d97706;
-                      .status-dot { background: #d97706; }
+                      .status-dot {
+                        background: #d97706;
+                      }
                     }
 
                     &.dirty {
                       background: rgba(100, 116, 139, 0.14);
                       color: #64748b;
-                      .status-dot { background: #64748b; }
+                      .status-dot {
+                        background: #64748b;
+                      }
                     }
                   }
                 }
@@ -7390,7 +7541,10 @@ export interface OrderSessionGroup {
           border: none;
           cursor: pointer;
           box-shadow: 0 2px 10px rgba(37, 211, 102, 0.3);
-          transition: transform 0.15s cubic-bezier(0.16, 1, 0.3, 1), background-color 0.15s ease, opacity 0.15s ease;
+          transition:
+            transform 0.15s cubic-bezier(0.16, 1, 0.3, 1),
+            background-color 0.15s ease,
+            opacity 0.15s ease;
 
           &:hover:not(:disabled) {
             background: #20ba5a;
@@ -8014,7 +8168,9 @@ export class OrderQueueComponent {
     if ((freshOrd.printCount || 0) > 0) {
       this.router.navigate(['/admin/billing', freshOrd.id], { queryParams: { reprint: 'true' } });
     } else {
-      this.router.navigate(['/admin/billing', freshOrd.id], { queryParams: { preview: 'thermal' } });
+      this.router.navigate(['/admin/billing', freshOrd.id], {
+        queryParams: { preview: 'thermal' },
+      });
     }
   }
 
@@ -8449,7 +8605,8 @@ export class OrderQueueComponent {
     if (rounds.length <= 1) return ord?.totalAmount !== undefined ? Math.round(ord.totalAmount) : 0;
     const sub = Math.round(rounds.reduce((sum, r) => sum + (r.subtotal || 0), 0) * 100) / 100;
     const tax = Math.round(rounds.reduce((sum, r) => sum + (r.taxAmount || 0), 0) * 100) / 100;
-    const disc = Math.round(rounds.reduce((sum, r) => sum + (r.discountAmount || 0), 0) * 100) / 100;
+    const disc =
+      Math.round(rounds.reduce((sum, r) => sum + (r.discountAmount || 0), 0) * 100) / 100;
     return Math.round(Math.max(0, sub + tax - disc));
   }
 
@@ -8466,14 +8623,20 @@ export class OrderQueueComponent {
 
   activeOrdersCount = computed(() => {
     return this.groupOrdersIntoSessions(this.orders()).filter(
-      (g) => !g.isAllCompleted && !g.isAllPaid && g.effectiveStatus !== 'COMPLETED' && g.effectiveStatus !== 'CANCELLED',
+      (g) =>
+        !g.isAllCompleted &&
+        !g.isAllPaid &&
+        g.effectiveStatus !== 'COMPLETED' &&
+        g.effectiveStatus !== 'CANCELLED',
     ).length;
   });
 
   countByStatus(status: OrderStatus): number {
     const groups = this.groupOrdersIntoSessions(this.orders());
     if (status === 'COMPLETED') {
-      return groups.filter((g) => g.isAllCompleted || g.isAllPaid || g.effectiveStatus === 'COMPLETED').length;
+      return groups.filter(
+        (g) => g.isAllCompleted || g.isAllPaid || g.effectiveStatus === 'COMPLETED',
+      ).length;
     }
     return groups.filter((g) => g.orders.some((o) => o.status === status)).length;
   }
@@ -8487,10 +8650,16 @@ export class OrderQueueComponent {
 
     if (st === 'ACTIVE') {
       list = list.filter(
-        (g) => !g.isAllCompleted && !g.isAllPaid && g.effectiveStatus !== 'COMPLETED' && g.effectiveStatus !== 'CANCELLED',
+        (g) =>
+          !g.isAllCompleted &&
+          !g.isAllPaid &&
+          g.effectiveStatus !== 'COMPLETED' &&
+          g.effectiveStatus !== 'CANCELLED',
       );
     } else if (st === 'COMPLETED') {
-      list = list.filter((g) => g.isAllCompleted || g.isAllPaid || g.effectiveStatus === 'COMPLETED');
+      list = list.filter(
+        (g) => g.isAllCompleted || g.isAllPaid || g.effectiveStatus === 'COMPLETED',
+      );
     }
 
     const q = this.searchQuery().toLowerCase().trim();
@@ -8502,9 +8671,7 @@ export class OrderQueueComponent {
           (g.customerPhone && g.customerPhone.toLowerCase().includes(q)) ||
           (g.pickupReference && g.pickupReference.toLowerCase().includes(q)) ||
           (g.tableNumber && g.tableNumber.toLowerCase().includes(q)) ||
-          g.orders.some((o) =>
-            o.items.some((it) => it.name.toLowerCase().includes(q)),
-          ),
+          g.orders.some((o) => o.items.some((it) => it.name.toLowerCase().includes(q))),
       );
     }
 
@@ -8639,135 +8806,140 @@ export class OrderQueueComponent {
     if (this.isSubmittingManualOrder || this.manualItems.length === 0) return;
     this.isSubmittingManualOrder = true;
     try {
+      const isTakeaway = this.manualOrderType === 'TAKEAWAY';
 
-    const isTakeaway = this.manualOrderType === 'TAKEAWAY';
-
-    if (isTakeaway) {
-      if (!this.isTakeawayEnabled()) {
-        this.toastService.error('Takeaway orders are currently disabled in restaurant settings.');
-        return;
-      }
-    } else {
-      if (!this.manualTableId() || this.manualTableId() === 'counter') {
-        const firstAvail = this.tables().find((t) => t.status === 'AVAILABLE');
-        if (!firstAvail) {
-          this.toastService.error('A dining table is required for dine-in orders.');
+      if (isTakeaway) {
+        if (!this.isTakeawayEnabled()) {
+          this.toastService.error('Takeaway orders are currently disabled in restaurant settings.');
           return;
         }
-        this.manualTableId.set(firstAvail.id);
+      } else {
+        if (!this.manualTableId() || this.manualTableId() === 'counter') {
+          const firstAvail = this.tables().find((t) => t.status === 'AVAILABLE');
+          if (!firstAvail) {
+            this.toastService.error('A dining table is required for dine-in orders.');
+            return;
+          }
+          this.manualTableId.set(firstAvail.id);
+        }
       }
-    }
 
-    const validation = this.mock.validateOrderStockAvailability(this.manualItems);
-    if (!validation.isValid) {
-      this.toastService.error(`Cannot place order: ${validation.errors.join('; ')}`);
-      return;
-    }
+      const validation = this.mock.validateOrderStockAvailability(this.manualItems);
+      if (!validation.isValid) {
+        this.toastService.error(`Cannot place order: ${validation.errors.join('; ')}`);
+        return;
+      }
 
-    const sub = this.manualSubtotal();
-    const cgstAmt = Math.round(sub * (this.cgstRate / 100) * 100) / 100;
-    const sgstAmt = Math.round(sub * (this.sgstRate / 100) * 100) / 100;
-    const tax = Math.round((cgstAmt + sgstAmt) * 100) / 100;
-    const tot = this.manualTotal();
+      const sub = this.manualSubtotal();
+      const cgstAmt = Math.round(sub * (this.cgstRate / 100) * 100) / 100;
+      const sgstAmt = Math.round(sub * (this.sgstRate / 100) * 100) / 100;
+      const tax = Math.round((cgstAmt + sgstAmt) * 100) / 100;
+      const tot = this.manualTotal();
 
-    const selectedTable = isTakeaway
-      ? undefined
-      : this.tables().find((t) => t.id === this.manualTableId());
+      const selectedTable = isTakeaway
+        ? undefined
+        : this.tables().find((t) => t.id === this.manualTableId());
 
-    const existingActiveTableOrder = !isTakeaway && selectedTable
-      ? this.orders().find(
-          (o) =>
-            (o.tableId === selectedTable.id || o.tableNumber === selectedTable.number) &&
-            o.status !== 'CANCELLED' &&
-            o.paymentStatus !== 'PAID' &&
-            o.seatingSessionId,
-        )
-      : undefined;
+      const existingActiveTableOrder =
+        !isTakeaway && selectedTable
+          ? this.orders().find(
+              (o) =>
+                (o.tableId === selectedTable.id || o.tableNumber === selectedTable.number) &&
+                o.status !== 'CANCELLED' &&
+                o.paymentStatus !== 'PAID' &&
+                o.seatingSessionId,
+            )
+          : undefined;
 
-    const generateUuid = () =>
-      typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
-        ? crypto.randomUUID()
-        : 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
-            const r = (Math.random() * 16) | 0;
-            const v = c === 'x' ? r : (r & 0x3) | 0x8;
-            return v.toString(16);
-          });
+      const generateUuid = () =>
+        typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+          ? crypto.randomUUID()
+          : 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+              const r = (Math.random() * 16) | 0;
+              const v = c === 'x' ? r : (r & 0x3) | 0x8;
+              return v.toString(16);
+            });
 
-    const assignedSessionId =
-      existingActiveTableOrder?.seatingSessionId ||
-      selectedTable?.currentSeatingSessionId ||
-      (!isTakeaway && selectedTable ? generateUuid() : undefined);
+      const assignedSessionId =
+        existingActiveTableOrder?.seatingSessionId ||
+        selectedTable?.currentSeatingSessionId ||
+        (!isTakeaway && selectedTable ? generateUuid() : undefined);
 
-    if (!isTakeaway && selectedTable && !selectedTable.currentSeatingSessionId && assignedSessionId) {
-      selectedTable.currentSeatingSessionId = assignedSessionId;
-    }
+      if (
+        !isTakeaway &&
+        selectedTable &&
+        !selectedTable.currentSeatingSessionId &&
+        assignedSessionId
+      ) {
+        selectedTable.currentSeatingSessionId = assignedSessionId;
+      }
 
-    const orderNum = `#ORD-${Math.floor(100 + Math.random() * 900)}`;
+      const orderNum = `#ORD-${Math.floor(100 + Math.random() * 900)}`;
 
-    const orderUuid = generateUuid();
+      const orderUuid = generateUuid();
 
-    const newOrder: Order = {
-      id: orderUuid,
-      orderNumber: orderNum,
-      orderType: this.manualOrderType,
-      pickupReference: isTakeaway ? this.manualPickupRef : undefined,
-      restaurantSlug: 'gurukripa-dhaba',
-      tableId: !isTakeaway && selectedTable ? selectedTable.id : undefined,
-      tableNumber: !isTakeaway && selectedTable ? selectedTable.number : undefined,
-      seatingSessionId: assignedSessionId,
-      customerName:
-        this.manualCustomerName.trim() || (isTakeaway ? 'Counter Guest' : 'Walk-in Guest'),
-      customerPhone: this.manualCustomerPhone.replace(/\s+/g, '').trim() || '',
-      items: [...this.manualItems],
-      subtotal: sub,
-      discountAmount: 0,
-      taxAmount: tax,
-      cgstRate: this.cgstRate,
-      sgstRate: this.sgstRate,
-      cgstAmount: cgstAmt,
-      sgstAmount: sgstAmt,
-      totalAmount: tot,
-      status: 'ACCEPTED',
-      paymentStatus: 'UNPAID',
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-      timeline: [
-        {
-          status: 'ACCEPTED',
-          timestamp: new Date().toISOString(),
-          note: isTakeaway
-            ? `Manual takeaway order (${this.manualPickupRef}) created at Counter`
-            : `Manual walk-in order created for Table ${selectedTable?.number}`,
-        },
-      ],
-    };
+      const newOrder: Order = {
+        id: orderUuid,
+        orderNumber: orderNum,
+        orderType: this.manualOrderType,
+        pickupReference: isTakeaway ? this.manualPickupRef : undefined,
+        restaurantSlug: 'gurukripa-dhaba',
+        tableId: !isTakeaway && selectedTable ? selectedTable.id : undefined,
+        tableNumber: !isTakeaway && selectedTable ? selectedTable.number : undefined,
+        seatingSessionId: assignedSessionId,
+        customerName:
+          this.manualCustomerName.trim() || (isTakeaway ? 'Counter Guest' : 'Walk-in Guest'),
+        customerPhone: this.manualCustomerPhone.replace(/\s+/g, '').trim() || '',
+        items: [...this.manualItems],
+        subtotal: sub,
+        discountAmount: 0,
+        taxAmount: tax,
+        cgstRate: this.cgstRate,
+        sgstRate: this.sgstRate,
+        cgstAmount: cgstAmt,
+        sgstAmount: sgstAmt,
+        totalAmount: tot,
+        status: 'ACCEPTED',
+        paymentStatus: 'UNPAID',
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        timeline: [
+          {
+            status: 'ACCEPTED',
+            timestamp: new Date().toISOString(),
+            note: isTakeaway
+              ? `Manual takeaway order (${this.manualPickupRef}) created at Counter`
+              : `Manual walk-in order created for Table ${selectedTable?.number}`,
+          },
+        ],
+      };
 
-    // Persist to backend database via API and record in memory/localStorage
-    this.dataService.addOrder(newOrder);
+      // Persist to backend database via API and record in memory/localStorage
+      this.dataService.addOrder(newOrder);
 
-    // Reserve stock for the newly accepted manual order
-    this.mock.reserveStockForOrder(newOrder.id);
+      // Reserve stock for the newly accepted manual order
+      this.mock.reserveStockForOrder(newOrder.id);
 
-    // If dining at a table, mark table as OCCUPIED and link activeOrderId
-    if (!isTakeaway && selectedTable) {
-      const updatedTables = this.mock
-        .tables()
-        .map((t) =>
-          t.id === selectedTable.id
-            ? { ...t, status: 'OCCUPIED' as const, activeOrderId: newOrder.id }
-            : t,
-        );
-      this.mock.tables.set(updatedTables);
-      this.mock.saveLocal('tables', updatedTables);
-      this.mock.updateTableStatus(selectedTable.id, 'OCCUPIED');
-    }
+      // If dining at a table, mark table as OCCUPIED and link activeOrderId
+      if (!isTakeaway && selectedTable) {
+        const updatedTables = this.mock
+          .tables()
+          .map((t) =>
+            t.id === selectedTable.id
+              ? { ...t, status: 'OCCUPIED' as const, activeOrderId: newOrder.id }
+              : t,
+          );
+        this.mock.tables.set(updatedTables);
+        this.mock.saveLocal('tables', updatedTables);
+        this.mock.updateTableStatus(selectedTable.id, 'OCCUPIED');
+      }
 
-    this.toastService.success(
-      isTakeaway
-        ? `Takeaway order ${newOrder.orderNumber} placed (Pickup Ref: ${newOrder.pickupReference})`
-        : `Manual order ${newOrder.orderNumber} placed for Table ${newOrder.tableNumber}`,
-    );
-    this.showManualModal = false;
+      this.toastService.success(
+        isTakeaway
+          ? `Takeaway order ${newOrder.orderNumber} placed (Pickup Ref: ${newOrder.pickupReference})`
+          : `Manual order ${newOrder.orderNumber} placed for Table ${newOrder.tableNumber}`,
+      );
+      this.showManualModal = false;
     } finally {
       this.isSubmittingManualOrder = false;
     }
@@ -8939,9 +9111,12 @@ export class OrderQueueComponent {
     const sessionOrders = this.getSessionOrders(order);
     if (sessionOrders.length > 1) {
       const allItems = sessionOrders.flatMap((o) => o.items);
-      const sub = Math.round(sessionOrders.reduce((sum, o) => sum + (o.subtotal || 0), 0) * 100) / 100;
-      const tax = Math.round(sessionOrders.reduce((sum, o) => sum + (o.taxAmount || 0), 0) * 100) / 100;
-      const disc = Math.round(sessionOrders.reduce((sum, o) => sum + (o.discountAmount || 0), 0) * 100) / 100;
+      const sub =
+        Math.round(sessionOrders.reduce((sum, o) => sum + (o.subtotal || 0), 0) * 100) / 100;
+      const tax =
+        Math.round(sessionOrders.reduce((sum, o) => sum + (o.taxAmount || 0), 0) * 100) / 100;
+      const disc =
+        Math.round(sessionOrders.reduce((sum, o) => sum + (o.discountAmount || 0), 0) * 100) / 100;
       const tot = Math.max(0, Math.round((sub + tax - disc) * 100) / 100);
       const consolidated: Order = {
         ...order,
@@ -9590,7 +9765,9 @@ export class OrderQueueComponent {
             this.toastService.success('WhatsApp bill delivered directly to customer!');
             this.closeWhatsAppModal();
           } else {
-            this.toastService.warning(res.error || 'Direct dispatch failed, opening WhatsApp fallback...');
+            this.toastService.warning(
+              res.error || 'Direct dispatch failed, opening WhatsApp fallback...',
+            );
             launchExternalUrl(
               `https://web.whatsapp.com/send?phone=${phone.replace(/\D/g, '')}&text=${encodeURIComponent(message)}`,
             );

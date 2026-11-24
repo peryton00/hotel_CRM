@@ -805,14 +805,38 @@
       background: rgba(255, 255, 255, 0.04);
     }
 
-    &[data-tab="general"] .nav-btn-icon-box { background: rgba(249, 115, 22, 0.2); color: #fb923c; }
-    &[data-tab="tax"] .nav-btn-icon-box { background: rgba(16, 185, 129, 0.2); color: #34d399; }
-    &[data-tab="printer"] .nav-btn-icon-box { background: rgba(139, 92, 246, 0.2); color: #a78bfa; }
-    &[data-tab="whatsapp"] .nav-btn-icon-box { background: rgba(34, 197, 94, 0.2); color: #4ade80; }
-    &[data-tab="service"] .nav-btn-icon-box { background: rgba(245, 158, 11, 0.2); color: #fbbf24; }
-    &[data-tab="maintenance"] .nav-btn-icon-box { background: rgba(14, 165, 233, 0.2); color: #38bdf8; }
-    &[data-tab="reset"] .nav-btn-icon-box { background: rgba(239, 68, 68, 0.2); color: #f87171; }
-    &[data-tab="security"] .nav-btn-icon-box { background: rgba(99, 102, 241, 0.2); color: #818cf8; }
+    &[data-tab='general'] .nav-btn-icon-box {
+      background: rgba(249, 115, 22, 0.2);
+      color: #fb923c;
+    }
+    &[data-tab='tax'] .nav-btn-icon-box {
+      background: rgba(16, 185, 129, 0.2);
+      color: #34d399;
+    }
+    &[data-tab='printer'] .nav-btn-icon-box {
+      background: rgba(139, 92, 246, 0.2);
+      color: #a78bfa;
+    }
+    &[data-tab='whatsapp'] .nav-btn-icon-box {
+      background: rgba(34, 197, 94, 0.2);
+      color: #4ade80;
+    }
+    &[data-tab='service'] .nav-btn-icon-box {
+      background: rgba(245, 158, 11, 0.2);
+      color: #fbbf24;
+    }
+    &[data-tab='maintenance'] .nav-btn-icon-box {
+      background: rgba(14, 165, 233, 0.2);
+      color: #38bdf8;
+    }
+    &[data-tab='reset'] .nav-btn-icon-box {
+      background: rgba(239, 68, 68, 0.2);
+      color: #f87171;
+    }
+    &[data-tab='security'] .nav-btn-icon-box {
+      background: rgba(99, 102, 241, 0.2);
+      color: #818cf8;
+    }
 
     &.active {
       background: rgba(234, 88, 12, 0.15) !important;
@@ -873,7 +897,11 @@
   }
 
   .apple-callout-guide {
-    background: linear-gradient(135deg, rgba(245, 158, 11, 0.08) 0%, rgba(245, 158, 11, 0.02) 100%) !important;
+    background: linear-gradient(
+      135deg,
+      rgba(245, 158, 11, 0.08) 0%,
+      rgba(245, 158, 11, 0.02) 100%
+    ) !important;
     border-color: rgba(245, 158, 11, 0.22) !important;
 
     .guide-lead {
@@ -2963,7 +2991,9 @@
 
       &.is-today {
         border-color: #ffffff !important;
-        box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.9), 0 2px 10px rgba(220, 38, 38, 0.5) !important;
+        box-shadow:
+          0 0 0 2px rgba(255, 255, 255, 0.9),
+          0 2px 10px rgba(220, 38, 38, 0.5) !important;
 
         .day-num {
           color: #ffffff !important;
@@ -3622,8 +3652,6 @@
         }
       }
     }
-
-
 
     .no-orders-box {
       background: #161920 !important;

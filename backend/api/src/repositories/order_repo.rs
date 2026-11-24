@@ -263,8 +263,7 @@ impl OrderRepository {
             "TAKEAWAY" => "TAKEAWAY",
             _ => "DINE_IN",
         };
-        let generated_order_number =
-            format!("ORD-{}", order_id.to_string()[..8].to_uppercase());
+        let generated_order_number = format!("ORD-{}", order_id.to_string()[..8].to_uppercase());
         let order = sqlx::query_as::<_, Order>(
             r#"
             INSERT INTO orders (
@@ -1157,7 +1156,11 @@ impl OrderRepository {
         )
         .bind(order_id)
         .bind(&updated_order.status)
-        .bind(format!("Order items updated: {} items (New Total: ₹{})", inserted_items.len(), total_amount_paise / 100))
+        .bind(format!(
+            "Order items updated: {} items (New Total: ₹{})",
+            inserted_items.len(),
+            total_amount_paise / 100
+        ))
         .bind(staff_id)
         .execute(&mut *tx)
         .await;

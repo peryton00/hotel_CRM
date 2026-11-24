@@ -235,7 +235,8 @@ import { environment } from '../../../../environments/environment';
                 <div class="empty-text-wrap">
                   <strong class="empty-title">All Tables Available</strong>
                   <span class="empty-desc"
-                    >No active reservations pending. All floor tables are free for walk-in dining.</span
+                    >No active reservations pending. All floor tables are free for walk-in
+                    dining.</span
                   >
                 </div>
               </div>
@@ -335,7 +336,8 @@ import { environment } from '../../../../environments/environment';
                               @for (tbl of availableTables(); track tbl.id) {
                                 @if (tbl.id !== res.tableId) {
                                   <option [value]="tbl.id">
-                                    Table {{ tbl.number }} (Cap: {{ tbl.capacity }}) - {{ tbl.section }}
+                                    Table {{ tbl.number }} (Cap: {{ tbl.capacity }}) -
+                                    {{ tbl.section }}
                                   </option>
                                 }
                               }
@@ -792,7 +794,13 @@ import { environment } from '../../../../environments/environment';
                           [style.height.px]="getTableHeight(tbl)"
                           (pointerdown)="onCanvasPointerDownTable($event, tbl)"
                           (click)="selectTable(tbl); $event.stopPropagation()"
-                          [title]="isDesignMode() ? 'Drag Table ' + tbl.number + ' to reposition or drag corner handle to resize' : 'Table ' + tbl.number + ' (' + tbl.status + ')'"
+                          [title]="
+                            isDesignMode()
+                              ? 'Drag Table ' +
+                                tbl.number +
+                                ' to reposition or drag corner handle to resize'
+                              : 'Table ' + tbl.number + ' (' + tbl.status + ')'
+                          "
                         >
                           <!-- Visual Chairs Around Table -->
                           <div class="table-chairs">
@@ -819,9 +827,15 @@ import { environment } from '../../../../environments/environment';
                               <div
                                 class="tbl-active-pill"
                                 [class.pill-paid]="isOrderPaid(actOrd)"
-                                title="Order #{{ actOrd.orderNumber }} ({{ isOrderPaid(actOrd) ? 'PAID' : '₹' + actOrd.totalAmount }})"
+                                title="Order #{{ actOrd.orderNumber }} ({{
+                                  isOrderPaid(actOrd) ? 'PAID' : '₹' + actOrd.totalAmount
+                                }})"
                               >
-                                <i class="ph" [class.ph-check-circle]="isOrderPaid(actOrd)" [class.ph-receipt]="!isOrderPaid(actOrd)"></i>
+                                <i
+                                  class="ph"
+                                  [class.ph-check-circle]="isOrderPaid(actOrd)"
+                                  [class.ph-receipt]="!isOrderPaid(actOrd)"
+                                ></i>
                                 <span>{{ actOrd.orderNumber }}</span>
                               </div>
                             } @else {
@@ -908,16 +922,28 @@ import { environment } from '../../../../environments/environment';
           <!-- MODAL: CREATE NEW SECTION / ROOM (INSIDE CANVAS WORKSPACE) -->
           @if (showCanvasCreateSectionModal()) {
             <div class="modal-overlay" (click)="showCanvasCreateSectionModal.set(false)">
-              <div class="modal-card apple-canvas-dialog" (click)="$event.stopPropagation()" role="dialog" aria-modal="true">
+              <div
+                class="modal-card apple-canvas-dialog"
+                (click)="$event.stopPropagation()"
+                role="dialog"
+                aria-modal="true"
+              >
                 <div class="modal-header">
                   <div class="dialog-icon-badge crimson-badge">
                     <i class="ph ph-squares-four"></i>
                   </div>
                   <div>
                     <h3 class="heading-card">Create Dining Section / Room</h3>
-                    <span class="text-xs text-muted">Add a distinct seating room zone to the interactive floor plan</span>
+                    <span class="text-xs text-muted"
+                      >Add a distinct seating room zone to the interactive floor plan</span
+                    >
                   </div>
-                  <button type="button" class="close-btn" (click)="showCanvasCreateSectionModal.set(false)" aria-label="Close">
+                  <button
+                    type="button"
+                    class="close-btn"
+                    (click)="showCanvasCreateSectionModal.set(false)"
+                    aria-label="Close"
+                  >
                     <i class="ph ph-x"></i>
                   </button>
                 </div>
@@ -935,10 +961,34 @@ import { environment } from '../../../../environments/environment';
                     />
                     <div class="quick-pills-row" style="margin-top: 8px;">
                       <span class="text-xs text-muted">Quick ideas:</span>
-                      <button type="button" class="quick-pill" (click)="canvasNewSectionName.set('Rooftop Lounge')">Rooftop Lounge</button>
-                      <button type="button" class="quick-pill" (click)="canvasNewSectionName.set('Private VIP Room')">Private VIP</button>
-                      <button type="button" class="quick-pill" (click)="canvasNewSectionName.set('Garden Patio')">Garden Patio</button>
-                      <button type="button" class="quick-pill" (click)="canvasNewSectionName.set('Courtyard Deck')">Courtyard Deck</button>
+                      <button
+                        type="button"
+                        class="quick-pill"
+                        (click)="canvasNewSectionName.set('Rooftop Lounge')"
+                      >
+                        Rooftop Lounge
+                      </button>
+                      <button
+                        type="button"
+                        class="quick-pill"
+                        (click)="canvasNewSectionName.set('Private VIP Room')"
+                      >
+                        Private VIP
+                      </button>
+                      <button
+                        type="button"
+                        class="quick-pill"
+                        (click)="canvasNewSectionName.set('Garden Patio')"
+                      >
+                        Garden Patio
+                      </button>
+                      <button
+                        type="button"
+                        class="quick-pill"
+                        (click)="canvasNewSectionName.set('Courtyard Deck')"
+                      >
+                        Courtyard Deck
+                      </button>
                     </div>
                   </div>
 
@@ -948,7 +998,9 @@ import { environment } from '../../../../environments/environment';
                       <button
                         type="button"
                         class="preset-dim-card"
-                        [class.active]="canvasNewSectionWidth() === 620 && canvasNewSectionHeight() === 420"
+                        [class.active]="
+                          canvasNewSectionWidth() === 620 && canvasNewSectionHeight() === 420
+                        "
                         (click)="canvasNewSectionWidth.set(620); canvasNewSectionHeight.set(420)"
                       >
                         <div class="dim-shape-icon std"></div>
@@ -958,7 +1010,9 @@ import { environment } from '../../../../environments/environment';
                       <button
                         type="button"
                         class="preset-dim-card"
-                        [class.active]="canvasNewSectionWidth() === 480 && canvasNewSectionHeight() === 340"
+                        [class.active]="
+                          canvasNewSectionWidth() === 480 && canvasNewSectionHeight() === 340
+                        "
                         (click)="canvasNewSectionWidth.set(480); canvasNewSectionHeight.set(340)"
                       >
                         <div class="dim-shape-icon sm"></div>
@@ -968,7 +1022,9 @@ import { environment } from '../../../../environments/environment';
                       <button
                         type="button"
                         class="preset-dim-card"
-                        [class.active]="canvasNewSectionWidth() === 840 && canvasNewSectionHeight() === 520"
+                        [class.active]="
+                          canvasNewSectionWidth() === 840 && canvasNewSectionHeight() === 520
+                        "
                         (click)="canvasNewSectionWidth.set(840); canvasNewSectionHeight.set(520)"
                       >
                         <div class="dim-shape-icon lg"></div>
@@ -980,8 +1036,18 @@ import { environment } from '../../../../environments/environment';
                 </div>
 
                 <div class="modal-footer">
-                  <button type="button" class="btn btn-secondary" (click)="showCanvasCreateSectionModal.set(false)">Cancel</button>
-                  <button type="button" class="btn btn-primary" (click)="submitCanvasCreateSection()">
+                  <button
+                    type="button"
+                    class="btn btn-secondary"
+                    (click)="showCanvasCreateSectionModal.set(false)"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    class="btn btn-primary"
+                    (click)="submitCanvasCreateSection()"
+                  >
                     <i class="ph ph-plus"></i>
                     <span>Create Section</span>
                   </button>
@@ -993,16 +1059,28 @@ import { environment } from '../../../../environments/environment';
           <!-- MODAL: CREATE NEW ARCHITECTURAL FIGURE / FIXTURE -->
           @if (showCanvasCreateFixtureModal()) {
             <div class="modal-overlay" (click)="showCanvasCreateFixtureModal.set(false)">
-              <div class="modal-card apple-canvas-dialog" (click)="$event.stopPropagation()" role="dialog" aria-modal="true">
+              <div
+                class="modal-card apple-canvas-dialog"
+                (click)="$event.stopPropagation()"
+                role="dialog"
+                aria-modal="true"
+              >
                 <div class="modal-header">
                   <div class="dialog-icon-badge amber-badge">
                     <i class="ph ph-shapes"></i>
                   </div>
                   <div>
                     <h3 class="heading-card">Add Architectural Figure</h3>
-                    <span class="text-xs text-muted">Place architectural cues, service desks, or decor markers on canvas</span>
+                    <span class="text-xs text-muted"
+                      >Place architectural cues, service desks, or decor markers on canvas</span
+                    >
                   </div>
-                  <button type="button" class="close-btn" (click)="showCanvasCreateFixtureModal.set(false)" aria-label="Close">
+                  <button
+                    type="button"
+                    class="close-btn"
+                    (click)="showCanvasCreateFixtureModal.set(false)"
+                    aria-label="Close"
+                  >
                     <i class="ph ph-x"></i>
                   </button>
                 </div>
@@ -1015,7 +1093,11 @@ import { environment } from '../../../../environments/environment';
                         type="button"
                         class="fig-type-btn"
                         [class.active]="canvasNewFixtureType() === 'CASHIER'"
-                        (click)="canvasNewFixtureType.set('CASHIER'); canvasNewFixtureLabel.set('Cashier / Billing Counter'); canvasNewFixtureIcon.set('ph-cash-register')"
+                        (click)="
+                          canvasNewFixtureType.set('CASHIER');
+                          canvasNewFixtureLabel.set('Cashier / Billing Counter');
+                          canvasNewFixtureIcon.set('ph-cash-register')
+                        "
                       >
                         <i class="ph ph-cash-register"></i>
                         <span>Cashier</span>
@@ -1024,7 +1106,11 @@ import { environment } from '../../../../environments/environment';
                         type="button"
                         class="fig-type-btn"
                         [class.active]="canvasNewFixtureType() === 'ENTRANCE'"
-                        (click)="canvasNewFixtureType.set('ENTRANCE'); canvasNewFixtureLabel.set('Entrance Door'); canvasNewFixtureIcon.set('ph-door')"
+                        (click)="
+                          canvasNewFixtureType.set('ENTRANCE');
+                          canvasNewFixtureLabel.set('Entrance Door');
+                          canvasNewFixtureIcon.set('ph-door')
+                        "
                       >
                         <i class="ph ph-door"></i>
                         <span>Entrance</span>
@@ -1033,7 +1119,11 @@ import { environment } from '../../../../environments/environment';
                         type="button"
                         class="fig-type-btn"
                         [class.active]="canvasNewFixtureType() === 'KITCHEN'"
-                        (click)="canvasNewFixtureType.set('KITCHEN'); canvasNewFixtureLabel.set('Kitchen Pass'); canvasNewFixtureIcon.set('ph-cooking-pot')"
+                        (click)="
+                          canvasNewFixtureType.set('KITCHEN');
+                          canvasNewFixtureLabel.set('Kitchen Pass');
+                          canvasNewFixtureIcon.set('ph-cooking-pot')
+                        "
                       >
                         <i class="ph ph-cooking-pot"></i>
                         <span>Kitchen</span>
@@ -1042,7 +1132,11 @@ import { environment } from '../../../../environments/environment';
                         type="button"
                         class="fig-type-btn"
                         [class.active]="canvasNewFixtureType() === 'BAR'"
-                        (click)="canvasNewFixtureType.set('BAR'); canvasNewFixtureLabel.set('Cocktail Bar'); canvasNewFixtureIcon.set('ph-martini')"
+                        (click)="
+                          canvasNewFixtureType.set('BAR');
+                          canvasNewFixtureLabel.set('Cocktail Bar');
+                          canvasNewFixtureIcon.set('ph-martini')
+                        "
                       >
                         <i class="ph ph-martini"></i>
                         <span>Bar</span>
@@ -1051,7 +1145,11 @@ import { environment } from '../../../../environments/environment';
                         type="button"
                         class="fig-type-btn"
                         [class.active]="canvasNewFixtureType() === 'RESTROOM'"
-                        (click)="canvasNewFixtureType.set('RESTROOM'); canvasNewFixtureLabel.set('Restrooms'); canvasNewFixtureIcon.set('ph-toilet')"
+                        (click)="
+                          canvasNewFixtureType.set('RESTROOM');
+                          canvasNewFixtureLabel.set('Restrooms');
+                          canvasNewFixtureIcon.set('ph-toilet')
+                        "
                       >
                         <i class="ph ph-toilet"></i>
                         <span>Restroom</span>
@@ -1060,7 +1158,11 @@ import { environment } from '../../../../environments/environment';
                         type="button"
                         class="fig-type-btn"
                         [class.active]="canvasNewFixtureType() === 'STAGE'"
-                        (click)="canvasNewFixtureType.set('STAGE'); canvasNewFixtureLabel.set('Live Music / DJ Stage'); canvasNewFixtureIcon.set('ph-speaker-high')"
+                        (click)="
+                          canvasNewFixtureType.set('STAGE');
+                          canvasNewFixtureLabel.set('Live Music / DJ Stage');
+                          canvasNewFixtureIcon.set('ph-speaker-high')
+                        "
                       >
                         <i class="ph ph-speaker-high"></i>
                         <span>Stage/DJ</span>
@@ -1069,7 +1171,11 @@ import { environment } from '../../../../environments/environment';
                         type="button"
                         class="fig-type-btn"
                         [class.active]="canvasNewFixtureType() === 'BUFFET'"
-                        (click)="canvasNewFixtureType.set('BUFFET'); canvasNewFixtureLabel.set('Buffet Station'); canvasNewFixtureIcon.set('ph-bowl-food')"
+                        (click)="
+                          canvasNewFixtureType.set('BUFFET');
+                          canvasNewFixtureLabel.set('Buffet Station');
+                          canvasNewFixtureIcon.set('ph-bowl-food')
+                        "
                       >
                         <i class="ph ph-bowl-food"></i>
                         <span>Buffet</span>
@@ -1078,7 +1184,11 @@ import { environment } from '../../../../environments/environment';
                         type="button"
                         class="fig-type-btn"
                         [class.active]="canvasNewFixtureType() === 'WINDOW'"
-                        (click)="canvasNewFixtureType.set('WINDOW'); canvasNewFixtureLabel.set('Glass Window Wall'); canvasNewFixtureIcon.set('ph-sun-dim')"
+                        (click)="
+                          canvasNewFixtureType.set('WINDOW');
+                          canvasNewFixtureLabel.set('Glass Window Wall');
+                          canvasNewFixtureIcon.set('ph-sun-dim')
+                        "
                       >
                         <i class="ph ph-sun-dim"></i>
                         <span>Window</span>
@@ -1087,7 +1197,11 @@ import { environment } from '../../../../environments/environment';
                         type="button"
                         class="fig-type-btn"
                         [class.active]="canvasNewFixtureType() === 'STAIRS'"
-                        (click)="canvasNewFixtureType.set('STAIRS'); canvasNewFixtureLabel.set('Staircase / Elevator'); canvasNewFixtureIcon.set('ph-stairs')"
+                        (click)="
+                          canvasNewFixtureType.set('STAIRS');
+                          canvasNewFixtureLabel.set('Staircase / Elevator');
+                          canvasNewFixtureIcon.set('ph-stairs')
+                        "
                       >
                         <i class="ph ph-stairs"></i>
                         <span>Stairs</span>
@@ -1096,7 +1210,11 @@ import { environment } from '../../../../environments/environment';
                         type="button"
                         class="fig-type-btn"
                         [class.active]="canvasNewFixtureType() === 'WALL'"
-                        (click)="canvasNewFixtureType.set('WALL'); canvasNewFixtureLabel.set('Partition / Planter'); canvasNewFixtureIcon.set('ph-plant')"
+                        (click)="
+                          canvasNewFixtureType.set('WALL');
+                          canvasNewFixtureLabel.set('Partition / Planter');
+                          canvasNewFixtureIcon.set('ph-plant')
+                        "
                       >
                         <i class="ph ph-plant"></i>
                         <span>Plant/Wall</span>
@@ -1105,7 +1223,11 @@ import { environment } from '../../../../environments/environment';
                         type="button"
                         class="fig-type-btn"
                         [class.active]="canvasNewFixtureType() === 'CUSTOM'"
-                        (click)="canvasNewFixtureType.set('CUSTOM'); canvasNewFixtureLabel.set('Custom Fixture'); canvasNewFixtureIcon.set('ph-cube')"
+                        (click)="
+                          canvasNewFixtureType.set('CUSTOM');
+                          canvasNewFixtureLabel.set('Custom Fixture');
+                          canvasNewFixtureIcon.set('ph-cube')
+                        "
                       >
                         <i class="ph ph-cube"></i>
                         <span>Custom...</span>
@@ -1140,8 +1262,18 @@ import { environment } from '../../../../environments/environment';
                 </div>
 
                 <div class="modal-footer">
-                  <button type="button" class="btn btn-secondary" (click)="showCanvasCreateFixtureModal.set(false)">Cancel</button>
-                  <button type="button" class="btn btn-primary" (click)="submitCanvasCreateFixture()">
+                  <button
+                    type="button"
+                    class="btn btn-secondary"
+                    (click)="showCanvasCreateFixtureModal.set(false)"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    class="btn btn-primary"
+                    (click)="submitCanvasCreateFixture()"
+                  >
                     <i class="ph ph-plus"></i>
                     <span>Place Figure on Canvas</span>
                   </button>
@@ -1490,7 +1622,8 @@ import { environment } from '../../../../environments/environment';
 
                             <div class="header-right-cluster">
                               <span class="ord-time apple-ord-time">
-                                <i class="ph ph-clock"></i> {{ actOrder.createdAt | date: 'shortTime' }}
+                                <i class="ph ph-clock"></i>
+                                {{ actOrder.createdAt | date: 'shortTime' }}
                               </span>
                               <app-status-badge [status]="actOrder.status"></app-status-badge>
                             </div>
@@ -1499,9 +1632,15 @@ import { environment } from '../../../../environments/environment';
                           <!-- 2. Guest & Server Info Strip (Apple Recessed Surface) -->
                           <div class="guest-server-recessed">
                             <div class="guest-compact-meta">
-                              <div class="guest-avatar-disc">{{ (actOrder.customerName || 'G').charAt(0).toUpperCase() }}</div>
+                              <div class="guest-avatar-disc">
+                                {{ (actOrder.customerName || 'G').charAt(0).toUpperCase() }}
+                              </div>
                               <div class="guest-text-col truncate">
-                                <span class="cust-name-clean truncate" [title]="actOrder.customerName">{{ actOrder.customerName || 'Walk-in Guest' }}</span>
+                                <span
+                                  class="cust-name-clean truncate"
+                                  [title]="actOrder.customerName"
+                                  >{{ actOrder.customerName || 'Walk-in Guest' }}</span
+                                >
                                 @if (actOrder.customerPhone) {
                                   <span class="phone-sub-clean">
                                     <i class="ph ph-phone"></i> {{ actOrder.customerPhone }}
@@ -1510,15 +1649,22 @@ import { environment } from '../../../../environments/environment';
                               </div>
                             </div>
 
-                            <div class="server-inline-picker" [class.server-bar-locked]="isOrderPaid(actOrder)">
+                            <div
+                              class="server-inline-picker"
+                              [class.server-bar-locked]="isOrderPaid(actOrder)"
+                            >
                               @if (isOrderPaid(actOrder)) {
                                 <div class="server-completed-pill" title="Serving Staff">
                                   <i class="ph ph-lock-key"></i>
-                                  <span class="truncate">{{ getServerStaffName(actOrder.serverStaffId) || 'Staff' }}</span>
+                                  <span class="truncate">{{
+                                    getServerStaffName(actOrder.serverStaffId) || 'Staff'
+                                  }}</span>
                                   <button
                                     type="button"
                                     class="btn-unlock-inline"
-                                    (click)="promptChangePaidServer(actOrder); $event.stopPropagation()"
+                                    (click)="
+                                      promptChangePaidServer(actOrder); $event.stopPropagation()
+                                    "
                                     title="Change serving staff on paid order"
                                   >
                                     <i class="ph ph-pencil-simple"></i>
@@ -1552,26 +1698,36 @@ import { environment } from '../../../../environments/environment';
                             <div class="receipt-stream-header">
                               <span class="receipt-stream-title">
                                 <i class="ph ph-receipt"></i>
-                                Ordered Items ({{ actOrder.items.length }} {{ actOrder.items.length === 1 ? 'Item' : 'Items' }})
+                                Ordered Items ({{ actOrder.items.length }}
+                                {{ actOrder.items.length === 1 ? 'Item' : 'Items' }})
                               </span>
                               <span class="receipt-stream-subtotal">
-                                {{ (actOrder.subtotal || actOrder.totalAmount) | currencyInr }}
+                                {{ actOrder.subtotal || actOrder.totalAmount | currencyInr }}
                               </span>
                             </div>
 
                             <div class="receipt-rounds-body">
-                              <div class="receipt-round-segment" [class.round-pending-soft]="actOrder.status === 'PENDING'">
+                              <div
+                                class="receipt-round-segment"
+                                [class.round-pending-soft]="actOrder.status === 'PENDING'"
+                              >
                                 <div class="round-items-clean">
                                   @for (it of actOrder.items; track it.id) {
                                     <div class="receipt-item-row">
                                       <div class="item-name-cluster">
                                         <span class="qty-bubble">{{ it.quantity }}×</span>
-                                        <span class="item-title truncate" [title]="it.name">{{ it.name }}</span>
+                                        <span class="item-title truncate" [title]="it.name">{{
+                                          it.name
+                                        }}</span>
                                         @if (it.selectedPortion) {
-                                          <span class="portion-tag">{{ it.selectedPortion.label }}</span>
+                                          <span class="portion-tag">{{
+                                            it.selectedPortion.label
+                                          }}</span>
                                         }
                                       </div>
-                                      <span class="item-price">{{ (it.itemTotal || (it.unitPrice * it.quantity)) | currencyInr }}</span>
+                                      <span class="item-price">{{
+                                        it.itemTotal || it.unitPrice * it.quantity | currencyInr
+                                      }}</span>
                                     </div>
                                   }
                                 </div>
@@ -1583,24 +1739,37 @@ import { environment } from '../../../../environments/environment';
                           <div class="bill-strip grand-bill-strip-apple">
                             <div class="sub-line">
                               <span class="bill-label">Subtotal</span>
-                              <span class="bill-val">{{ (actOrder.subtotal || actOrder.totalAmount) | currencyInr }}</span>
+                              <span class="bill-val">{{
+                                actOrder.subtotal || actOrder.totalAmount | currencyInr
+                              }}</span>
                             </div>
                             @if (actOrder.discountAmount && actOrder.discountAmount > 0) {
                               <div class="sub-line discount">
-                                <span class="bill-label"><i class="ph ph-tag"></i> {{ actOrder.appliedCouponCode || 'Discount' }}</span>
-                                <span class="bill-val">-{{ actOrder.discountAmount | currencyInr }}</span>
+                                <span class="bill-label"
+                                  ><i class="ph ph-tag"></i>
+                                  {{ actOrder.appliedCouponCode || 'Discount' }}</span
+                                >
+                                <span class="bill-val"
+                                  >-{{ actOrder.discountAmount | currencyInr }}</span
+                                >
                               </div>
                             }
                             <div class="total-row-apple">
                               <div class="total-meta-left">
                                 <span class="total-label-apple">Payable Total</span>
                                 @if (isOrderPaid(actOrder)) {
-                                  <span class="status-pill-chip paid"><i class="ph ph-check-circle"></i> PAID</span>
+                                  <span class="status-pill-chip paid"
+                                    ><i class="ph ph-check-circle"></i> PAID</span
+                                  >
                                 } @else {
-                                  <span class="status-pill-chip unpaid"><i class="ph ph-clock"></i> UNPAID</span>
+                                  <span class="status-pill-chip unpaid"
+                                    ><i class="ph ph-clock"></i> UNPAID</span
+                                  >
                                 }
                               </div>
-                              <span class="payable-val-apple">{{ actOrder.totalAmount | currencyInr }}</span>
+                              <span class="payable-val-apple">{{
+                                actOrder.totalAmount | currencyInr
+                              }}</span>
                             </div>
                           </div>
 
@@ -1611,11 +1780,15 @@ import { environment } from '../../../../environments/environment';
                                 <button
                                   type="button"
                                   class="apple-btn-primary"
-                                  (click)="openCanvasSettleModal(actOrder); $event.stopPropagation()"
+                                  (click)="
+                                    openCanvasSettleModal(actOrder); $event.stopPropagation()
+                                  "
                                   title="Settle payment for Order #{{ actOrder.orderNumber }}"
                                 >
                                   <i class="ph ph-credit-card"></i>
-                                  <span>Settle Bill ({{ actOrder.totalAmount | currencyInr }})</span>
+                                  <span
+                                    >Settle Bill ({{ actOrder.totalAmount | currencyInr }})</span
+                                  >
                                 </button>
                               </div>
                             }
@@ -1696,9 +1869,15 @@ import { environment } from '../../../../environments/environment';
 
                 <!-- Table Dimensions & Size (ONLY IN DESIGN MODE) -->
                 <div class="drawer-section">
-                  <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
-                    <label class="drawer-label" style="margin-bottom: 0;">Table Dimensions & Size</label>
-                    <span class="text-xs text-muted">{{ getTableWidth(insTbl) }} × {{ getTableHeight(insTbl) }} px</span>
+                  <div
+                    style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;"
+                  >
+                    <label class="drawer-label" style="margin-bottom: 0;"
+                      >Table Dimensions & Size</label
+                    >
+                    <span class="text-xs text-muted"
+                      >{{ getTableWidth(insTbl) }} × {{ getTableHeight(insTbl) }} px</span
+                    >
                   </div>
                   <div class="table-size-preset-grid">
                     <button
@@ -1715,7 +1894,9 @@ import { environment } from '../../../../environments/environment';
                       type="button"
                       class="size-chip-btn"
                       [class.active]="getTableWidth(insTbl) > 80 && getTableWidth(insTbl) <= 105"
-                      (click)="updateTableSize(insTbl, getTableShape(insTbl) === 'ROUND' ? 96 : 136, 96)"
+                      (click)="
+                        updateTableSize(insTbl, getTableShape(insTbl) === 'ROUND' ? 96 : 136, 96)
+                      "
                       title="Standard Size"
                     >
                       <span class="chip-title">M</span>
@@ -1725,7 +1906,13 @@ import { environment } from '../../../../environments/environment';
                       type="button"
                       class="size-chip-btn"
                       [class.active]="getTableWidth(insTbl) > 105 && getTableWidth(insTbl) <= 140"
-                      (click)="updateTableSize(insTbl, getTableShape(insTbl) === 'ROUND' ? 120 : 160, getTableShape(insTbl) === 'ROUND' ? 120 : 110)"
+                      (click)="
+                        updateTableSize(
+                          insTbl,
+                          getTableShape(insTbl) === 'ROUND' ? 120 : 160,
+                          getTableShape(insTbl) === 'ROUND' ? 120 : 110
+                        )
+                      "
                       title="Spacious Size"
                     >
                       <span class="chip-title">L</span>
@@ -1735,7 +1922,13 @@ import { environment } from '../../../../environments/environment';
                       type="button"
                       class="size-chip-btn"
                       [class.active]="getTableWidth(insTbl) > 140"
-                      (click)="updateTableSize(insTbl, getTableShape(insTbl) === 'ROUND' ? 150 : 200, getTableShape(insTbl) === 'ROUND' ? 150 : 130)"
+                      (click)="
+                        updateTableSize(
+                          insTbl,
+                          getTableShape(insTbl) === 'ROUND' ? 150 : 200,
+                          getTableShape(insTbl) === 'ROUND' ? 150 : 130
+                        )
+                      "
                       title="VIP Large Banquet"
                     >
                       <span class="chip-title">XL</span>
@@ -1743,9 +1936,16 @@ import { environment } from '../../../../environments/environment';
                     </button>
                   </div>
 
-                  <div class="size-sliders-row" style="margin-top: 12px; display: flex; flex-direction: column; gap: 8px;">
-                    <div style="display: flex; align-items: center; justify-content: space-between; font-size: 0.8125rem;">
-                      <span>Width: <strong>{{ getTableWidth(insTbl) }}px</strong></span>
+                  <div
+                    class="size-sliders-row"
+                    style="margin-top: 12px; display: flex; flex-direction: column; gap: 8px;"
+                  >
+                    <div
+                      style="display: flex; align-items: center; justify-content: space-between; font-size: 0.8125rem;"
+                    >
+                      <span
+                        >Width: <strong>{{ getTableWidth(insTbl) }}px</strong></span
+                      >
                       <input
                         type="range"
                         min="64"
@@ -1757,8 +1957,12 @@ import { environment } from '../../../../environments/environment';
                       />
                     </div>
                     @if (getTableShape(insTbl) === 'RECT') {
-                      <div style="display: flex; align-items: center; justify-content: space-between; font-size: 0.8125rem;">
-                        <span>Height: <strong>{{ getTableHeight(insTbl) }}px</strong></span>
+                      <div
+                        style="display: flex; align-items: center; justify-content: space-between; font-size: 0.8125rem;"
+                      >
+                        <span
+                          >Height: <strong>{{ getTableHeight(insTbl) }}px</strong></span
+                        >
                         <input
                           type="range"
                           min="64"
@@ -2339,11 +2543,15 @@ import { environment } from '../../../../environments/environment';
                             <div class="item-text-group">
                               <span class="item-name-text">{{ item.name }}</span>
                               @if (item.notes || item.specialInstructions) {
-                                <span class="item-instruction-text">{{ item.notes || item.specialInstructions }}</span>
+                                <span class="item-instruction-text">{{
+                                  item.notes || item.specialInstructions
+                                }}</span>
                               }
                             </div>
                           </div>
-                          <span class="item-total-price">{{ (item.itemTotal || (item.unitPrice * item.quantity)) | currencyInr }}</span>
+                          <span class="item-total-price">{{
+                            item.itemTotal || item.unitPrice * item.quantity | currencyInr
+                          }}</span>
                         </div>
                       }
                     </div>
@@ -2353,7 +2561,9 @@ import { environment } from '../../../../environments/environment';
 
                   <div class="settle-row">
                     <span>Item Subtotal</span>
-                    <span class="font-semibold">{{ (ord.subtotal || ord.totalAmount) | currencyInr }}</span>
+                    <span class="font-semibold">{{
+                      ord.subtotal || ord.totalAmount | currencyInr
+                    }}</span>
                   </div>
                   @if (settleDiscountMode() === 'COUPON' && getEffectiveDiscount(ord) > 0) {
                     <div class="settle-row discount">
@@ -2419,7 +2629,12 @@ import { environment } from '../../../../environments/environment';
                           class="inr-input"
                           placeholder="Enter rupees off..."
                           [value]="customDiscountRupees() || ''"
-                          (input)="onCustomDiscountChange($event, (ord.subtotal || ord.totalAmount) + (ord.taxAmount || 0))"
+                          (input)="
+                            onCustomDiscountChange(
+                              $event,
+                              (ord.subtotal || ord.totalAmount) + (ord.taxAmount || 0)
+                            )
+                          "
                         />
                         @if (customDiscountRupees() > 0) {
                           <button
@@ -2437,7 +2652,12 @@ import { environment } from '../../../../environments/environment';
                           type="button"
                           class="disc-chip"
                           [class.chip-active]="customDiscountRupees() === 20"
-                          (click)="applyQuickRupees(20, (ord.subtotal || ord.totalAmount) + (ord.taxAmount || 0))"
+                          (click)="
+                            applyQuickRupees(
+                              20,
+                              (ord.subtotal || ord.totalAmount) + (ord.taxAmount || 0)
+                            )
+                          "
                         >
                           -₹20
                         </button>
@@ -2445,7 +2665,12 @@ import { environment } from '../../../../environments/environment';
                           type="button"
                           class="disc-chip"
                           [class.chip-active]="customDiscountRupees() === 50"
-                          (click)="applyQuickRupees(50, (ord.subtotal || ord.totalAmount) + (ord.taxAmount || 0))"
+                          (click)="
+                            applyQuickRupees(
+                              50,
+                              (ord.subtotal || ord.totalAmount) + (ord.taxAmount || 0)
+                            )
+                          "
                         >
                           -₹50
                         </button>
@@ -2453,7 +2678,12 @@ import { environment } from '../../../../environments/environment';
                           type="button"
                           class="disc-chip"
                           [class.chip-active]="customDiscountRupees() === 100"
-                          (click)="applyQuickRupees(100, (ord.subtotal || ord.totalAmount) + (ord.taxAmount || 0))"
+                          (click)="
+                            applyQuickRupees(
+                              100,
+                              (ord.subtotal || ord.totalAmount) + (ord.taxAmount || 0)
+                            )
+                          "
                         >
                           -₹100
                         </button>
@@ -2960,7 +3190,8 @@ import { environment } from '../../../../environments/environment';
                         <option value="" disabled>-- Select Table --</option>
                         @for (tbl of tables(); track tbl.id) {
                           <option [value]="tbl.id">
-                            Table {{ tbl.number }} ({{ tbl.section }} • {{ tbl.capacity }}p) — {{ tbl.status }}
+                            Table {{ tbl.number }} ({{ tbl.section }} • {{ tbl.capacity }}p) —
+                            {{ tbl.status }}
                           </option>
                         }
                       </select>
@@ -3110,7 +3341,9 @@ import { environment } from '../../../../environments/environment';
             </div>
 
             <div class="modal-footer">
-              <button class="btn btn-secondary" (click)="closeManualOrderModal()" type="button">Cancel</button>
+              <button class="btn btn-secondary" (click)="closeManualOrderModal()" type="button">
+                Cancel
+              </button>
               <button
                 class="btn btn-primary"
                 (click)="submitManualOrder()"
@@ -3362,7 +3595,9 @@ import { environment } from '../../../../environments/environment';
         display: flex;
         flex-direction: column;
         gap: 12px;
-        box-shadow: 0 4px 16px -2px rgba(0, 0, 0, 0.04), 0 2px 4px -1px rgba(0, 0, 0, 0.02);
+        box-shadow:
+          0 4px 16px -2px rgba(0, 0, 0, 0.04),
+          0 2px 4px -1px rgba(0, 0, 0, 0.02);
         position: relative;
         overflow: hidden;
         transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
@@ -3776,8 +4011,9 @@ import { environment } from '../../../../environments/environment';
             display: inline-flex;
             align-items: center;
             gap: 4px;
-            transition: transform 0.15s cubic-bezier(0.16, 1, 0.3, 1),
-                        background-color 0.15s ease;
+            transition:
+              transform 0.15s cubic-bezier(0.16, 1, 0.3, 1),
+              background-color 0.15s ease;
 
             &:active {
               transform: scale(0.96);
@@ -3808,7 +4044,9 @@ import { environment } from '../../../../environments/environment';
             align-items: center;
             justify-content: center;
             color: var(--color-danger, #a91c12);
-            transition: background-color 0.15s ease, transform 0.15s ease;
+            transition:
+              background-color 0.15s ease,
+              transform 0.15s ease;
 
             &:hover {
               background: rgba(169, 28, 18, 0.08);
@@ -3833,7 +4071,8 @@ import { environment } from '../../../../environments/environment';
       }
 
       @keyframes apple-live-pulse {
-        0%, 100% {
+        0%,
+        100% {
           opacity: 1;
           transform: scale(1);
         }
@@ -4171,7 +4410,9 @@ import { environment } from '../../../../environments/environment';
           position: absolute;
           z-index: 45;
           opacity: 0;
-          transition: opacity 0.15s ease, background 0.15s ease;
+          transition:
+            opacity 0.15s ease,
+            background 0.15s ease;
 
           &.sec-resize-se {
             right: -6px;
@@ -5464,7 +5705,9 @@ import { environment } from '../../../../environments/environment';
               border: none;
               cursor: pointer;
               box-shadow: 0 2px 6px rgba(186, 12, 47, 0.2);
-              transition: transform 0.15s cubic-bezier(0.16, 1, 0.3, 1), background-color 0.15s ease;
+              transition:
+                transform 0.15s cubic-bezier(0.16, 1, 0.3, 1),
+                background-color 0.15s ease;
 
               &:hover {
                 background: #960a26;
@@ -5495,7 +5738,10 @@ import { environment } from '../../../../environments/environment';
                 font-weight: 600;
                 text-decoration: none;
                 cursor: pointer;
-                transition: transform 0.15s cubic-bezier(0.16, 1, 0.3, 1), background-color 0.15s ease, color 0.15s ease;
+                transition:
+                  transform 0.15s cubic-bezier(0.16, 1, 0.3, 1),
+                  background-color 0.15s ease,
+                  color 0.15s ease;
 
                 i {
                   font-size: 0.875rem;
@@ -6945,8 +7191,12 @@ import { environment } from '../../../../environments/environment';
                 width: 7px;
                 height: 7px;
                 border-radius: 50%;
-                &.veg { background: #16a34a; }
-                &.non-veg { background: #dc2626; }
+                &.veg {
+                  background: #16a34a;
+                }
+                &.non-veg {
+                  background: #dc2626;
+                }
               }
             }
           }
@@ -7029,8 +7279,14 @@ import { environment } from '../../../../environments/environment';
                     border-radius: 4px;
                     text-transform: uppercase;
                     letter-spacing: 0.03em;
-                    &.low { background: #fef3c7; color: #b45309; }
-                    &.out { background: #fee2e2; color: #b91c1c; }
+                    &.low {
+                      background: #fef3c7;
+                      color: #b45309;
+                    }
+                    &.out {
+                      background: #fee2e2;
+                      color: #b91c1c;
+                    }
                   }
                 }
               }
@@ -7170,25 +7426,33 @@ import { environment } from '../../../../environments/environment';
                     &.available {
                       background: rgba(22, 163, 74, 0.12);
                       color: #16a34a;
-                      .status-dot { background: #16a34a; }
+                      .status-dot {
+                        background: #16a34a;
+                      }
                     }
 
                     &.occupied {
                       background: rgba(220, 38, 38, 0.12);
                       color: #dc2626;
-                      .status-dot { background: #dc2626; }
+                      .status-dot {
+                        background: #dc2626;
+                      }
                     }
 
                     &.reserved {
                       background: rgba(217, 119, 6, 0.12);
                       color: #d97706;
-                      .status-dot { background: #d97706; }
+                      .status-dot {
+                        background: #d97706;
+                      }
                     }
 
                     &.dirty {
                       background: rgba(100, 116, 139, 0.14);
                       color: #64748b;
-                      .status-dot { background: #64748b; }
+                      .status-dot {
+                        background: #64748b;
+                      }
                     }
                   }
                 }
@@ -8282,7 +8546,9 @@ import { environment } from '../../../../environments/environment';
         box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
         z-index: 60;
         opacity: 0;
-        transition: opacity 0.15s ease, transform 0.15s ease;
+        transition:
+          opacity 0.15s ease,
+          transform 0.15s ease;
 
         &:hover {
           transform: scale(1.25);
@@ -8370,9 +8636,18 @@ import { environment } from '../../../../environments/environment';
               border-radius: 4px;
               margin-bottom: 4px;
 
-              &.std { width: 32px; height: 22px; }
-              &.sm { width: 24px; height: 18px; }
-              &.lg { width: 40px; height: 26px; }
+              &.std {
+                width: 32px;
+                height: 22px;
+              }
+              &.sm {
+                width: 24px;
+                height: 18px;
+              }
+              &.lg {
+                width: 40px;
+                height: 26px;
+              }
             }
 
             .dim-title {
@@ -8649,12 +8924,24 @@ export class TableListComponent implements OnInit {
     placesList.forEach((sec, idx) => {
       const explicitBox = boxes[sec];
       // Compute estimated dimensions based on table count
-      const tables = this.tables().filter((t) => (t.section || 'Main Hall').trim().toLowerCase() === sec.trim().toLowerCase());
+      const tables = this.tables().filter(
+        (t) => (t.section || 'Main Hall').trim().toLowerCase() === sec.trim().toLowerCase(),
+      );
       const rowCount = Math.max(1, Math.ceil(tables.length / 3));
-      const width = explicitBox?.width && !isNaN(explicitBox.width) ? Math.max(380, explicitBox.width) : 620;
-      const height = explicitBox?.height && !isNaN(explicitBox.height) ? Math.max(260, explicitBox.height) : Math.max(420, 65 + rowCount * 155 + 50);
+      const width =
+        explicitBox?.width && !isNaN(explicitBox.width) ? Math.max(380, explicitBox.width) : 620;
+      const height =
+        explicitBox?.height && !isNaN(explicitBox.height)
+          ? Math.max(260, explicitBox.height)
+          : Math.max(420, 65 + rowCount * 155 + 50);
 
-      if (explicitBox && explicitBox.x !== undefined && explicitBox.y !== undefined && !isNaN(explicitBox.x) && !isNaN(explicitBox.y)) {
+      if (
+        explicitBox &&
+        explicitBox.x !== undefined &&
+        explicitBox.y !== undefined &&
+        !isNaN(explicitBox.x) &&
+        !isNaN(explicitBox.y)
+      ) {
         layout[sec] = {
           x: explicitBox.x,
           y: explicitBox.y,
@@ -8981,7 +9268,8 @@ export class TableListComponent implements OnInit {
   updateTableSize(table: Table, width: number, height?: number): void {
     const shape = this.getTableShape(table);
     const safeWidth = Math.max(64, Math.min(300, width));
-    const safeHeight = shape === 'ROUND' ? safeWidth : Math.max(64, Math.min(220, height ?? safeWidth));
+    const safeHeight =
+      shape === 'ROUND' ? safeWidth : Math.max(64, Math.min(220, height ?? safeWidth));
     const coords = { ...this.tableCoords() };
     coords[table.id] = {
       ...coords[table.id],
@@ -9001,7 +9289,9 @@ export class TableListComponent implements OnInit {
         height: safeHeight,
       });
     }
-    this.toastService.success(`Table ${table.number} size updated (${safeWidth} × ${safeHeight}px)`);
+    this.toastService.success(
+      `Table ${table.number} size updated (${safeWidth} × ${safeHeight}px)`,
+    );
   }
 
   adjustSectionSize(section: string, deltaW: number, deltaH: number): void {
@@ -9296,7 +9586,9 @@ export class TableListComponent implements OnInit {
     this.saveSectionBoxes(boxes);
 
     this.showCanvasCreateSectionModal.set(false);
-    this.toastService.success(`Created "${name}" (${this.canvasNewSectionWidth()} × ${this.canvasNewSectionHeight()}px). You can now add tables and fixtures!`);
+    this.toastService.success(
+      `Created "${name}" (${this.canvasNewSectionWidth()} × ${this.canvasNewSectionHeight()}px). You can now add tables and fixtures!`,
+    );
   }
 
   openCanvasCreateFixtureModal(type?: FloorElementType): void {
@@ -9316,7 +9608,9 @@ export class TableListComponent implements OnInit {
       CUSTOM: 'Custom Fixture',
     };
     this.canvasNewFixtureLabel.set(defaultLabels[t] || 'Floor Element');
-    this.canvasNewFixtureSection.set(this.selectedSection() === 'ALL' ? 'ALL' : this.selectedSection());
+    this.canvasNewFixtureSection.set(
+      this.selectedSection() === 'ALL' ? 'ALL' : this.selectedSection(),
+    );
     this.canvasNewFixtureIcon.set(this.getElementIcon(t));
     this.showCanvasCreateFixtureModal.set(true);
   }
@@ -9347,7 +9641,11 @@ export class TableListComponent implements OnInit {
   }
 
   // --- Pointer & Drag Handlers ---
-  onCanvasPointerDownSectionResize(e: PointerEvent, section: string, handle: 'se' | 'e' | 's'): void {
+  onCanvasPointerDownSectionResize(
+    e: PointerEvent,
+    section: string,
+    handle: 'se' | 'e' | 's',
+  ): void {
     if (!this.isDesignMode()) return;
     e.stopPropagation();
     this.hasDragged = false;
@@ -9866,7 +10164,9 @@ export class TableListComponent implements OnInit {
   }
 
   openManualOrderModal(table?: Table): void {
-    const targetTableId = table ? table.id : (this.tables().find((t) => t.status === 'AVAILABLE')?.id || (this.tables()[0]?.id ?? ''));
+    const targetTableId = table
+      ? table.id
+      : this.tables().find((t) => t.status === 'AVAILABLE')?.id || (this.tables()[0]?.id ?? '');
     this.manualOrderTableId.set(targetTableId);
     this.manualOrderCustomerName.set('Walk-in Guest');
     this.manualOrderCustomerPhone.set('');
@@ -9947,110 +10247,111 @@ export class TableListComponent implements OnInit {
     }
     this.isSubmittingManualOrder = true;
     try {
+      const selectedTable = this.tables().find((t) => t.id === this.manualOrderTableId());
+      if (!selectedTable) {
+        this.toastService.error('Please select a dining table for this order.');
+        return;
+      }
 
-    const selectedTable = this.tables().find((t) => t.id === this.manualOrderTableId());
-    if (!selectedTable) {
-      this.toastService.error('Please select a dining table for this order.');
-      return;
-    }
+      const validation = this.mock.validateOrderStockAvailability(this.manualItems);
+      if (!validation.isValid) {
+        this.toastService.error(`Cannot place order: ${validation.errors.join('; ')}`);
+        return;
+      }
 
-    const validation = this.mock.validateOrderStockAvailability(this.manualItems);
-    if (!validation.isValid) {
-      this.toastService.error(`Cannot place order: ${validation.errors.join('; ')}`);
-      return;
-    }
+      const sub = this.manualSubtotal();
+      const cgstRate = this.restaurant()?.taxSettings?.cgstRate ?? 2.5;
+      const sgstRate = this.restaurant()?.taxSettings?.sgstRate ?? 2.5;
+      const cgstAmt = Math.round(sub * (cgstRate / 100) * 100) / 100;
+      const sgstAmt = Math.round(sub * (sgstRate / 100) * 100) / 100;
+      const tax = Math.round((cgstAmt + sgstAmt) * 100) / 100;
+      const tot = this.manualTotal();
 
-    const sub = this.manualSubtotal();
-    const cgstRate = this.restaurant()?.taxSettings?.cgstRate ?? 2.5;
-    const sgstRate = this.restaurant()?.taxSettings?.sgstRate ?? 2.5;
-    const cgstAmt = Math.round(sub * (cgstRate / 100) * 100) / 100;
-    const sgstAmt = Math.round(sub * (sgstRate / 100) * 100) / 100;
-    const tax = Math.round((cgstAmt + sgstAmt) * 100) / 100;
-    const tot = this.manualTotal();
+      const existingActiveTableOrder = this.mock
+        .orders()
+        .find(
+          (o) =>
+            (o.tableId === selectedTable.id || o.tableNumber === selectedTable.number) &&
+            o.status !== 'CANCELLED' &&
+            o.paymentStatus !== 'PAID' &&
+            o.seatingSessionId,
+        );
 
-    const existingActiveTableOrder = this.mock.orders().find(
-      (o) =>
-        (o.tableId === selectedTable.id || o.tableNumber === selectedTable.number) &&
-        o.status !== 'CANCELLED' &&
-        o.paymentStatus !== 'PAID' &&
-        o.seatingSessionId,
-    );
+      const generateUuid = () =>
+        typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+          ? crypto.randomUUID()
+          : 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+              const r = (Math.random() * 16) | 0;
+              const v = c === 'x' ? r : (r & 0x3) | 0x8;
+              return v.toString(16);
+            });
 
-    const generateUuid = () =>
-      typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
-        ? crypto.randomUUID()
-        : 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
-            const r = (Math.random() * 16) | 0;
-            const v = c === 'x' ? r : (r & 0x3) | 0x8;
-            return v.toString(16);
-          });
+      const assignedSessionId =
+        existingActiveTableOrder?.seatingSessionId ||
+        selectedTable?.currentSeatingSessionId ||
+        generateUuid();
 
-    const assignedSessionId =
-      existingActiveTableOrder?.seatingSessionId ||
-      selectedTable?.currentSeatingSessionId ||
-      generateUuid();
+      if (!selectedTable.currentSeatingSessionId && assignedSessionId) {
+        selectedTable.currentSeatingSessionId = assignedSessionId;
+      }
 
-    if (!selectedTable.currentSeatingSessionId && assignedSessionId) {
-      selectedTable.currentSeatingSessionId = assignedSessionId;
-    }
+      const orderNum = `#ORD-${Math.floor(100 + Math.random() * 900)}`;
+      const orderUuid = generateUuid();
 
-    const orderNum = `#ORD-${Math.floor(100 + Math.random() * 900)}`;
-    const orderUuid = generateUuid();
+      const newOrder: Order = {
+        id: orderUuid,
+        orderNumber: orderNum,
+        orderType: 'DINE_IN',
+        restaurantSlug: 'gurukripa-dhaba',
+        tableId: selectedTable.id,
+        tableNumber: selectedTable.number,
+        seatingSessionId: assignedSessionId,
+        customerName: this.manualOrderCustomerName().trim() || 'Walk-in Guest',
+        customerPhone: this.manualOrderCustomerPhone().replace(/\s+/g, '').trim() || '',
+        items: [...this.manualItems],
+        subtotal: sub,
+        discountAmount: 0,
+        taxAmount: tax,
+        cgstRate,
+        sgstRate,
+        cgstAmount: cgstAmt,
+        sgstAmount: sgstAmt,
+        totalAmount: tot,
+        status: 'ACCEPTED',
+        paymentStatus: 'UNPAID',
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        timeline: [
+          {
+            status: 'ACCEPTED',
+            timestamp: new Date().toISOString(),
+            note: `Manual order created for Table ${selectedTable.number} via Floor Canvas`,
+          },
+        ],
+      };
 
-    const newOrder: Order = {
-      id: orderUuid,
-      orderNumber: orderNum,
-      orderType: 'DINE_IN',
-      restaurantSlug: 'gurukripa-dhaba',
-      tableId: selectedTable.id,
-      tableNumber: selectedTable.number,
-      seatingSessionId: assignedSessionId,
-      customerName: this.manualOrderCustomerName().trim() || 'Walk-in Guest',
-      customerPhone: this.manualOrderCustomerPhone().replace(/\s+/g, '').trim() || '',
-      items: [...this.manualItems],
-      subtotal: sub,
-      discountAmount: 0,
-      taxAmount: tax,
-      cgstRate,
-      sgstRate,
-      cgstAmount: cgstAmt,
-      sgstAmount: sgstAmt,
-      totalAmount: tot,
-      status: 'ACCEPTED',
-      paymentStatus: 'UNPAID',
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-      timeline: [
-        {
-          status: 'ACCEPTED',
-          timestamp: new Date().toISOString(),
-          note: `Manual order created for Table ${selectedTable.number} via Floor Canvas`,
-        },
-      ],
-    };
+      // Sync to data service backend and local storage
+      this.dataService.addOrder(newOrder);
 
-    // Sync to data service backend and local storage
-    this.dataService.addOrder(newOrder);
+      // Reserve stock for newly accepted order
+      this.mock.reserveStockForOrder(newOrder.id);
 
-    // Reserve stock for newly accepted order
-    this.mock.reserveStockForOrder(newOrder.id);
+      // Mark table as OCCUPIED and link order
+      const updatedTables = this.mock
+        .tables()
+        .map((t) =>
+          t.id === selectedTable.id
+            ? { ...t, status: 'OCCUPIED' as const, activeOrderId: newOrder.id }
+            : t,
+        );
+      this.mock.tables.set(updatedTables);
+      this.mock.saveLocal('tables', updatedTables);
+      this.mock.updateTableStatus(selectedTable.id, 'OCCUPIED');
 
-    // Mark table as OCCUPIED and link order
-    const updatedTables = this.mock
-      .tables()
-      .map((t) =>
-        t.id === selectedTable.id
-          ? { ...t, status: 'OCCUPIED' as const, activeOrderId: newOrder.id }
-          : t,
+      this.toastService.success(
+        `Manual order ${newOrder.orderNumber} placed for Table ${newOrder.tableNumber}`,
       );
-    this.mock.tables.set(updatedTables);
-    this.mock.saveLocal('tables', updatedTables);
-    this.mock.updateTableStatus(selectedTable.id, 'OCCUPIED');
-
-    this.toastService.success(
-      `Manual order ${newOrder.orderNumber} placed for Table ${newOrder.tableNumber}`,
-    );
-    this.closeManualOrderModal();
+      this.closeManualOrderModal();
     } finally {
       this.isSubmittingManualOrder = false;
     }
@@ -10302,7 +10603,9 @@ export class TableListComponent implements OnInit {
       this.mock.recalculateTableStatus(ord.tableId || ord.tableNumber!);
     }
 
-    this.toastService.success(`Order #${ord.orderNumber} successfully settled & marked COMPLETED via ${method}`);
+    this.toastService.success(
+      `Order #${ord.orderNumber} successfully settled & marked COMPLETED via ${method}`,
+    );
     setTimeout(() => {
       this.isSettling.set(false);
       this.closeCanvasSettleModal();

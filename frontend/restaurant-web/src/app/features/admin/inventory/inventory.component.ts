@@ -174,7 +174,10 @@ type InventoryTab = 'INGREDIENTS' | 'RECIPES' | 'LEDGER';
           <div class="kpi-icon icon-rose"><i class="ph ph-trash"></i></div>
           <div class="kpi-content">
             <span class="kpi-label">Recorded Wastage</span>
-            <strong class="kpi-value" [class.text-crimson]="valuationSummary().totalWastageCost > 0">
+            <strong
+              class="kpi-value"
+              [class.text-crimson]="valuationSummary().totalWastageCost > 0"
+            >
               @if (isLoading()) {
                 <app-skeleton variant="text" width="90px" height="1.6rem" />
               } @else {
@@ -358,7 +361,9 @@ type InventoryTab = 'INGREDIENTS' | 'RECIPES' | 'LEDGER';
                         </div>
                       </td>
                       <td>
-                        <span class="category-pill" [attr.data-cat]="ing.category">{{ ing.category }}</span>
+                        <span class="category-pill" [attr.data-cat]="ing.category">{{
+                          ing.category
+                        }}</span>
                       </td>
                       <td>
                         <div class="stock-qty-cell">
@@ -374,7 +379,8 @@ type InventoryTab = 'INGREDIENTS' | 'RECIPES' | 'LEDGER';
                           @if (getReservedQuantity(ing.id); as resQty) {
                             @if (resQty > 0) {
                               <span class="text-xs text-muted" title="Active order reservations">
-                                Avail: {{ getAvailableStock(ing.id) }} • Res: {{ resQty }} {{ ing.unit }}
+                                Avail: {{ getAvailableStock(ing.id) }} • Res: {{ resQty }}
+                                {{ ing.unit }}
                               </span>
                             }
                           }
@@ -403,10 +409,14 @@ type InventoryTab = 'INGREDIENTS' | 'RECIPES' | 'LEDGER';
                         <span class="threshold-val">{{ ing.minThreshold }} {{ ing.unit }}</span>
                       </td>
                       <td>
-                        <span class="unit-rate-val">{{ ing.costPerUnit | currencyInr }}/{{ ing.costUnit }}</span>
+                        <span class="unit-rate-val"
+                          >{{ ing.costPerUnit | currencyInr }}/{{ ing.costUnit }}</span
+                        >
                       </td>
                       <td>
-                        <strong class="valuation-val">{{ calcIngredientValue(ing) | currencyInr }}</strong>
+                        <strong class="valuation-val">{{
+                          calcIngredientValue(ing) | currencyInr
+                        }}</strong>
                       </td>
                       <td>
                         @if (ing.currentStock <= 0) {
@@ -1658,7 +1668,9 @@ type InventoryTab = 'INGREDIENTS' | 'RECIPES' | 'LEDGER';
         &.active {
           background: var(--color-surface);
           color: var(--color-text-primary);
-          box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08), 0 0 1px rgba(0, 0, 0, 0.1);
+          box-shadow:
+            0 1px 4px rgba(0, 0, 0, 0.08),
+            0 0 1px rgba(0, 0, 0, 0.1);
 
           .tab-icon {
             color: var(--color-primary);
@@ -2002,34 +2014,34 @@ type InventoryTab = 'INGREDIENTS' | 'RECIPES' | 'LEDGER';
         letter-spacing: 0.04em;
         display: inline-block;
 
-        &[data-cat="DAIRY"] {
+        &[data-cat='DAIRY'] {
           background: rgba(59, 130, 246, 0.1);
           color: #2563eb;
           border-color: rgba(59, 130, 246, 0.2);
         }
-        &[data-cat="MEAT"] {
+        &[data-cat='MEAT'] {
           background: rgba(239, 68, 68, 0.1);
           color: #dc2626;
           border-color: rgba(239, 68, 68, 0.2);
         }
-        &[data-cat="PRODUCE"] {
+        &[data-cat='PRODUCE'] {
           background: rgba(16, 185, 129, 0.1);
           color: #059669;
           border-color: rgba(16, 185, 129, 0.2);
         }
-        &[data-cat="GRAINS"],
-        &[data-cat="PULSES"] {
+        &[data-cat='GRAINS'],
+        &[data-cat='PULSES'] {
           background: rgba(245, 158, 11, 0.1);
           color: #d97706;
           border-color: rgba(245, 158, 11, 0.2);
         }
-        &[data-cat="SPICES"] {
+        &[data-cat='SPICES'] {
           background: rgba(249, 115, 22, 0.1);
           color: #ea580c;
           border-color: rgba(249, 115, 22, 0.2);
         }
-        &[data-cat="FLOUR"],
-        &[data-cat="OTHER"] {
+        &[data-cat='FLOUR'],
+        &[data-cat='OTHER'] {
           background: rgba(100, 116, 139, 0.1);
           color: #475569;
           border-color: rgba(100, 116, 139, 0.2);

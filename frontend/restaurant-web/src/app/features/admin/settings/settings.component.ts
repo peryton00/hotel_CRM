@@ -20,14 +20,7 @@ import { AuditLogEntry } from '../../../core/models/audit.model';
 import { WhatsAppBridgeService } from '../../../core/services/whatsapp-bridge.service';
 
 type SettingsTab =
-  | 'general'
-  | 'tax'
-  | 'printer'
-  | 'whatsapp'
-  | 'service'
-  | 'maintenance'
-  | 'security'
-  | 'reset';
+  'general' | 'tax' | 'printer' | 'whatsapp' | 'service' | 'maintenance' | 'security' | 'reset';
 
 @Component({
   selector: 'app-settings',
@@ -174,7 +167,12 @@ type SettingsTab =
                   <label class="form-label">Establishment Name *</label>
                   <div class="input-with-icon">
                     <i class="ph ph-buildings field-icon"></i>
-                    <input type="text" class="form-input has-icon" [(ngModel)]="profile.name" placeholder="e.g. Gurukripa Dhaba" />
+                    <input
+                      type="text"
+                      class="form-input has-icon"
+                      [(ngModel)]="profile.name"
+                      placeholder="e.g. Gurukripa Dhaba"
+                    />
                   </div>
                 </div>
 
@@ -182,7 +180,12 @@ type SettingsTab =
                   <label class="form-label">Tagline / Culinary Subtitle</label>
                   <div class="input-with-icon">
                     <i class="ph ph-sparkle field-icon"></i>
-                    <input type="text" class="form-input has-icon" [(ngModel)]="profile.tagline" placeholder="e.g. Authentic North Indian & Tandoor" />
+                    <input
+                      type="text"
+                      class="form-input has-icon"
+                      [(ngModel)]="profile.tagline"
+                      placeholder="e.g. Authentic North Indian & Tandoor"
+                    />
                   </div>
                 </div>
 
@@ -426,7 +429,9 @@ type SettingsTab =
                       </p>
                     </div>
                   </div>
-                  <span class="panel-badge highlight-emerald">Tax Slab: {{ profile.cgstRate + profile.sgstRate | number: '1.1-1' }}%</span>
+                  <span class="panel-badge highlight-emerald"
+                    >Tax Slab: {{ profile.cgstRate + profile.sgstRate | number: '1.1-1' }}%</span
+                  >
                 </div>
 
                 <!-- Apple Quick Tax Bracket Presets -->
@@ -503,7 +508,9 @@ type SettingsTab =
                   <div class="label-with-action">
                     <label class="form-label">GST Identification Number (GSTIN)</label>
                     @if (profile.gstNumber && profile.gstNumber.trim().length === 15) {
-                      <span class="valid-pill"><i class="ph ph-check-circle"></i> Valid 15-Digit Format</span>
+                      <span class="valid-pill"
+                        ><i class="ph ph-check-circle"></i> Valid 15-Digit Format</span
+                      >
                     } @else {
                       <span class="warn-pill">15 Characters Required</span>
                     }
@@ -542,7 +549,12 @@ type SettingsTab =
                     <label class="form-label">Default Currency</label>
                     <div class="input-with-icon">
                       <i class="ph ph-lock-key field-icon"></i>
-                      <input type="text" class="form-input has-icon disabled-input" value="INR (₹) - Indian Rupee" disabled />
+                      <input
+                        type="text"
+                        class="form-input has-icon disabled-input"
+                        value="INR (₹) - Indian Rupee"
+                        disabled
+                      />
                     </div>
                   </div>
                 </div>
@@ -561,24 +573,37 @@ type SettingsTab =
                     <span class="math-op">+</span>
                     <div class="math-chip">
                       <span class="chip-label">CGST ({{ profile.cgstRate }}%)</span>
-                      <span class="chip-val">₹{{ 1000 * profile.cgstRate / 100 | number: '1.2-2' }}</span>
+                      <span class="chip-val"
+                        >₹{{ (1000 * profile.cgstRate) / 100 | number: '1.2-2' }}</span
+                      >
                     </div>
                     <span class="math-op">+</span>
                     <div class="math-chip">
                       <span class="chip-label">SGST ({{ profile.sgstRate }}%)</span>
-                      <span class="chip-val">₹{{ 1000 * profile.sgstRate / 100 | number: '1.2-2' }}</span>
+                      <span class="chip-val"
+                        >₹{{ (1000 * profile.sgstRate) / 100 | number: '1.2-2' }}</span
+                      >
                     </div>
                     @if (profile.serviceChargeRate > 0) {
                       <span class="math-op">+</span>
                       <div class="math-chip">
                         <span class="chip-label">Service ({{ profile.serviceChargeRate }}%)</span>
-                        <span class="chip-val">₹{{ 1000 * profile.serviceChargeRate / 100 | number: '1.2-2' }}</span>
+                        <span class="chip-val"
+                          >₹{{ (1000 * profile.serviceChargeRate) / 100 | number: '1.2-2' }}</span
+                        >
                       </div>
                     }
                     <span class="math-op">=</span>
                     <div class="math-chip highlight-chip">
                       <span class="chip-label">Total Payable</span>
-                      <span class="chip-val text-brand">₹{{ 1000 + (1000 * (profile.cgstRate + profile.sgstRate + profile.serviceChargeRate) / 100) | number: '1.2-2' }}</span>
+                      <span class="chip-val text-brand"
+                        >₹{{
+                          1000 +
+                            (1000 *
+                              (profile.cgstRate + profile.sgstRate + profile.serviceChargeRate)) /
+                              100 | number: '1.2-2'
+                        }}</span
+                      >
                     </div>
                   </div>
                 </div>
@@ -605,7 +630,9 @@ type SettingsTab =
                   <div class="label-with-action">
                     <label class="form-label">FSSAI License / Registration #</label>
                     @if (profile.fssaiNumber && profile.fssaiNumber.trim().length === 14) {
-                      <span class="valid-pill"><i class="ph ph-check-circle"></i> 14 Digits Valid</span>
+                      <span class="valid-pill"
+                        ><i class="ph ph-check-circle"></i> 14 Digits Valid</span
+                      >
                     } @else {
                       <span class="field-hint">14 Digits Mandated</span>
                     }
@@ -628,7 +655,9 @@ type SettingsTab =
                 <div class="form-group">
                   <div class="label-with-action">
                     <label class="form-label">Invoice Footer Message</label>
-                    <span class="char-count-text">{{ profile.invoiceFooter ? profile.invoiceFooter.length : 0 }} chars</span>
+                    <span class="char-count-text"
+                      >{{ profile.invoiceFooter ? profile.invoiceFooter.length : 0 }} chars</span
+                    >
                   </div>
                   <textarea
                     class="form-textarea"
@@ -643,21 +672,29 @@ type SettingsTab =
                     <button
                       type="button"
                       class="insert-pill"
-                      (click)="setFooterPreset('Thank you for dining with GuruKripa Dhaba! Please visit again.')"
+                      (click)="
+                        setFooterPreset(
+                          'Thank you for dining with GuruKripa Dhaba! Please visit again.'
+                        )
+                      "
                     >
                       "Thank you for dining with us!"
                     </button>
                     <button
                       type="button"
                       class="insert-pill"
-                      (click)="setFooterPreset('Feedback? Scan the QR code below to review us on Google!')"
+                      (click)="
+                        setFooterPreset('Feedback? Scan the QR code below to review us on Google!')
+                      "
                     >
                       "Scan QR for Google Review"
                     </button>
                     <button
                       type="button"
                       class="insert-pill"
-                      (click)="setFooterPreset('Service charge is discretionary. Tips are welcome.')"
+                      (click)="
+                        setFooterPreset('Service charge is discretionary. Tips are welcome.')
+                      "
                     >
                       "Tips are discretionary"
                     </button>
@@ -682,14 +719,14 @@ type SettingsTab =
                     </div>
                     <div class="dashed-line">----------------------------------------</div>
                     <div class="tape-center italic-msg">
-                      "{{ profile.invoiceFooter || 'Thank you for dining with us! Please visit us again.' }}"
+                      "{{
+                        profile.invoiceFooter ||
+                          'Thank you for dining with us! Please visit us again.'
+                      }}"
                     </div>
-                    <div class="tape-center qr-placeholder">
-                      [ QR CODE - SCAN TO PAY / REVIEW ]
-                    </div>
+                    <div class="tape-center qr-placeholder">[ QR CODE - SCAN TO PAY / REVIEW ]</div>
                   </div>
                 </div>
-
               </div>
             </div>
           }
@@ -746,7 +783,10 @@ type SettingsTab =
                             <strong>Windows / USB Thermal Printer (Tauri Native)</strong>
                             <span class="tech-tag tag-emerald">RECOMMENDED</span>
                           </div>
-                          <span>Direct raw spooling via Windows printer driver with auto-cut &amp; drawer kick</span>
+                          <span
+                            >Direct raw spooling via Windows printer driver with auto-cut &amp;
+                            drawer kick</span
+                          >
                         </div>
                         <div class="radio-check-indicator">
                           <i class="ph ph-check-circle"></i>
@@ -802,7 +842,10 @@ type SettingsTab =
                             <strong>Standard Browser Print Dialog</strong>
                             <span class="tech-tag tag-amber">FALLBACK</span>
                           </div>
-                          <span>Operating system print preview window (no auto-cut or drawer kick)</span>
+                          <span
+                            >Operating system print preview window (no auto-cut or drawer
+                            kick)</span
+                          >
                         </div>
                         <div class="radio-check-indicator">
                           <i class="ph ph-check-circle"></i>
@@ -824,7 +867,9 @@ type SettingsTab =
                           <label class="form-label mb-0" for="winThermalSelect">
                             Installed Spooler Printer
                           </label>
-                          <span class="device-hint-sub">Windows print spooler raw direct pass-through</span>
+                          <span class="device-hint-sub"
+                            >Windows print spooler raw direct pass-through</span
+                          >
                         </div>
                       </div>
                       <button
@@ -850,7 +895,8 @@ type SettingsTab =
                         <option value="">-- Use System Default Printer --</option>
                         @for (p of availablePrinters(); track p.name) {
                           <option [value]="p.name">
-                            {{ p.name }} {{ p.is_default ? '★ (Default)' : '' }} {{ cleanPortName(p.port_name) }}
+                            {{ p.name }} {{ p.is_default ? '★ (Default)' : '' }}
+                            {{ cleanPortName(p.port_name) }}
                           </option>
                         }
                       </select>
@@ -860,12 +906,16 @@ type SettingsTab =
                       <div class="telemetry-left">
                         <span class="dot-live"></span>
                         <span class="status-summary">
-                          {{ availablePrinters().length }} driver{{ availablePrinters().length === 1 ? '' : 's' }} ready
+                          {{ availablePrinters().length }} driver{{
+                            availablePrinters().length === 1 ? '' : 's'
+                          }}
+                          ready
                         </span>
                       </div>
                       <div class="telemetry-right">
                         <span class="active-spool-text">
-                          Spooling to: <strong>{{ printerConfig().printerName || 'System Default' }}</strong>
+                          Spooling to:
+                          <strong>{{ printerConfig().printerName || 'System Default' }}</strong>
                         </span>
                       </div>
                     </div>
@@ -887,7 +937,8 @@ type SettingsTab =
                       />
                     </div>
                     <span class="field-hint">
-                      Standard ESC/POS thermal printers (Epson, POS-80, TVS) listen for raw socket print jobs on TCP port 9100.
+                      Standard ESC/POS thermal printers (Epson, POS-80, TVS) listen for raw socket
+                      print jobs on TCP port 9100.
                     </span>
                   </div>
                 }
@@ -987,7 +1038,9 @@ type SettingsTab =
                       <input
                         type="checkbox"
                         [checked]="printerConfig().openCashDrawer"
-                        (change)="updatePrinterConfig('openCashDrawer', $any($event.target).checked)"
+                        (change)="
+                          updatePrinterConfig('openCashDrawer', $any($event.target).checked)
+                        "
                       />
                       <span class="switch-slider"></span>
                     </div>
@@ -1002,7 +1055,8 @@ type SettingsTab =
                       <strong>Verify Hardware Communication</strong>
                     </div>
                     <p class="text-xs text-muted">
-                      Send an instant test slip to verify character alignment, font scaling, barcode rendering, and cutter mechanics.
+                      Send an instant test slip to verify character alignment, font scaling, barcode
+                      rendering, and cutter mechanics.
                     </p>
                   </div>
                   <button
@@ -1022,16 +1076,23 @@ type SettingsTab =
                 </div>
 
                 <!-- Live Monospace Paper Tape Emulation -->
-                <div class="thermal-bill-preview tape-emulation-box" [class.compact-tape]="printerConfig().paperWidth === '58mm'">
+                <div
+                  class="thermal-bill-preview tape-emulation-box"
+                  [class.compact-tape]="printerConfig().paperWidth === '58mm'"
+                >
                   <div class="bill-preview-header">
                     <div class="flex items-center gap-2">
                       <i class="ph ph-receipt"></i>
                       <span>Hardware Paper Tape Emulation ({{ printerConfig().paperWidth }})</span>
                     </div>
-                    <span class="badge-tape-width">{{ printerConfig().paperWidth === '80mm' ? '48 Chars Width' : '32 Chars Width' }}</span>
+                    <span class="badge-tape-width">{{
+                      printerConfig().paperWidth === '80mm' ? '48 Chars Width' : '32 Chars Width'
+                    }}</span>
                   </div>
                   <div class="bill-paper-tape font-mono">
-                    <div class="tape-center font-bold">*** {{ profile.name || 'GURUKRIPA DHABA' }} ***</div>
+                    <div class="tape-center font-bold">
+                      *** {{ profile.name || 'GURUKRIPA DHABA' }} ***
+                    </div>
                     <div class="tape-center text-xs">HARDWARE PRINTER TEST SLIP</div>
                     <div class="dashed-line">----------------------------------------</div>
                     <div class="tape-row flex-between text-xs">
@@ -1048,7 +1109,9 @@ type SettingsTab =
                     </div>
                     <div class="tape-row flex-between text-xs">
                       <span>DRAWER KICK:</span>
-                      <strong>{{ printerConfig().openCashDrawer ? 'ENABLED (ESC p)' : 'DISABLED' }}</strong>
+                      <strong>{{
+                        printerConfig().openCashDrawer ? 'ENABLED (ESC p)' : 'DISABLED'
+                      }}</strong>
                     </div>
                     <div class="dashed-line">----------------------------------------</div>
                     <div class="tape-center italic-msg text-xs">
@@ -1102,12 +1165,17 @@ type SettingsTab =
                       </div>
                       <div class="wa-conn-details">
                         <div class="wa-title-row">
-                          <h3 class="wa-conn-title">{{ whatsAppBridge.connectedName() || 'Restaurant Device' }}</h3>
-                          <span class="wa-verified-pill"><i class="ph ph-check-circle"></i> Active</span>
+                          <h3 class="wa-conn-title">
+                            {{ whatsAppBridge.connectedName() || 'Restaurant Device' }}
+                          </h3>
+                          <span class="wa-verified-pill"
+                            ><i class="ph ph-check-circle"></i> Active</span
+                          >
                         </div>
                         <p class="wa-conn-phone">+{{ whatsAppBridge.connectedPhone() }}</p>
                         <p class="wa-conn-hint">
-                          Customer bills and digital invoices will dispatch automatically in the background.
+                          Customer bills and digital invoices will dispatch automatically in the
+                          background.
                         </p>
                       </div>
                     </div>
@@ -1133,7 +1201,10 @@ type SettingsTab =
                         />
                       } @else {
                         <div class="wa-qr-placeholder">
-                          <i class="ph ph-spinner ph-spin" style="font-size: 2rem; color: #16a34a;"></i>
+                          <i
+                            class="ph ph-spinner ph-spin"
+                            style="font-size: 2rem; color: #16a34a;"
+                          ></i>
                           <p class="text-xs text-muted">Generating QR code...</p>
                         </div>
                       }
@@ -1143,7 +1214,10 @@ type SettingsTab =
                       <h4 class="font-bold">Link Restaurant WhatsApp</h4>
                       <ol class="wa-steps-list">
                         <li>Open <strong>WhatsApp</strong> on your restaurant business phone.</li>
-                        <li>Tap <strong>Settings</strong> or <strong>Menu (⋮)</strong> &gt; <strong>Linked Devices</strong>.</li>
+                        <li>
+                          Tap <strong>Settings</strong> or <strong>Menu (⋮)</strong> &gt;
+                          <strong>Linked Devices</strong>.
+                        </li>
                         <li>Tap <strong>Link a Device</strong> and scan this QR code.</li>
                         <li>Your session stays connected on this terminal automatically.</li>
                       </ol>
@@ -1297,7 +1371,8 @@ type SettingsTab =
                         placeholder="Type WhatsApp message template..."
                       ></textarea>
                       <span class="text-xs text-muted" style="margin-top: 4px; display: block;">
-                        Supports standard WhatsApp formatting: *bold*, _italics_, ~strikethrough~, and emojis.
+                        Supports standard WhatsApp formatting: *bold*, _italics_, ~strikethrough~,
+                        and emojis.
                       </span>
                     </div>
                   </div>
@@ -1311,7 +1386,9 @@ type SettingsTab =
                           <i class="ph ph-buildings"></i>
                         </div>
                         <div class="wa-header-info">
-                          <span class="wa-header-name">{{ profile.name || 'GuruKripa Dhaba' }}</span>
+                          <span class="wa-header-name">{{
+                            profile.name || 'GuruKripa Dhaba'
+                          }}</span>
                           <span class="wa-header-status">Online (Verified Business)</span>
                         </div>
                       </div>
@@ -1351,7 +1428,11 @@ type SettingsTab =
                       </p>
                     </div>
                   </div>
-                  <span class="panel-badge" [class.success]="profile.dineInEnabled" [class.warning]="!profile.dineInEnabled">
+                  <span
+                    class="panel-badge"
+                    [class.success]="profile.dineInEnabled"
+                    [class.warning]="!profile.dineInEnabled"
+                  >
                     {{ profile.dineInEnabled ? 'Dine-In Active' : 'Dine-In Paused' }}
                   </span>
                 </div>
@@ -1365,13 +1446,22 @@ type SettingsTab =
                     <div class="channel-card-meta">
                       <div class="channel-title-row">
                         <strong class="channel-title">Dine-In QR Table Ordering</strong>
-                        <span class="channel-status-pill" [class.active-pill]="profile.dineInEnabled">
+                        <span
+                          class="channel-status-pill"
+                          [class.active-pill]="profile.dineInEnabled"
+                        >
                           <span class="dot-indicator"></span>
-                          {{ profile.dineInEnabled ? 'ACCEPTING LIVE ORDERS' : 'PAUSED • CATALOG ONLY' }}
+                          {{
+                            profile.dineInEnabled
+                              ? 'ACCEPTING LIVE ORDERS'
+                              : 'PAUSED • CATALOG ONLY'
+                          }}
                         </span>
                       </div>
                       <p class="channel-desc">
-                        When enabled, guests scanning table QR codes can place food orders directly into the kitchen queue. When paused, the customer menu operates in browse-only view mode.
+                        When enabled, guests scanning table QR codes can place food orders directly
+                        into the kitchen queue. When paused, the customer menu operates in
+                        browse-only view mode.
                       </p>
                     </div>
                   </div>
@@ -1469,7 +1559,11 @@ type SettingsTab =
                       <p class="panel-subtitle">Pickup buffers and counter order workflows.</p>
                     </div>
                   </div>
-                  <span class="panel-badge" [class.success]="profile.takeawayEnabled" [class.subtle]="!profile.takeawayEnabled">
+                  <span
+                    class="panel-badge"
+                    [class.success]="profile.takeawayEnabled"
+                    [class.subtle]="!profile.takeawayEnabled"
+                  >
                     {{ profile.takeawayEnabled ? 'Takeaway Active' : 'Takeaway Off' }}
                   </span>
                 </div>
@@ -1477,19 +1571,28 @@ type SettingsTab =
                 <!-- Apple Channel Switch Card: Takeaway & Counter -->
                 <div class="apple-channel-card" [class.is-enabled]="profile.takeawayEnabled">
                   <div class="channel-card-left">
-                    <div class="channel-icon-disc teal-disc" [class.active-disc]="profile.takeawayEnabled">
+                    <div
+                      class="channel-icon-disc teal-disc"
+                      [class.active-disc]="profile.takeawayEnabled"
+                    >
                       <i class="ph ph-bag"></i>
                     </div>
                     <div class="channel-card-meta">
                       <div class="channel-title-row">
                         <strong class="channel-title">Takeaway &amp; Counter Ordering</strong>
-                        <span class="channel-status-pill" [class.active-pill]="profile.takeawayEnabled">
+                        <span
+                          class="channel-status-pill"
+                          [class.active-pill]="profile.takeawayEnabled"
+                        >
                           <span class="dot-indicator"></span>
-                          {{ profile.takeawayEnabled ? 'ACTIVE CHANNEL' : 'DISABLED (DINE-IN ONLY)' }}
+                          {{
+                            profile.takeawayEnabled ? 'ACTIVE CHANNEL' : 'DISABLED (DINE-IN ONLY)'
+                          }}
                         </span>
                       </div>
                       <p class="channel-desc">
-                        Allows front-desk counter staff and mobile users to place takeaway orders. When disabled, the entire portal operates exclusively in table dine-in mode.
+                        Allows front-desk counter staff and mobile users to place takeaway orders.
+                        When disabled, the entire portal operates exclusively in table dine-in mode.
                       </p>
                     </div>
                   </div>
@@ -1519,10 +1622,21 @@ type SettingsTab =
                     />
                     <span class="field-suffix">mins</span>
                   </div>
-                  <span class="field-hint">Added to kitchen prep estimate so takeaway guests arrive when food is fresh off the stove.</span>
+                  <span class="field-hint"
+                    >Added to kitchen prep estimate so takeaway guests arrive when food is fresh off
+                    the stove.</span
+                  >
 
                   <div class="quick-preset-chips">
-                    @for (item of [{ mins: 5, label: '+5m Express' }, { mins: 10, label: '+10m Standard' }, { mins: 15, label: '+15m Rush Hour' }, { mins: 30, label: '+30m Peak Weekend' }]; track item.mins) {
+                    @for (
+                      item of [
+                        { mins: 5, label: '+5m Express' },
+                        { mins: 10, label: '+10m Standard' },
+                        { mins: 15, label: '+15m Rush Hour' },
+                        { mins: 30, label: '+30m Peak Weekend' },
+                      ];
+                      track item.mins
+                    ) {
                       <button
                         type="button"
                         class="preset-chip"
@@ -1547,24 +1661,43 @@ type SettingsTab =
                   <div class="impact-grid">
                     <div class="impact-item">
                       <span class="impact-lbl">Dine-In Behavior</span>
-                      <strong class="impact-val" [class.text-emerald]="profile.dineInEnabled" [class.text-amber]="!profile.dineInEnabled">
-                        {{ profile.dineInEnabled ? 'Instant Mobile Ordering' : 'Catalog View Only' }}
+                      <strong
+                        class="impact-val"
+                        [class.text-emerald]="profile.dineInEnabled"
+                        [class.text-amber]="!profile.dineInEnabled"
+                      >
+                        {{
+                          profile.dineInEnabled ? 'Instant Mobile Ordering' : 'Catalog View Only'
+                        }}
                       </strong>
                     </div>
                     <div class="impact-item">
                       <span class="impact-lbl">Guest Kitchen Prep ETA</span>
-                      <strong class="impact-val">~{{ profile.estimatedPrepMinutes || 20 }} Mins</strong>
+                      <strong class="impact-val"
+                        >~{{ profile.estimatedPrepMinutes || 20 }} Mins</strong
+                      >
                     </div>
                     <div class="impact-item">
                       <span class="impact-lbl">Min Cart Value</span>
                       <strong class="impact-val">
-                        {{ profile.minOrderAmount && profile.minOrderAmount > 0 ? '₹' + profile.minOrderAmount : 'Zero Minimum' }}
+                        {{
+                          profile.minOrderAmount && profile.minOrderAmount > 0
+                            ? '₹' + profile.minOrderAmount
+                            : 'Zero Minimum'
+                        }}
                       </strong>
                     </div>
                     <div class="impact-item">
                       <span class="impact-lbl">Takeaway Pickup Ready</span>
                       <strong class="impact-val">
-                        {{ profile.takeawayEnabled ? '~' + ((profile.estimatedPrepMinutes || 20) + (profile.pickupBufferMinutes || 10)) + ' Mins' : 'Disabled' }}
+                        {{
+                          profile.takeawayEnabled
+                            ? '~' +
+                              ((profile.estimatedPrepMinutes || 20) +
+                                (profile.pickupBufferMinutes || 10)) +
+                              ' Mins'
+                            : 'Disabled'
+                        }}
                       </strong>
                     </div>
                   </div>
@@ -1585,9 +1718,22 @@ type SettingsTab =
                   <div class="system-hero-text">
                     <div class="system-title-row">
                       <h3 class="system-title">System Health &amp; Diagnostics</h3>
-                      <span class="apple-platform-status-pill" [class.is-all-online]="systemStatuses().localBackend.online && systemStatuses().liveBackend.online && systemStatuses().database.online">
+                      <span
+                        class="apple-platform-status-pill"
+                        [class.is-all-online]="
+                          systemStatuses().localBackend.online &&
+                          systemStatuses().liveBackend.online &&
+                          systemStatuses().database.online
+                        "
+                      >
                         <span class="dot-indicator"></span>
-                        {{ systemStatuses().localBackend.online && systemStatuses().liveBackend.online && systemStatuses().database.online ? 'All Systems Online' : 'Check Diagnostics' }}
+                        {{
+                          systemStatuses().localBackend.online &&
+                          systemStatuses().liveBackend.online &&
+                          systemStatuses().database.online
+                            ? 'All Systems Online'
+                            : 'Check Diagnostics'
+                        }}
                       </span>
                     </div>
                     <p class="system-desc">
@@ -1688,10 +1834,22 @@ type SettingsTab =
                       <div class="latency-gauge-track">
                         <div
                           class="latency-meter-bar"
-                          [class.latency-good]="systemStatuses().localBackend.latencyMs > 0 && systemStatuses().localBackend.latencyMs < 100"
-                          [class.latency-fair]="systemStatuses().localBackend.latencyMs >= 100 && systemStatuses().localBackend.latencyMs < 300"
+                          [class.latency-good]="
+                            systemStatuses().localBackend.latencyMs > 0 &&
+                            systemStatuses().localBackend.latencyMs < 100
+                          "
+                          [class.latency-fair]="
+                            systemStatuses().localBackend.latencyMs >= 100 &&
+                            systemStatuses().localBackend.latencyMs < 300
+                          "
                           [class.latency-slow]="systemStatuses().localBackend.latencyMs >= 300"
-                          [style.width.%]="systemStatuses().localBackend.latencyMs ? (systemStatuses().localBackend.latencyMs > 500 ? 100 : (systemStatuses().localBackend.latencyMs / 5)) : 8"
+                          [style.width.%]="
+                            systemStatuses().localBackend.latencyMs
+                              ? systemStatuses().localBackend.latencyMs > 500
+                                ? 100
+                                : systemStatuses().localBackend.latencyMs / 5
+                              : 8
+                          "
                         ></div>
                       </div>
                     </div>
@@ -1767,7 +1925,8 @@ type SettingsTab =
                     <div class="panel-title-text">
                       <h2 class="heading-card">Local Storage Diagnostics &amp; Cache</h2>
                       <p class="panel-subtitle">
-                        Zero-latency offline data snapshots cached in browser memory for instant UI rendering.
+                        Zero-latency offline data snapshots cached in browser memory for instant UI
+                        rendering.
                       </p>
                     </div>
                   </div>
@@ -1848,7 +2007,8 @@ type SettingsTab =
                     <div class="panel-title-text">
                       <h2 class="heading-card">System &amp; Transaction Audit Logs</h2>
                       <p class="panel-subtitle">
-                        Immutable event ledger tracking administrative overrides, orders, bill settlements, and operational states.
+                        Immutable event ledger tracking administrative overrides, orders, bill
+                        settlements, and operational states.
                       </p>
                     </div>
                   </div>
@@ -1964,7 +2124,9 @@ type SettingsTab =
               </div>
 
               <!-- 4. Quick Transition to Dedicated Recovery & Reset Center -->
-              <div class="panel-box full-width-panel system-reset-callout-card apple-card apple-reset-callout">
+              <div
+                class="panel-box full-width-panel system-reset-callout-card apple-card apple-reset-callout"
+              >
                 <div class="callout-left">
                   <div class="callout-icon-box">
                     <i class="ph ph-shield-warning"></i>
@@ -1972,11 +2134,16 @@ type SettingsTab =
                   <div>
                     <h3 class="callout-title">System Recovery &amp; Factory Reset</h3>
                     <p class="callout-desc">
-                      Shift seating resets, offline cache clearing, and system factory restore options.
+                      Shift seating resets, offline cache clearing, and system factory restore
+                      options.
                     </p>
                   </div>
                 </div>
-                <button type="button" class="btn btn-secondary btn-sm apple-action-pill" (click)="switchTab('reset')">
+                <button
+                  type="button"
+                  class="btn btn-secondary btn-sm apple-action-pill"
+                  (click)="switchTab('reset')"
+                >
                   <span>Open Reset Center</span>
                   <i class="ph ph-arrow-right"></i>
                 </button>
@@ -1996,7 +2163,8 @@ type SettingsTab =
                   <div class="hero-recovery-content">
                     <h2 class="hero-panel-heading">Reset &amp; System Recovery</h2>
                     <p class="hero-panel-sub">
-                      Reset table seating for a new shift, flush local storage cache, or restore factory defaults.
+                      Reset table seating for a new shift, flush local storage cache, or restore
+                      factory defaults.
                     </p>
                   </div>
                 </div>
@@ -2028,7 +2196,8 @@ type SettingsTab =
                           <span class="tier-pill pill-cache">Safe</span>
                         </div>
                         <p class="recovery-desc">
-                          Purges volatile browser memory and pulls fresh records from the server database. All orders and menu items remain safe.
+                          Purges volatile browser memory and pulls fresh records from the server
+                          database. All orders and menu items remain safe.
                         </p>
                       </div>
                     </div>
@@ -2056,7 +2225,8 @@ type SettingsTab =
                           <span class="tier-pill pill-shift">Shift</span>
                         </div>
                         <p class="recovery-desc">
-                          Sets all dining floor tables to Available status for the next service shift. Menu items and past invoices are untouched.
+                          Sets all dining floor tables to Available status for the next service
+                          shift. Menu items and past invoices are untouched.
                         </p>
                       </div>
                     </div>
@@ -2084,7 +2254,8 @@ type SettingsTab =
                           <span class="tier-pill pill-danger">Destructive</span>
                         </div>
                         <p class="recovery-desc">
-                          Restores initial catalog, default 8-table layout, and wipes demo tickets. Server connection &amp; admin login remain safe.
+                          Restores initial catalog, default 8-table layout, and wipes demo tickets.
+                          Server connection &amp; admin login remain safe.
                         </p>
                       </div>
                     </div>
@@ -2217,7 +2388,9 @@ type SettingsTab =
                       @if (pwdForm.newPassword === pwdForm.confirmPassword) {
                         <span class="match-pill match-ok"><i class="ph ph-check"></i> Match</span>
                       } @else {
-                        <span class="match-pill match-bad"><i class="ph ph-x"></i> Do not match</span>
+                        <span class="match-pill match-bad"
+                          ><i class="ph ph-x"></i> Do not match</span
+                        >
                       }
                     }
                   </div>
@@ -2455,8 +2628,15 @@ type SettingsTab =
       }
 
       @keyframes pulseSoft {
-        0%, 100% { opacity: 1; transform: scale(1); }
-        50% { opacity: 0.85; transform: scale(0.98); }
+        0%,
+        100% {
+          opacity: 1;
+          transform: scale(1);
+        }
+        50% {
+          opacity: 0.85;
+          transform: scale(0.98);
+        }
       }
 
       .header-actions-group {
@@ -2467,7 +2647,9 @@ type SettingsTab =
         .save-btn {
           border-radius: var(--radius-md);
           font-weight: 600;
-          transition: transform 0.15s ease, background 0.15s ease;
+          transition:
+            transform 0.15s ease,
+            background 0.15s ease;
 
           &:not(:disabled):active {
             transform: scale(0.98);
@@ -2580,7 +2762,9 @@ type SettingsTab =
         display: flex;
         flex-direction: column;
         gap: 16px;
-        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04), 0 4px 12px -2px rgba(0, 0, 0, 0.02);
+        box-shadow:
+          0 1px 3px rgba(0, 0, 0, 0.04),
+          0 4px 12px -2px rgba(0, 0, 0, 0.02);
         position: sticky;
         top: calc(var(--topbar-height, 68px) + 20px);
         max-height: calc(100vh - var(--topbar-height, 68px) - 36px);
@@ -2649,14 +2833,38 @@ type SettingsTab =
         }
 
         // Apple squircle icon accents per tab
-        &[data-tab="general"] .nav-btn-icon-box { background: rgba(249, 115, 22, 0.12); color: #ea580c; }
-        &[data-tab="tax"] .nav-btn-icon-box { background: rgba(16, 185, 129, 0.12); color: #059669; }
-        &[data-tab="service"] .nav-btn-icon-box { background: rgba(245, 158, 11, 0.12); color: #d97706; }
-        &[data-tab="printer"] .nav-btn-icon-box { background: rgba(139, 92, 246, 0.12); color: #7c3aed; }
-        &[data-tab="whatsapp"] .nav-btn-icon-box { background: rgba(34, 197, 94, 0.12); color: #16a34a; }
-        &[data-tab="maintenance"] .nav-btn-icon-box { background: rgba(14, 165, 233, 0.12); color: #0284c7; }
-        &[data-tab="security"] .nav-btn-icon-box { background: rgba(99, 102, 241, 0.12); color: #4f46e5; }
-        &[data-tab="reset"] .nav-btn-icon-box { background: rgba(239, 68, 68, 0.12); color: #dc2626; }
+        &[data-tab='general'] .nav-btn-icon-box {
+          background: rgba(249, 115, 22, 0.12);
+          color: #ea580c;
+        }
+        &[data-tab='tax'] .nav-btn-icon-box {
+          background: rgba(16, 185, 129, 0.12);
+          color: #059669;
+        }
+        &[data-tab='service'] .nav-btn-icon-box {
+          background: rgba(245, 158, 11, 0.12);
+          color: #d97706;
+        }
+        &[data-tab='printer'] .nav-btn-icon-box {
+          background: rgba(139, 92, 246, 0.12);
+          color: #7c3aed;
+        }
+        &[data-tab='whatsapp'] .nav-btn-icon-box {
+          background: rgba(34, 197, 94, 0.12);
+          color: #16a34a;
+        }
+        &[data-tab='maintenance'] .nav-btn-icon-box {
+          background: rgba(14, 165, 233, 0.12);
+          color: #0284c7;
+        }
+        &[data-tab='security'] .nav-btn-icon-box {
+          background: rgba(99, 102, 241, 0.12);
+          color: #4f46e5;
+        }
+        &[data-tab='reset'] .nav-btn-icon-box {
+          background: rgba(239, 68, 68, 0.12);
+          color: #dc2626;
+        }
 
         &.active {
           background: rgba(194, 65, 12, 0.08);
@@ -2780,7 +2988,9 @@ type SettingsTab =
 
       .apple-card {
         border-radius: var(--radius-md);
-        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04), 0 4px 12px -2px rgba(0, 0, 0, 0.02);
+        box-shadow:
+          0 1px 3px rgba(0, 0, 0, 0.04),
+          0 4px 12px -2px rgba(0, 0, 0, 0.02);
       }
 
       .icon-blue {
@@ -2843,7 +3053,11 @@ type SettingsTab =
         gap: 14px;
         padding: 10px 14px;
         border-radius: 10px;
-        background: linear-gradient(135deg, rgba(245, 158, 11, 0.06) 0%, rgba(245, 158, 11, 0.02) 100%);
+        background: linear-gradient(
+          135deg,
+          rgba(245, 158, 11, 0.06) 0%,
+          rgba(245, 158, 11, 0.02) 100%
+        );
         border: 1px solid rgba(245, 158, 11, 0.2);
 
         @media (max-width: 768px) {
@@ -3030,7 +3244,11 @@ type SettingsTab =
         gap: 10px;
         padding: 12px 14px;
         border-radius: 12px;
-        background: linear-gradient(135deg, rgba(16, 185, 129, 0.05) 0%, rgba(16, 185, 129, 0.01) 100%);
+        background: linear-gradient(
+          135deg,
+          rgba(16, 185, 129, 0.05) 0%,
+          rgba(16, 185, 129, 0.01) 100%
+        );
         border: 1px solid rgba(16, 185, 129, 0.2);
 
         .math-callout-header {
@@ -3983,7 +4201,9 @@ type SettingsTab =
         background: var(--color-surface, #ffffff) !important;
         color: var(--color-text-primary, #0f172a) !important;
         border: 1px solid var(--color-border, #cbd5e1);
-        transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+        transition:
+          border-color var(--transition-fast),
+          box-shadow var(--transition-fast);
 
         &:focus {
           outline: none;
@@ -4883,7 +5103,11 @@ type SettingsTab =
         justify-content: space-between;
         gap: 20px;
         padding: 20px 24px;
-        background: linear-gradient(135deg, var(--color-surface) 0%, var(--color-bone-light, #f8fafc) 100%);
+        background: linear-gradient(
+          135deg,
+          var(--color-surface) 0%,
+          var(--color-bone-light, #f8fafc) 100%
+        );
         border: 1px solid var(--color-border);
         border-radius: var(--radius-lg, 12px);
         box-shadow: 0 1px 4px rgba(0, 0, 0, 0.03);
@@ -5276,8 +5500,12 @@ type SettingsTab =
                   margin-top: 2px;
                   flex-shrink: 0;
 
-                  &.text-danger { color: #dc2626; }
-                  &.text-success { color: #16a34a; }
+                  &.text-danger {
+                    color: #dc2626;
+                  }
+                  &.text-success {
+                    color: #16a34a;
+                  }
                 }
               }
             }
@@ -5292,7 +5520,11 @@ type SettingsTab =
         justify-content: space-between;
         gap: 20px;
         padding: 20px 24px;
-        background: linear-gradient(135deg, rgba(239, 68, 68, 0.05) 0%, rgba(245, 158, 11, 0.02) 100%);
+        background: linear-gradient(
+          135deg,
+          rgba(239, 68, 68, 0.05) 0%,
+          rgba(245, 158, 11, 0.02) 100%
+        );
         border: 1px solid rgba(239, 68, 68, 0.2);
         border-radius: var(--radius-md);
 
@@ -5607,7 +5839,11 @@ type SettingsTab =
         justify-content: space-between;
         gap: 16px;
         padding: 16px 20px;
-        background: linear-gradient(135deg, rgba(239, 68, 68, 0.04) 0%, rgba(245, 158, 11, 0.04) 100%);
+        background: linear-gradient(
+          135deg,
+          rgba(239, 68, 68, 0.04) 0%,
+          rgba(245, 158, 11, 0.04) 100%
+        );
         border: 1px dashed rgba(239, 68, 68, 0.35);
         border-radius: var(--radius-md, 10px);
 
@@ -5699,7 +5935,9 @@ type SettingsTab =
         &.selected {
           border-color: var(--color-primary);
           background: rgba(194, 65, 12, 0.03);
-          box-shadow: 0 0 0 1px var(--color-primary), 0 4px 16px rgba(194, 65, 12, 0.08);
+          box-shadow:
+            0 0 0 1px var(--color-primary),
+            0 4px 16px rgba(194, 65, 12, 0.08);
         }
 
         .radio-card-content {
@@ -6809,11 +7047,7 @@ export class SettingsComponent implements OnInit {
     const isAdmin = this.auth.isAdmin();
     const available = this.navItems.filter((item) => !item.adminOnly || isAdmin);
 
-    const categories = [
-      'RESTAURANT & OPERATIONS',
-      'HARDWARE & INTEGRATIONS',
-      'PLATFORM & SYSTEM',
-    ];
+    const categories = ['RESTAURANT & OPERATIONS', 'HARDWARE & INTEGRATIONS', 'PLATFORM & SYSTEM'];
 
     return categories
       .map((cat) => {
@@ -6822,9 +7056,7 @@ export class SettingsComponent implements OnInit {
           .map((i) => ({
             ...i,
             matchesSearch:
-              !query ||
-              i.label.toLowerCase().includes(query) ||
-              i.keywords.includes(query),
+              !query || i.label.toLowerCase().includes(query) || i.keywords.includes(query),
           }));
         return { category: cat, items };
       })
@@ -6850,7 +7082,9 @@ export class SettingsComponent implements OnInit {
   clearLocalCache(): void {
     this.mock.resetAllDemoData();
     this.loadCurrentSettings();
-    this.toastService.success('Local cache cleared and authoritative records refreshed from server.');
+    this.toastService.success(
+      'Local cache cleared and authoritative records refreshed from server.',
+    );
   }
 
   executeShiftReset(): void {
@@ -7011,10 +7245,13 @@ export class SettingsComponent implements OnInit {
     contactPhone: '+91 80 4912 8800',
     contactEmail: 'contact@gurukripadhaba.com',
     customerMenuUrl:
-      (typeof localStorage !== 'undefined' && localStorage.getItem('hotel_crm_customer_menu_url')) ||
+      (typeof localStorage !== 'undefined' &&
+        localStorage.getItem('hotel_crm_customer_menu_url')) ||
       'https://gurukripadhaba-menu.vercel.app',
     googleReviewUrl:
-      (typeof localStorage !== 'undefined' && localStorage.getItem('hotel_crm_google_review_url')) || '',
+      (typeof localStorage !== 'undefined' &&
+        localStorage.getItem('hotel_crm_google_review_url')) ||
+      '',
     street: '14 Heritage Promenade, MG Road',
     city: 'Bengaluru',
     statePin: 'Karnataka - 560001',
@@ -7042,10 +7279,12 @@ export class SettingsComponent implements OnInit {
         (typeof localStorage !== 'undefined' && localStorage.getItem('hotel_crm_wa_tpl_pending')) ||
         'Namaste {customer_name}! 🙏 We have received your reservation request for {restaurant_name} on {date} at {time} for {guests} guests.\n\nOur team is currently reviewing availability. We will confirm your table shortly.\n\nThank you for choosing us!',
       confirmed:
-        (typeof localStorage !== 'undefined' && localStorage.getItem('hotel_crm_wa_tpl_confirmed')) ||
+        (typeof localStorage !== 'undefined' &&
+          localStorage.getItem('hotel_crm_wa_tpl_confirmed')) ||
         'Namaste {customer_name}! 🌟 Your reservation at {restaurant_name} is CONFIRMED!\n\n📅 Date: {date}\n⏰ Time: {time}\n👥 Guests: {guests}\n🪑 Allocated Table: Table {table_number} ({section})\n\nWe look forward to serving you! If you need to make changes, please contact us.',
       cancelled:
-        (typeof localStorage !== 'undefined' && localStorage.getItem('hotel_crm_wa_tpl_cancelled')) ||
+        (typeof localStorage !== 'undefined' &&
+          localStorage.getItem('hotel_crm_wa_tpl_cancelled')) ||
         'Namaste {customer_name}. We regret to inform you that your reservation request at {restaurant_name} for {date} at {time} could not be confirmed.\n\nPlease contact us directly if you would like to reserve for an alternative slot. We apologize for the inconvenience.',
     },
   };
@@ -7077,7 +7316,13 @@ export class SettingsComponent implements OnInit {
     if (/^usb\d*/i.test(trimmed)) return '[USB]';
     if (/^(ip_|tcp|lan|eth)/i.test(trimmed)) return '[LAN]';
     if (/^(lpt|com)\d+/i.test(trimmed)) return `[${trimmed.toUpperCase()}]`;
-    if (trimmed.length > 15 || trimmed.includes('{') || trimmed.includes('-') || trimmed.toLowerCase() === 'nul:') return '';
+    if (
+      trimmed.length > 15 ||
+      trimmed.includes('{') ||
+      trimmed.includes('-') ||
+      trimmed.toLowerCase() === 'nul:'
+    )
+      return '';
     return `[${trimmed}]`;
   }
 
@@ -7124,13 +7369,29 @@ export class SettingsComponent implements OnInit {
   private loadCurrentSettings(customRes?: Restaurant | null): void {
     const res = customRes || this.mock.restaurant();
     if (res) {
-      const localFssai = typeof localStorage !== 'undefined' ? localStorage.getItem('hotel_crm_fssai_number') : null;
-      const localFooter = typeof localStorage !== 'undefined' ? localStorage.getItem('hotel_crm_invoice_footer') : null;
-      const localBuffer = typeof localStorage !== 'undefined' ? localStorage.getItem('hotel_crm_pickup_buffer_minutes') : null;
+      const localFssai =
+        typeof localStorage !== 'undefined' ? localStorage.getItem('hotel_crm_fssai_number') : null;
+      const localFooter =
+        typeof localStorage !== 'undefined'
+          ? localStorage.getItem('hotel_crm_invoice_footer')
+          : null;
+      const localBuffer =
+        typeof localStorage !== 'undefined'
+          ? localStorage.getItem('hotel_crm_pickup_buffer_minutes')
+          : null;
       const incomingTpls = res.whatsappTemplates || (res as any)?.whatsapp_templates || {};
-      const localPending = typeof localStorage !== 'undefined' ? localStorage.getItem('hotel_crm_wa_tpl_pending') : null;
-      const localConfirmed = typeof localStorage !== 'undefined' ? localStorage.getItem('hotel_crm_wa_tpl_confirmed') : null;
-      const localCancelled = typeof localStorage !== 'undefined' ? localStorage.getItem('hotel_crm_wa_tpl_cancelled') : null;
+      const localPending =
+        typeof localStorage !== 'undefined'
+          ? localStorage.getItem('hotel_crm_wa_tpl_pending')
+          : null;
+      const localConfirmed =
+        typeof localStorage !== 'undefined'
+          ? localStorage.getItem('hotel_crm_wa_tpl_confirmed')
+          : null;
+      const localCancelled =
+        typeof localStorage !== 'undefined'
+          ? localStorage.getItem('hotel_crm_wa_tpl_cancelled')
+          : null;
 
       this.profile = {
         name: res.name || this.profile.name,
@@ -7143,7 +7404,8 @@ export class SettingsComponent implements OnInit {
         contactPhone: res.contact?.phone || this.profile.contactPhone,
         contactEmail: res.contact?.email || this.profile.contactEmail,
         customerMenuUrl:
-          (typeof localStorage !== 'undefined' && localStorage.getItem('hotel_crm_customer_menu_url')) ||
+          (typeof localStorage !== 'undefined' &&
+            localStorage.getItem('hotel_crm_customer_menu_url')) ||
           res.contact?.website ||
           environment.customerMenuUrl ||
           'https://gurukripadhaba-menu.vercel.app',
@@ -7151,7 +7413,8 @@ export class SettingsComponent implements OnInit {
           (res as any)?.google_review_url ||
           res.googleReviewUrl ||
           res.contact?.googleReviewUrl ||
-          (typeof localStorage !== 'undefined' && localStorage.getItem('hotel_crm_google_review_url')) ||
+          (typeof localStorage !== 'undefined' &&
+            localStorage.getItem('hotel_crm_google_review_url')) ||
           this.profile.googleReviewUrl ||
           '',
         street: res.address?.street || this.profile.street,
@@ -7183,8 +7446,10 @@ export class SettingsComponent implements OnInit {
           (localBuffer ? Number(localBuffer) : this.profile.pickupBufferMinutes),
         whatsappTemplates: {
           pending: incomingTpls.pending || localPending || this.defaultWhatsAppTemplates.pending,
-          confirmed: incomingTpls.confirmed || localConfirmed || this.defaultWhatsAppTemplates.confirmed,
-          cancelled: incomingTpls.cancelled || localCancelled || this.defaultWhatsAppTemplates.cancelled,
+          confirmed:
+            incomingTpls.confirmed || localConfirmed || this.defaultWhatsAppTemplates.confirmed,
+          cancelled:
+            incomingTpls.cancelled || localCancelled || this.defaultWhatsAppTemplates.cancelled,
         },
       };
       this.savedProfileJson = JSON.stringify(this.profile);
@@ -7318,7 +7583,11 @@ export class SettingsComponent implements OnInit {
       return;
     }
     const lower = raw.toLowerCase();
-    if (lower.startsWith('javascript:') || lower.startsWith('data:') || lower.startsWith('vbscript:')) {
+    if (
+      lower.startsWith('javascript:') ||
+      lower.startsWith('data:') ||
+      lower.startsWith('vbscript:')
+    ) {
       this.toastService.error('Invalid URL protocol detected.');
       return;
     }
@@ -7348,7 +7617,11 @@ export class SettingsComponent implements OnInit {
       'https://gurukripadhaba-menu.vercel.app'
     ).trim();
     const lower = raw.toLowerCase();
-    if (lower.startsWith('javascript:') || lower.startsWith('data:') || lower.startsWith('vbscript:')) {
+    if (
+      lower.startsWith('javascript:') ||
+      lower.startsWith('data:') ||
+      lower.startsWith('vbscript:')
+    ) {
       this.toastService.error('Invalid URL protocol detected.');
       return;
     }

@@ -46,9 +46,7 @@ export class WhatsAppBridgeService {
     this.isPollerRunning = true;
 
     timer(0, 4000)
-      .pipe(
-        switchMap(() => this.fetchStatus()),
-      )
+      .pipe(switchMap(() => this.fetchStatus()))
       .subscribe();
   }
 

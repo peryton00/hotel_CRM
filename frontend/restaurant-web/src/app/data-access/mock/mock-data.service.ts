@@ -962,7 +962,8 @@ export class MockDataService {
           ? {
               ...t,
               status: nextStatus,
-              currentSeatingSessionId: nextStatus === 'AVAILABLE' ? undefined : t.currentSeatingSessionId,
+              currentSeatingSessionId:
+                nextStatus === 'AVAILABLE' ? undefined : t.currentSeatingSessionId,
               activeOrderId: nextStatus === 'AVAILABLE' ? undefined : t.activeOrderId,
             }
           : t,

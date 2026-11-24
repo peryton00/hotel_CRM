@@ -70,7 +70,11 @@ import { WhatsAppBridgeService } from '../../../core/services/whatsapp-bridge.se
                 >
                   <i class="ph ph-split-horizontal"></i>
                   <span>Split Slips ({{ getOrderSplitBills(ord.id).length }})</span>
-                  <i class="ph" [class.ph-caret-down]="!showSplitDropdown()" [class.ph-caret-up]="showSplitDropdown()"></i>
+                  <i
+                    class="ph"
+                    [class.ph-caret-down]="!showSplitDropdown()"
+                    [class.ph-caret-up]="showSplitDropdown()"
+                  ></i>
                 </button>
                 @if (showSplitDropdown()) {
                   <div class="split-dropdown-box">
@@ -82,8 +86,14 @@ import { WhatsAppBridgeService } from '../../../core/services/whatsapp-bridge.se
                         (click)="showSplitDropdown.set(false)"
                       >
                         <div class="split-link-info">
-                          <span class="split-link-title">Bill #{{ s.splitIndex }}/{{ s.splitTotalCount }}</span>
-                          <span class="split-link-status" [class.paid]="s.paymentStatus === 'PAID'">{{ s.paymentStatus }}</span>
+                          <span class="split-link-title"
+                            >Bill #{{ s.splitIndex }}/{{ s.splitTotalCount }}</span
+                          >
+                          <span
+                            class="split-link-status"
+                            [class.paid]="s.paymentStatus === 'PAID'"
+                            >{{ s.paymentStatus }}</span
+                          >
                         </div>
                         <strong class="split-link-amt">{{ s.totalAmount | currencyInr }}</strong>
                       </a>
@@ -234,9 +244,7 @@ import { WhatsAppBridgeService } from '../../../core/services/whatsapp-bridge.se
                 <div class="meta-card-title">SPLIT RECEIPT PARTICULARS</div>
                 <div class="meta-field-row">
                   <span class="m-label">Receipt Slip ID:</span>
-                  <strong class="m-val mono"
-                    >{{ split.id.substring(0, 12).toUpperCase() }}</strong
-                  >
+                  <strong class="m-val mono">{{ split.id.substring(0, 12).toUpperCase() }}</strong>
                 </div>
                 <div class="meta-field-row">
                   <span class="m-label">Parent Order No:</span>
@@ -244,14 +252,14 @@ import { WhatsAppBridgeService } from '../../../core/services/whatsapp-bridge.se
                 </div>
                 <div class="meta-field-row">
                   <span class="m-label">Settlement Date:</span>
-                  <span class="m-val"
-                    >@if (split.settledAt) {
+                  <span class="m-val">
+                    @if (split.settledAt) {
                       {{ split.settledAt | date: 'mediumDate' }},
                       {{ split.settledAt | date: 'shortTime' }}
                     } @else {
                       <span class="text-muted" style="font-style: italic;">Pending Settlement</span>
-                    }</span
-                  >
+                    }
+                  </span>
                 </div>
                 <div class="meta-field-row">
                   <span class="m-label">Split Mode:</span>
@@ -493,7 +501,10 @@ import { WhatsAppBridgeService } from '../../../core/services/whatsapp-bridge.se
                 </div>
 
                 <div class="brand-legal-badge-col">
-                  <div class="tax-document-tag" [class.consolidated-tag]="sessionRounds().length > 1">
+                  <div
+                    class="tax-document-tag"
+                    [class.consolidated-tag]="sessionRounds().length > 1"
+                  >
                     {{ sessionRounds().length > 1 ? 'CONSOLIDATED TAX INVOICE' : 'TAX INVOICE' }}
                   </div>
                   <div class="legal-id-card">
@@ -516,7 +527,10 @@ import { WhatsAppBridgeService } from '../../../core/services/whatsapp-bridge.se
               <div class="session-consolidated-badge-banner">
                 <div class="consolidated-badge-content">
                   <i class="ph ph-receipt"></i>
-                  <span>CONSOLIDATED DINING SESSION BILL — {{ sessionRounds().length }} SERVICE ROUNDS UNIFIED</span>
+                  <span
+                    >CONSOLIDATED DINING SESSION BILL — {{ sessionRounds().length }} SERVICE ROUNDS
+                    UNIFIED</span
+                  >
                 </div>
               </div>
             }
@@ -579,21 +593,16 @@ import { WhatsAppBridgeService } from '../../../core/services/whatsapp-bridge.se
                 </div>
                 <div class="meta-field-row">
                   <span class="m-label">Payment Status:</span>
-                  <span
-                    class="m-val payment-status-pill"
-                    [class.paid]="isPaid(ord)"
-                  >
-                    {{
-                      isPaid(ord)
-                        ? 'PAID (' + (ord.paymentMethod || 'SETTLED') + ')'
-                        : 'UNPAID'
-                    }}
+                  <span class="m-val payment-status-pill" [class.paid]="isPaid(ord)">
+                    {{ isPaid(ord) ? 'PAID (' + (ord.paymentMethod || 'SETTLED') + ')' : 'UNPAID' }}
                   </span>
                 </div>
                 @if (sessionRounds().length > 1) {
                   <div class="meta-field-row">
                     <span class="m-label">Total Ordered:</span>
-                    <span class="m-val font-semibold">{{ ord.items.length }} Items across {{ sessionRounds().length }} Rounds</span>
+                    <span class="m-val font-semibold"
+                      >{{ ord.items.length }} Items across {{ sessionRounds().length }} Rounds</span
+                    >
                   </div>
                 }
                 @if (ord.printCount && ord.printCount > 0) {
@@ -612,8 +621,13 @@ import { WhatsAppBridgeService } from '../../../core/services/whatsapp-bridge.se
             @if (sessionRounds().length > 1) {
               <div class="session-timeline-strip">
                 <div class="strip-header">
-                  <span class="strip-title"><i class="ph ph-clock-counter-clockwise"></i> SESSION ROUNDS BREAKDOWN</span>
-                  <span class="strip-total-badge">{{ sessionRounds().length }} Rounds • {{ ord.items.length }} Items • {{ ord.subtotal | currencyInr }}</span>
+                  <span class="strip-title"
+                    ><i class="ph ph-clock-counter-clockwise"></i> SESSION ROUNDS BREAKDOWN</span
+                  >
+                  <span class="strip-total-badge"
+                    >{{ sessionRounds().length }} Rounds • {{ ord.items.length }} Items •
+                    {{ ord.subtotal | currencyInr }}</span
+                  >
                 </div>
                 <div class="rounds-pills-row">
                   @for (rnd of sessionRounds(); track rnd.order.id) {
@@ -650,10 +664,15 @@ import { WhatsAppBridgeService } from '../../../core/services/whatsapp-bridge.se
                             <span class="rnd-tag">ROUND {{ rnd.roundIndex }}</span>
                             <span class="rnd-ord-no">{{ rnd.order.orderNumber }}</span>
                             <span class="rnd-time">
-                              <i class="ph ph-clock"></i> {{ rnd.order.createdAt | date: 'shortTime' }}
+                              <i class="ph ph-clock"></i>
+                              {{ rnd.order.createdAt | date: 'shortTime' }}
                             </span>
-                            <span class="rnd-count">{{ rnd.itemsCount }} item{{ rnd.itemsCount > 1 ? 's' : '' }}</span>
-                            <span class="rnd-subtotal">Round Subtotal: {{ rnd.roundSubtotal | currencyInr }}</span>
+                            <span class="rnd-count"
+                              >{{ rnd.itemsCount }} item{{ rnd.itemsCount > 1 ? 's' : '' }}</span
+                            >
+                            <span class="rnd-subtotal"
+                              >Round Subtotal: {{ rnd.roundSubtotal | currencyInr }}</span
+                            >
                           </div>
                         </td>
                       </tr>
@@ -757,7 +776,12 @@ import { WhatsAppBridgeService } from '../../../core/services/whatsapp-bridge.se
                   @if (sessionRounds().length > 1) {
                     <div class="settlement-row">
                       <span>Dining Rounds:</span>
-                      <strong>{{ sessionRounds().length }} Service Rounds ({{ ord.items.length }} Items)</strong>
+                      <strong
+                        >{{ sessionRounds().length }} Service Rounds ({{
+                          ord.items.length
+                        }}
+                        Items)</strong
+                      >
                     </div>
                   }
                   <div
@@ -787,7 +811,11 @@ import { WhatsAppBridgeService } from '../../../core/services/whatsapp-bridge.se
                 <div class="totals-table">
                   <div class="total-line">
                     <span class="t-label">
-                      {{ sessionRounds().length > 1 ? 'Consolidated Subtotal (' + sessionRounds().length + ' Rounds):' : 'Items Subtotal:' }}
+                      {{
+                        sessionRounds().length > 1
+                          ? 'Consolidated Subtotal (' + sessionRounds().length + ' Rounds):'
+                          : 'Items Subtotal:'
+                      }}
                     </span>
                     <span class="t-val">{{ ord.subtotal | currencyInr }}</span>
                   </div>
@@ -959,7 +987,11 @@ import { WhatsAppBridgeService } from '../../../core/services/whatsapp-bridge.se
         <!-- WhatsApp Delivery Modal (Apple Fluid Design) -->
         @if (showWhatsAppModal() && effectiveOrder(); as ord) {
           <div class="modal-overlay" (click)="onBackdropClick($event)">
-            <div class="modal-card settle-modal whatsapp-dialog-card" role="dialog" aria-modal="true">
+            <div
+              class="modal-card settle-modal whatsapp-dialog-card"
+              role="dialog"
+              aria-modal="true"
+            >
               <!-- Modal Header -->
               <div class="modal-header whatsapp-apple-header">
                 <div class="whatsapp-header-wrap">
@@ -969,9 +1001,16 @@ import { WhatsAppBridgeService } from '../../../core/services/whatsapp-bridge.se
                   <div>
                     <div class="flex items-center gap-2">
                       <h3 class="heading-card">Send Bill via WhatsApp</h3>
-                      <span class="badge-gateway-chip" [class.is-connected]="whatsAppBridge.connectionStatus() === 'CONNECTED'">
+                      <span
+                        class="badge-gateway-chip"
+                        [class.is-connected]="whatsAppBridge.connectionStatus() === 'CONNECTED'"
+                      >
                         <span class="dot-indicator"></span>
-                        {{ whatsAppBridge.connectionStatus() === 'CONNECTED' ? 'DIRECT GATEWAY' : 'WEB FALLBACK' }}
+                        {{
+                          whatsAppBridge.connectionStatus() === 'CONNECTED'
+                            ? 'DIRECT GATEWAY'
+                            : 'WEB FALLBACK'
+                        }}
                       </span>
                     </div>
                     <span class="text-xs text-muted">
@@ -996,16 +1035,22 @@ import { WhatsAppBridgeService } from '../../../core/services/whatsapp-bridge.se
                       <i class="ph ph-phone text-whatsapp"></i> Customer WhatsApp Number
                     </label>
                     @if (authService.isAdmin()) {
-                      <span class="admin-verified-pill" title="Administrator access permitted to change recipient">
+                      <span
+                        class="admin-verified-pill"
+                        title="Administrator access permitted to change recipient"
+                      >
                         <i class="ph ph-shield-check"></i> Admin Editable
                       </span>
                     } @else {
-                      <span class="admin-locked-pill" title="Only Admin can modify customer phone number">
+                      <span
+                        class="admin-locked-pill"
+                        title="Only Admin can modify customer phone number"
+                      >
                         <i class="ph ph-lock-key"></i> Admin Protected
                       </span>
                     }
                   </div>
-                  
+
                   <div class="input-with-icon">
                     <i class="ph ph-phone"></i>
                     <input
@@ -1020,7 +1065,10 @@ import { WhatsAppBridgeService } from '../../../core/services/whatsapp-bridge.se
                       (keyup.enter)="sendWhatsAppBill()"
                     />
                     @if (!authService.isAdmin()) {
-                      <i class="ph ph-lock-key lock-status-icon" title="Only Admins can modify phone number"></i>
+                      <i
+                        class="ph ph-lock-key lock-status-icon"
+                        title="Only Admins can modify phone number"
+                      ></i>
                     }
                   </div>
                   <span class="hint-text">
@@ -1054,7 +1102,11 @@ import { WhatsAppBridgeService } from '../../../core/services/whatsapp-bridge.se
 
               <!-- Modal Footer: Single Primary Action & Secondary Utils -->
               <div class="modal-footer whatsapp-apple-footer">
-                <button type="button" class="btn btn-secondary btn-apple-cancel" (click)="closeWhatsAppModal()">
+                <button
+                  type="button"
+                  class="btn btn-secondary btn-apple-cancel"
+                  (click)="closeWhatsAppModal()"
+                >
                   Cancel
                 </button>
 
@@ -1149,8 +1201,12 @@ import { WhatsAppBridgeService } from '../../../core/services/whatsapp-bridge.se
         display: inline-block;
       }
       @keyframes spin {
-        from { transform: rotate(0deg); }
-        to { transform: rotate(360deg); }
+        from {
+          transform: rotate(0deg);
+        }
+        to {
+          transform: rotate(360deg);
+        }
       }
       button:active:not(:disabled) {
         transform: scale(0.98);
@@ -2763,7 +2819,10 @@ import { WhatsAppBridgeService } from '../../../core/services/whatsapp-bridge.se
           border: none;
           cursor: pointer;
           box-shadow: 0 2px 10px rgba(37, 211, 102, 0.3);
-          transition: transform 0.15s cubic-bezier(0.16, 1, 0.3, 1), background-color 0.15s ease, opacity 0.15s ease;
+          transition:
+            transform 0.15s cubic-bezier(0.16, 1, 0.3, 1),
+            background-color 0.15s ease,
+            opacity 0.15s ease;
 
           &:hover:not(:disabled) {
             background: #20ba5a;
@@ -2804,9 +2863,7 @@ export class InvoicePreviewComponent implements OnInit {
       const s = this.splitBill();
       const q = this.route.snapshot.queryParamMap;
       const shouldAutoPreview =
-        q.get('preview') === 'thermal' ||
-        q.get('thermal') === 'true' ||
-        q.get('print') === 'true';
+        q.get('preview') === 'thermal' || q.get('thermal') === 'true' || q.get('print') === 'true';
 
       if (ord && shouldAutoPreview && !this.hasAutoOpenedThermal) {
         const isPaidTarget = s ? s.paymentStatus === 'PAID' : this.isPaid(ord);
@@ -2828,15 +2885,19 @@ export class InvoicePreviewComponent implements OnInit {
 
   getOrderCgstRate(ord: Order | null | undefined): number {
     if (!ord) return this.restaurant()?.taxSettings?.cgstRate ?? 2.5;
-    if (typeof (ord as any).cgstRate === 'number' && (ord as any).cgstRate > 0) return (ord as any).cgstRate;
-    if (typeof (ord as any).cgst_rate === 'number' && (ord as any).cgst_rate > 0) return (ord as any).cgst_rate;
+    if (typeof (ord as any).cgstRate === 'number' && (ord as any).cgstRate > 0)
+      return (ord as any).cgstRate;
+    if (typeof (ord as any).cgst_rate === 'number' && (ord as any).cgst_rate > 0)
+      return (ord as any).cgst_rate;
     return this.restaurant()?.taxSettings?.cgstRate ?? 2.5;
   }
 
   getOrderSgstRate(ord: Order | null | undefined): number {
     if (!ord) return this.restaurant()?.taxSettings?.sgstRate ?? 2.5;
-    if (typeof (ord as any).sgstRate === 'number' && (ord as any).sgstRate > 0) return (ord as any).sgstRate;
-    if (typeof (ord as any).sgst_rate === 'number' && (ord as any).sgst_rate > 0) return (ord as any).sgst_rate;
+    if (typeof (ord as any).sgstRate === 'number' && (ord as any).sgstRate > 0)
+      return (ord as any).sgstRate;
+    if (typeof (ord as any).sgst_rate === 'number' && (ord as any).sgst_rate > 0)
+      return (ord as any).sgst_rate;
     return this.restaurant()?.taxSettings?.sgstRate ?? 2.5;
   }
 
@@ -2935,52 +2996,50 @@ export class InvoicePreviewComponent implements OnInit {
       }
     } else {
       // 2. Discover all sibling orders belonging to this dining session
-      const siblings = this.mock
-        .orders()
-        .filter((o) => {
-          if (o.id === raw.id || o.status === 'CANCELLED' || o.orderType === 'TAKEAWAY') {
-            return false;
-          }
+      const siblings = this.mock.orders().filter((o) => {
+        if (o.id === raw.id || o.status === 'CANCELLED' || o.orderType === 'TAKEAWAY') {
+          return false;
+        }
 
-          // Seating session match if available on both
-          if (raw.seatingSessionId && o.seatingSessionId) {
-            return o.seatingSessionId === raw.seatingSessionId;
-          }
+        // Seating session match if available on both
+        if (raw.seatingSessionId && o.seatingSessionId) {
+          return o.seatingSessionId === raw.seatingSessionId;
+        }
 
-          // Exact table matching (must match tableId if both present)
-          if (raw.tableId && o.tableId && raw.tableId !== o.tableId) {
-            return false;
-          }
-          const sameTable =
-            (raw.tableId && o.tableId === raw.tableId) ||
-            (raw.tableNumber &&
-              o.tableNumber &&
-              raw.tableNumber.trim().toLowerCase() === o.tableNumber.trim().toLowerCase());
-          if (!sameTable) return false;
+        // Exact table matching (must match tableId if both present)
+        if (raw.tableId && o.tableId && raw.tableId !== o.tableId) {
+          return false;
+        }
+        const sameTable =
+          (raw.tableId && o.tableId === raw.tableId) ||
+          (raw.tableNumber &&
+            o.tableNumber &&
+            raw.tableNumber.trim().toLowerCase() === o.tableNumber.trim().toLowerCase());
+        if (!sameTable) return false;
 
-          // Time guard: Never mix orders across different dining times (> 3 hours apart)
-          const timeDiff = Math.abs(
-            new Date(raw.createdAt).getTime() - new Date(o.createdAt).getTime(),
-          );
-          if (timeDiff > 3 * 60 * 60 * 1000) return false;
+        // Time guard: Never mix orders across different dining times (> 3 hours apart)
+        const timeDiff = Math.abs(
+          new Date(raw.createdAt).getTime() - new Date(o.createdAt).getTime(),
+        );
+        if (timeDiff > 3 * 60 * 60 * 1000) return false;
 
-          // If raw is settled, siblings must either be settled around the same time or absorbed
-          if (raw.paymentStatus === 'PAID') {
-            if (o.paymentStatus === 'PAID') {
-              if (raw.settledAt && o.settledAt) {
-                const diffMs = Math.abs(
-                  new Date(raw.settledAt).getTime() - new Date(o.settledAt).getTime(),
-                );
-                return diffMs <= 10 * 60 * 1000;
-              }
-              return o.totalAmount === 0 || raw.totalAmount === 0;
+        // If raw is settled, siblings must either be settled around the same time or absorbed
+        if (raw.paymentStatus === 'PAID') {
+          if (o.paymentStatus === 'PAID') {
+            if (raw.settledAt && o.settledAt) {
+              const diffMs = Math.abs(
+                new Date(raw.settledAt).getTime() - new Date(o.settledAt).getTime(),
+              );
+              return diffMs <= 10 * 60 * 1000;
             }
-            return false;
+            return o.totalAmount === 0 || raw.totalAmount === 0;
           }
+          return false;
+        }
 
-          // Both unpaid on same table within 3 hours
-          return o.paymentStatus === 'UNPAID';
-        });
+        // Both unpaid on same table within 3 hours
+        return o.paymentStatus === 'UNPAID';
+      });
 
       allOrders = [raw, ...siblings];
     }
@@ -3026,8 +3085,12 @@ export class InvoicePreviewComponent implements OnInit {
 
     const rounds = this.sessionRounds();
     if (rounds.length <= 1) {
-      const itemsSum = raw.items?.reduce((s, it) => s + (it.unitPrice || 0) * (it.quantity || 1), 0);
-      const subtotal = itemsSum !== undefined && itemsSum > 0 ? Math.round(itemsSum * 100) / 100 : raw.subtotal;
+      const itemsSum = raw.items?.reduce(
+        (s, it) => s + (it.unitPrice || 0) * (it.quantity || 1),
+        0,
+      );
+      const subtotal =
+        itemsSum !== undefined && itemsSum > 0 ? Math.round(itemsSum * 100) / 100 : raw.subtotal;
       const discountAmount = raw.discountAmount || 0;
       const hasCoupon = !!raw.appliedCouponCode;
 
@@ -3076,10 +3139,11 @@ export class InvoicePreviewComponent implements OnInit {
     const allItems = rounds.flatMap((r) => r.order.items || []);
     const subtotal = Math.round(rounds.reduce((sum, r) => sum + r.roundSubtotal, 0) * 100) / 100;
 
-    const discountAmount = Math.round(
-      (raw.discountAmount ||
-        rounds.reduce((sum, r) => sum + (r.order.discountAmount || 0), 0)) * 100,
-    ) / 100;
+    const discountAmount =
+      Math.round(
+        (raw.discountAmount || rounds.reduce((sum, r) => sum + (r.order.discountAmount || 0), 0)) *
+          100,
+      ) / 100;
 
     const hasCoupon = !!(raw.appliedCouponCode || rounds.some((r) => r.order.appliedCouponCode));
     const cgstRate = this.getOrderCgstRate(raw);
@@ -3398,7 +3462,9 @@ export class InvoicePreviewComponent implements OnInit {
     const existingPhone = ord?.customerPhone || '';
     this.whatsAppPhone.set(existingPhone);
     const restName = this.restaurant()?.name || 'GuruKripa Dhaba';
-    this.whatsAppCustomMessage.set(ord ? buildWhatsAppBillMessage(restName, ord, this.splitBill()) : '');
+    this.whatsAppCustomMessage.set(
+      ord ? buildWhatsAppBillMessage(restName, ord, this.splitBill()) : '',
+    );
     this.showWhatsAppModal.set(true);
     this.whatsAppBridge.startStatusPoller();
   }
@@ -3451,7 +3517,9 @@ export class InvoicePreviewComponent implements OnInit {
             this.toastService.success('WhatsApp bill delivered directly to customer!');
             this.closeWhatsAppModal();
           } else {
-            this.toastService.warning(res.error || 'Direct dispatch failed, opening WhatsApp fallback...');
+            this.toastService.warning(
+              res.error || 'Direct dispatch failed, opening WhatsApp fallback...',
+            );
             launchExternalUrl(
               `https://web.whatsapp.com/send?phone=${phone.replace(/\D/g, '')}&text=${encodeURIComponent(message)}`,
             );

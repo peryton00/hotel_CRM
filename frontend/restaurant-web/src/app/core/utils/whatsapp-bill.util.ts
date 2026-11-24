@@ -24,7 +24,7 @@ export function buildWhatsAppBillMessage(
       : `Table ${ord.tableNumber || 'Dine-In'}`;
 
   const isSplit = !!split;
-  const totalAmount = isSplit ? split!.totalAmount ?? 0 : ord.totalAmount ?? 0;
+  const totalAmount = isSplit ? (split!.totalAmount ?? 0) : (ord.totalAmount ?? 0);
   const tender = (isSplit ? split!.paymentMethod : ord.paymentMethod) || 'SETTLED';
   const payStatus =
     (isSplit ? split!.paymentStatus : ord.paymentStatus) === 'PAID'
@@ -33,7 +33,10 @@ export function buildWhatsAppBillMessage(
 
   // 1. Items itemization with proper currency spacing
   const itemsLines = (ord.items || [])
-    .map((it) => `• ${it.name} x ${it.quantity} = ₹${(it.itemTotal ?? it.quantity * it.unitPrice).toFixed(2)}`)
+    .map(
+      (it) =>
+        `• ${it.name} x ${it.quantity} = ₹${(it.itemTotal ?? it.quantity * it.unitPrice).toFixed(2)}`,
+    )
     .join('\n');
 
   // 2. Subtotal calculation

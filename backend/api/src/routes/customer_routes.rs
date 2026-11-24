@@ -100,13 +100,19 @@ pub async fn update_reservation_status(
 
     // WhatsApp Notification on Status Lifecycle change
     let status_upper = reservation.status.to_uppercase();
-    let restaurant = crate::repositories::RestaurantRepository::get_by_id(&pool, tenant.restaurant_id)
-        .await
-        .ok()
-        .flatten();
+    let restaurant =
+        crate::repositories::RestaurantRepository::get_by_id(&pool, tenant.restaurant_id)
+            .await
+            .ok()
+            .flatten();
 
-    let restaurant_name = restaurant.as_ref().map(|r| r.name.as_str()).unwrap_or("The Restaurant");
-    let custom_templates = restaurant.as_ref().and_then(|r| r.whatsapp_templates.as_ref());
+    let restaurant_name = restaurant
+        .as_ref()
+        .map(|r| r.name.as_str())
+        .unwrap_or("The Restaurant");
+    let custom_templates = restaurant
+        .as_ref()
+        .and_then(|r| r.whatsapp_templates.as_ref());
 
     let date_str = reservation.reservation_time.format("%d %b %Y").to_string();
     let time_str = reservation.reservation_time.format("%I:%M %p").to_string();

@@ -1659,9 +1659,7 @@ describe('Phase 7: Reporting, COGS, Wastage Analysis & Split-Bill Receipts', () 
         expect(totalCollectionsAcrossDailyReports).toBe(500);
       });
 
-      it(
-        'preserves exact Dashboard and Reports parity across all metrics for identical selected date ranges',
-        () => {
+      it('preserves exact Dashboard and Reports parity across all metrics for identical selected date ranges', () => {
         const mockService = TestBed.inject(MockDataService);
         const order1 = createTestOrder({
           id: 'ord-7c-parity-1',

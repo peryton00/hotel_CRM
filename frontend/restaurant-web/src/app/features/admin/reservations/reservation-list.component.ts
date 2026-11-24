@@ -322,7 +322,9 @@ import { ToastService } from '../../../core/services/toast.service';
             <div class="modal-header allocate-modal-header">
               <div>
                 <h3 class="heading-card">Approve & Allocate Table</h3>
-                <p class="text-xs text-muted">Confirm guest reservation and send live WhatsApp notification.</p>
+                <p class="text-xs text-muted">
+                  Confirm guest reservation and send live WhatsApp notification.
+                </p>
               </div>
               <button class="close-btn" (click)="showAllocateModal = false">
                 <i class="ph ph-x"></i>
@@ -337,12 +339,16 @@ import { ToastService } from '../../../core/services/toast.service';
                 </div>
                 <div class="guest-preview-row">
                   <span class="text-muted">Party Size:</span>
-                  <span class="badge badge-outline"><i class="ph ph-users"></i> {{ res.partySize }} Guests</span>
+                  <span class="badge badge-outline"
+                    ><i class="ph ph-users"></i> {{ res.partySize }} Guests</span
+                  >
                 </div>
                 <div class="guest-preview-row">
                   <span class="text-muted">Requested Slot:</span>
                   <strong style="color: var(--color-primary, #ea580c);">
-                    <i class="ph ph-calendar"></i> {{ res.reservationTime || res.reservationDate | date: 'mediumDate' }} at {{ res.reservationTime || res.reservationDate | date: 'shortTime' }}
+                    <i class="ph ph-calendar"></i>
+                    {{ res.reservationTime || res.reservationDate | date: 'mediumDate' }} at
+                    {{ res.reservationTime || res.reservationDate | date: 'shortTime' }}
                   </strong>
                 </div>
                 @if (res.specialRequests) {
@@ -355,8 +361,14 @@ import { ToastService } from '../../../core/services/toast.service';
 
               <!-- Table Allocation Selector -->
               <div class="form-group">
-                <label class="form-label" style="font-weight: 700;">Select Table to Allocate *</label>
-                <select class="form-select" [ngModel]="selectedAllocateTableId()" (ngModelChange)="selectedAllocateTableId.set($event)">
+                <label class="form-label" style="font-weight: 700;"
+                  >Select Table to Allocate *</label
+                >
+                <select
+                  class="form-select"
+                  [ngModel]="selectedAllocateTableId()"
+                  (ngModelChange)="selectedAllocateTableId.set($event)"
+                >
                   @for (t of tables(); track t.id) {
                     <option [value]="t.id">
                       {{ t.number }} — {{ t.section }} ({{ t.capacity }} seats) [{{ t.status }}]
@@ -367,7 +379,11 @@ import { ToastService } from '../../../core/services/toast.service';
                   @if (sel.capacity < res.partySize) {
                     <div class="warning-callout">
                       <i class="ph ph-warning"></i>
-                      <span>Selected table capacity ({{ sel.capacity }}) is less than party size ({{ res.partySize }}).</span>
+                      <span
+                        >Selected table capacity ({{ sel.capacity }}) is less than party size ({{
+                          res.partySize
+                        }}).</span
+                      >
                     </div>
                   }
                 }
@@ -381,7 +397,10 @@ import { ToastService } from '../../../core/services/toast.service';
                 <div class="wa-preview-text">
                   <span class="wa-title">Automated WhatsApp Confirmation</span>
                   <p class="wa-desc">
-                    Customer will immediately receive confirmation details with Date, Time, and Table <strong>{{ getSelectedTable()?.number || 'Selected' }}</strong> at <strong>{{ res.customerPhone }}</strong>.
+                    Customer will immediately receive confirmation details with Date, Time, and
+                    Table <strong>{{ getSelectedTable()?.number || 'Selected' }}</strong> at
+                    <strong>{{ res.customerPhone }}</strong
+                    >.
                   </p>
                 </div>
               </div>
@@ -415,17 +434,22 @@ import { ToastService } from '../../../core/services/toast.service';
             </div>
             <div class="modal-body space-y-3">
               <p style="font-size: 0.875rem;">
-                Are you sure you want to decline or cancel the reservation for <strong>{{ res.customerName }}</strong> ({{ res.partySize }} guests)?
+                Are you sure you want to decline or cancel the reservation for
+                <strong>{{ res.customerName }}</strong> ({{ res.partySize }} guests)?
               </p>
               <div class="cancel-wa-card">
                 <i class="ph ph-whatsapp-logo" style="color: #ea580c; font-size: 1.25rem;"></i>
                 <span class="text-xs">
-                  An automatic WhatsApp message will be sent to <strong>{{ res.customerPhone }}</strong> politely informing them that the table could not be accommodated.
+                  An automatic WhatsApp message will be sent to
+                  <strong>{{ res.customerPhone }}</strong> politely informing them that the table
+                  could not be accommodated.
                 </span>
               </div>
             </div>
             <div class="modal-footer">
-              <button class="btn btn-secondary" (click)="showCancelModal = false">Keep Reservation</button>
+              <button class="btn btn-secondary" (click)="showCancelModal = false">
+                Keep Reservation
+              </button>
               <button
                 class="btn btn-danger"
                 [appLoadingButton]="isSaving()"
@@ -841,9 +865,7 @@ export class ReservationListComponent {
     this.allocatingReservation = res;
     // Find matching table: capacity >= partySize and status AVAILABLE
     const matching =
-      this.tables().find(
-        (t) => t.capacity >= res.partySize && t.status === 'AVAILABLE',
-      ) ||
+      this.tables().find((t) => t.capacity >= res.partySize && t.status === 'AVAILABLE') ||
       this.tables().find((t) => t.capacity >= res.partySize) ||
       this.tables()[0];
 

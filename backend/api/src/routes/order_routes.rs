@@ -12,7 +12,7 @@ use crate::{
     error::AppError,
     models::{
         common::{ApiResponse, PaginationQuery},
-        order::{CreateOrderRequest, UpdateOrderStatusRequest, UpdateOrderItemsRequest},
+        order::{CreateOrderRequest, UpdateOrderItemsRequest, UpdateOrderStatusRequest},
     },
     repositories::OrderRepository,
     routes::auth_routes::verify_password,

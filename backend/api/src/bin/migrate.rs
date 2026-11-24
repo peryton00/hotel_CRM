@@ -33,7 +33,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     .await?;
     println!("\nActive Staff Members in DB:");
     for (sid, sname, srole, slogin, spin) in staff_list {
-        println!(" - ID: {}, Name: {}, Role: {}, LoginID: '{}', PinHashPrefix: '{}'", sid, sname, srole, slogin, &spin[..std::cmp::min(10, spin.len())]);
+        println!(
+            " - ID: {}, Name: {}, Role: {}, LoginID: '{}', PinHashPrefix: '{}'",
+            sid,
+            sname,
+            srole,
+            slogin,
+            &spin[..std::cmp::min(10, spin.len())]
+        );
     }
     sqlx::raw_sql(
         r#"

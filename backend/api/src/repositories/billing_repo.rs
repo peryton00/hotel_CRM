@@ -6,8 +6,8 @@ use crate::{
     error::AppError,
     models::{
         billing::{
-            CreatePaymentRequest, CreateRefundRequest, Payment, ReceiptData, ReceiptItemData, Refund, SettleOrderRequest,
-            SplitBill, SplitOrderRequest,
+            CreatePaymentRequest, CreateRefundRequest, Payment, ReceiptData, ReceiptItemData,
+            Refund, SettleOrderRequest, SplitBill, SplitOrderRequest,
         },
         order::{Order, OrderItem},
         paise::Paise,
@@ -166,39 +166,35 @@ impl BillingRepository {
         let raw_discount_paise = req.discount_paise.unwrap_or(order.discount_paise);
         let total_tax_rate = order.cgst_rate.unwrap_or(2.5) + order.sgst_rate.unwrap_or(2.5);
 
-        let (final_discount_paise, final_tax_paise, final_total_paise, final_coupon_code) = if has_coupon {
-            // Coupon discount applies to total BEFORE taxes
-            let coupon_discount = raw_discount_paise.min(combined_subtotal_paise).max(0);
-            let taxable_paise = (combined_subtotal_paise - coupon_discount).max(0);
-            let tax_paise = if combined_subtotal_paise > 0 {
-                ((taxable_paise as f64) * total_tax_rate / 100.0).round() as i64
+        let (final_discount_paise, final_tax_paise, final_total_paise, final_coupon_code) =
+            if has_coupon {
+                // Coupon discount applies to total BEFORE taxes
+                let coupon_discount = raw_discount_paise.min(combined_subtotal_paise).max(0);
+                let taxable_paise = (combined_subtotal_paise - coupon_discount).max(0);
+                let tax_paise = if combined_subtotal_paise > 0 {
+                    ((taxable_paise as f64) * total_tax_rate / 100.0).round() as i64
+                } else {
+                    0
+                };
+                let unrounded_total = taxable_paise + tax_paise;
+                // Round to nearest whole rupee (100 paise) so chargeable amount never shows pointed/decimal value
+                let rounded_rupees = ((unrounded_total as f64) / 100.0).round() as i64;
+                let final_total = (rounded_rupees * 100).max(0);
+                (
+                    coupon_discount,
+                    tax_paise,
+                    final_total,
+                    req.applied_coupon_code.or(order.applied_coupon_code),
+                )
             } else {
-                0
+                // Admin discount / round-off applies to total AFTER taxes
+                let admin_discount = raw_discount_paise.min(combined_gross_total_paise).max(0);
+                let unrounded_total = (combined_gross_total_paise - admin_discount).max(0);
+                // Round to nearest whole rupee (100 paise) so chargeable amount never shows pointed/decimal value
+                let rounded_rupees = ((unrounded_total as f64) / 100.0).round() as i64;
+                let final_total = (rounded_rupees * 100).max(0);
+                (admin_discount, combined_tax_paise, final_total, None)
             };
-            let unrounded_total = taxable_paise + tax_paise;
-            // Round to nearest whole rupee (100 paise) so chargeable amount never shows pointed/decimal value
-            let rounded_rupees = ((unrounded_total as f64) / 100.0).round() as i64;
-            let final_total = (rounded_rupees * 100).max(0);
-            (
-                coupon_discount,
-                tax_paise,
-                final_total,
-                req.applied_coupon_code.or(order.applied_coupon_code),
-            )
-        } else {
-            // Admin discount / round-off applies to total AFTER taxes
-            let admin_discount = raw_discount_paise.min(combined_gross_total_paise).max(0);
-            let unrounded_total = (combined_gross_total_paise - admin_discount).max(0);
-            // Round to nearest whole rupee (100 paise) so chargeable amount never shows pointed/decimal value
-            let rounded_rupees = ((unrounded_total as f64) / 100.0).round() as i64;
-            let final_total = (rounded_rupees * 100).max(0);
-            (
-                admin_discount,
-                combined_tax_paise,
-                final_total,
-                None,
-            )
-        };
 
         let payment_amount = if req.discount_paise.is_some() || !sibling_orders.is_empty() {
             final_total_paise
@@ -500,7 +496,13 @@ impl BillingRepository {
                 .execute(&mut *tx)
                 .await?;
 
-                crate::ws::broadcast_order_status(req.order_id, None, None, "COMPLETED", Some("PAID"));
+                crate::ws::broadcast_order_status(
+                    req.order_id,
+                    None,
+                    None,
+                    "COMPLETED",
+                    Some("PAID"),
+                );
             } else {
                 sqlx::query(
                     r#"
@@ -515,7 +517,13 @@ impl BillingRepository {
                 .execute(&mut *tx)
                 .await?;
 
-                crate::ws::broadcast_order_status(req.order_id, None, None, "SERVED", Some("PARTIALLY_PAID"));
+                crate::ws::broadcast_order_status(
+                    req.order_id,
+                    None,
+                    None,
+                    "SERVED",
+                    Some("PARTIALLY_PAID"),
+                );
             }
         } else {
             crate::ws::broadcast_order_status(req.order_id, None, None, "COMPLETED", Some("PAID"));
@@ -827,12 +835,11 @@ impl BillingRepository {
 
             let total_completed = total_refunded_row.0.unwrap_or(0);
 
-            let (order_total_paise, order_id): (i64, Uuid) = sqlx::query_as(
-                "SELECT total_amount_paise, id FROM orders WHERE id = $1",
-            )
-            .bind(refund.order_id)
-            .fetch_one(&mut *tx)
-            .await?;
+            let (order_total_paise, order_id): (i64, Uuid) =
+                sqlx::query_as("SELECT total_amount_paise, id FROM orders WHERE id = $1")
+                    .bind(refund.order_id)
+                    .fetch_one(&mut *tx)
+                    .await?;
 
             if total_completed >= order_total_paise {
                 sqlx::query(
