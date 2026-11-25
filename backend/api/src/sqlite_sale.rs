@@ -995,12 +995,6 @@ mod sale_tests {
         assert_eq!(counts, (1, 1, 2));
         drop(app);
         pool.close().await;
-        for _ in 0..20 {
-            if std::fs::remove_file(dir.join("restaurant.sqlite3")).is_ok() {
-                break;
-            }
-            tokio::time::sleep(std::time::Duration::from_millis(50)).await;
-        }
-        std::fs::remove_dir(dir).unwrap();
+        crate::local_database::remove_test_database(&dir).await;
     }
 }

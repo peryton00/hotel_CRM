@@ -74,6 +74,26 @@ pub async fn serve(
 }
 
 #[cfg(test)]
+pub(crate) async fn remove_test_database(directory: &Path) {
+    // WAL mode may leave sidecar files alongside the database. On Windows the
+    // SQLite workers can briefly hold those files after the pool closes.
+    for attempt in 1..=20 {
+        match std::fs::remove_dir_all(directory) {
+            Ok(()) => return,
+            Err(err) if err.kind() == std::io::ErrorKind::NotFound && !directory.exists() => return,
+            Err(err)
+                if attempt < 20
+                    && (err.kind() == std::io::ErrorKind::DirectoryNotEmpty
+                        || (cfg!(windows) && matches!(err.raw_os_error(), Some(5 | 32 | 33)))) =>
+            {
+                tokio::time::sleep(Duration::from_millis(50)).await;
+            }
+            Err(err) => panic!("Cannot remove test database {}: {err}", directory.display()),
+        }
+    }
+}
+
+#[cfg(test)]
 mod tests {
     use super::*;
 
@@ -101,16 +121,6 @@ mod tests {
             1
         );
         pool.close().await;
-        // SQLite worker threads can briefly retain file handles after the pool closes on Windows.
-        for attempt in 0..20 {
-            match std::fs::remove_file(directory.join("restaurant.sqlite3")) {
-                Ok(()) => break,
-                Err(error) if error.raw_os_error() == Some(32) && attempt < 19 => {
-                    tokio::time::sleep(Duration::from_millis(50)).await;
-                }
-                Err(error) => panic!("Cannot clean up test database: {error}"),
-            }
-        }
-        std::fs::remove_dir(directory).unwrap();
+        remove_test_database(&directory).await;
     }
 }
