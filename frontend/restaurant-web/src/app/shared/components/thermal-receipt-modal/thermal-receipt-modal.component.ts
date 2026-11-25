@@ -1837,7 +1837,7 @@ export class ThermalReceiptModalComponent {
 
   async authorizeAndPrint(): Promise<void> {
     const pwd = this.adminPasswordInput.trim();
-    if (!await this.adminAuth.verifyAdminPassword(pwd)) {
+    if (!(await this.adminAuth.verifyAdminPassword(pwd))) {
       this.adminAuthError.set('Incorrect admin password. Supervisor authorization required.');
       return;
     }

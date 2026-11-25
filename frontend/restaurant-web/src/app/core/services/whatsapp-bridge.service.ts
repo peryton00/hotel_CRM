@@ -33,7 +33,9 @@ export interface SendWhatsAppResponse {
 })
 export class WhatsAppBridgeService {
   private get requestOptions() {
-    return { headers: { Authorization: `Bearer ${localStorage.getItem('sb-access-token') || ''}` } };
+    return {
+      headers: { Authorization: `Bearer ${localStorage.getItem('sb-access-token') || ''}` },
+    };
   }
 
   private readonly bridgeUrl = 'http://127.0.0.1:3001';
@@ -68,27 +70,29 @@ export class WhatsAppBridgeService {
    * Fetches the current WhatsApp Gateway state and QR code
    */
   fetchStatus(): Observable<WhatsAppBridgeStatus> {
-    return this.http.get<WhatsAppBridgeStatus>(`${this.bridgeUrl}/status`, this.requestOptions).pipe(
-      map((res) => {
-        this.isBridgeReachable.set(true);
-        this.connectionStatus.set(res.status);
-        this.qrCodeDataUrl.set(res.qr);
-        this.connectedPhone.set(res.phone);
-        this.connectedName.set(res.name);
-        return res;
-      }),
-      catchError(() => {
-        this.isBridgeReachable.set(false);
-        this.connectionStatus.set('DISCONNECTED');
-        this.qrCodeDataUrl.set(null);
-        return of({
-          status: 'DISCONNECTED' as const,
-          qr: null,
-          phone: null,
-          name: null,
-        });
-      }),
-    );
+    return this.http
+      .get<WhatsAppBridgeStatus>(`${this.bridgeUrl}/status`, this.requestOptions)
+      .pipe(
+        map((res) => {
+          this.isBridgeReachable.set(true);
+          this.connectionStatus.set(res.status);
+          this.qrCodeDataUrl.set(res.qr);
+          this.connectedPhone.set(res.phone);
+          this.connectedName.set(res.name);
+          return res;
+        }),
+        catchError(() => {
+          this.isBridgeReachable.set(false);
+          this.connectionStatus.set('DISCONNECTED');
+          this.qrCodeDataUrl.set(null);
+          return of({
+            status: 'DISCONNECTED' as const,
+            qr: null,
+            phone: null,
+            name: null,
+          });
+        }),
+      );
   }
 
   /**
@@ -104,10 +108,14 @@ export class WhatsAppBridgeService {
     }
 
     return this.http
-      .post<SendWhatsAppResponse>(`${this.bridgeUrl}/send`, {
-        phone: cleanDigits,
-        message,
-      }, this.requestOptions)
+      .post<SendWhatsAppResponse>(
+        `${this.bridgeUrl}/send`,
+        {
+          phone: cleanDigits,
+          message,
+        },
+        this.requestOptions,
+      )
       .pipe(
         catchError((err) => {
           return of({
@@ -239,10 +247,14 @@ export class WhatsAppBridgeService {
     const message = customMessage || buildWhatsAppBillMessage(restaurantName, order, split);
 
     return this.http
-      .post<SendWhatsAppResponse>(`${this.bridgeUrl}/send`, {
-        phone: cleanDigits,
-        message,
-      }, this.requestOptions)
+      .post<SendWhatsAppResponse>(
+        `${this.bridgeUrl}/send`,
+        {
+          phone: cleanDigits,
+          message,
+        },
+        this.requestOptions,
+      )
       .pipe(
         catchError((err) => {
           return of({
@@ -258,7 +270,11 @@ export class WhatsAppBridgeService {
    */
   logout(): Observable<{ success: boolean; message?: string }> {
     return this.http
-      .post<{ success: boolean; message?: string }>(`${this.bridgeUrl}/logout`, {}, this.requestOptions)
+      .post<{ success: boolean; message?: string }>(
+        `${this.bridgeUrl}/logout`,
+        {},
+        this.requestOptions,
+      )
       .pipe(
         map((res) => {
           this.fetchStatus().subscribe();

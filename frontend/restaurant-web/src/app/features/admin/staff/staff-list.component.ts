@@ -4102,9 +4102,7 @@ export class StaffListComponent {
     this.staffRepo.updateStaff(memberId, { password: newPwd } as any).subscribe({
       next: () => {
         this.isSubmitting = false;
-        this.toastService.success(
-          `Updated secret password for ${this.selectedMember?.name}!`,
-        );
+        this.toastService.success(`Updated secret password for ${this.selectedMember?.name}!`);
         this.showResetModal = false;
       },
       error: () => {

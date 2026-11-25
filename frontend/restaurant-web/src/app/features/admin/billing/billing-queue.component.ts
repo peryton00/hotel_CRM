@@ -63,9 +63,24 @@ import { AdminAuthService } from '../../../core/services/admin-auth.service';
           <h2>Refunds awaiting approval</h2>
           @for (refund of pendingRefunds(); track refund.id) {
             <div class="toolbar-top-row">
-              <span>{{ refund.orderNumber }} · {{ refund.refundAmount | currencyInr }} · {{ refund.reason }}</span>
-              <button type="button" class="filter-btn" (click)="decideRefund(refund.id, 'completed')">Approve refund</button>
-              <button type="button" class="filter-btn" (click)="decideRefund(refund.id, 'cancelled')">Decline</button>
+              <span
+                >{{ refund.orderNumber }} · {{ refund.refundAmount | currencyInr }} ·
+                {{ refund.reason }}</span
+              >
+              <button
+                type="button"
+                class="filter-btn"
+                (click)="decideRefund(refund.id, 'completed')"
+              >
+                Approve refund
+              </button>
+              <button
+                type="button"
+                class="filter-btn"
+                (click)="decideRefund(refund.id, 'cancelled')"
+              >
+                Decline
+              </button>
             </div>
           }
         </section>
@@ -2931,7 +2946,9 @@ import { AdminAuthService } from '../../../core/services/admin-auth.service';
 export class BillingQueueComponent {
   private dataService = inject(RestaurantDataService);
   private mock = this.dataService;
-  readonly pendingRefunds = computed(() => this.mock.refunds().filter(refund => refund.status === 'PENDING'));
+  readonly pendingRefunds = computed(() =>
+    this.mock.refunds().filter((refund) => refund.status === 'PENDING'),
+  );
   async decideRefund(id: string, status: 'completed' | 'cancelled'): Promise<void> {
     try {
       await this.mock.decideRefund(id, status);
@@ -3912,12 +3929,17 @@ export class BillingQueueComponent {
       refundAmount: amt,
       reason,
       staffName: 'Staff',
-      idempotencyKey: this.refundRequestKey ??= generateIdempotencyKey('refund', ord.customerPhone),
+      idempotencyKey: (this.refundRequestKey ??= generateIdempotencyKey(
+        'refund',
+        ord.customerPhone,
+      )),
     });
     this.isSubmittingRefund.set(false);
 
     if (res.success && res.refund) {
-      this.toastService.success(`Refund of ₹${res.refund.refundAmount} ${res.refund.status === 'PENDING' ? 'awaiting approval' : 'completed'}.`);
+      this.toastService.success(
+        `Refund of ₹${res.refund.refundAmount} ${res.refund.status === 'PENDING' ? 'awaiting approval' : 'completed'}.`,
+      );
       this.closeRefundModal();
     } else {
       this.refundError.set(res.error || 'Failed to record refund');

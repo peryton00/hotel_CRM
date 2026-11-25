@@ -23,7 +23,13 @@ import { ToastService } from '../../../core/services/toast.service';
           <i class="ph ph-shield-check"></i>
           <div>
             <strong>{{ firstAdmin() ? 'Create the first administrator' : 'Staff sign in' }}</strong>
-            <p>{{ firstAdmin() ? 'Choose an admin password with at least 12 characters.' : 'Use your local staff ID and password.' }}</p>
+            <p>
+              {{
+                firstAdmin()
+                  ? 'Choose an admin password with at least 12 characters.'
+                  : 'Use your local staff ID and password.'
+              }}
+            </p>
           </div>
         </div>
 
@@ -33,7 +39,8 @@ import { ToastService } from '../../../core/services/toast.service';
             <div class="input-container">
               <i class="ph ph-identification-badge input-icon"></i>
               <input
-                id="loginId" [readonly]="firstAdmin()"
+                id="loginId"
+                [readonly]="firstAdmin()"
                 type="text"
                 class="form-input with-icon"
                 placeholder="e.g. admin or assigned staff ID"
@@ -300,10 +307,13 @@ export class AdminLoginComponent implements OnInit {
   firstAdmin = signal(false);
 
   ngOnInit(): void {
-    this.auth.firstAdminRequired().subscribe({next: status => {
-      this.firstAdmin.set(status.required);
-      if (status.required) this.loginId = 'admin';
-    }, error: () => {} });
+    this.auth.firstAdminRequired().subscribe({
+      next: (status) => {
+        this.firstAdmin.set(status.required);
+        if (status.required) this.loginId = 'admin';
+      },
+      error: () => {},
+    });
     if (this.route.snapshot.queryParamMap.get('expired') === 'true') {
       this.errorMessage.set('Your session has expired. Please log in again to continue.');
     }
@@ -333,8 +343,7 @@ export class AdminLoginComponent implements OnInit {
           this.router.navigate([targetRoute]);
         } else {
           this.errorMessage.set(
-            res.message ||
-              'Invalid credentials. Please verify your ID and password on this till.',
+            res.message || 'Invalid credentials. Please verify your ID and password on this till.',
           );
         }
       },

@@ -226,9 +226,15 @@ describe('Live Order Stream & Active Queue Synchronization', () => {
     let current = mockService.orders().find((o) => o.id === order.id);
     expect(current?.serverStaffId).toBe('staff-waiter-original');
 
-    vi.spyOn(TestBed.inject(AdminAuthService), 'verifyAdminPassword').mockResolvedValueOnce(false).mockResolvedValueOnce(true);
+    vi.spyOn(TestBed.inject(AdminAuthService), 'verifyAdminPassword')
+      .mockResolvedValueOnce(false)
+      .mockResolvedValueOnce(true);
     // 2. Attempt with incorrect admin password
-    const wrongPwdRes = await mockService.assignOrderServer(order.id, 'staff-waiter-new', 'wrong-pin');
+    const wrongPwdRes = await mockService.assignOrderServer(
+      order.id,
+      'staff-waiter-new',
+      'wrong-pin',
+    );
     expect(wrongPwdRes.success).toBe(false);
     expect(wrongPwdRes.error).toContain('Admin password required');
     current = mockService.orders().find((o) => o.id === order.id);

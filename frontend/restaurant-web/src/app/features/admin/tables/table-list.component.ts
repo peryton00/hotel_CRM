@@ -10299,7 +10299,7 @@ export class TableListComponent implements OnInit {
       }
 
       const orderNum = `#ORD-${Math.floor(100 + Math.random() * 900)}`;
-      const orderUuid = this.manualOrderRequestId ??= generateUuid();
+      const orderUuid = (this.manualOrderRequestId ??= generateUuid());
 
       const newOrder: Order = {
         id: orderUuid,
@@ -10543,7 +10543,11 @@ export class TableListComponent implements OnInit {
     }
   }
 
-  async settleSplitPart(order: Order, split: SplitBill, method?: 'CASH' | 'UPI' | 'CARD'): Promise<void> {
+  async settleSplitPart(
+    order: Order,
+    split: SplitBill,
+    method?: 'CASH' | 'UPI' | 'CARD',
+  ): Promise<void> {
     const tender = method || this.canvasPaymentMethod();
     this.isSettling.set(true);
     const res = await this.mock.settleSplitBill({
@@ -10739,7 +10743,7 @@ export class TableListComponent implements OnInit {
 
   async confirmServerAdminChange(): Promise<void> {
     const pwd = this.serverAdminPassword();
-    if (!await this.adminAuth.verifyAdminPassword(pwd)) {
+    if (!(await this.adminAuth.verifyAdminPassword(pwd))) {
       this.serverAdminError.set('Incorrect admin password. Cannot reassign server on paid order.');
       return;
     }

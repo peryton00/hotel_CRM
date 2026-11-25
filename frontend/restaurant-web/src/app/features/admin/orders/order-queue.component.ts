@@ -8870,7 +8870,7 @@ export class OrderQueueComponent {
 
       const orderNum = `#ORD-${Math.floor(100 + Math.random() * 900)}`;
 
-      const orderUuid = this.manualOrderRequestId ??= generateUuid();
+      const orderUuid = (this.manualOrderRequestId ??= generateUuid());
 
       const newOrder: Order = {
         id: orderUuid,
@@ -8916,11 +8916,17 @@ export class OrderQueueComponent {
       this.mock.reserveStockForOrder(newOrder.id);
 
       if (!isTakeaway && selectedTable) {
-        const confirmed = this.dataService.orders().find(o => o.id === newOrder.id);
-        const updatedTables = this.mock.tables().map(t => t.id === selectedTable.id
-          ? { ...t, status: 'OCCUPIED' as const, activeOrderId: newOrder.id,
-              currentSeatingSessionId: confirmed?.seatingSessionId }
-          : t);
+        const confirmed = this.dataService.orders().find((o) => o.id === newOrder.id);
+        const updatedTables = this.mock.tables().map((t) =>
+          t.id === selectedTable.id
+            ? {
+                ...t,
+                status: 'OCCUPIED' as const,
+                activeOrderId: newOrder.id,
+                currentSeatingSessionId: confirmed?.seatingSessionId,
+              }
+            : t,
+        );
         this.mock.tables.set(updatedTables);
         this.mock.saveLocal('tables', updatedTables);
       }
@@ -9055,7 +9061,7 @@ export class OrderQueueComponent {
     if (!ord) return;
 
     const pwd = this.serverAdminPasswordInput().trim();
-    if (!await this.adminAuth.verifyAdminPassword(pwd)) {
+    if (!(await this.adminAuth.verifyAdminPassword(pwd))) {
       this.serverAdminPasswordError.set(
         'Incorrect admin password. Authorization required to change serving staff on completed orders.',
       );
@@ -9063,7 +9069,11 @@ export class OrderQueueComponent {
     }
 
     const newStaffId = this.selectedNewStaffId();
-    const res = await this.dataService.assignOrderServer(ord.id, newStaffId ? newStaffId : null, pwd);
+    const res = await this.dataService.assignOrderServer(
+      ord.id,
+      newStaffId ? newStaffId : null,
+      pwd,
+    );
 
     if (res.success) {
       const staffName = this.getServerStaffName(newStaffId) || 'Unassigned';
@@ -9370,7 +9380,11 @@ export class OrderQueueComponent {
     }
   }
 
-  async settleSplitPart(order: Order, split: SplitBill, method?: 'CASH' | 'UPI' | 'CARD'): Promise<void> {
+  async settleSplitPart(
+    order: Order,
+    split: SplitBill,
+    method?: 'CASH' | 'UPI' | 'CARD',
+  ): Promise<void> {
     const tender = method || this.selectedPaymentMethod();
     this.isSettling.set(true);
     const res = await this.mock.settleSplitBill({
@@ -9397,7 +9411,11 @@ export class OrderQueueComponent {
     const tender = this.selectedPaymentMethod();
     this.isSettling.set(true);
     for (const split of unpaid) {
-      const result = await this.mock.settleSplitBill({ orderId:order.id,splitBillId:split.id,paymentMethod:tender });
+      const result = await this.mock.settleSplitBill({
+        orderId: order.id,
+        splitBillId: split.id,
+        paymentMethod: tender,
+      });
       if (!result.success) {
         this.isSettling.set(false);
         this.toastService.error(result.error || 'Split payment was not confirmed.');
@@ -9494,7 +9512,7 @@ export class OrderQueueComponent {
 
   async verifyAdminPasswordForEdit(): Promise<void> {
     const input = this.adminPasswordInput();
-    if (!await this.adminAuth.verifyAdminPassword(input)) {
+    if (!(await this.adminAuth.verifyAdminPassword(input))) {
       this.adminPasswordError.set(
         'Incorrect admin password. Authorization required to modify paid orders.',
       );

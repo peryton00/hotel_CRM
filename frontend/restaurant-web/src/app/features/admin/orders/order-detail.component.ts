@@ -2876,7 +2876,7 @@ export class OrderDetailComponent implements OnInit {
     if (!ord) return;
 
     const pwd = this.serverAdminPasswordInput().trim();
-    if (!await this.adminAuth.verifyAdminPassword(pwd)) {
+    if (!(await this.adminAuth.verifyAdminPassword(pwd))) {
       this.serverAdminPasswordError.set(
         'Incorrect admin password. Authorization required to change serving staff on completed orders.',
       );
@@ -2884,7 +2884,11 @@ export class OrderDetailComponent implements OnInit {
     }
 
     const newStaffId = this.selectedNewStaffId();
-    const res = await this.dataService.assignOrderServer(ord.id, newStaffId ? newStaffId : null, pwd);
+    const res = await this.dataService.assignOrderServer(
+      ord.id,
+      newStaffId ? newStaffId : null,
+      pwd,
+    );
 
     if (res.success) {
       const staffName = this.getServerStaffName(newStaffId) || 'Unassigned';
@@ -3010,7 +3014,7 @@ export class OrderDetailComponent implements OnInit {
 
   async verifyAdminPasswordForEdit(): Promise<void> {
     const input = this.adminPasswordInput();
-    if (!await this.adminAuth.verifyAdminPassword(input)) {
+    if (!(await this.adminAuth.verifyAdminPassword(input))) {
       this.adminPasswordError.set(
         this.isReprintFlow()
           ? 'Incorrect admin password. Authorization required to reprint invoice.'
@@ -3355,13 +3359,18 @@ export class OrderDetailComponent implements OnInit {
       refundAmount: amt,
       reason,
       staffName: 'Staff',
-      idempotencyKey: this.refundRequestKey ??= generateIdempotencyKey('refund', ord.customerPhone),
+      idempotencyKey: (this.refundRequestKey ??= generateIdempotencyKey(
+        'refund',
+        ord.customerPhone,
+      )),
     });
 
     this.isSubmittingRefund.set(false);
 
     if (res.success && res.refund) {
-      this.toastService.success(`Refund of ₹${res.refund.refundAmount} ${res.refund.status === 'PENDING' ? 'awaiting approval' : 'completed'}.`);
+      this.toastService.success(
+        `Refund of ₹${res.refund.refundAmount} ${res.refund.status === 'PENDING' ? 'awaiting approval' : 'completed'}.`,
+      );
       this.closeRefundModal();
     } else {
       this.refundError.set(res.error || 'Failed to record refund');

@@ -63,10 +63,11 @@ describe('Offline Order System & Auto-Sync Resilience', () => {
   it('keeps an unconfirmed manual ticket out of the kitchen queue', async () => {
     networkService.isOnline.set(false);
     const pending = service.addOrder(testOrder);
-    httpMock.expectOne(r => r.url.endsWith('/orders') && r.method === 'POST')
-      .flush({}, {status: 503, statusText: 'Unavailable'});
+    httpMock
+      .expectOne((r) => r.url.endsWith('/orders') && r.method === 'POST')
+      .flush({}, { status: 503, statusText: 'Unavailable' });
     expect(await pending).toBe(false);
-    expect(service.orders().some(o => o.id === testOrder.id)).toBe(false);
+    expect(service.orders().some((o) => o.id === testOrder.id)).toBe(false);
     expect(service.offlineOutbox().length).toBe(0);
   });
 
@@ -84,9 +85,11 @@ describe('Offline Order System & Auto-Sync Resilience', () => {
   it('keeps the bill unpaid when the local database cannot confirm payment', async () => {
     networkService.isOnline.set(false);
     service.orders.set([testOrder]);
-    const pending = service.settleOrder({orderId:testOrder.id,paymentMethod:'UPI'});
+    const pending = service.settleOrder({ orderId: testOrder.id, paymentMethod: 'UPI' });
     expect(service.orders()[0].paymentStatus).toBe('UNPAID');
-    httpMock.expectOne(r => r.url.endsWith('/settle')).flush({}, { status:503,statusText:'Unavailable' });
+    httpMock
+      .expectOne((r) => r.url.endsWith('/settle'))
+      .flush({}, { status: 503, statusText: 'Unavailable' });
     expect((await pending).success).toBe(false);
     expect(service.orders()[0].paymentStatus).toBe('UNPAID');
     expect(service.offlineOutbox().length).toBe(0);
@@ -207,10 +210,13 @@ describe('Offline Order System & Auto-Sync Resilience', () => {
   it('uses a stable payment key and accepts the confirmed local receipt while internet is offline', async () => {
     networkService.isOnline.set(false);
     service.orders.set([testOrder]);
-    const pending=service.settleOrder({orderId:testOrder.id,paymentMethod:'UPI'});
-    const request=httpMock.expectOne(r=>r.url.endsWith('/settle'));
+    const pending = service.settleOrder({ orderId: testOrder.id, paymentMethod: 'UPI' });
+    const request = httpMock.expectOne((r) => r.url.endsWith('/settle'));
     expect(request.request.body.idempotency_key).toBe(`settle-${testOrder.id}`);
-    request.flush({success:true,data:{amount_paise:21000,settled_at:new Date().toISOString()}});
+    request.flush({
+      success: true,
+      data: { amount_paise: 21000, settled_at: new Date().toISOString() },
+    });
     expect((await pending).success).toBe(true);
     expect(service.orders()[0].paymentStatus).toBe('PAID');
   });

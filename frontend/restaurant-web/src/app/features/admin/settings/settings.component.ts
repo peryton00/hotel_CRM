@@ -7700,24 +7700,43 @@ export class SettingsComponent implements OnInit {
         }));
       });
 
-    const headers = new HttpHeaders({ Authorization: `Bearer ${localStorage.getItem('sb-access-token') || ''}` });
-    this.http.get<{configured:boolean;sync:{online:boolean;pending:number;last_success:string|null}}>(
-      `${environment.apiBaseUrl}/sync/status`, { headers }
-    ).pipe(timeout(5000),catchError(() => of(null))).subscribe(result => {
-      const online = Boolean(result?.configured && result.sync.online);
-      this.systemStatuses.update(curr => ({
-        ...curr,
-        liveBackend: {
-          online, statusText: online ? 'Sync active' : result?.configured ? 'Sync offline' : 'Sync unavailable',
-          url: 'Device gateway',
-          details: result ? `${result.sync.pending} changes pending. Last contact: ${result.sync.last_success || 'none yet'}.` : 'Local POS could not report sync status.',
-          latencyMs: 0,
-        },
-        database: {
-          online: !!result, statusText: result ? 'Local PostgreSQL ready' : 'Local database unavailable',
-          url: 'Local POS', details: 'Readiness is measured by querying the local synchronization queue.', latencyMs: 0,
-        },
-      }));
+    const headers = new HttpHeaders({
+      Authorization: `Bearer ${localStorage.getItem('sb-access-token') || ''}`,
+    });
+    this.http
+      .get<{
+        configured: boolean;
+        sync: { online: boolean; pending: number; last_success: string | null };
+      }>(`${environment.apiBaseUrl}/sync/status`, { headers })
+      .pipe(
+        timeout(5000),
+        catchError(() => of(null)),
+      )
+      .subscribe((result) => {
+        const online = Boolean(result?.configured && result.sync.online);
+        this.systemStatuses.update((curr) => ({
+          ...curr,
+          liveBackend: {
+            online,
+            statusText: online
+              ? 'Sync active'
+              : result?.configured
+                ? 'Sync offline'
+                : 'Sync unavailable',
+            url: 'Device gateway',
+            details: result
+              ? `${result.sync.pending} changes pending. Last contact: ${result.sync.last_success || 'none yet'}.`
+              : 'Local POS could not report sync status.',
+            latencyMs: 0,
+          },
+          database: {
+            online: !!result,
+            statusText: result ? 'Local PostgreSQL ready' : 'Local database unavailable',
+            url: 'Local POS',
+            details: 'Readiness is measured by querying the local synchronization queue.',
+            latencyMs: 0,
+          },
+        }));
         this.lastCheckedTime.set(new Date());
         this.isCheckingHealth.set(false);
       });

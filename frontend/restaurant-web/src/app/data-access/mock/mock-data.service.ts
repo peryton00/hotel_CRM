@@ -3924,7 +3924,9 @@ export class MockDataService {
       currentOrder.status === 'COMPLETED' ||
       !!currentOrder.settledAt;
     if (isPaid) {
-      const isAuthorized = !!(adminPassword && await this.adminAuth.verifyAdminPassword(adminPassword));
+      const isAuthorized = !!(
+        adminPassword && (await this.adminAuth.verifyAdminPassword(adminPassword))
+      );
       if (!isAuthorized) {
         return {
           success: false,

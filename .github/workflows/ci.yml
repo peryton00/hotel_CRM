@@ -84,9 +84,11 @@ jobs:
           createdb -T guest_sync sqlite_gateway
           cargo test --locked --lib sqlite_shift_reconciles_on_postgres -- --ignored
           cargo test --locked --test guest_sync -- --ignored
-          pg_dump -Fc -f "$RUNNER_TEMP/shift.dump" pos_sync
+          # Use the service container's matching PostgreSQL backup and restore tools.
+          pg_container="${{ job.services.postgres.id }}"
+          docker exec "$pg_container" pg_dump -U postgres -Fc -f /tmp/shift.dump pos_sync
           createdb restored_shift
-          pg_restore --exit-on-error --single-transaction -d restored_shift "$RUNNER_TEMP/shift.dump"
+          docker exec "$pg_container" pg_restore -U postgres --exit-on-error --single-transaction -d restored_shift /tmp/shift.dump
           test "$(psql -At -d restored_shift -c 'select count(*) from order_items')" = "$(psql -At -d pos_sync -c 'select count(*) from order_items')"
 
       - name: Build Release Binary

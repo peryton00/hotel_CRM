@@ -29,7 +29,9 @@ export interface ThermalPrintResult {
 })
 export class ThermalPrinterService {
   private get requestOptions() {
-    return { headers: { Authorization: `Bearer ${localStorage.getItem('sb-access-token') || ''}` } };
+    return {
+      headers: { Authorization: `Bearer ${localStorage.getItem('sb-access-token') || ''}` },
+    };
   }
 
   private http = inject(HttpClient);
@@ -131,12 +133,16 @@ export class ThermalPrinterService {
   ): Observable<ThermalPrintResult> {
     const url = `${environment.apiBaseUrl}/printer/print`;
     return this.http
-      .post<ThermalPrintResult>(url, {
-        target: cfg.target,
-        printer_name: cfg.printerName || null,
-        network_address: cfg.networkAddress || null,
-        raw_bytes: rawBytes,
-      }, this.requestOptions)
+      .post<ThermalPrintResult>(
+        url,
+        {
+          target: cfg.target,
+          printer_name: cfg.printerName || null,
+          network_address: cfg.networkAddress || null,
+          raw_bytes: rawBytes,
+        },
+        this.requestOptions,
+      )
       .pipe(
         catchError((err) => {
           const msg =

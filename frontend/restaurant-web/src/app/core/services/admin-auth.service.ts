@@ -115,10 +115,14 @@ export class AdminAuthService {
   }
 
   firstAdminRequired() {
-    return this.http.get<{required:boolean}>(`${this.apiUrl}/auth/setup`);
+    return this.http.get<{ required: boolean }>(`${this.apiUrl}/auth/setup`);
   }
 
-  loginWithSupabase(loginId: string, secretPassword: string, firstAdmin = false): Observable<AuthLoginResponse> {
+  loginWithSupabase(
+    loginId: string,
+    secretPassword: string,
+    firstAdmin = false,
+  ): Observable<AuthLoginResponse> {
     const id = loginId.trim();
     const pwd = secretPassword.trim();
 
@@ -216,22 +220,42 @@ export class AdminAuthService {
 
   verifyAdminPasswordAsync(password: string): Observable<boolean> {
     if (!password.trim()) return of(false);
-    return this.http.post<{ data?: { valid: boolean } }>(
-      `${this.apiUrl}/auth/verify-admin-password`, { password }, { headers: this.authorizationHeaders },
-    ).pipe(map(response => response.data?.valid === true), catchError(() => of(false)));
+    return this.http
+      .post<{ data?: { valid: boolean } }>(
+        `${this.apiUrl}/auth/verify-admin-password`,
+        { password },
+        { headers: this.authorizationHeaders },
+      )
+      .pipe(
+        map((response) => response.data?.valid === true),
+        catchError(() => of(false)),
+      );
   }
 
-  changeAdminPassword(newPassword: string, currentPassword?: string): Observable<{ success: boolean; message: string }> {
-    if (newPassword.trim().length < 4) return of({ success: false, message: 'Password must be at least 4 characters long.' });
-    return this.verifyAdminPasswordAsync(currentPassword || '').pipe(switchMap(valid => {
-      if (!valid) return of({ success: false, message: 'Current admin password is incorrect.' });
-      const id = this.currentUser()?.id;
-      if (!id || !this.isAdmin()) return of({ success: false, message: 'Sign in as an administrator.' });
-      return this.http.put(`${this.apiUrl}/restaurants/staff/${id}`, { password: newPassword.trim() }, { headers: this.authorizationHeaders }).pipe(
-        map(() => ({ success: true, message: 'Admin password updated.' })),
-        catchError(() => of({ success: false, message: 'Password update failed.' })),
-      );
-    }));
+  changeAdminPassword(
+    newPassword: string,
+    currentPassword?: string,
+  ): Observable<{ success: boolean; message: string }> {
+    if (newPassword.trim().length < 4)
+      return of({ success: false, message: 'Password must be at least 4 characters long.' });
+    return this.verifyAdminPasswordAsync(currentPassword || '').pipe(
+      switchMap((valid) => {
+        if (!valid) return of({ success: false, message: 'Current admin password is incorrect.' });
+        const id = this.currentUser()?.id;
+        if (!id || !this.isAdmin())
+          return of({ success: false, message: 'Sign in as an administrator.' });
+        return this.http
+          .put(
+            `${this.apiUrl}/restaurants/staff/${id}`,
+            { password: newPassword.trim() },
+            { headers: this.authorizationHeaders },
+          )
+          .pipe(
+            map(() => ({ success: true, message: 'Admin password updated.' })),
+            catchError(() => of({ success: false, message: 'Password update failed.' })),
+          );
+      }),
+    );
   }
 
   /**

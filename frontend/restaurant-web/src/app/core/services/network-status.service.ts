@@ -5,7 +5,9 @@ import { environment } from '../../../environments/environment';
   providedIn: 'root',
 })
 export class NetworkStatusService implements OnDestroy {
-  readonly isOnline = signal<boolean>(environment.isDesktop || typeof navigator === 'undefined' || navigator.onLine);
+  readonly isOnline = signal<boolean>(
+    environment.isDesktop || typeof navigator === 'undefined' || navigator.onLine,
+  );
 
   readonly networkConnected = signal(typeof navigator === 'undefined' || navigator.onLine);
 
@@ -84,7 +86,11 @@ export class NetworkStatusService implements OnDestroy {
 
       if (res.ok) {
         const data = await res.json().catch(() => null);
-        if (data?.status === 'ready' || data?.status === 'alive' || (data?.status === 'ok' && data.database === 'sqlite')) {
+        if (
+          data?.status === 'ready' ||
+          data?.status === 'alive' ||
+          (data?.status === 'ok' && data.database === 'sqlite')
+        ) {
           this.setOnline();
           return true;
         }

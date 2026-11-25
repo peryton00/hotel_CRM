@@ -115,7 +115,9 @@ describe('AdminAuthService & Controlled Access RBAC System', () => {
     it('requires API confirmation even when a legacy password is cached', async () => {
       localStorage.setItem(ADMIN_PASSWORD_HASH_KEY, 'legacy-secret');
       const result = service.verifyAdminPassword('legacy-secret');
-      httpMock.expectOne(req => req.url.endsWith('/auth/verify-admin-password')).flush({ data: { valid: false } });
+      httpMock
+        .expectOne((req) => req.url.endsWith('/auth/verify-admin-password'))
+        .flush({ data: { valid: false } });
       expect(await result).toBe(false);
     });
 
@@ -160,13 +162,14 @@ describe('AdminAuthService & Controlled Access RBAC System', () => {
         loginId: 'admin',
       });
 
-
       let response: any;
       service.changeAdminPassword('NewAdminPass@2026', 'Admin@123').subscribe((res) => {
         response = res;
       });
 
-      httpMock.expectOne(req => req.url.endsWith('/auth/verify-admin-password')).flush({ data: { valid: true } });
+      httpMock
+        .expectOne((req) => req.url.endsWith('/auth/verify-admin-password'))
+        .flush({ data: { valid: true } });
       const putReq = httpMock.expectOne(
         'http://localhost:3000/api/v1/restaurants/staff/admin-uuid-001',
       );
@@ -191,13 +194,14 @@ describe('AdminAuthService & Controlled Access RBAC System', () => {
         loginId: 'admin',
       });
 
-
       let response: any;
       service.changeAdminPassword('FallbackPass@2026', 'current').subscribe((res) => {
         response = res;
       });
 
-      httpMock.expectOne(req => req.url.endsWith('/auth/verify-admin-password')).flush({ data: { valid: true } });
+      httpMock
+        .expectOne((req) => req.url.endsWith('/auth/verify-admin-password'))
+        .flush({ data: { valid: true } });
       const putReq = httpMock.expectOne(
         'http://localhost:3000/api/v1/restaurants/staff/admin-uuid-001',
       );
@@ -210,13 +214,14 @@ describe('AdminAuthService & Controlled Access RBAC System', () => {
     it('rejects password update when current password is provided but invalid', () => {
       service.loginWithToken('admin-token', 'ADMIN');
 
-
       let response: any;
       service.changeAdminPassword('NewPass@123', 'WrongOldPass').subscribe((res) => {
         response = res;
       });
 
-      httpMock.expectOne(req => req.url.endsWith('/auth/verify-admin-password')).flush({ data: { valid: false } });
+      httpMock
+        .expectOne((req) => req.url.endsWith('/auth/verify-admin-password'))
+        .flush({ data: { valid: false } });
       httpMock.expectNone('http://localhost:3000/api/v1/restaurants/staff/admin-uuid-001');
       expect(response.success).toBe(false);
       expect(response.message).toContain('Current admin password is incorrect');

@@ -67,7 +67,6 @@ export class ApiClientService {
       );
   }
 
-
   post<T>(endpoint: string, body: any): Observable<T> {
     return this.http
       .post<ApiResponse<T>>(`${this.baseUrl}${endpoint}`, body, {
@@ -90,7 +89,6 @@ export class ApiClientService {
       );
   }
 
-
   delete<T>(endpoint: string): Observable<T> {
     return this.http
       .delete<ApiResponse<T>>(`${this.baseUrl}${endpoint}`, {
@@ -101,7 +99,6 @@ export class ApiClientService {
         catchError((err) => this.handleError(err)),
       );
   }
-
 
   private handleError(error: any) {
     let errorMsg = 'An unexpected server error occurred';

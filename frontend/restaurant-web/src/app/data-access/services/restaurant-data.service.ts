@@ -3493,7 +3493,9 @@ export class RestaurantDataService {
       order_type: (order.orderType || 'dine_in').toLowerCase(),
       pickup_reference: order.pickupReference,
       table_id: this.isValidUuid(order.tableId) ? order.tableId : undefined,
-      seating_session_id: this.isValidUuid(order.seatingSessionId) ? order.seatingSessionId : undefined,
+      seating_session_id: this.isValidUuid(order.seatingSessionId)
+        ? order.seatingSessionId
+        : undefined,
       customer_id: undefined,
       customer_name: customerName,
       customer_phone: customerPhone,
@@ -3512,16 +3514,17 @@ export class RestaurantDataService {
     try {
       response = await firstValueFrom(this.api.post<any>('/orders', payload));
     } catch (err) {
-      this.handleApiError('Local POS could not confirm the order. Check the order queue before retrying.', err);
+      this.handleApiError(
+        'Local POS could not confirm the order. Check the order queue before retrying.',
+        err,
+      );
       return false;
     }
     const mapped = this.mapApiOrder(response.order || response);
     const currentList = this.orders();
     const existing = currentList.find((o) => o.id === order.id || o.id === mapped.id);
     const preservedItems =
-      mapped.items && mapped.items.length > 0
-        ? mapped.items
-        : existing?.items || order.items || [];
+      mapped.items && mapped.items.length > 0 ? mapped.items : existing?.items || order.items || [];
     const preservedCustomerName =
       order.customerName && order.customerName.trim() && order.customerName !== 'Walk-in Guest'
         ? order.customerName.trim()
@@ -3578,7 +3581,8 @@ export class RestaurantDataService {
       return { success: false, error: 'Cannot settle a cancelled order' };
     }
 
-    if (!this.isValidUuid(order.id)) return { success: false, error: "Save the order to the local POS before taking payment." };
+    if (!this.isValidUuid(order.id))
+      return { success: false, error: 'Save the order to the local POS before taking payment.' };
     const targetStatus: OrderStatus = 'COMPLETED';
 
     // Detect if this table has multiple rounds/orders that must be unified into one bill
@@ -3603,7 +3607,9 @@ export class RestaurantDataService {
       Math.round(
         (order.taxAmount + siblingOrders.reduce((sum, s) => sum + (s.taxAmount || 0), 0)) * 100,
       ) / 100;
-    const serviceCharge = (order.serviceChargeAmount || 0) + siblingOrders.reduce((sum,s) => sum + (s.serviceChargeAmount || 0), 0);
+    const serviceCharge =
+      (order.serviceChargeAmount || 0) +
+      siblingOrders.reduce((sum, s) => sum + (s.serviceChargeAmount || 0), 0);
     const grossTotal = combinedSubtotal + combinedTax + serviceCharge;
     const finalDiscount = Math.min(
       grossTotal,
@@ -3612,24 +3618,42 @@ export class RestaurantDataService {
         req.discountAmount !== undefined ? req.discountAmount : order.discountAmount || 0,
       ),
     );
-    const changedDiscount = req.discountAmount !== undefined && (req.discountAmount !== (order.discountAmount || 0) || (req.appliedCouponCode || '') !== (order.appliedCouponCode || ''));
+    const changedDiscount =
+      req.discountAmount !== undefined &&
+      (req.discountAmount !== (order.discountAmount || 0) ||
+        (req.appliedCouponCode || '') !== (order.appliedCouponCode || ''));
     const coupon = req.appliedCouponCode || undefined;
     const taxable = Math.max(0, combinedSubtotal - finalDiscount);
     const taxRate = (order.cgstRate ?? 2.5) + (order.sgstRate ?? 2.5);
     const expected = changedDiscount
-      ? Math.round(coupon ? taxable + Math.round(taxable * taxRate) / 100 + serviceCharge : grossTotal - finalDiscount)
+      ? Math.round(
+          coupon
+            ? taxable + Math.round(taxable * taxRate) / 100 + serviceCharge
+            : grossTotal - finalDiscount,
+        )
       : order.totalAmount + siblingOrders.reduce((sum, s) => sum + s.totalAmount, 0);
     let payment: { amount_paise: number; settled_at: string };
     try {
-      payment = await firstValueFrom(this.api.post<typeof payment>(`/orders/${order.id}/settle`, {
-        payment_method: req.paymentMethod.toLowerCase(), amount_paise: Math.round(expected * 100),
-        discount_paise: changedDiscount ? Math.round(finalDiscount * 100) : undefined,
-        applied_coupon_code: changedDiscount ? coupon : undefined,
-        notes: req.notes, idempotency_key: `settle-${order.id}`,
-      }));
-      if (!payment || !Number.isSafeInteger(payment.amount_paise)) throw new Error('Local POS returned an incomplete payment receipt.');
+      payment = await firstValueFrom(
+        this.api.post<typeof payment>(`/orders/${order.id}/settle`, {
+          payment_method: req.paymentMethod.toLowerCase(),
+          amount_paise: Math.round(expected * 100),
+          discount_paise: changedDiscount ? Math.round(finalDiscount * 100) : undefined,
+          applied_coupon_code: changedDiscount ? coupon : undefined,
+          notes: req.notes,
+          idempotency_key: `settle-${order.id}`,
+        }),
+      );
+      if (!payment || !Number.isSafeInteger(payment.amount_paise))
+        throw new Error('Local POS returned an incomplete payment receipt.');
     } catch (err) {
-      return { success: false, error: err instanceof Error ? err.message : 'Payment could not be confirmed. Retry from the same bill.' };
+      return {
+        success: false,
+        error:
+          err instanceof Error
+            ? err.message
+            : 'Payment could not be confirmed. Retry from the same bill.',
+      };
     }
     const totalAmount = payment.amount_paise / 100;
     const now = payment.settled_at;
@@ -3687,26 +3711,42 @@ export class RestaurantDataService {
 
   async splitOrderEqual(req: { orderId: string; sharesCount?: number; splitCount?: number }) {
     const ways = req.splitCount ?? req.sharesCount ?? 2;
-    if (this.testMock) return this.testMock.splitOrderEqual({orderId: req.orderId, splitCount: ways});
-    return this.saveOrderSplit(req.orderId, {split_type: 'equal', ways});
+    if (this.testMock)
+      return this.testMock.splitOrderEqual({ orderId: req.orderId, splitCount: ways });
+    return this.saveOrderSplit(req.orderId, { split_type: 'equal', ways });
   }
 
-  private async saveOrderSplit(orderId: string, payload: {split_type: string; ways: number; item_allocations?: {split_number: number; order_item_id: string; quantity: number}[]}): Promise<{ success: boolean; error?: string; splitBills?: SplitBill[] }> {
+  private async saveOrderSplit(
+    orderId: string,
+    payload: {
+      split_type: string;
+      ways: number;
+      item_allocations?: { split_number: number; order_item_id: string; quantity: number }[];
+    },
+  ): Promise<{ success: boolean; error?: string; splitBills?: SplitBill[] }> {
     try {
       const rows = await firstValueFrom(this.api.post<any[]>(`/orders/${orderId}/split`, payload));
       if (!Array.isArray(rows) || rows.length !== payload.ways) {
-        return {success: false, error: 'Could not confirm the split. Reopen the bill to refresh it.'};
+        return {
+          success: false,
+          error: 'Could not confirm the split. Reopen the bill to refresh it.',
+        };
       }
-      const splits = rows.map(row => this.mapApiSplitBill(row));
-      const updated = [...this.splitBills().filter(b => b.orderId !== orderId), ...splits];
+      const splits = rows.map((row) => this.mapApiSplitBill(row));
+      const updated = [...this.splitBills().filter((b) => b.orderId !== orderId), ...splits];
       this.splitBills.set(updated);
       this.saveLocal('split_bills', updated);
-      const orders = this.orders().map(o => o.id === orderId ? {...o, isSplit: true, splitCount: splits.length} : o);
+      const orders = this.orders().map((o) =>
+        o.id === orderId ? { ...o, isSplit: true, splitCount: splits.length } : o,
+      );
       this.orders.set(orders);
       this.saveLocal('orders', orders);
-      return {success: true, splitBills: splits};
+      return { success: true, splitBills: splits };
     } catch (error: any) {
-      return {success: false, error: error?.error?.error?.message || 'The local POS could not confirm this split.'};
+      return {
+        success: false,
+        error: error?.error?.error?.message || 'The local POS could not confirm this split.',
+      };
     }
   }
 
@@ -3804,7 +3844,9 @@ export class RestaurantDataService {
       customerName,
       splitIndex,
       splitTotalCount,
-      splitType: (['ITEM', 'ITEM_BASED'].includes((sb.split_type || sb.splitType || 'equal').toUpperCase())
+      splitType: (['ITEM', 'ITEM_BASED'].includes(
+        (sb.split_type || sb.splitType || 'equal').toUpperCase(),
+      )
         ? 'ITEM_BASED'
         : 'EQUAL') as 'EQUAL' | 'ITEM_BASED',
       allocatedItems: existing?.allocatedItems || [],
@@ -3855,14 +3897,23 @@ export class RestaurantDataService {
       return { success: false, error: 'Cannot settle a refunded split bill' };
     }
 
-    if (!this.isValidUuid(splitBill.id) || !this.isValidUuid(splitBill.orderId)) return { success: false, error: 'Save the split to the local POS before taking payment.' };
+    if (!this.isValidUuid(splitBill.id) || !this.isValidUuid(splitBill.orderId))
+      return { success: false, error: 'Save the split to the local POS before taking payment.' };
     try {
-      await firstValueFrom(this.api.post('/payments', {
-        order_id:splitBill.orderId, split_bill_id:splitBill.id, amount_paise:Math.round(splitBill.totalAmount * 100),
-        payment_method:req.paymentMethod.toLowerCase(), idempotency_key:`split-${splitBill.id}`,
-      }));
-    } catch(err) {
-      return { success:false,error:err instanceof Error ? err.message : 'Split payment could not be confirmed.' };
+      await firstValueFrom(
+        this.api.post('/payments', {
+          order_id: splitBill.orderId,
+          split_bill_id: splitBill.id,
+          amount_paise: Math.round(splitBill.totalAmount * 100),
+          payment_method: req.paymentMethod.toLowerCase(),
+          idempotency_key: `split-${splitBill.id}`,
+        }),
+      );
+    } catch (err) {
+      return {
+        success: false,
+        error: err instanceof Error ? err.message : 'Split payment could not be confirmed.',
+      };
     }
     const now = new Date().toISOString();
     const settledBill: SplitBill = {
@@ -3913,11 +3964,24 @@ export class RestaurantDataService {
     });
   }
 
-  async assignOrderServer(orderId: string, staffId: string | null, adminPassword?: string): Promise<{ success: boolean; error?: string }> {
+  async assignOrderServer(
+    orderId: string,
+    staffId: string | null,
+    adminPassword?: string,
+  ): Promise<{ success: boolean; error?: string }> {
     if (this.testMock) return this.testMock.assignOrderServer(orderId, staffId, adminPassword);
     try {
-      await firstValueFrom(this.api.put(`/orders/${orderId}/server`, { server_staff_id: staffId, admin_password: adminPassword }));
-      this.orders.update(orders => orders.map(order => order.id === orderId ? { ...order, serverStaffId: staffId || undefined } : order));
+      await firstValueFrom(
+        this.api.put(`/orders/${orderId}/server`, {
+          server_staff_id: staffId,
+          admin_password: adminPassword,
+        }),
+      );
+      this.orders.update((orders) =>
+        orders.map((order) =>
+          order.id === orderId ? { ...order, serverStaffId: staffId || undefined } : order,
+        ),
+      );
       return { success: true };
     } catch {
       return { success: false, error: 'The POS could not save the server assignment.' };
@@ -4686,12 +4750,23 @@ export class RestaurantDataService {
     return { success: true, printCount: 1 };
   }
 
-  async splitOrderItemBased(dto: {orderId: string; splits: {allocatedItems: {orderItemId: string; quantity: number}[]}[]}) {
+  async splitOrderItemBased(dto: {
+    orderId: string;
+    splits: { allocatedItems: { orderItemId: string; quantity: number }[] }[];
+  }) {
     if (this.testMock) return this.testMock.splitOrderItemBased(dto);
-    const allocations = dto.splits.flatMap((share, index) => share.allocatedItems.map(item => ({
-      split_number: index + 1, order_item_id: item.orderItemId, quantity: item.quantity,
-    })));
-    return this.saveOrderSplit(dto.orderId, {split_type: 'item', ways: dto.splits.length, item_allocations: allocations});
+    const allocations = dto.splits.flatMap((share, index) =>
+      share.allocatedItems.map((item) => ({
+        split_number: index + 1,
+        order_item_id: item.orderItemId,
+        quantity: item.quantity,
+      })),
+    );
+    return this.saveOrderSplit(dto.orderId, {
+      split_type: 'item',
+      ways: dto.splits.length,
+      item_allocations: allocations,
+    });
   }
 
   transferTable(req: {
@@ -4770,48 +4845,85 @@ export class RestaurantDataService {
 
   private fetchRefunds(): void {
     this.api.get<any[]>('/refunds').subscribe({
-      next: rows => this.refunds.set(rows.map(row => ({
-        id: row.id, orderId: row.order_id, orderNumber: row.order_number, splitBillId: row.split_bill_id,
-        customerName: row.customer_name || 'Guest', refundAmount: row.refund_amount_paise / 100,
-        staffName: row.staff_name, reason: row.reason, createdAt: row.requested_at, completedAt: row.completed_at,
-        status: row.status === 'completed' ? 'COMPLETED' : row.status === 'cancelled' ? 'CANCELLED' : 'PENDING',
-      }))),
-      error: err => this.handleApiError('Could not load refunds', err),
+      next: (rows) =>
+        this.refunds.set(
+          rows.map((row) => ({
+            id: row.id,
+            orderId: row.order_id,
+            orderNumber: row.order_number,
+            splitBillId: row.split_bill_id,
+            customerName: row.customer_name || 'Guest',
+            refundAmount: row.refund_amount_paise / 100,
+            staffName: row.staff_name,
+            reason: row.reason,
+            createdAt: row.requested_at,
+            completedAt: row.completed_at,
+            status:
+              row.status === 'completed'
+                ? 'COMPLETED'
+                : row.status === 'cancelled'
+                  ? 'CANCELLED'
+                  : 'PENDING',
+          })),
+        ),
+      error: (err) => this.handleApiError('Could not load refunds', err),
     });
   }
 
   async decideRefund(id: string, status: 'completed' | 'cancelled'): Promise<void> {
-    await firstValueFrom(this.api.put(`/refunds/${id}/status`, {status}));
+    await firstValueFrom(this.api.put(`/refunds/${id}/status`, { status }));
     this.fetchRefunds();
   }
 
   async recordRefund(req: {
-    orderId: string; splitBillId?: string; refundAmount: number; reason: string; staffName?: string;
-    idempotencyKey?: string; status?: 'COMPLETED' | 'PENDING';
+    orderId: string;
+    splitBillId?: string;
+    refundAmount: number;
+    reason: string;
+    staffName?: string;
+    idempotencyKey?: string;
+    status?: 'COMPLETED' | 'PENDING';
   }): Promise<{ success: boolean; error?: string; refund?: RefundRecord }> {
     if (this.testMock) return this.testMock.recordRefund(req);
-    const order = this.orders().find(o => o.id === req.orderId || o.orderNumber === req.orderId);
-    if (!order) return {success: false, error: 'Order unavailable.'};
+    const order = this.orders().find((o) => o.id === req.orderId || o.orderNumber === req.orderId);
+    if (!order) return { success: false, error: 'Order unavailable.' };
     try {
-      const data = await firstValueFrom(this.api.post<any>(`/orders/${order.id}/refund`, {
-        refund_amount_paise: Math.round(req.refundAmount * 100), reason: req.reason,
-        refund_method: 'original_source', idempotency_key: req.idempotencyKey, split_bill_id: req.splitBillId,
-      }));
+      const data = await firstValueFrom(
+        this.api.post<any>(`/orders/${order.id}/refund`, {
+          refund_amount_paise: Math.round(req.refundAmount * 100),
+          reason: req.reason,
+          refund_method: 'original_source',
+          idempotency_key: req.idempotencyKey,
+          split_bill_id: req.splitBillId,
+        }),
+      );
       let status = data.status;
       if (status === 'requested' && this.adminAuth.isManager() && req.status !== 'PENDING') {
-        const decision = await firstValueFrom(this.api.put<any>(`/refunds/${data.id}/status`, {status: 'completed'}));
+        const decision = await firstValueFrom(
+          this.api.put<any>(`/refunds/${data.id}/status`, { status: 'completed' }),
+        );
         status = decision.status;
       }
       const refund: RefundRecord = {
-        id: data.id, orderId: order.id, orderNumber: order.orderNumber, splitBillId: req.splitBillId,
-        customerName: order.customerName || 'Guest', refundAmount: data.refund_amount_paise / 100,
-        reason: data.reason, staffName: req.staffName, createdAt: data.requested_at,
-        status: status === 'completed' ? 'COMPLETED' : status === 'cancelled' ? 'CANCELLED' : 'PENDING',
+        id: data.id,
+        orderId: order.id,
+        orderNumber: order.orderNumber,
+        splitBillId: req.splitBillId,
+        customerName: order.customerName || 'Guest',
+        refundAmount: data.refund_amount_paise / 100,
+        reason: data.reason,
+        staffName: req.staffName,
+        createdAt: data.requested_at,
+        status:
+          status === 'completed' ? 'COMPLETED' : status === 'cancelled' ? 'CANCELLED' : 'PENDING',
       };
-      this.refunds.set([refund,...this.refunds().filter(r => r.id !== refund.id)]);
-      return {success: true, refund};
+      this.refunds.set([refund, ...this.refunds().filter((r) => r.id !== refund.id)]);
+      return { success: true, refund };
     } catch (error: any) {
-      return {success: false, error: error?.error?.error?.message || 'The local POS could not confirm the refund.'};
+      return {
+        success: false,
+        error: error?.error?.error?.message || 'The local POS could not confirm the refund.',
+      };
     }
   }
 

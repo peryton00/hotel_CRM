@@ -22,7 +22,9 @@ describe('NetworkStatusService', () => {
     expect(service.isOnline()).toBe(false);
     expect(service.networkConnected()).toBe(false);
 
-    const probe = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify({ status: 'ready' })));
+    const probe = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValue(new Response(JSON.stringify({ status: 'ready' })));
     try {
       window.dispatchEvent(new Event('online'));
       expect(service.networkConnected()).toBe(true);
@@ -34,7 +36,8 @@ describe('NetworkStatusService', () => {
 
   it('recovers on the retry timer when SQLite becomes ready without a refresh', async () => {
     vi.useFakeTimers();
-    const probe = vi.spyOn(globalThis, 'fetch')
+    const probe = vi
+      .spyOn(globalThis, 'fetch')
       .mockRejectedValueOnce(new TypeError('unavailable'))
       .mockResolvedValueOnce(new Response(JSON.stringify({ status: 'ok', database: 'sqlite' })));
     try {

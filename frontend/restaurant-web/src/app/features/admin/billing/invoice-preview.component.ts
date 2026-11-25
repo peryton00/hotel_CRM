@@ -3416,7 +3416,7 @@ export class InvoicePreviewComponent implements OnInit {
 
   async confirmReprintWithAdmin(): Promise<void> {
     const pwd = this.adminPasswordInput();
-    if (!await this.adminAuth.verifyAdminPassword(pwd)) {
+    if (!(await this.adminAuth.verifyAdminPassword(pwd))) {
       this.adminPasswordError.set(
         'Incorrect admin password. Authorization required to reprint invoice.',
       );
