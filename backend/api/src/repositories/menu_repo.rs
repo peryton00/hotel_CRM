@@ -40,7 +40,7 @@ impl MenuRepository {
             sqlx::query_as::<_, MenuItem>(
                 r#"
                 SELECT id, restaurant_id, category_id, name, description,
-                       base_price_paise, tax_rate_percent::float8 AS tax_rate_percent, is_veg, is_available,
+                       COALESCE(base_price_paise,price_paise) AS base_price_paise, tax_rate_percent::float8 AS tax_rate_percent, is_veg, is_available,
                        image_url, preparation_time_minutes, display_order, created_at, updated_at
                 FROM menu_items
                 WHERE restaurant_id = $1 AND category_id = $2
@@ -55,7 +55,7 @@ impl MenuRepository {
             sqlx::query_as::<_, MenuItem>(
                 r#"
                 SELECT id, restaurant_id, category_id, name, description,
-                       base_price_paise, tax_rate_percent::float8 AS tax_rate_percent, is_veg, is_available,
+                       COALESCE(base_price_paise,price_paise) AS base_price_paise, tax_rate_percent::float8 AS tax_rate_percent, is_veg, is_available,
                        image_url, preparation_time_minutes, display_order, created_at, updated_at
                 FROM menu_items
                 WHERE restaurant_id = $1
@@ -78,7 +78,7 @@ impl MenuRepository {
         let item = sqlx::query_as::<_, MenuItem>(
             r#"
             SELECT id, restaurant_id, category_id, name, description,
-                   base_price_paise, tax_rate_percent::float8 AS tax_rate_percent, is_veg, is_available,
+                   COALESCE(base_price_paise,price_paise) AS base_price_paise, tax_rate_percent::float8 AS tax_rate_percent, is_veg, is_available,
                    image_url, preparation_time_minutes, display_order, created_at, updated_at
             FROM menu_items
             WHERE restaurant_id = $1 AND id = $2
@@ -104,7 +104,7 @@ impl MenuRepository {
             SET is_available = $3, updated_at = NOW()
             WHERE restaurant_id = $1 AND id = $2
             RETURNING id, restaurant_id, category_id, name, description,
-                      base_price_paise, tax_rate_percent::float8 AS tax_rate_percent, is_veg, is_available,
+                      COALESCE(base_price_paise,price_paise) AS base_price_paise, tax_rate_percent::float8 AS tax_rate_percent, is_veg, is_available,
                       image_url, preparation_time_minutes, display_order, created_at, updated_at
             "#,
         )
@@ -214,18 +214,6 @@ impl MenuRepository {
         restaurant_id: Uuid,
         item_id: Uuid,
     ) -> Result<(), AppError> {
-        // Disassociate historical order items so existing orders & bills retain their snapshot without FK violation
-        sqlx::query("UPDATE order_items SET menu_item_id = NULL WHERE menu_item_id = $1")
-            .bind(item_id)
-            .execute(pool)
-            .await?;
-
-        // Remove any recipe ingredient links if present
-        let _ = sqlx::query("DELETE FROM recipe_ingredients WHERE menu_item_id = $1")
-            .bind(item_id)
-            .execute(pool)
-            .await;
-
         sqlx::query("DELETE FROM menu_items WHERE restaurant_id = $1 AND id = $2")
             .bind(restaurant_id)
             .bind(item_id)

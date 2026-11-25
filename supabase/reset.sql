@@ -1,60 +1,55 @@
--- ==============================================================================
--- HOTEL_CRM: Complete Database Teardown & Reset Script
--- File: supabase/reset.sql
--- Description: Completely purges all existing tables, views, custom types,
---              Row Level Security policies, stored procedures, triggers,
---              and Realtime publication bindings in the 'public' schema.
---              Execute this script in Supabase SQL Editor BEFORE running schema.sql
---              to start completely fresh.
--- ==============================================================================
-
--- ------------------------------------------------------------------------------
--- 1. DETACH REALTIME REPLICATION BINDINGS (DYNAMIC & COMPATIBLE)
--- ------------------------------------------------------------------------------
-DO $$
-DECLARE
-    r RECORD;
-BEGIN
-    IF EXISTS (SELECT 1 FROM pg_publication WHERE pubname = 'supabase_realtime') THEN
-        FOR r IN (
-            SELECT schemaname, tablename 
-            FROM pg_publication_tables 
-            WHERE pubname = 'supabase_realtime' AND schemaname = 'public'
-        ) LOOP
-            EXECUTE format('ALTER PUBLICATION supabase_realtime DROP TABLE %I.%I', r.schemaname, r.tablename);
-        END LOOP;
-    END IF;
-EXCEPTION WHEN OTHERS THEN
-    NULL; -- Safe continue
-END $$;
-
--- ------------------------------------------------------------------------------
--- 2. DROP AUTH HOOK TRIGGER ON auth.users
--- ------------------------------------------------------------------------------
+-- Destructive development reset for a dedicated restaurant cloud database.
+-- Stop Render and disconnect the till before resetting. Run schema.sql afterward.
+-- This only resets cloud CRM data. The till retains its SQLite database and sync history.
+BEGIN;
+SELECT pg_advisory_xact_lock(718104521);
 DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
 
--- ------------------------------------------------------------------------------
--- 3. TEARDOWN ALL PUBLIC ENTITIES (COMPLETE CLEAN WIPE)
--- ------------------------------------------------------------------------------
--- The cleanest, most reliable way in PostgreSQL/Supabase to delete all tables,
--- foreign keys, RLS policies, sequences, and enums is dropping and recreating
--- the 'public' schema with CASCADE.
-DROP SCHEMA IF EXISTS public CASCADE;
-CREATE SCHEMA public;
+-- Drop related tables in one statement so their internal dependencies are removed together.
+-- RESTRICT makes an unexpected external dependency roll back the entire reset.
+DROP TABLE IF EXISTS
+    public.restaurants,
+    public.users,
+    public.staff_members,
+    public.staff_attendance,
+    public.customers,
+    public.customer_auth_challenges,
+    public.tables,
+    public.table_transfers,
+    public.menu_categories,
+    public.menu_items,
+    public.orders,
+    public.order_items,
+    public.order_timeline_events,
+    public.split_bills,
+    public.split_bill_items,
+    public.payments,
+    public.refunds,
+    public.invoices,
+    public.invoice_prints,
+    public.inventory_items,
+    public.recipes,
+    public.recipe_ingredients,
+    public.stock_movements,
+    public.wastage_records,
+    public.coupons,
+    public.coupon_assignments,
+    public.coupon_redemptions,
+    public.reservations,
+    public.customer_feedback,
+    public.sync_outbox,
+    public.sync_inbox,
+    public.sync_checkpoints,
+    public.idempotency_records,
+    public.audit_logs,
+    public._sqlx_migrations,
+    public.restaurant_heartbeats,
+    public.guest_order_receipts,
+    public.device_events
+RESTRICT;
 
--- ------------------------------------------------------------------------------
--- 4. RESTORE DEFAULT SUPABASE ROLE PERMISSIONS ON public
--- ------------------------------------------------------------------------------
-GRANT USAGE, CREATE ON SCHEMA public TO postgres, anon, authenticated, service_role;
-
-ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO postgres, service_role;
-ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON FUNCTIONS TO postgres, service_role;
-ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON SEQUENCES TO postgres, service_role;
-
--- Re-grant schema usage
-GRANT ALL ON SCHEMA public TO postgres;
-GRANT USAGE ON SCHEMA public TO anon, authenticated, service_role;
-
--- Re-enable required extensions
-CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
-CREATE EXTENSION IF NOT EXISTS "pgcrypto";
+DROP FUNCTION IF EXISTS public.current_staff_restaurant_id(), public.current_customer_id(),
+    public.current_staff_role(), public.trg_fn_order_lifecycle(), public.handle_new_user(),
+    public.fn_validate_coupon_server_side(uuid, uuid, varchar, bigint);
+DROP TYPE IF EXISTS public.order_type, public.order_status, public.payment_status, public.table_status, public.customer_status, public.loyalty_tier, public.actor_role;
+COMMIT;

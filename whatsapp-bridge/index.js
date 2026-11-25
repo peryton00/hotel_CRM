@@ -11,7 +11,7 @@ const pino = require('pino');
 const QRCode = require('qrcode');
 
 const PORT = process.env.WHATSAPP_PORT || 3001;
-const AUTH_DIR = path.resolve(__dirname, 'auth_info_baileys');
+const AUTH_DIR = path.resolve(process.env.HOTEL_CRM_WHATSAPP_DATA || __dirname, 'auth_info_baileys');
 
 // State management
 let sock = null;
@@ -83,17 +83,19 @@ async function initWhatsApp() {
   });
 }
 
-// Start WhatsApp socket
-initWhatsApp().catch((err) => {
-  console.error('[WhatsApp Bridge] Init error:', err);
-});
-
 // HTTP API Server (Native Node http, zero express bloat)
+const allowedOrigins = new Set(['http://tauri.localhost', 'https://tauri.localhost', 'tauri://localhost', 'http://localhost:4200', 'http://127.0.0.1:4200']);
 const server = http.createServer(async (req, res) => {
   // CORS Headers for Desktop & Localhost
-  res.setHeader('Access-Control-Allow-Origin', '*');
+  const origin = req.headers.origin;
+  if (origin && !allowedOrigins.has(origin)) {
+    res.writeHead(403).end();
+    return;
+  }
+  if (origin) res.setHeader('Access-Control-Allow-Origin', origin);
+  res.setHeader('Vary', 'Origin');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  res.setHeader('Access-Control-Allow-Headers', 'Authorization, Content-Type');
 
   if (req.method === 'OPTIONS') {
     res.writeHead(204);
@@ -101,7 +103,27 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
-  const url = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
+  const url = new URL(req.url, 'http://127.0.0.1');
+  const auth = req.headers.authorization;
+  if (!auth?.startsWith('Bearer ') || auth.length < 16) {
+    res.writeHead(401).end();
+    return;
+  }
+  try {
+    const session = await fetch('http://127.0.0.1:3000/api/v1/auth/me', {
+      headers: { Authorization: auth }, signal: AbortSignal.timeout(3000), redirect: 'error',
+    });
+    if (!session.ok) { res.writeHead(401).end(); return; }
+    const role = String((await session.json()).data?.role || '').toUpperCase();
+    if (url.pathname === '/logout' && role !== 'ADMIN') { res.writeHead(403).end(); return; }
+    if (url.pathname === '/status' && role !== 'ADMIN') {
+      res.writeHead(200, { 'Content-Type': 'application/json' }).end(JSON.stringify({ status: connectionStatus, qr: null, phone: null, name: null }));
+      return;
+    }
+  } catch {
+    res.writeHead(503).end();
+    return;
+  }
 
   // 1. GET /status — Returns connection state & active QR code
   if (req.method === 'GET' && url.pathname === '/status') {
@@ -120,9 +142,14 @@ const server = http.createServer(async (req, res) => {
   // 2. POST /send — Dispatches a text message (Bill/Receipt)
   if (req.method === 'POST' && url.pathname === '/send') {
     let body = '';
-    req.on('data', (chunk) => (body += chunk));
+    let size = 0;
+    req.on('data', (chunk) => {
+      size += chunk.length;
+      if (size <= 32768) body += chunk;
+    });
     req.on('end', async () => {
       try {
+        if (size > 32768) { res.writeHead(413).end(); return; }
         const payload = JSON.parse(body || '{}');
         let { phone, message } = payload;
 
@@ -192,5 +219,9 @@ const server = http.createServer(async (req, res) => {
 });
 
 server.listen(PORT, '127.0.0.1', () => {
+  initWhatsApp().catch(err => {
+    connectionStatus = 'DISCONNECTED';
+    console.error('[WhatsApp Bridge] Init error:', err);
+  });
   console.log(`[WhatsApp Bridge] Running on http://127.0.0.1:${PORT}`);
 });

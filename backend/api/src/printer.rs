@@ -216,13 +216,20 @@ pub async fn list_system_printers() -> Vec<PrinterInfo> {
 
 // Axum Route Handlers
 
-pub async fn list_printers_route() -> Json<Vec<PrinterInfo>> {
+pub async fn list_printers_route(_staff: crate::auth::TenantContext) -> Json<Vec<PrinterInfo>> {
     let printers = list_system_printers().await;
     Json(printers)
 }
 
 pub async fn print_escpos_route(
+    _staff: crate::auth::TenantContext,
     Json(payload): Json<PrintEscposRequest>,
+) -> Result<Json<PrintResponse>, (StatusCode, Json<serde_json::Value>)> {
+    print_request(payload).await
+}
+
+pub(crate) async fn print_request(
+    payload: PrintEscposRequest,
 ) -> Result<Json<PrintResponse>, (StatusCode, Json<serde_json::Value>)> {
     let bytes = if let Some(raw) = payload.raw_bytes {
         raw

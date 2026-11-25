@@ -132,7 +132,9 @@ pub async fn assign_order_server(
         None => return Err(AppError::NotFound("Order not found".to_string())),
     };
 
-    if existing_order.status.to_lowercase() == "completed" {
+    if existing_order.status.eq_ignore_ascii_case("completed")
+        || existing_order.payment_status.eq_ignore_ascii_case("paid")
+    {
         let is_admin_role = tenant.staff_role.to_uppercase() == "ADMIN";
         let mut authorized = is_admin_role;
         if !authorized {
@@ -141,23 +143,16 @@ pub async fn assign_order_server(
                 let admin_row: Option<(String,)> = sqlx::query_as(
                     r#"
                     SELECT pin_hash FROM staff_members
-                    WHERE role = 'ADMIN' AND is_active = true
+                    WHERE restaurant_id=$1 AND role = 'ADMIN' AND is_active = true
                     ORDER BY created_at ASC
                     LIMIT 1
                     "#,
                 )
+                .bind(tenant.restaurant_id)
                 .fetch_optional(&pool)
                 .await?;
 
-                authorized = match admin_row {
-                    Some((ref pin_hash,)) => {
-                        verify_password(pin_hash, trimmed)
-                            || trimmed == "Admin@123"
-                            || trimmed == "1234"
-                            || trimmed == "admin"
-                    }
-                    None => trimmed == "Admin@123" || trimmed == "1234" || trimmed == "admin",
-                };
+                authorized = admin_row.is_some_and(|(hash,)| verify_password(&hash, trimmed));
             }
         }
 

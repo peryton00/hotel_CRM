@@ -28,6 +28,10 @@ export interface ThermalPrintResult {
   providedIn: 'root',
 })
 export class ThermalPrinterService {
+  private get requestOptions() {
+    return { headers: { Authorization: `Bearer ${localStorage.getItem('sb-access-token') || ''}` } };
+  }
+
   private http = inject(HttpClient);
   private storageKey = 'hotel_crm_printer_config';
 
@@ -81,7 +85,7 @@ export class ThermalPrinterService {
    */
   getSystemPrinters(): Observable<SystemPrinterInfo[]> {
     const url = `${environment.apiBaseUrl}/printer/list`;
-    return this.http.get<SystemPrinterInfo[]>(url).pipe(
+    return this.http.get<SystemPrinterInfo[]>(url, this.requestOptions).pipe(
       catchError(() => {
         // Fallback or empty if offline
         return of([]);
@@ -132,7 +136,7 @@ export class ThermalPrinterService {
         printer_name: cfg.printerName || null,
         network_address: cfg.networkAddress || null,
         raw_bytes: rawBytes,
-      })
+      }, this.requestOptions)
       .pipe(
         catchError((err) => {
           const msg =

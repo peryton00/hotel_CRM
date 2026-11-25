@@ -3,11 +3,13 @@ services:
     name: hotel-crm-api
     runtime: rust
     rootDir: backend/api
-    buildCommand: cargo build --release
-    startCommand: ./target/release/hotel_crm_api
-    plan: starter
-    healthCheckPath: /health/live
+    buildCommand: cargo build --release --locked --bins
+    startCommand: ./target/release/migrate && ./target/release/hotel_crm_api
+    plan: free
+    healthCheckPath: /health/ready
     envVars:
+      - key: DEVICE_SYNC_TOKEN
+        sync: false # Same high-entropy device credential provisioned on the till
       - key: ENVIRONMENT
         value: production
       - key: PORT
@@ -19,28 +21,6 @@ services:
       - key: SUPABASE_URL
         sync: false # Set to your Supabase Project URL
       - key: ALLOWED_ORIGINS
-        value: "https://hotel-crm-api-vpxu.onrender.com,http://localhost:4200"
+        sync: false # Exact HTTPS origin of the customer menu
       - key: ALLOW_DEV_AUTH
         value: "false"
-
-  # Customer-Facing Digital QR Ordering Site
-  - type: static_site
-    name: hotel-crm-customer-web
-    rootDir: frontend/restaurant-web
-    buildCommand: npm install && npm run build:customer
-    staticPublishPath: dist/restaurant-web/browser
-    routes:
-      - type: rewrite
-        source: /*
-        destination: /index.html
-
-  # Admin CRM & Remote Management PWA
-  - type: static_site
-    name: hotel-crm-admin-web
-    rootDir: frontend/restaurant-web
-    buildCommand: npm install && npm run build
-    staticPublishPath: dist/restaurant-web/browser
-    routes:
-      - type: rewrite
-        source: /*
-        destination: /index.html

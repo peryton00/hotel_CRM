@@ -32,6 +32,10 @@ export interface SendWhatsAppResponse {
   providedIn: 'root',
 })
 export class WhatsAppBridgeService {
+  private get requestOptions() {
+    return { headers: { Authorization: `Bearer ${localStorage.getItem('sb-access-token') || ''}` } };
+  }
+
   private readonly bridgeUrl = 'http://127.0.0.1:3001';
 
   // Reactive state signals
@@ -64,7 +68,7 @@ export class WhatsAppBridgeService {
    * Fetches the current WhatsApp Gateway state and QR code
    */
   fetchStatus(): Observable<WhatsAppBridgeStatus> {
-    return this.http.get<WhatsAppBridgeStatus>(`${this.bridgeUrl}/status`).pipe(
+    return this.http.get<WhatsAppBridgeStatus>(`${this.bridgeUrl}/status`, this.requestOptions).pipe(
       map((res) => {
         this.isBridgeReachable.set(true);
         this.connectionStatus.set(res.status);
@@ -103,7 +107,7 @@ export class WhatsAppBridgeService {
       .post<SendWhatsAppResponse>(`${this.bridgeUrl}/send`, {
         phone: cleanDigits,
         message,
-      })
+      }, this.requestOptions)
       .pipe(
         catchError((err) => {
           return of({
@@ -238,7 +242,7 @@ export class WhatsAppBridgeService {
       .post<SendWhatsAppResponse>(`${this.bridgeUrl}/send`, {
         phone: cleanDigits,
         message,
-      })
+      }, this.requestOptions)
       .pipe(
         catchError((err) => {
           return of({
@@ -254,7 +258,7 @@ export class WhatsAppBridgeService {
    */
   logout(): Observable<{ success: boolean; message?: string }> {
     return this.http
-      .post<{ success: boolean; message?: string }>(`${this.bridgeUrl}/logout`, {})
+      .post<{ success: boolean; message?: string }>(`${this.bridgeUrl}/logout`, {}, this.requestOptions)
       .pipe(
         map((res) => {
           this.fetchStatus().subscribe();

@@ -5,11 +5,21 @@ import { environment } from '../../../environments/environment';
   providedIn: 'root',
 })
 export class NetworkStatusService implements OnDestroy {
-  readonly isOnline = signal<boolean>(typeof navigator !== 'undefined' ? navigator.onLine : true);
+  readonly isOnline = signal<boolean>(environment.isDesktop || typeof navigator === 'undefined' || navigator.onLine);
+
+  readonly networkConnected = signal(typeof navigator === 'undefined' || navigator.onLine);
 
   readonly isBroadcastChannelSupported = signal<boolean>(typeof BroadcastChannel !== 'undefined');
 
   readonly isChecking = signal<boolean>(false);
+
+  private linkInterval?: ReturnType<typeof setInterval>;
+  private readonly refreshLink = () => {
+    if (navigator.onLine !== this.networkConnected()) {
+      if (navigator.onLine) this.onlineHandler();
+      else this.offlineHandler();
+    }
+  };
 
   private probeIntervalId: any = null;
   private readonly healthUrl =
@@ -18,9 +28,15 @@ export class NetworkStatusService implements OnDestroy {
       : 'http://localhost:3000') + '/health/ready';
 
   private readonly onlineHandler = () => {
-    this.setOnline();
+    this.networkConnected.set(true);
+    void this.checkHealth();
   };
   private readonly offlineHandler = () => {
+    this.networkConnected.set(false);
+    if (environment.isDesktop) {
+      void this.checkHealth();
+      return;
+    }
     this.isOnline.set(false);
     this.startProbe();
   };
@@ -29,6 +45,8 @@ export class NetworkStatusService implements OnDestroy {
     if (typeof window !== 'undefined') {
       window.addEventListener('online', this.onlineHandler);
       window.addEventListener('offline', this.offlineHandler);
+      window.addEventListener('focus', this.refreshLink);
+      if (environment.isDesktop) this.linkInterval = setInterval(this.refreshLink, 4000);
 
       if (!this.isOnline()) {
         this.startProbe();
@@ -53,9 +71,10 @@ export class NetworkStatusService implements OnDestroy {
   async checkHealth(): Promise<boolean> {
     if (typeof window === 'undefined') return true;
     this.isChecking.set(true);
+    let timeoutId: ReturnType<typeof setTimeout> | null = null;
     try {
       const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
-      const timeoutId = controller ? setTimeout(() => controller.abort(), 3500) : null;
+      timeoutId = controller ? setTimeout(() => controller.abort(), 3500) : null;
 
       const res = await fetch(this.healthUrl, {
         method: 'GET',
@@ -63,23 +82,23 @@ export class NetworkStatusService implements OnDestroy {
         signal: controller?.signal,
       });
 
-      if (timeoutId) clearTimeout(timeoutId);
-
       if (res.ok) {
         const data = await res.json().catch(() => null);
-        if (data?.status === 'ready' || data?.status === 'alive') {
+        if (data?.status === 'ready' || data?.status === 'alive' || (data?.status === 'ok' && data.database === 'sqlite')) {
           this.setOnline();
-          this.isChecking.set(false);
           return true;
         }
       }
-      this.isOnline.set(false);
-      this.isChecking.set(false);
+      this.reportConnectionError();
+      this.startProbe();
       return false;
     } catch {
-      this.isOnline.set(false);
-      this.isChecking.set(false);
+      this.reportConnectionError();
+      this.startProbe();
       return false;
+    } finally {
+      if (timeoutId !== null) clearTimeout(timeoutId);
+      this.isChecking.set(false);
     }
   }
 
@@ -107,6 +126,8 @@ export class NetworkStatusService implements OnDestroy {
     if (typeof window !== 'undefined') {
       window.removeEventListener('online', this.onlineHandler);
       window.removeEventListener('offline', this.offlineHandler);
+      window.removeEventListener('focus', this.refreshLink);
+      clearInterval(this.linkInterval);
     }
   }
 }

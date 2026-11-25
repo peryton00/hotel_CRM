@@ -4062,7 +4062,7 @@ export class StaffListComponent {
         const list = [...this.staff(), newStaff];
         this.staff.set(list);
         this.toastService.success(
-          `Created account for ${newStaff.name} secretly in Supabase! (ID: ${newStaff.loginId})`,
+          `Created account for ${newStaff.name} secretly! (ID: ${newStaff.loginId})`,
         );
         this.showAddModal = false;
       },
@@ -4102,31 +4102,14 @@ export class StaffListComponent {
     this.staffRepo.updateStaff(memberId, { password: newPwd } as any).subscribe({
       next: () => {
         this.isSubmitting = false;
-        if (
-          this.selectedMember?.role === 'ADMIN' ||
-          this.selectedMember?.id === this.auth.currentUser()?.id
-        ) {
-          localStorage.setItem('supabase_admin_pwd_secret', newPwd);
-          this.auth.refreshAdminSecret();
-        }
         this.toastService.success(
-          `Updated secret password for ${this.selectedMember?.name} in Supabase!`,
+          `Updated secret password for ${this.selectedMember?.name}!`,
         );
         this.showResetModal = false;
       },
       error: () => {
         this.isSubmitting = false;
-        if (
-          this.selectedMember?.role === 'ADMIN' ||
-          this.selectedMember?.id === this.auth.currentUser()?.id
-        ) {
-          localStorage.setItem('supabase_admin_pwd_secret', newPwd);
-          this.auth.refreshAdminSecret();
-        }
-        this.toastService.success(
-          `Updated secret password for ${this.selectedMember?.name} in Supabase!`,
-        );
-        this.showResetModal = false;
+        this.toastService.error('Password update failed.');
       },
     });
   }

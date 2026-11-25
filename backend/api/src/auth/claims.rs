@@ -18,6 +18,8 @@ pub struct UserMetadata {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SupabaseClaims {
+    #[serde(default)]
+    pub phone: Option<String>,
     pub sub: String,
     pub email: Option<String>,
     pub role: Option<String>,

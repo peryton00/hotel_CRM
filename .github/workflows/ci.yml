@@ -18,6 +18,17 @@ jobs:
   backend-ci:
     name: Rust Backend API (Axum & Tokio)
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: pos_ci
+          POSTGRES_DB: pos_test
+        ports:
+          - 5432:5432
+        options: --health-cmd pg_isready --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      POS_TEST_DATABASE_URL: postgres://postgres:pos_ci@localhost:5432/pos_test
     defaults:
       run:
         working-directory: backend/api
@@ -44,6 +55,39 @@ jobs:
 
       - name: Run Backend Unit & Invariant Tests
         run: cargo test --workspace --verbose
+
+      - name: Verify local sales on PostgreSQL
+        run: cargo test --locked --test offline_sale -- --ignored
+
+      - name: Verify guest delivery between independent databases
+        env:
+          PGHOST: localhost
+          PGUSER: postgres
+          PGPASSWORD: pos_ci
+          POS_SYNC_TEST_LOCAL_URL: postgres://postgres:pos_ci@localhost:5432/pos_sync
+          POS_SYNC_TEST_CLOUD_URL: postgres://postgres:pos_ci@localhost:5432/guest_sync
+          POS_SQLITE_TEST_CLOUD_URL: postgres://postgres:pos_ci@localhost:5432/sqlite_gateway
+        run: |
+          python3 ../../scripts/build_cloud_schema.py --check
+          createdb pos_sync
+          createdb guest_sync
+          psql -v ON_ERROR_STOP=1 -d guest_sync <<'SQL'
+          CREATE ROLE authenticated;
+          CREATE ROLE anon;
+          CREATE ROLE service_role;
+          CREATE SCHEMA auth;
+          CREATE TABLE auth.users(id uuid PRIMARY KEY, email text, raw_user_meta_data jsonb);
+          CREATE FUNCTION auth.uid() RETURNS uuid LANGUAGE sql AS 'SELECT NULL::uuid';
+          CREATE FUNCTION auth.jwt() RETURNS jsonb LANGUAGE sql AS 'SELECT NULL::jsonb';
+          SQL
+          psql -v ON_ERROR_STOP=1 -d guest_sync -f ../../supabase/schema.sql
+          createdb -T guest_sync sqlite_gateway
+          cargo test --locked --lib sqlite_shift_reconciles_on_postgres -- --ignored
+          cargo test --locked --test guest_sync -- --ignored
+          pg_dump -Fc -f "$RUNNER_TEMP/shift.dump" pos_sync
+          createdb restored_shift
+          pg_restore --exit-on-error --single-transaction -d restored_shift "$RUNNER_TEMP/shift.dump"
+          test "$(psql -At -d restored_shift -c 'select count(*) from order_items')" = "$(psql -At -d pos_sync -c 'select count(*) from order_items')"
 
       - name: Build Release Binary
         run: cargo build --release

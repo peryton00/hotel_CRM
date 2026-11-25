@@ -24,10 +24,10 @@ impl ReportsRepository {
         let sales_row: (Option<i64>, Option<i64>, Option<i64>, Option<i64>, i64) = sqlx::query_as(
             r#"
             SELECT
-                COALESCE(SUM(subtotal_paise), 0),
-                COALESCE(SUM(total_amount_paise), 0),
-                COALESCE(SUM(discount_paise), 0),
-                COALESCE(SUM(tax_paise), 0),
+                COALESCE(SUM(subtotal_paise), 0)::bigint,
+                COALESCE(SUM(total_amount_paise), 0)::bigint,
+                COALESCE(SUM(discount_paise), 0)::bigint,
+                COALESCE(SUM(tax_paise), 0)::bigint,
                 COUNT(*)
             FROM orders
             WHERE restaurant_id = $1
@@ -67,10 +67,10 @@ impl ReportsRepository {
         let collections_row: (Option<i64>, Option<i64>, Option<i64>, Option<i64>, i64) = sqlx::query_as(
             r#"
             SELECT
-                COALESCE(SUM(amount_paise), 0),
-                COALESCE(SUM(CASE WHEN payment_method = 'cash' THEN amount_paise ELSE 0 END), 0),
-                COALESCE(SUM(CASE WHEN payment_method = 'upi' THEN amount_paise ELSE 0 END), 0),
-                COALESCE(SUM(CASE WHEN payment_method NOT IN ('cash', 'upi') THEN amount_paise ELSE 0 END), 0),
+                COALESCE(SUM(amount_paise), 0)::bigint,
+                COALESCE(SUM(CASE WHEN payment_method = 'cash' THEN amount_paise ELSE 0 END), 0)::bigint,
+                COALESCE(SUM(CASE WHEN payment_method = 'upi' THEN amount_paise ELSE 0 END), 0)::bigint,
+                COALESCE(SUM(CASE WHEN payment_method NOT IN ('cash', 'upi') THEN amount_paise ELSE 0 END), 0)::bigint,
                 COUNT(*)
             FROM payments
             WHERE restaurant_id = $1
@@ -104,15 +104,13 @@ impl ReportsRepository {
         let refund_row: (Option<i64>, i64, i64, i64) = sqlx::query_as(
             r#"
             SELECT
-                COALESCE(SUM(CASE WHEN status = 'completed' THEN refund_amount_paise ELSE 0 END), 0),
+                COALESCE(SUM(CASE WHEN status = 'completed' THEN refund_amount_paise ELSE 0 END), 0)::bigint,
                 COUNT(CASE WHEN status = 'completed' THEN 1 END),
                 COUNT(CASE WHEN status = 'requested' THEN 1 END),
                 COUNT(CASE WHEN status = 'cancelled' THEN 1 END)
             FROM refunds
             WHERE restaurant_id = $1
-              AND status = 'completed'
-              AND completed_at >= $2
-              AND completed_at <= $3
+              AND (CASE status WHEN 'completed' THEN completed_at WHEN 'cancelled' THEN cancelled_at ELSE requested_at END) BETWEEN $2 AND $3
               AND legacy_unknown_timestamp = false
             "#,
         )
@@ -144,10 +142,10 @@ impl ReportsRepository {
         // Exclude parent orders that have child split bills!
         let unpaid_unsplit_orders_row: (Option<i64>, i64) = sqlx::query_as(
             r#"
-            SELECT COALESCE(SUM(o.total_amount_paise), 0), COUNT(o.id)
+            SELECT COALESCE(SUM(GREATEST(o.total_amount_paise - COALESCE((SELECT SUM(p.amount_paise) FROM payments p WHERE p.order_id=o.id AND p.status='completed'),0),0)),0)::bigint, COUNT(o.id)
             FROM orders o
             WHERE o.restaurant_id = $1
-              AND o.payment_status IN ('pending', 'partial')
+              AND o.payment_status IN ('pending', 'partial', 'partially_paid')
               AND o.status != 'cancelled'
               AND NOT EXISTS (SELECT 1 FROM split_bills sb WHERE sb.order_id = o.id)
             "#,
@@ -158,7 +156,7 @@ impl ReportsRepository {
 
         let unpaid_splits_row: (Option<i64>, i64) = sqlx::query_as(
             r#"
-            SELECT COALESCE(SUM(sb.amount_paise), 0), COUNT(sb.id)
+            SELECT COALESCE(SUM(sb.amount_paise), 0)::bigint, COUNT(sb.id)
             FROM split_bills sb
             JOIN orders o ON o.id = sb.order_id
             WHERE o.restaurant_id = $1
@@ -181,7 +179,7 @@ impl ReportsRepository {
         // 6. Inventory costs & Wastage in period
         let wastage_row: (Option<i64>,) = sqlx::query_as(
             r#"
-            SELECT COALESCE(SUM(cost_impact_paise), 0)
+            SELECT COALESCE(SUM(cost_impact_paise), 0)::bigint
             FROM wastage_records
             WHERE restaurant_id = $1
               AND created_at >= $2
@@ -210,7 +208,7 @@ impl ReportsRepository {
         // 7. Legacy unknown timestamp disclosure
         let legacy_row: (i64, Option<i64>) = sqlx::query_as(
             r#"
-            SELECT COUNT(*), COALESCE(SUM(total_amount_paise), 0)
+            SELECT COUNT(*), COALESCE(SUM(total_amount_paise), 0)::bigint
             FROM orders
             WHERE restaurant_id = $1 AND legacy_unknown_timestamp = true
             "#,
@@ -239,9 +237,11 @@ impl ReportsRepository {
         pool: &PgPool,
         restaurant_id: Uuid,
     ) -> Result<DashboardSummary, AppError> {
-        let now = Utc::now();
-        let start_of_today = now.date_naive().and_hms_opt(0, 0, 0).unwrap().and_utc();
-        let end_of_today = now.date_naive().and_hms_opt(23, 59, 59).unwrap().and_utc();
+        let (start_of_today, end_of_today): (DateTime<Utc>, DateTime<Utc>) = sqlx::query_as(
+            "SELECT date_trunc('day', now() AT TIME ZONE timezone) AT TIME ZONE timezone,
+            ((date_trunc('day', now() AT TIME ZONE timezone) + interval '1 day') AT TIME ZONE timezone) - interval '1 microsecond'
+            FROM restaurants WHERE id=$1"
+        ).bind(restaurant_id).fetch_one(pool).await?;
 
         let today_report =
             Self::get_period_report(pool, restaurant_id, start_of_today, end_of_today).await?;

@@ -6,7 +6,7 @@ import { WarningCircle, ForkKnife } from '@phosphor-icons/react/dist/ssr';
 export default async function TablePage({
   params,
 }: {
-  params: Promise<{ token: string }> | { token: string };
+  params: Promise<{ token: string }>;
 }) {
   const resolvedParams = await params;
   const token = resolvedParams.token;
@@ -39,13 +39,12 @@ export default async function TablePage({
             <div className="text-[11px] font-medium text-neutral-400">
               Table QR scanned: <span className="font-mono font-bold text-neutral-700">{token}</span>
             </div>
-            <button
-              type="button"
-              onClick={() => window.location.reload()}
+            <a
+              href={`/table/${encodeURIComponent(token)}`}
               className="w-full py-2.5 bg-neutral-900 text-white font-bold text-xs rounded-xl hover:bg-neutral-800 transition-colors cursor-pointer"
             >
               Retry Connection
-            </button>
+            </a>
           </div>
         </div>
       </div>

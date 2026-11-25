@@ -24,7 +24,14 @@ use crate::config::AppState;
 pub fn create_router(state: AppState) -> Router {
     // Configure CORS with allowed origins
     let cors = CorsLayer::new()
-        .allow_origin(Any)
+        .allow_origin(
+            state
+                .config
+                .allowed_origins
+                .iter()
+                .filter_map(|origin| origin.parse::<axum::http::HeaderValue>().ok())
+                .collect::<Vec<_>>(),
+        )
         .allow_methods(Any)
         .allow_headers(Any);
 
@@ -116,6 +123,7 @@ pub fn create_router(state: AppState) -> Router {
         )
         .route("/split-bills", get(billing_routes::list_split_bills))
         .route("/orders/:id/refund", post(billing_routes::create_refund))
+        .route("/refunds", get(billing_routes::list_refunds))
         .route(
             "/refunds/:id/status",
             put(billing_routes::update_refund_status),
@@ -179,13 +187,14 @@ pub fn create_router(state: AppState) -> Router {
             "/dashboard/summary",
             get(reports_routes::get_dashboard_summary),
         )
+        .route("/sync/status", get(health::sync_status))
         // System utilities
         .route("/system/open-external", post(system_open_external))
         // Hardware / Thermal Printer
         .route("/printer/list", get(crate::printer::list_printers_route))
         .route("/printer/print", post(crate::printer::print_escpos_route));
 
-    Router::new()
+    let public = Router::new()
         // Health check routes
         .route("/health", get(health::health_check))
         .route("/health/live", get(health::liveness))
@@ -201,6 +210,10 @@ pub fn create_router(state: AppState) -> Router {
         .route(
             "/public/tables/:token",
             get(public_routes::get_public_table),
+        )
+        .route(
+            "/public/receipts/:key",
+            get(public_routes::guest_order_status),
         )
         .route("/public/menu", get(public_routes::get_public_menu))
         .route(
@@ -240,14 +253,18 @@ pub fn create_router(state: AppState) -> Router {
         .route(
             "/public/customer/profile",
             post(public_routes::update_public_customer_profile),
-        )
-        // WebSocket & SSE Real-time streams
-        .route("/ws/orders", get(ws_routes::ws_handler))
-        .route("/events", get(crate::ws::sse_handler))
-        .route("/sse", get(crate::ws::sse_handler))
-        .route("/api/v1/events", get(crate::ws::sse_handler))
-        // API v1 prefix
-        .nest("/api/v1", api_v1)
+        );
+    let public = if state.config.is_offline_first {
+        public
+            .route("/ws/orders", get(ws_routes::ws_handler))
+            .route("/events", get(crate::ws::sse_handler))
+            .route("/sse", get(crate::ws::sse_handler))
+            .route("/api/v1/events", get(crate::ws::sse_handler))
+            .nest("/api/v1", api_v1)
+    } else {
+        public
+    };
+    public
         .route(
             "/api/v1/health/restaurant/:id",
             get(health::check_restaurant_availability),
@@ -264,6 +281,13 @@ pub struct OpenExternalRequest {
 pub async fn system_open_external(
     _user: crate::auth::middleware::AuthenticatedUser,
     axum::Json(payload): axum::Json<OpenExternalRequest>,
+) -> Result<axum::Json<serde_json::Value>, (axum::http::StatusCode, axum::Json<serde_json::Value>)>
+{
+    open_external_request(payload).await
+}
+
+pub(crate) async fn open_external_request(
+    payload: OpenExternalRequest,
 ) -> Result<axum::Json<serde_json::Value>, (axum::http::StatusCode, axum::Json<serde_json::Value>)>
 {
     let url = payload.url.trim().to_string();

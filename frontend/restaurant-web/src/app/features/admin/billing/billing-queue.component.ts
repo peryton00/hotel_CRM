@@ -58,6 +58,18 @@ import { AdminAuthService } from '../../../core/services/admin-auth.service';
         </div>
       </div>
 
+      @if (authService.isManager() && pendingRefunds().length) {
+        <section class="toolbar-card" aria-label="Pending refund approvals">
+          <h2>Refunds awaiting approval</h2>
+          @for (refund of pendingRefunds(); track refund.id) {
+            <div class="toolbar-top-row">
+              <span>{{ refund.orderNumber }} · {{ refund.refundAmount | currencyInr }} · {{ refund.reason }}</span>
+              <button type="button" class="filter-btn" (click)="decideRefund(refund.id, 'completed')">Approve refund</button>
+              <button type="button" class="filter-btn" (click)="decideRefund(refund.id, 'cancelled')">Decline</button>
+            </div>
+          }
+        </section>
+      }
       <!-- Filter Toolbar -->
       <div class="toolbar-card">
         <div class="toolbar-top-row">
@@ -2919,6 +2931,15 @@ import { AdminAuthService } from '../../../core/services/admin-auth.service';
 export class BillingQueueComponent {
   private dataService = inject(RestaurantDataService);
   private mock = this.dataService;
+  readonly pendingRefunds = computed(() => this.mock.refunds().filter(refund => refund.status === 'PENDING'));
+  async decideRefund(id: string, status: 'completed' | 'cancelled'): Promise<void> {
+    try {
+      await this.mock.decideRefund(id, status);
+    } catch {
+      this.toastService.error('The local POS could not confirm the refund decision.');
+    }
+  }
+
   private toastService = inject(ToastService);
   private router = inject(Router);
   readonly whatsAppBridge = inject(WhatsAppBridgeService);
@@ -3596,7 +3617,7 @@ export class BillingQueueComponent {
     this.isSettling.set(false);
   }
 
-  confirmSettlement(): void {
+  async confirmSettlement(): Promise<void> {
     const ord = this.selectedOrderForSettlement();
     if (!ord || this.isSettling()) return;
 
@@ -3605,7 +3626,7 @@ export class BillingQueueComponent {
     const finalDiscount = this.getEffectiveDiscount(ord);
     const appliedCode = this.settleDiscountMode() === 'COUPON' ? this.selectedCouponCode() : '';
 
-    const res = this.mock.settleOrder({
+    const res = await this.mock.settleOrder({
       orderId: ord.id,
       paymentMethod: method,
       discountAmount: finalDiscount,
@@ -3654,14 +3675,14 @@ export class BillingQueueComponent {
     this.isSettlingSplit.set(false);
   }
 
-  confirmSplitSettlement(): void {
+  async confirmSplitSettlement(): Promise<void> {
     const split = this.selectedSplitForSettlement();
     const ord = this.parentOrderForSplit();
     if (!split || !ord || this.isSettlingSplit()) return;
 
     this.isSettlingSplit.set(true);
     const method = this.selectedSplitPaymentMethod();
-    const res = this.mock.settleSplitBill({
+    const res = await this.mock.settleSplitBill({
       orderId: ord.id,
       splitBillId: split.id,
       paymentMethod: method,
@@ -3758,7 +3779,7 @@ export class BillingQueueComponent {
     return ord.items.every((it) => this.isItemFullyAllocated(it));
   }
 
-  confirmSplit(): void {
+  async confirmSplit(): Promise<void> {
     const ord = this.selectedOrderForSplit();
     if (!ord || this.isSubmittingSplit()) return;
 
@@ -3766,7 +3787,7 @@ export class BillingQueueComponent {
     this.splitError.set('');
 
     if (this.splitMode() === 'EQUAL') {
-      const res = this.mock.splitOrderEqual({
+      const res = await this.mock.splitOrderEqual({
         orderId: ord.id,
         splitCount: this.splitCount(),
       });
@@ -3804,7 +3825,7 @@ export class BillingQueueComponent {
         splitsPayload.push({ allocatedItems: itemsForThisSplit });
       }
 
-      const res = this.mock.splitOrderItemBased({
+      const res = await this.mock.splitOrderItemBased({
         orderId: ord.id,
         splits: splitsPayload,
       });
@@ -3823,6 +3844,7 @@ export class BillingQueueComponent {
 
   // --- Refund Actions ---
   openRefundModal(order: Order): void {
+    this.refundRequestKey = undefined;
     const remaining = this.mock.getRemainingRefundableAmount(order.id);
     if (remaining <= 0) {
       this.toastService.warning(`Order ${order.orderNumber} has no refundable balance.`);
@@ -3837,6 +3859,7 @@ export class BillingQueueComponent {
   }
 
   openRefundSplitModal(order: Order, split: SplitBill): void {
+    this.refundRequestKey = undefined;
     const remaining = this.mock.getRemainingRefundableAmount(order.id, split.id);
     if (remaining <= 0) {
       this.toastService.warning(`Split bill #${split.splitIndex} has no refundable balance.`);
@@ -3860,7 +3883,9 @@ export class BillingQueueComponent {
     this.isSubmittingRefund.set(false);
   }
 
-  confirmRefund(): void {
+  private refundRequestKey?: string;
+
+  async confirmRefund(): Promise<void> {
     const ord = this.selectedOrderForRefund();
     if (!ord || this.isSubmittingRefund()) return;
 
@@ -3881,18 +3906,18 @@ export class BillingQueueComponent {
     this.isSubmittingRefund.set(true);
     this.refundError.set('');
 
-    const res = this.mock.recordRefund({
+    const res = await this.mock.recordRefund({
       orderId: ord.id,
       splitBillId: split?.id,
       refundAmount: amt,
       reason,
       staffName: 'Staff',
-      idempotencyKey: generateIdempotencyKey('refund', ord.customerPhone),
+      idempotencyKey: this.refundRequestKey ??= generateIdempotencyKey('refund', ord.customerPhone),
     });
     this.isSubmittingRefund.set(false);
 
     if (res.success && res.refund) {
-      this.toastService.success(`Refund of ₹${res.refund.refundAmount} recorded successfully.`);
+      this.toastService.success(`Refund of ₹${res.refund.refundAmount} ${res.refund.status === 'PENDING' ? 'awaiting approval' : 'completed'}.`);
       this.closeRefundModal();
     } else {
       this.refundError.set(res.error || 'Failed to record refund');

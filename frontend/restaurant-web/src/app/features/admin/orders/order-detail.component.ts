@@ -2785,7 +2785,7 @@ export class OrderDetailComponent implements OnInit {
     this.toastService.success(`Order status updated to ${status}`);
   }
 
-  updatePaymentStatus(status: PaymentStatus): void {
+  async updatePaymentStatus(status: PaymentStatus): Promise<void> {
     const ord = this.order();
     if (!ord) return;
 
@@ -2799,7 +2799,7 @@ export class OrderDetailComponent implements OnInit {
     if (status === 'PAID') {
       const method: 'UPI' | 'CASH' | 'CARD' =
         ord.paymentMethod === 'CARD' ? 'CARD' : ord.paymentMethod === 'UPI' ? 'UPI' : 'CASH';
-      const settleRes = this.mock.settleOrder({
+      const settleRes = await this.mock.settleOrder({
         orderId: ord.id,
         paymentMethod: method,
       });
@@ -2871,12 +2871,12 @@ export class OrderDetailComponent implements OnInit {
     this.showServerAdminModal.set(true);
   }
 
-  confirmChangeCompletedServer(): void {
+  async confirmChangeCompletedServer(): Promise<void> {
     const ord = this.order();
     if (!ord) return;
 
     const pwd = this.serverAdminPasswordInput().trim();
-    if (!this.adminAuth.verifyAdminPassword(pwd)) {
+    if (!await this.adminAuth.verifyAdminPassword(pwd)) {
       this.serverAdminPasswordError.set(
         'Incorrect admin password. Authorization required to change serving staff on completed orders.',
       );
@@ -2884,7 +2884,7 @@ export class OrderDetailComponent implements OnInit {
     }
 
     const newStaffId = this.selectedNewStaffId();
-    const res = this.dataService.assignOrderServer(ord.id, newStaffId ? newStaffId : null, pwd);
+    const res = await this.dataService.assignOrderServer(ord.id, newStaffId ? newStaffId : null, pwd);
 
     if (res.success) {
       const staffName = this.getServerStaffName(newStaffId) || 'Unassigned';
@@ -2904,7 +2904,7 @@ export class OrderDetailComponent implements OnInit {
     this.serverAdminPasswordError.set('');
   }
 
-  onAssignOrderServer(staffIdStr: string): void {
+  async onAssignOrderServer(staffIdStr: string): Promise<void> {
     const ord = this.order();
     if (!ord) return;
     if (this.isOrderPaid(ord)) {
@@ -2912,7 +2912,7 @@ export class OrderDetailComponent implements OnInit {
       return;
     }
     const staffId = staffIdStr && staffIdStr.trim().length > 0 ? staffIdStr : null;
-    const res = this.dataService.assignOrderServer(ord.id, staffId);
+    const res = await this.dataService.assignOrderServer(ord.id, staffId);
     if (res.success) {
       this.toastService.success('Order server assigned');
     } else {
@@ -3008,9 +3008,9 @@ export class OrderDetailComponent implements OnInit {
     this.startEditingOrder(false);
   }
 
-  verifyAdminPasswordForEdit(): void {
+  async verifyAdminPasswordForEdit(): Promise<void> {
     const input = this.adminPasswordInput();
-    if (!this.adminAuth.verifyAdminPassword(input)) {
+    if (!await this.adminAuth.verifyAdminPassword(input)) {
       this.adminPasswordError.set(
         this.isReprintFlow()
           ? 'Incorrect admin password. Authorization required to reprint invoice.'
@@ -3307,6 +3307,7 @@ export class OrderDetailComponent implements OnInit {
 
   // --- Refund Actions ---
   openRefundModal(): void {
+    this.refundRequestKey = undefined;
     const ord = this.order();
     if (!ord) return;
     const remaining = this.remainingRefundable();
@@ -3328,7 +3329,9 @@ export class OrderDetailComponent implements OnInit {
     this.isSubmittingRefund.set(false);
   }
 
-  confirmRefund(): void {
+  private refundRequestKey?: string;
+
+  async confirmRefund(): Promise<void> {
     const ord = this.order();
     if (!ord || this.isSubmittingRefund()) return;
 
@@ -3347,18 +3350,18 @@ export class OrderDetailComponent implements OnInit {
     this.isSubmittingRefund.set(true);
     this.refundError.set('');
 
-    const res = this.mock.recordRefund({
+    const res = await this.mock.recordRefund({
       orderId: ord.id,
       refundAmount: amt,
       reason,
       staffName: 'Staff',
-      idempotencyKey: generateIdempotencyKey('refund', ord.customerPhone),
+      idempotencyKey: this.refundRequestKey ??= generateIdempotencyKey('refund', ord.customerPhone),
     });
 
     this.isSubmittingRefund.set(false);
 
     if (res.success && res.refund) {
-      this.toastService.success(`Refund of ₹${res.refund.refundAmount} recorded successfully.`);
+      this.toastService.success(`Refund of ₹${res.refund.refundAmount} ${res.refund.status === 'PENDING' ? 'awaiting approval' : 'completed'}.`);
       this.closeRefundModal();
     } else {
       this.refundError.set(res.error || 'Failed to record refund');

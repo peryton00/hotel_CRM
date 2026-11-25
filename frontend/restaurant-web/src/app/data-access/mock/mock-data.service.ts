@@ -3908,11 +3908,11 @@ export class MockDataService {
    * Assigns serving staff to an order.
    * If the order is COMPLETED, requires valid admin authorization password.
    */
-  assignOrderServer(
+  async assignOrderServer(
     orderId: string,
     staffId: string | null,
     adminPassword?: string,
-  ): { success: boolean; error?: string } {
+  ): Promise<{ success: boolean; error?: string }> {
     const server_staff_id = staffId && staffId.trim() ? staffId.trim() : null;
     const currentOrder = this.orders().find((o) => o.id === orderId);
     if (!currentOrder) {
@@ -3924,7 +3924,7 @@ export class MockDataService {
       currentOrder.status === 'COMPLETED' ||
       !!currentOrder.settledAt;
     if (isPaid) {
-      const isAuthorized = !!(adminPassword && this.adminAuth.verifyAdminPassword(adminPassword));
+      const isAuthorized = !!(adminPassword && await this.adminAuth.verifyAdminPassword(adminPassword));
       if (!isAuthorized) {
         return {
           success: false,

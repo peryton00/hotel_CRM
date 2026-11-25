@@ -43,9 +43,17 @@ Name: "english"; MessagesFile: "compiler:Default.isl"
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: checkedonce
 Name: "startup"; Description: "Launch HOTEL CRM automatically when Windows boots up"; GroupDescription: "System Startup:"; Flags: checkedonce
 
+[InstallDelete]
+Type: filesandordirs; Name: "{app}\whatsapp-bridge\node_modules"
+
 [Files]
-Source: "src-tauri\target\release\hotel_crm_desktop.exe"; DestDir: "{app}"; DestName: "{#MyAppExeName}"; Flags: ignoreversion
-Source: "backend\api\.env"; DestDir: "{app}"; Flags: ignoreversion
+Source: "{#BridgeDir}\node.exe"; DestDir: "{app}\whatsapp-bridge"; Flags: ignoreversion
+Source: "{#BridgeDir}\NODE-LICENSE.txt"; DestDir: "{app}\whatsapp-bridge"; Flags: ignoreversion
+Source: "{#BridgeDir}\index.js"; DestDir: "{app}\whatsapp-bridge"; Flags: ignoreversion
+Source: "{#BridgeDir}\package.json"; DestDir: "{app}\whatsapp-bridge"; Flags: ignoreversion
+Source: "{#BridgeDir}\node_modules\*"; DestDir: "{app}\whatsapp-bridge\node_modules"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "{#DesktopExe}"; DestDir: "{app}"; DestName: "{#MyAppExeName}"; Flags: ignoreversion
+Source: "{#SetupExe}"; DestDir: "{app}"; DestName: "pos-setup.exe"; Flags: ignoreversion
 Source: "src-tauri\icons\icon.ico"; DestDir: "{app}"; Flags: ignoreversion
 
 [Icons]

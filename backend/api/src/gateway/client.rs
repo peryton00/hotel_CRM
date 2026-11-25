@@ -23,17 +23,6 @@ impl GatewayHeartbeatClient {
                 self.restaurant_id
             );
 
-            // Ensure heartbeat table exists in cloud
-            let ensure_sql = r#"
-                CREATE TABLE IF NOT EXISTS restaurant_heartbeats (
-                    restaurant_id UUID PRIMARY KEY,
-                    is_online BOOLEAN NOT NULL DEFAULT TRUE,
-                    last_seen_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-                    metadata JSONB
-                );
-            "#;
-            let _ = sqlx::raw_sql(ensure_sql).execute(&self.cloud_pool).await;
-
             loop {
                 let pulse_result = sqlx::query(
                     r#"

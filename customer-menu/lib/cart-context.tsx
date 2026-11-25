@@ -1,9 +1,10 @@
 'use client';
 
-import { createContext, useContext, useState, useEffect, useRef, ReactNode } from 'react';
+import { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
 import type { CartItem, MenuItem } from './types';
 
 interface CartCtx {
+  selectSession: (token: string, session?: string) => void;
   items: CartItem[];
   add: (item: MenuItem) => void;
   remove: (id: string) => void;
@@ -17,29 +18,23 @@ const Ctx = createContext<CartCtx | null>(null);
 
 export function CartProvider({ children }: { children: ReactNode }) {
   const [items, setItems] = useState<CartItem[]>([]);
-  const isLoadedRef = useRef(false);
-
-  // Load from localStorage on mount (preserves cart across page refreshes)
-  useEffect(() => {
+  const [storageKey, setStorageKey] = useState('');
+  const selectSession = useCallback((token: string, session?: string) => {
+    const key = `guest-cart:${token}:${session || 'browse'}`;
+    if (key === storageKey) return;
+    let restored: CartItem[] = [];
     try {
-      const saved = localStorage.getItem('customer_cart');
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed)) {
-          setItems(parsed);
-        }
-      }
+      const saved = JSON.parse(sessionStorage.getItem(key) || '[]');
+      if (Array.isArray(saved)) restored = saved.filter(line => line?.item?.id && Number.isSafeInteger(line.quantity) && line.quantity > 0);
     } catch {}
-    isLoadedRef.current = true;
-  }, []);
+    setItems(restored);
+    setStorageKey(key);
+  }, [storageKey]);
 
-  // Save to localStorage on any cart modification (only after initial load has finished)
   useEffect(() => {
-    if (!isLoadedRef.current) return;
-    try {
-      localStorage.setItem('customer_cart', JSON.stringify(items));
-    } catch {}
-  }, [items]);
+    if (!storageKey) return;
+    try { sessionStorage.setItem(storageKey, JSON.stringify(items)); } catch {}
+  }, [storageKey, items]);
 
   const add = (item: MenuItem) =>
     setItems((prev) => {
@@ -61,7 +56,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
   const clear = () => {
     setItems([]);
     try {
-      localStorage.removeItem('customer_cart');
+      if (storageKey) sessionStorage.removeItem(storageKey);
     } catch {}
   };
 
@@ -69,7 +64,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
   const count = items.reduce((s, i) => s + i.quantity, 0);
 
   return (
-    <Ctx.Provider value={{ items, add, remove, update, clear, total, count }}>
+    <Ctx.Provider value={{ selectSession, items, add, remove, update, clear, total, count }}>
       {children}
     </Ctx.Provider>
   );

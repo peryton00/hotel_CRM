@@ -20,6 +20,25 @@ impl OrderRepository {
         staff_id: Option<Uuid>,
         req: CreateOrderRequest,
     ) -> Result<OrderWithItems, AppError> {
+        Self::insert_order(pool, restaurant_id, staff_id, req, None).await
+    }
+
+    pub async fn create_guest_order(
+        pool: &PgPool,
+        restaurant_id: Uuid,
+        req: CreateOrderRequest,
+        request_id: Uuid,
+    ) -> Result<OrderWithItems, AppError> {
+        Self::insert_order(pool, restaurant_id, None, req, Some(request_id)).await
+    }
+
+    async fn insert_order(
+        pool: &PgPool,
+        restaurant_id: Uuid,
+        staff_id: Option<Uuid>,
+        mut req: CreateOrderRequest,
+        guest_request: Option<Uuid>,
+    ) -> Result<OrderWithItems, AppError> {
         if req.items.is_empty() {
             return Err(AppError::BadRequest(
                 "Cannot create order with no items".to_string(),
@@ -45,12 +64,81 @@ impl OrderRepository {
 
         let mut tx = pool.begin().await?;
 
-        // 1. Calculate items total in paise
-        let mut subtotal_paise: i64 = 0;
+        if let Some(key) = guest_request {
+            // Serialize retries of this checkout, even when two HTTP requests arrive together.
+            sqlx::query("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))")
+                .bind(key.to_string())
+                .execute(&mut *tx)
+                .await?;
+            if let Some(existing) = sqlx::query_scalar::<_, Uuid>(
+                "SELECT order_id FROM guest_order_receipts WHERE request_id=$1",
+            )
+            .bind(key)
+            .fetch_optional(&mut *tx)
+            .await?
+            {
+                tx.commit().await?;
+                return Self::get_order(pool, restaurant_id, existing)
+                    .await?
+                    .ok_or_else(|| AppError::Conflict("Checkout belongs to another order".into()));
+            }
+            let seated = sqlx::query_scalar::<_, Uuid>("SELECT id FROM tables WHERE id=$1 AND restaurant_id=$2 AND ordering_enabled AND status='OCCUPIED' AND current_seating_session_id::text=$3 FOR UPDATE")
+                .bind(req.table_id).bind(restaurant_id).bind(req.seating_session_id.map(|s|s.to_string())).fetch_optional(&mut *tx).await?;
+            if seated.is_none() {
+                return Err(AppError::Forbidden(
+                    "This seating session is no longer accepting orders.".into(),
+                ));
+            }
+        }
 
-        for item in &req.items {
-            let item_subtotal = item.unit_price_paise * item.quantity as i64;
-            subtotal_paise += item_subtotal;
+        let mut subtotal_paise = 0_i64;
+        for item in &mut req.items {
+            if let Some(id) = item.menu_item_id {
+                let (name, price): (String, i64) = sqlx::query_as("SELECT name, COALESCE(base_price_paise,price_paise) FROM menu_items WHERE id=$1 AND restaurant_id=$2 AND is_available FOR SHARE")
+                    .bind(id).bind(restaurant_id).fetch_optional(&mut *tx).await?
+                    .ok_or_else(|| AppError::Conflict("A menu item is unavailable. Refresh the menu.".into()))?;
+                item.item_name = name;
+                item.unit_price_paise = price;
+            } else if guest_request.is_some() {
+                return Err(AppError::BadRequest("A menu item is required.".into()));
+            }
+            if item.quantity <= 0 || item.unit_price_paise < 0 {
+                return Err(AppError::BadRequest(
+                    "Invalid item quantity or price".into(),
+                ));
+            }
+            subtotal_paise = item
+                .unit_price_paise
+                .checked_mul(i64::from(item.quantity))
+                .and_then(|line| subtotal_paise.checked_add(line))
+                .filter(|&sum| sum <= 100_000_000_000)
+                .ok_or_else(|| AppError::BadRequest("Order amount is too large".into()))?;
+        }
+        let mut redeemed_coupon = None;
+        if guest_request.is_some() {
+            req.discount_paise = None;
+            if let Some(code) = req.applied_coupon_code.as_deref() {
+                let validation = crate::repositories::CouponRepository::validate_on(
+                    &mut tx,
+                    restaurant_id,
+                    &crate::models::coupon::ValidateCouponRequest {
+                        code: code.to_owned(),
+                        order_amount_paise: subtotal_paise,
+                        customer_phone: req.customer_phone.clone(),
+                        customer_id: None,
+                    },
+                )
+                .await?;
+                if !validation.is_valid {
+                    return Err(AppError::BadRequest(
+                        validation
+                            .message
+                            .unwrap_or_else(|| "Coupon unavailable".into()),
+                    ));
+                }
+                redeemed_coupon = validation.coupon.map(|coupon| coupon.id);
+                req.discount_paise = Some(validation.discount_paise);
+            }
         }
 
         // Fetch tax settings configured by admin from database
@@ -385,16 +473,27 @@ impl OrderRepository {
         };
         let outbox_payload = serde_json::to_value(&full_order).unwrap_or_default();
         let idem_key = format!("order-create-{}", order.id);
-        OutboxService::emit_event(
-            &mut tx,
-            "order",
-            order.id,
-            "ORDER_CREATED",
-            outbox_payload,
-            &idem_key,
-        )
-        .await?;
-
+        if let Some(key) = guest_request {
+            sqlx::query("INSERT INTO guest_order_receipts(request_id,order_id) VALUES($1,$2)")
+                .bind(key)
+                .bind(order.id)
+                .execute(&mut *tx)
+                .await?;
+            if let Some(coupon) = redeemed_coupon {
+                sqlx::query("INSERT INTO coupon_redemptions(coupon_id,order_id,customer_id,customer_phone,discount_applied_paise) VALUES ($1,$2,$3,$4,$5)")
+                    .bind(coupon).bind(order.id).bind(order.customer_id).bind(cust_phone).bind(order.discount_paise).execute(&mut *tx).await?;
+            }
+        } else {
+            OutboxService::emit_event(
+                &mut tx,
+                "order",
+                order.id,
+                "ORDER_CREATED",
+                outbox_payload,
+                &idem_key,
+            )
+            .await?;
+        }
         tx.commit().await?;
 
         Ok(OrderWithItems {

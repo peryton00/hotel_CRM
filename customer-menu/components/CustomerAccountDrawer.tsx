@@ -20,6 +20,7 @@ import {
   Clock,
   CheckCircle,
 } from '@phosphor-icons/react';
+import { clearDinerSession, dinerHeaders, phoneSignInEnabled, verifyDinerPhone } from '@/lib/diner-session';
 import { getCustomerOrders, getCustomerLoyalty, getCoupons, updateCustomerProfile } from '@/lib/api';
 import { CustomerPastOrder, Coupon } from '@/lib/types';
 
@@ -75,6 +76,8 @@ export function CustomerAccountDrawer({
   const [isEditingPhone, setIsEditingPhone] = useState(false);
   const [phoneInput, setPhoneInput] = useState('');
   const [nameInput, setNameInput] = useState('');
+  const [verificationCode, setVerificationCode] = useState('');
+  const [codeSent, setCodeSent] = useState(false);
   const [lookupLoading, setLookupLoading] = useState(false);
   const [lookupMessage, setLookupMessage] = useState('');
 
@@ -132,6 +135,7 @@ export function CustomerAccountDrawer({
     const currentPhone = phone || (typeof window !== 'undefined' ? localStorage.getItem('customer_phone') || '' : '');
     if (currentPhone && currentPhone.length >= 10) {
       setPhone(currentPhone);
+      if (phoneSignInEnabled && !dinerHeaders(currentPhone).Authorization) setIsEditingPhone(true);
       refreshCustomerData(currentPhone);
     } else {
       setIsEditingPhone(true);
@@ -184,35 +188,38 @@ export function CustomerAccountDrawer({
     }
   };
 
-  // Quick lookup when typing phone number
-  const handlePhoneInputChange = async (val: string) => {
-    const clean = val.replace(/\D/g, '');
-    setPhoneInput(clean);
+  const handlePhoneInputChange = (value: string) => {
+    setPhoneInput(value.replace(/\D/g, ''));
+    setCodeSent(false);
+    setVerificationCode('');
     setLookupMessage('');
-
-    if (clean.length === 10) {
-      setLookupLoading(true);
-      try {
-        const info = await getCustomerLoyalty(clean);
-        if (info?.name) {
-          setNameInput(info.name);
-          setLookupMessage(`Found existing diner: ${info.name} 🎉`);
-        } else {
-          setLookupMessage('New diner! Enter your name below to link your account.');
-        }
-      } catch {
-        setLookupMessage('');
-      } finally {
-        setLookupLoading(false);
-      }
-    }
   };
 
   const handleSaveProfile = async () => {
     const clean = phoneInput.replace(/\D/g, '');
     const trimmedName = nameInput.trim();
-    if (clean.length < 10) return;
-
+    if (clean.length !== 10 || lookupLoading) return;
+    setLookupLoading(true);
+    try {
+      if (phoneSignInEnabled) {
+        if (!dinerHeaders(clean).Authorization) {
+          await verifyDinerPhone(clean, codeSent ? verificationCode : undefined);
+          if (!codeSent) {
+            setCodeSent(true);
+            setLookupMessage('Enter the code sent to your phone.');
+            return;
+          }
+        }
+        if (trimmedName && !(await updateCustomerProfile(clean, trimmedName))) {
+          throw new Error('The restaurant could not save your profile. Please try again.');
+        }
+      }
+    } catch (error) {
+      setLookupMessage(error instanceof Error ? error.message : 'Verification failed.');
+      return;
+    } finally {
+      setLookupLoading(false);
+    }
     setPhone(clean);
     setName(trimmedName);
     setIsEditingPhone(false);
@@ -224,14 +231,16 @@ export function CustomerAccountDrawer({
       }
     } catch {}
 
-    if (trimmedName) {
-      await updateCustomerProfile(clean, trimmedName);
-    }
+    setCodeSent(false);
+    setVerificationCode('');
 
     refreshCustomerData(clean);
   };
 
   const handleSignOut = () => {
+    clearDinerSession();
+    setCodeSent(false);
+    setVerificationCode('');
     try {
       localStorage.removeItem('customer_phone');
       localStorage.removeItem('customer_name');
@@ -403,7 +412,7 @@ export function CustomerAccountDrawer({
                 )}
               </div>
               <p className="text-[11px] text-neutral-600 dark:text-neutral-400">
-                Enter your mobile number to view your active kitchen orders, completed order history in My Orders, and your account coupons.
+                {phoneSignInEnabled ? 'Verify your mobile number to view your loyalty account and coupons.' : 'Save your contact details on this device. You can view orders placed in this tab.'}
               </p>
 
               <div className="space-y-2">
@@ -421,10 +430,16 @@ export function CustomerAccountDrawer({
                   />
                 </div>
 
+                {codeSent && <label className="block text-xs">SMS verification code
+                  <input inputMode="numeric" autoComplete="one-time-code" maxLength={6}
+                    value={verificationCode} onChange={e => setVerificationCode(e.target.value.replace(/\D/g, ''))}
+                    className="block w-full rounded-xl border p-2" />
+                  <button type="button" disabled={lookupLoading} onClick={() => { setCodeSent(false); setVerificationCode(''); setLookupMessage(''); }}>Request a new code</button>
+                </label>}
                 {lookupLoading && (
                   <div className="text-[10px] text-amber-600 dark:text-amber-400 flex items-center gap-1">
                     <span className="w-2.5 h-2.5 border-2 border-amber-600 border-t-transparent rounded-full animate-spin" />
-                    <span>Checking customer profile...</span>
+                    <span>Please wait…</span>
                   </div>
                 )}
                 {lookupMessage && !lookupLoading && (
@@ -445,11 +460,11 @@ export function CustomerAccountDrawer({
 
                 <button
                   type="button"
-                  disabled={phoneInput.replace(/\D/g, '').length < 10}
+                  disabled={lookupLoading || phoneInput.length !== 10 || (codeSent && verificationCode.length !== 6)}
                   onClick={handleSaveProfile}
                   className="w-full bg-[#c21807] hover:bg-[#a91c12] disabled:opacity-50 text-white text-xs font-extrabold py-2.5 rounded-xl transition-all cursor-pointer shadow-xs flex items-center justify-center gap-1.5"
                 >
-                  <span>Save &amp; View My Orders</span>
+                  <span>{codeSent ? 'Verify code' : phoneSignInEnabled && !dinerHeaders(phoneInput).Authorization ? 'Send verification code' : 'Save details'}</span>
                   <ArrowRight size={14} weight="bold" />
                 </button>
               </div>

@@ -77,17 +77,7 @@ pub async fn get_public_table(
                'ONLINE'::text AS restaurant_status
         FROM tables t
         LEFT JOIN restaurants r ON r.id = t.restaurant_id
-        WHERE (
-            COALESCE(t.qr_code_identifier, t.qr_token) = $1
-            OR LOWER(t.number) = LOWER($1)
-            OR LOWER(COALESCE(t.table_number, '')) = LOWER($1)
-            OR LOWER(REPLACE(t.number, 'T-', '')) = LOWER($1)
-            OR LOWER(REPLACE(t.number, 'T-0', '')) = LOWER($1)
-            OR LOWER(REPLACE(COALESCE(t.table_number, ''), 'tbl-', '')) = LOWER($1)
-            OR LOWER(REPLACE(COALESCE(t.table_number, ''), 'tbl-0', '')) = LOWER($1)
-            OR LOWER(t.number) = LOWER(CONCAT('T-', LPAD($1, 2, '0')))
-            OR LOWER(COALESCE(t.table_number, '')) = LOWER(CONCAT('tbl-', LPAD($1, 2, '0')))
-        )
+        WHERE (t.qr_token = $1 OR t.qr_code_identifier = $1)
           AND t.restaurant_id = $2
         "#,
     )
@@ -97,9 +87,8 @@ pub async fn get_public_table(
     .await?
     .ok_or_else(|| AppError::NotFound("Table not found".to_string()))?;
 
-    let is_online = crate::gateway::GatewayHeartbeatClient::is_restaurant_online(&pool, q.rid)
-        .await
-        || crate::ws::has_active_crm_clients();
+    let is_online =
+        crate::gateway::GatewayHeartbeatClient::is_restaurant_online(&pool, q.rid).await;
 
     table.is_pos_online = is_online;
     table.restaurant_status = if is_online {
@@ -124,9 +113,8 @@ pub async fn get_public_restaurant_status(
     State(pool): State<PgPool>,
     Query(q): Query<RestaurantIdQuery>,
 ) -> Result<Json<ApiResponse<RestaurantStatusResponse>>, AppError> {
-    let is_online = crate::gateway::GatewayHeartbeatClient::is_restaurant_online(&pool, q.rid)
-        .await
-        || crate::ws::has_active_crm_clients();
+    let is_online =
+        crate::gateway::GatewayHeartbeatClient::is_restaurant_online(&pool, q.rid).await;
 
     let phone: Option<String> = sqlx::query_scalar("SELECT phone FROM restaurants WHERE id = $1")
         .bind(q.rid)
@@ -219,6 +207,7 @@ pub struct PublicOrderItem {
 
 #[derive(Debug, Deserialize)]
 pub struct PublicCreateOrderRequest {
+    pub request_id: Uuid,
     pub restaurant_id: Uuid,
     pub table_id: Option<Uuid>,
     pub table_number: Option<String>,
@@ -259,136 +248,25 @@ pub async fn create_public_order(
         }
     }
 
+    if let Some(id) = sqlx::query_scalar::<_, Uuid>(
+        "SELECT order_id FROM guest_order_receipts WHERE request_id=$1",
+    )
+    .bind(req.request_id)
+    .fetch_optional(&pool)
+    .await?
+    {
+        if let Some(order) = OrderRepository::get_order(&pool, req.restaurant_id, id).await? {
+            return Ok(Json(ApiResponse::success(order)));
+        }
+    }
     let is_pos_online =
         crate::gateway::GatewayHeartbeatClient::is_restaurant_online(&pool, req.restaurant_id)
-            .await
-            || crate::ws::has_active_crm_clients();
+            .await;
 
     if !is_pos_online {
         return Err(AppError::Conflict(
             "RESTAURANT_POS_OFFLINE: Restaurant kitchen system is currently offline. Please call staff to place your order directly.".to_string(),
         ));
-    }
-
-    // PentAGI Replay & Rapid Double-Click Defense:
-    // If an identical order from this phone was placed in the last 4 seconds for this table, return existing order
-    if let Some(tbl_id) = req.table_id {
-        let recent_order_id: Option<Uuid> = sqlx::query_scalar(
-            r#"
-            SELECT id FROM orders 
-            WHERE table_id = $1 
-              AND customer_phone = $2 
-              AND restaurant_id = $3 
-              AND created_at > NOW() - INTERVAL '4 seconds'
-            ORDER BY created_at DESC 
-            LIMIT 1
-            "#,
-        )
-        .bind(tbl_id)
-        .bind(&req.customer_phone)
-        .bind(req.restaurant_id)
-        .fetch_optional(&pool)
-        .await?;
-
-        if let Some(oid) = recent_order_id {
-            if let Some(existing_order) =
-                OrderRepository::get_order(&pool, req.restaurant_id, oid).await?
-            {
-                tracing::warn!(
-                    "PentAGI: Blocked duplicate order submission within 4s window for order {oid}"
-                );
-                return Ok(Json(ApiResponse::success(existing_order)));
-            }
-        }
-    }
-
-    // Pattern 3 Host-Seated Verification + PentAGI Session Pinning
-    if let Some(tbl_id) = req.table_id {
-        let table_record: Option<(String, bool, Option<Uuid>)> = sqlx::query_as(
-            r#"SELECT status::text, ordering_enabled,
-                      CASE 
-                          WHEN current_seating_session_id::text ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$' 
-                          THEN current_seating_session_id::uuid 
-                          ELSE NULL 
-                      END AS current_seating_session_id
-               FROM tables WHERE id = $1 AND restaurant_id = $2"#,
-        )
-        .bind(tbl_id)
-        .bind(req.restaurant_id)
-        .fetch_optional(&pool)
-        .await?;
-
-        match table_record {
-            Some((status, ordering_enabled, current_session)) => {
-                if !ordering_enabled {
-                    return Err(AppError::Forbidden(
-                        "Ordering is currently disabled for this table.".to_string(),
-                    ));
-                }
-                if status != "OCCUPIED" {
-                    return Err(AppError::Forbidden(
-                        "TABLE_UNSEATED: Table is currently unseated. Please ask restaurant staff to seat this table before ordering.".to_string(),
-                    ));
-                }
-                if let (Some(tbl_session), Some(req_session)) =
-                    (current_session, req.seating_session_id)
-                {
-                    if tbl_session != req_session {
-                        return Err(AppError::Forbidden(
-                            "EXPIRED_SEATING_SESSION: Dining session has concluded or is invalid. Please refresh the menu.".to_string(),
-                        ));
-                    }
-                }
-            }
-            None => {
-                return Err(AppError::NotFound(
-                    "Table not found for this restaurant".to_string(),
-                ));
-            }
-        }
-    } else if let Some(ref num) = req.table_number {
-        let table_record: Option<(String, bool, Option<Uuid>)> = sqlx::query_as(
-            r#"SELECT status::text, ordering_enabled,
-                      CASE 
-                          WHEN current_seating_session_id::text ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$' 
-                          THEN current_seating_session_id::uuid 
-                          ELSE NULL 
-                      END AS current_seating_session_id
-               FROM tables WHERE (number = $1 OR table_number = $1) AND restaurant_id = $2"#,
-        )
-        .bind(num)
-        .bind(req.restaurant_id)
-        .fetch_optional(&pool)
-        .await?;
-
-        match table_record {
-            Some((status, ordering_enabled, current_session)) => {
-                if !ordering_enabled {
-                    return Err(AppError::Forbidden(
-                        "Ordering is currently disabled for this table.".to_string(),
-                    ));
-                }
-                if status != "OCCUPIED" {
-                    return Err(AppError::Forbidden(
-                        "TABLE_UNSEATED: Table is currently unseated. Please ask restaurant staff to seat this table before ordering.".to_string(),
-                    ));
-                }
-                if let (Some(tbl_session), Some(req_session)) =
-                    (current_session, req.seating_session_id)
-                {
-                    if tbl_session != req_session {
-                        return Err(AppError::Forbidden(
-                            "EXPIRED_SEATING_SESSION: Dining session has concluded or is invalid. Please refresh the menu.".to_string(),
-                        ));
-                    }
-                }
-            }
-            None => {
-                return Err(AppError::NotFound(
-                    "Table not found for this restaurant".to_string(),
-                ));
-            }
-        }
     }
 
     let create_req = CreateOrderRequest {
@@ -416,21 +294,9 @@ pub async fn create_public_order(
         seating_session_id: req.seating_session_id,
     };
 
-    let order = OrderRepository::create_order(&pool, req.restaurant_id, None, create_req).await?;
-
-    // Broadcast to WS & SSE clients
-    crate::ws::broadcast_new_order(&order);
-
-    if let Some(table_id) = order.order.table_id {
-        let table_num = req.table_number.unwrap_or_default();
-        crate::ws::broadcast_table_status(
-            table_id,
-            &table_num,
-            "OCCUPIED",
-            true,
-            req.seating_session_id,
-        );
-    }
+    let order =
+        OrderRepository::create_guest_order(&pool, req.restaurant_id, create_req, req.request_id)
+            .await?;
 
     Ok(Json(ApiResponse::success(order)))
 }
@@ -445,23 +311,26 @@ pub struct CustomerOrdersQuery {
 }
 
 pub async fn get_customer_orders(
+    headers: axum::http::HeaderMap,
     State(pool): State<PgPool>,
     Query(q): Query<CustomerOrdersQuery>,
 ) -> Result<Json<ApiResponse<Vec<crate::models::order::OrderWithItems>>>, AppError> {
-    let clean_phone = q
-        .phone
-        .as_deref()
-        .map(|p| p.chars().filter(|c| c.is_ascii_digit()).collect::<String>())
-        .unwrap_or_default();
-
-    if clean_phone.len() < 10 && q.table_id.is_none() {
-        return Ok(Json(ApiResponse::success(Vec::new())));
+    let mut orders = Vec::new();
+    let keys: Vec<Uuid> = headers
+        .get("x-order-receipts")
+        .and_then(|value| value.to_str().ok())
+        .unwrap_or("")
+        .split(',')
+        .take(50)
+        .filter_map(|value| Uuid::parse_str(value).ok())
+        .collect();
+    let ids: Vec<Uuid> = sqlx::query_scalar("SELECT o.id FROM orders o JOIN guest_order_receipts r ON r.order_id=o.id WHERE r.request_id=ANY($1) AND o.restaurant_id=$2 AND ($3::uuid IS NULL OR o.table_id=$3) ORDER BY o.created_at DESC")
+        .bind(keys).bind(q.rid).bind(q.table_id).fetch_all(&pool).await?;
+    for id in ids {
+        if let Some(order) = OrderRepository::get_order(&pool, q.rid, id).await? {
+            orders.push(order);
+        }
     }
-
-    let orders =
-        OrderRepository::list_orders_by_customer_phone(&pool, q.rid, &clean_phone, q.table_id)
-            .await?;
-
     Ok(Json(ApiResponse::success(orders)))
 }
 
@@ -548,7 +417,9 @@ pub async fn create_public_reservation(
             "PentAGI: Blocked duplicate reservation submission within 5s window for reservation {}",
             existing.id
         );
-        return Ok(Json(ApiResponse::success(existing)));
+        return Err(AppError::Conflict(
+            "A recent submission was already received.".into(),
+        ));
     }
 
     let create_req = crate::models::customer::CreateReservationRequest {
@@ -634,7 +505,9 @@ pub async fn create_public_feedback(
                 "PentAGI: Blocked duplicate feedback submission within 5s window for feedback {}",
                 existing.id
             );
-            return Ok(Json(ApiResponse::success(existing)));
+            return Err(AppError::Conflict(
+                "A recent submission was already received.".into(),
+            ));
         }
     }
 
@@ -668,10 +541,33 @@ pub struct PublicCouponsQuery {
     pub phone: Option<String>,
 }
 
+fn require_verified_phone(
+    user: &crate::auth::AuthenticatedUser,
+    phone: &str,
+) -> Result<(), AppError> {
+    fn normalize(value: &str) -> Option<String> {
+        let digits: String = value.chars().filter(char::is_ascii_digit).collect();
+        match digits.len() {
+            10 => Some(format!("91{digits}")),
+            12 if digits.starts_with("91") => Some(digits),
+            _ => None,
+        }
+    }
+    let verified = user.claims.phone.as_deref().and_then(normalize);
+    if verified.is_none() || verified != normalize(phone) {
+        return Err(AppError::Forbidden(
+            "Verify this mobile number to access the diner account.".into(),
+        ));
+    }
+    Ok(())
+}
+
 pub async fn get_public_coupons(
+    user: crate::auth::AuthenticatedUser,
     State(pool): State<PgPool>,
     Query(q): Query<PublicCouponsQuery>,
 ) -> Result<Json<ApiResponse<Vec<crate::models::coupon::Coupon>>>, AppError> {
+    require_verified_phone(&user, q.phone.as_deref().unwrap_or(""))?;
     let clean_phone = q
         .phone
         .as_deref()
@@ -759,9 +655,8 @@ pub async fn get_public_restaurant_info(
     .await?
     .ok_or_else(|| AppError::NotFound("Restaurant not found".to_string()))?;
 
-    let is_online = crate::gateway::GatewayHeartbeatClient::is_restaurant_online(&pool, q.rid)
-        .await
-        || crate::ws::has_active_crm_clients();
+    let is_online =
+        crate::gateway::GatewayHeartbeatClient::is_restaurant_online(&pool, q.rid).await;
 
     info.is_pos_online = is_online;
     info.restaurant_status = if is_online {
@@ -777,6 +672,7 @@ pub async fn get_public_restaurant_info(
 
 #[derive(Debug, Serialize, sqlx::FromRow)]
 pub struct PublicTableSummary {
+    pub qr_token: String,
     pub id: Uuid,
     pub number: String,
     pub table_number: Option<String>,
@@ -784,7 +680,6 @@ pub struct PublicTableSummary {
     pub capacity: i32,
     pub status: String,
     pub ordering_enabled: bool,
-    pub token: String,
 }
 
 pub async fn list_public_tables(
@@ -793,9 +688,8 @@ pub async fn list_public_tables(
 ) -> Result<Json<ApiResponse<Vec<PublicTableSummary>>>, AppError> {
     let tables = sqlx::query_as::<_, PublicTableSummary>(
         r#"
-        SELECT id, number, table_number, section, capacity,
-               status::text AS status, ordering_enabled,
-               COALESCE(qr_code_identifier, qr_token, number) AS token
+        SELECT id, qr_token, number, table_number, section, capacity,
+               status::text AS status, ordering_enabled
         FROM tables
         WHERE restaurant_id = $1
         ORDER BY number ASC
@@ -864,9 +758,11 @@ pub async fn get_public_loyalty_config(
 }
 
 pub async fn get_public_customer_loyalty(
+    user: crate::auth::AuthenticatedUser,
     State(pool): State<PgPool>,
     Query(q): Query<CustomerLoyaltyQuery>,
 ) -> Result<Json<ApiResponse<PublicCustomerLoyaltyResponse>>, AppError> {
+    require_verified_phone(&user, &q.phone)?;
     let clean_phone: String = q.phone.chars().filter(|c| c.is_ascii_digit()).collect();
 
     #[derive(sqlx::FromRow)]
@@ -992,9 +888,11 @@ pub struct UpdateCustomerProfileRequest {
 }
 
 pub async fn update_public_customer_profile(
+    user: crate::auth::AuthenticatedUser,
     State(pool): State<PgPool>,
     Json(req): Json<UpdateCustomerProfileRequest>,
 ) -> Result<Json<ApiResponse<PublicCustomerLoyaltyResponse>>, AppError> {
+    require_verified_phone(&user, &req.phone)?;
     let clean_phone: String = req.phone.chars().filter(|c| c.is_ascii_digit()).collect();
     let trimmed_name = req.name.trim().to_string();
 
@@ -1049,6 +947,7 @@ pub async fn update_public_customer_profile(
 
     // Return the updated loyalty response
     get_public_customer_loyalty(
+        user,
         State(pool),
         Query(CustomerLoyaltyQuery {
             rid: req.restaurant_id,
@@ -1056,4 +955,16 @@ pub async fn update_public_customer_profile(
         }),
     )
     .await
+}
+
+/// A private checkout receipt reveals only the state of its own ticket.
+pub async fn guest_order_status(
+    State(pool): State<PgPool>,
+    Path(key): Path<Uuid>,
+) -> Result<Json<ApiResponse<serde_json::Value>>, AppError> {
+    let (accepted, status): (bool, String) = sqlx::query_as("SELECT r.received_at IS NOT NULL,o.status FROM guest_order_receipts r JOIN orders o ON o.id=r.order_id WHERE r.request_id=$1")
+        .bind(key).fetch_optional(&pool).await?.ok_or_else(|| AppError::NotFound("Receipt unavailable".into()))?;
+    Ok(Json(ApiResponse::success(
+        json!({"accepted":accepted,"status":if accepted {status} else {"pending".into()}}),
+    )))
 }

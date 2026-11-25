@@ -38,7 +38,7 @@ import {
 const fmt = (paise: number) => `₹${(paise / 100).toFixed(2)}`;
 
 function CheckoutContent() {
-  const { items, total, clear, update, add } = useCart();
+  const { selectSession, items, total, clear, update, add } = useCart();
   const router = useRouter();
   const params = useParams();
   const token = (params?.token as string) || '';
@@ -86,6 +86,9 @@ function CheckoutContent() {
 
   const isTableSeated =
     (tableInfo?.status || '').toUpperCase() === 'OCCUPIED' && tableInfo?.ordering_enabled !== false;
+  useEffect(() => {
+    if (tableInfo?.id) selectSession(token, tableInfo.current_seating_session_id);
+  }, [selectSession, token, tableInfo?.id, tableInfo?.current_seating_session_id]);
   const prevTableStatusRef = useRef<string>('');
 
   useEffect(() => {
@@ -97,7 +100,7 @@ function CheckoutContent() {
       const stored = sessionStorage.getItem('tableInfo');
       if (stored) {
         const parsed = JSON.parse(stored);
-        setTableInfo(parsed);
+        if (parsed.token === token) setTableInfo(parsed);
       }
       const savedName = localStorage.getItem('customer_name');
       const savedPhone = localStorage.getItem('customer_phone');
@@ -131,115 +134,15 @@ function CheckoutContent() {
     }
   }, [token]);
 
-  // Real-time table seating & status synchronization via WebSocket & SSE
-  useEffect(() => {
-    let ws: WebSocket | null = null;
-    let sse: EventSource | null = null;
-    let reconnectTimeout: any = null;
-
-    const handleEventData = (rawText: string) => {
-      try {
-        const data = JSON.parse(rawText);
-        if (data.event === 'TABLE_STATUS_CHANGED') {
-          const dataTableNum = String(data.table_number || '').toLowerCase();
-          const currentTableNum = String(tableInfo?.table_number || '').toLowerCase();
-          const matchesTable =
-            (data.table_id && data.table_id === tableInfo?.id) ||
-            (dataTableNum && (
-              dataTableNum === currentTableNum ||
-              dataTableNum.replace(/^tbl-0?/, '').replace(/^t-0?/, '') === currentTableNum.replace(/^tbl-0?/, '').replace(/^t-0?/, '')
-            ));
-
-          if (matchesTable) {
-            const newStatus = (data.status || '').toUpperCase();
-            const prevStatus = (prevTableStatusRef.current || '').toUpperCase();
-            prevTableStatusRef.current = newStatus;
-
-            setTableInfo((prev: any) => {
-              const updated = {
-                ...prev,
-                status: newStatus,
-                ordering_enabled: data.ordering_enabled ?? prev.ordering_enabled,
-                current_seating_session_id:
-                  data.seating_session_id ?? prev.current_seating_session_id,
-              };
-              try {
-                sessionStorage.setItem('tableInfo', JSON.stringify(updated));
-              } catch {}
-              return updated;
-            });
-
-            if (newStatus === 'OCCUPIED' && prevStatus !== 'OCCUPIED') {
-              setError('');
-              dynaura.success({
-                title: `Table ${tableInfo?.table_number || ''} Seated!`,
-                description: 'Floor host has opened your table. Live ordering is active!',
-              });
-            } else if (newStatus !== 'OCCUPIED' && prevStatus === 'OCCUPIED') {
-              dynaura.info({
-                title: `Table ${tableInfo?.table_number || ''} Dining Concluded`,
-                description: 'Table session settled. Digital menu set to browse-only.',
-              });
-            }
-          }
-        }
-      } catch {}
-    };
-
-    const connectLiveStream = () => {
-      const apiBase = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000';
-      const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-      const wsHost = apiBase.startsWith('http')
-        ? apiBase.replace(/^http/, 'ws')
-        : `${wsProtocol}//${window.location.hostname}:3000`;
-
-      try {
-        ws = new WebSocket(`${wsHost}/ws/orders`);
-        ws.onmessage = (event) => handleEventData(event.data);
-        ws.onerror = () => {
-          if (!sse && typeof EventSource !== 'undefined') {
-            try {
-              sse = new EventSource(`${apiBase}/events`);
-              sse.onmessage = (e) => handleEventData(e.data);
-            } catch {}
-          }
-        };
-        ws.onclose = () => {
-          if (!sse && typeof EventSource !== 'undefined') {
-            try {
-              sse = new EventSource(`${apiBase}/events`);
-              sse.onmessage = (e) => handleEventData(e.data);
-            } catch {}
-          }
-          reconnectTimeout = setTimeout(connectLiveStream, 5000);
-        };
-      } catch {
-        if (!sse && typeof EventSource !== 'undefined') {
-          try {
-            sse = new EventSource(`${apiBase}/events`);
-            sse.onmessage = (e) => handleEventData(e.data);
-          } catch {}
-        }
-      }
-    };
-
-    connectLiveStream();
-    return () => {
-      if (reconnectTimeout) clearTimeout(reconnectTimeout);
-      if (ws) ws.close();
-      if (sse) sse.close();
-    };
-  }, [tableInfo?.id, tableInfo?.table_number]);
-
   // Fallback auto-poll table status every 5 seconds when unseated
   useEffect(() => {
-    if (isTableSeated || !token) return;
+    if (!token) return;
     const interval = setInterval(() => {
       getTable(token)
         .then((res) => {
           if (res?.data) {
             setTableInfo((prev: any) => {
-              if (prev.status !== res.data.status && res.data.status === 'OCCUPIED') {
+              if (prev?.status !== res.data.status && res.data.status === 'OCCUPIED') {
                 setError('');
                 dynaura.success({
                   title: `Table ${res.data.table_number || ''} Seated!`,
@@ -379,7 +282,9 @@ function CheckoutContent() {
   const discountedSubtotal = Math.max(0, total - discountPaise);
   const cgst = Math.round(discountedSubtotal * (cgstRate / 100));
   const sgst = Math.round(discountedSubtotal * (sgstRate / 100));
-  const grandTotal = discountedSubtotal + cgst + sgst;
+  const serviceCharge = Math.round(total * ((tableInfo?.service_charge_rate ?? 0) / 100));
+  const estimatedTax = Math.round(discountedSubtotal * (gstRate / 100));
+  const grandTotal = Math.round((discountedSubtotal + estimatedTax + serviceCharge) / 100) * 100;
 
   const applyCouponCode = (rawCode?: string) => {
     const code = (rawCode || couponCodeInput).trim().toUpperCase();
@@ -557,9 +462,15 @@ function CheckoutContent() {
               });
               return;
             }
-            activeSessionId = freshTable.data.current_seating_session_id || activeSessionId;
+            if (!activeSessionId || freshTable.data.current_seating_session_id !== activeSessionId) {
+              setError('This table has started a different sitting. Please review your basket.');
+              return;
+            }
           }
-        } catch {}
+        } catch {
+          setError("Unable to confirm this table. Retry when connected.");
+          return;
+        }
       }
 
       const orderItems = items.map((i) => ({
@@ -570,7 +481,12 @@ function CheckoutContent() {
         notes: i.notes,
       }));
 
+      const fingerprint = JSON.stringify([tableInfo.id, activeSessionId, cleanPhone, trimmedName, orderItems, notes, appliedCoupon?.code]);
+      const previous = JSON.parse(sessionStorage.getItem('pending-checkout') || 'null');
+      const requestId = previous?.fingerprint === fingerprint ? previous.id : crypto.randomUUID();
+      sessionStorage.setItem('pending-checkout', JSON.stringify({ fingerprint, id: requestId }));
       const res = await placeOrder({
+        request_id: requestId,
         table_id: tableInfo.id,
         table_number: tableInfo.table_number,
         customer_name: trimmedName,
@@ -588,21 +504,22 @@ function CheckoutContent() {
       sessionStorage.setItem(
         'lastOrder',
         JSON.stringify({
+          request_id: requestId,
           order_id: orderData.id,
           order_number: orderData.order_number,
           table_number: tableInfo.table_number || 'Dining',
           section: tableInfo.section || 'Main Floor',
           customer_name: trimmedName,
           customer_phone: cleanPhone,
-          items: orderItems,
-          subtotal_paise: total,
-          discount_paise: discountPaise,
+          items: orderData.items,
+          subtotal_paise: orderData.subtotal_paise,
+          discount_paise: orderData.discount_paise,
           applied_coupon_code: appliedCoupon?.code,
           cgst_paise: cgst,
           sgst_paise: sgst,
           cgst_rate: cgstRate,
           sgst_rate: sgstRate,
-          grand_total_paise: grandTotal,
+          grand_total_paise: orderData.total_amount_paise,
           created_at: new Date().toISOString(),
         })
       );
@@ -612,6 +529,7 @@ function CheckoutContent() {
         localStorage.setItem('customer_phone', cleanPhone);
       } catch {}
 
+      sessionStorage.removeItem('pending-checkout');
       clear();
       router.push(`/table/${token}/confirmation`);
     } catch (err: any) {

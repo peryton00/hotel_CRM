@@ -65,7 +65,7 @@ impl IntoResponse for AppError {
                 (
                     StatusCode::INTERNAL_SERVER_ERROR,
                     "DATABASE_ERROR",
-                    format!("Database error: {err}"),
+                    "The database operation could not be completed.".to_string(),
                 )
             }
             AppError::Internal(msg) => {

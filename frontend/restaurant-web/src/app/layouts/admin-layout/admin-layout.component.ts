@@ -302,7 +302,7 @@ import { WhatsAppBridgeService } from '../../core/services/whatsapp-bridge.servi
             <span class="terminal-tag">POS Terminal</span>
             <span class="cloud-status">
               <span class="status-pip"></span>
-              <span>{{ network.isOnline() ? 'Cloud Synced' : 'Offline' }}</span>
+              <span>{{ network.isOnline() ? 'POS connected' : 'POS unavailable' }}</span>
             </span>
           </div>
         </div>
@@ -323,21 +323,21 @@ import { WhatsAppBridgeService } from '../../core/services/whatsapp-bridge.servi
             <div class="restaurant-indicator">
               <span
                 class="connection-status-pill"
-                [class.is-online]="network.isOnline()"
-                [class.is-offline]="!network.isOnline()"
+                [class.is-online]="network.networkConnected()"
+                [class.is-offline]="!network.networkConnected()"
                 [attr.title]="
-                  network.isOnline()
-                    ? 'Internet Connection: Online'
-                    : 'Internet Connection: Offline'
+                  network.networkConnected()
+                    ? 'Network connection: Online'
+                    : 'Network connection: Offline'
                 "
               >
                 <span class="connection-dot"></span>
                 <i
                   class="ph"
-                  [class.ph-wifi-high]="network.isOnline()"
-                  [class.ph-wifi-slash]="!network.isOnline()"
+                  [class.ph-wifi-high]="network.networkConnected()"
+                  [class.ph-wifi-slash]="!network.networkConnected()"
                 ></i>
-                <span>{{ network.isOnline() ? 'Online' : 'Offline' }}</span>
+                <span>{{ network.networkConnected() ? 'Online' : 'Offline' }}</span>
               </span>
             </div>
           </div>
@@ -2296,22 +2296,7 @@ export class AdminLayoutComponent {
       },
       error: () => {
         this.isVerifyingPin.set(false);
-        if (this.auth.verifyAdminPassword(pin)) {
-          this.auth.setRoleMode('ADMIN');
-          this.showAdminPinModal.set(false);
-          this.adminPinInput = '';
-          this.toastService.success(
-            'Super Admin Mode unlocked. Full CRM access granted.',
-            'Admin Mode',
-          );
-          if (this.pendingAdminRedirect) {
-            const dest = this.pendingAdminRedirect;
-            this.pendingAdminRedirect = null;
-            this.router.navigateByUrl(dest);
-          }
-        } else {
-          this.pinError.set('Incorrect Admin PIN or password. Access denied.');
-        }
+        this.pinError.set('Unable to verify the administrator password.');
       },
     });
   }

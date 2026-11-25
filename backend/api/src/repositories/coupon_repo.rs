@@ -174,6 +174,15 @@ impl CouponRepository {
         restaurant_id: Uuid,
         req: &ValidateCouponRequest,
     ) -> Result<ValidateCouponResponse, AppError> {
+        let mut connection = pool.acquire().await?;
+        Self::validate_on(&mut connection, restaurant_id, req).await
+    }
+
+    pub(crate) async fn validate_on(
+        connection: &mut sqlx::PgConnection,
+        restaurant_id: Uuid,
+        req: &ValidateCouponRequest,
+    ) -> Result<ValidateCouponResponse, AppError> {
         let code_upper = req.code.trim().to_uppercase();
 
         let coupon = sqlx::query_as::<_, Coupon>(
@@ -184,12 +193,12 @@ impl CouponRepository {
                    min_order_amount_paise, max_discount_amount_paise, one_time_per_customer,
                    is_active, start_date, end_date, created_at, updated_at
             FROM coupons
-            WHERE restaurant_id = $1 AND code = $2 AND is_active = true
+            WHERE restaurant_id = $1 AND code = $2 AND is_active = true AND NOT COALESCE(is_targeted,false) FOR UPDATE
             "#,
         )
         .bind(restaurant_id)
         .bind(&code_upper)
-        .fetch_optional(pool)
+        .fetch_optional(&mut *connection)
         .await?;
 
         let coupon = match coupon {
@@ -247,7 +256,7 @@ impl CouponRepository {
                 )
                 .bind(coupon.id)
                 .bind(phone)
-                .fetch_one(pool)
+                .fetch_one(&mut *connection)
                 .await?;
 
                 if redeemed_row.0 > 0 {
@@ -301,7 +310,8 @@ impl CouponRepository {
             customer_id: req.customer_id,
         };
 
-        let val_res = Self::validate_coupon(pool, restaurant_id, &val_req).await?;
+        let mut tx = pool.begin().await?;
+        let val_res = Self::validate_on(&mut tx, restaurant_id, &val_req).await?;
         if !val_res.is_valid {
             return Err(AppError::BadRequest(
                 val_res
@@ -312,16 +322,14 @@ impl CouponRepository {
 
         let coupon = val_res.coupon.unwrap();
 
-        let mut tx = pool.begin().await?;
-
         // Insert redemption record
         let redemption = sqlx::query_as::<_, CouponRedemption>(
             r#"
             INSERT INTO coupon_redemptions (
-                coupon_id, restaurant_id, order_id, customer_id, customer_phone, discount_applied_paise
+                coupon_id, order_id, customer_id, customer_phone, discount_applied_paise
             )
-            VALUES ($1, $2, $3, $4, $5, $6)
-            RETURNING id, coupon_id, restaurant_id, order_id, customer_id, customer_phone,
+            VALUES ($1, $3, $4, $5, $6)
+            RETURNING id, coupon_id, $2::uuid AS restaurant_id, order_id, customer_id, customer_phone,
                       discount_applied_paise, redeemed_at
             "#,
         )

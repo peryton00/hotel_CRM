@@ -113,6 +113,14 @@ pub async fn update_refund_status(
     Path(refund_id): Path<Uuid>,
     Json(req): Json<UpdateRefundStatusRequest>,
 ) -> Result<impl IntoResponse, AppError> {
+    if !matches!(
+        tenant.staff_role.to_ascii_uppercase().as_str(),
+        "ADMIN" | "MANAGER"
+    ) {
+        return Err(AppError::Forbidden(
+            "A manager must approve refund decisions.".into(),
+        ));
+    }
     let refund = BillingRepository::update_refund_status(
         &pool,
         tenant.restaurant_id,
@@ -132,4 +140,12 @@ pub async fn get_receipt(
     let receipt =
         BillingRepository::generate_receipt(&pool, tenant.restaurant_id, order_id).await?;
     Ok(Json(ApiResponse::success(receipt)))
+}
+
+pub async fn list_refunds(
+    State(pool): State<PgPool>,
+    tenant: TenantContext,
+) -> Result<impl IntoResponse, AppError> {
+    let data:Vec<serde_json::Value>=sqlx::query_scalar("SELECT to_jsonb(r) || jsonb_build_object('order_number',o.order_number,'customer_name',o.customer_name,'split_bill_id',p.split_bill_id,'staff_name',s.name) FROM refunds r JOIN orders o ON o.id=r.order_id LEFT JOIN payments p ON p.id=r.payment_id LEFT JOIN staff_members s ON s.id=r.processed_by_staff_id WHERE r.restaurant_id=$1 ORDER BY r.created_at DESC,r.id").bind(tenant.restaurant_id).fetch_all(&pool).await?;
+    Ok(Json(ApiResponse::success(data)))
 }

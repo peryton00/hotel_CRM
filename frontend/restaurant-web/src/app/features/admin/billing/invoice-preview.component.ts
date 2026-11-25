@@ -3332,12 +3332,12 @@ export class InvoicePreviewComponent implements OnInit {
     return this.isPaid(this.order());
   }
 
-  settleCurrentTarget(): void {
+  async settleCurrentTarget(): Promise<void> {
     const s = this.splitBill();
     const ord = this.order();
     if (!ord) return;
     if (s) {
-      const res = this.mock.settleSplitBill({
+      const res = await this.mock.settleSplitBill({
         orderId: ord.id,
         splitBillId: s.id,
         paymentMethod: 'CASH',
@@ -3348,7 +3348,7 @@ export class InvoicePreviewComponent implements OnInit {
         this.toastService.error(res.error || 'Failed to settle split bill');
       }
     } else {
-      const res = this.mock.settleOrder({
+      const res = await this.mock.settleOrder({
         orderId: ord.id,
         paymentMethod: 'CASH',
       });
@@ -3414,9 +3414,9 @@ export class InvoicePreviewComponent implements OnInit {
     this.adminPasswordError.set('');
   }
 
-  confirmReprintWithAdmin(): void {
+  async confirmReprintWithAdmin(): Promise<void> {
     const pwd = this.adminPasswordInput();
-    if (!this.adminAuth.verifyAdminPassword(pwd)) {
+    if (!await this.adminAuth.verifyAdminPassword(pwd)) {
       this.adminPasswordError.set(
         'Incorrect admin password. Authorization required to reprint invoice.',
       );

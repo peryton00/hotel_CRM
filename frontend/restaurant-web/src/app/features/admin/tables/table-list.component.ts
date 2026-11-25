@@ -10164,6 +10164,7 @@ export class TableListComponent implements OnInit {
   }
 
   openManualOrderModal(table?: Table): void {
+    this.manualOrderRequestId = undefined;
     const targetTableId = table
       ? table.id
       : this.tables().find((t) => t.status === 'AVAILABLE')?.id || (this.tables()[0]?.id ?? '');
@@ -10239,7 +10240,9 @@ export class TableListComponent implements OnInit {
 
   private isSubmittingManualOrder = false;
 
-  submitManualOrder(): void {
+  private manualOrderRequestId?: string;
+
+  async submitManualOrder(): Promise<void> {
     if (this.isSubmittingManualOrder) return;
     if (this.manualItems.length === 0) {
       this.toastService.warning('Please select at least one dish for the order');
@@ -10296,7 +10299,7 @@ export class TableListComponent implements OnInit {
       }
 
       const orderNum = `#ORD-${Math.floor(100 + Math.random() * 900)}`;
-      const orderUuid = generateUuid();
+      const orderUuid = this.manualOrderRequestId ??= generateUuid();
 
       const newOrder: Order = {
         id: orderUuid,
@@ -10331,7 +10334,8 @@ export class TableListComponent implements OnInit {
       };
 
       // Sync to data service backend and local storage
-      this.dataService.addOrder(newOrder);
+      if (!(await this.dataService.addOrder(newOrder))) return;
+      this.manualOrderRequestId = undefined;
 
       // Reserve stock for newly accepted order
       this.mock.reserveStockForOrder(newOrder.id);
@@ -10518,9 +10522,9 @@ export class TableListComponent implements OnInit {
     }
   }
 
-  confirmCreateSplit(order: Order): void {
+  async confirmCreateSplit(order: Order): Promise<void> {
     this.isSettling.set(true);
-    const res = this.mock.splitOrderEqual({
+    const res = await this.mock.splitOrderEqual({
       orderId: order.id,
       splitCount: this.splitCount(),
     });
@@ -10539,10 +10543,10 @@ export class TableListComponent implements OnInit {
     }
   }
 
-  settleSplitPart(order: Order, split: SplitBill, method?: 'CASH' | 'UPI' | 'CARD'): void {
+  async settleSplitPart(order: Order, split: SplitBill, method?: 'CASH' | 'UPI' | 'CARD'): Promise<void> {
     const tender = method || this.canvasPaymentMethod();
     this.isSettling.set(true);
-    const res = this.mock.settleSplitBill({
+    const res = await this.mock.settleSplitBill({
       orderId: order.id,
       splitBillId: split.id,
       paymentMethod: tender,
@@ -10574,7 +10578,7 @@ export class TableListComponent implements OnInit {
     }
   }
 
-  confirmCanvasSettlement(): void {
+  async confirmCanvasSettlement(): Promise<void> {
     const ord = this.orderToSettle();
     if (!ord || this.isSettling()) return;
 
@@ -10584,7 +10588,7 @@ export class TableListComponent implements OnInit {
     const appliedCode = this.settleDiscountMode() === 'COUPON' ? this.selectedCouponCode() : '';
 
     if (ord.paymentStatus !== 'PAID' && !ord.isSplit) {
-      const res = this.mock.settleOrder({
+      const res = await this.mock.settleOrder({
         orderId: ord.id,
         paymentMethod: method,
         discountAmount: finalDiscount,
@@ -10733,16 +10737,16 @@ export class TableListComponent implements OnInit {
     this.serverAdminError.set('');
   }
 
-  confirmServerAdminChange(): void {
+  async confirmServerAdminChange(): Promise<void> {
     const pwd = this.serverAdminPassword();
-    if (!this.adminAuth.verifyAdminPassword(pwd)) {
+    if (!await this.adminAuth.verifyAdminPassword(pwd)) {
       this.serverAdminError.set('Incorrect admin password. Cannot reassign server on paid order.');
       return;
     }
     const ord = this.targetServerOrder();
     if (!ord) return;
     const newStaffId = this.selectedServerStaffId();
-    const res = this.dataService.assignOrderServer(ord.id, newStaffId, pwd);
+    const res = await this.dataService.assignOrderServer(ord.id, newStaffId, pwd);
     if (!res.success) {
       this.serverAdminError.set(res.error || 'Failed to update server staff');
       return;
@@ -10753,13 +10757,13 @@ export class TableListComponent implements OnInit {
     this.cancelServerAdminModal();
   }
 
-  onAssignActiveOrderServer(order: Order, staffIdStr: string): void {
+  async onAssignActiveOrderServer(order: Order, staffIdStr: string): Promise<void> {
     if (this.isOrderPaid(order)) {
       this.promptChangePaidServer(order);
       return;
     }
     const staffId = staffIdStr && staffIdStr.trim().length > 0 ? staffIdStr.trim() : null;
-    const res = this.dataService.assignOrderServer(order.id, staffId);
+    const res = await this.dataService.assignOrderServer(order.id, staffId);
     if (!res.success) {
       this.toastService.warning(res.error || 'Failed to assign staff to customer order');
       return;

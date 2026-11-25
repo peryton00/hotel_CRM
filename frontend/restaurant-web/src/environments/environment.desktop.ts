@@ -6,5 +6,5 @@ export const environment = {
   useMockRepositories: false,
   isDesktop: true,
   customerMenuUrl: 'https://gurukripadhaba-menu.vercel.app',
-  wsOrdersUrl: 'wss://hotel-crm-api-vpxu.onrender.com/ws/orders',
+  wsOrdersUrl: 'ws://127.0.0.1:3000/ws/orders',
 };

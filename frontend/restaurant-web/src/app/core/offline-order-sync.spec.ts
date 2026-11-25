@@ -60,15 +60,14 @@ describe('Offline Order System & Auto-Sync Resilience', () => {
     localStorage.clear();
   });
 
-  it('queues order creation in outbox and updates local state when offline', () => {
+  it('keeps an unconfirmed manual ticket out of the kitchen queue', async () => {
     networkService.isOnline.set(false);
-
-    service.addOrder(testOrder);
-
-    expect(service.orders().some((o) => o.id === testOrder.id)).toBe(true);
-    expect(service.offlineOutbox().length).toBe(1);
-    expect(service.offlineOutbox()[0].type).toBe('CREATE_ORDER');
-    expect(service.offlineOutbox()[0].orderId).toBe(testOrder.id);
+    const pending = service.addOrder(testOrder);
+    httpMock.expectOne(r => r.url.endsWith('/orders') && r.method === 'POST')
+      .flush({}, {status: 503, statusText: 'Unavailable'});
+    expect(await pending).toBe(false);
+    expect(service.orders().some(o => o.id === testOrder.id)).toBe(false);
+    expect(service.offlineOutbox().length).toBe(0);
   });
 
   it('queues status updates without rolling back when offline', () => {
@@ -82,20 +81,15 @@ describe('Offline Order System & Auto-Sync Resilience', () => {
     expect(service.offlineOutbox().some((a) => a.type === 'UPDATE_ORDER_STATUS')).toBe(true);
   });
 
-  it('queues payment settlement and marks order PAID in memory & localStorage when offline', () => {
+  it('keeps the bill unpaid when the local database cannot confirm payment', async () => {
     networkService.isOnline.set(false);
     service.orders.set([testOrder]);
-
-    const res = service.settleOrder({
-      orderId: testOrder.id,
-      paymentMethod: 'UPI',
-    });
-
-    expect(res.success).toBe(true);
-    const settled = service.orders().find((o) => o.id === testOrder.id);
-    expect(settled?.paymentStatus).toBe('PAID');
-    expect(settled?.paymentMethod).toBe('UPI');
-    expect(service.offlineOutbox().some((a) => a.type === 'SETTLE_ORDER')).toBe(true);
+    const pending = service.settleOrder({orderId:testOrder.id,paymentMethod:'UPI'});
+    expect(service.orders()[0].paymentStatus).toBe('UNPAID');
+    httpMock.expectOne(r => r.url.endsWith('/settle')).flush({}, { status:503,statusText:'Unavailable' });
+    expect((await pending).success).toBe(false);
+    expect(service.orders()[0].paymentStatus).toBe('UNPAID');
+    expect(service.offlineOutbox().length).toBe(0);
   });
 
   it('flushes offline outbox queue to backend when connection is restored', () => {
@@ -210,19 +204,14 @@ describe('Offline Order System & Auto-Sync Resilience', () => {
     expect(service.offlineOutbox().some((a) => a.type === 'TOGGLE_MENU_AVAILABILITY')).toBe(false);
   });
 
-  it('attaches idempotency_key to settlement payload', () => {
+  it('uses a stable payment key and accepts the confirmed local receipt while internet is offline', async () => {
     networkService.isOnline.set(false);
     service.orders.set([testOrder]);
-
-    service.settleOrder({
-      orderId: testOrder.id,
-      paymentMethod: 'UPI',
-    });
-
-    const action = service.offlineOutbox().find((a) => a.type === 'SETTLE_ORDER');
-    expect(action).toBeDefined();
-    expect(action?.payload.idempotency_key).toBeDefined();
-    expect(typeof action?.payload.idempotency_key).toBe('string');
-    expect(action?.payload.idempotency_key.length).toBeGreaterThan(5);
+    const pending=service.settleOrder({orderId:testOrder.id,paymentMethod:'UPI'});
+    const request=httpMock.expectOne(r=>r.url.endsWith('/settle'));
+    expect(request.request.body.idempotency_key).toBe(`settle-${testOrder.id}`);
+    request.flush({success:true,data:{amount_paise:21000,settled_at:new Date().toISOString()}});
+    expect((await pending).success).toBe(true);
+    expect(service.orders()[0].paymentStatus).toBe('PAID');
   });
 });

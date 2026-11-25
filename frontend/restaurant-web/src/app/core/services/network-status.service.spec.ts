@@ -17,12 +17,35 @@ describe('NetworkStatusService', () => {
     expect(typeof service.isOnline()).toBe('boolean');
   });
 
-  it('should update isOnline signal when window emits online and offline events', () => {
+  it('should update isOnline signal after the API confirms readiness', async () => {
     window.dispatchEvent(new Event('offline'));
     expect(service.isOnline()).toBe(false);
+    expect(service.networkConnected()).toBe(false);
 
-    window.dispatchEvent(new Event('online'));
-    expect(service.isOnline()).toBe(true);
+    const probe = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify({ status: 'ready' })));
+    try {
+      window.dispatchEvent(new Event('online'));
+      expect(service.networkConnected()).toBe(true);
+      await vi.waitFor(() => expect(service.isOnline()).toBe(true));
+    } finally {
+      probe.mockRestore();
+    }
+  });
+
+  it('recovers on the retry timer when SQLite becomes ready without a refresh', async () => {
+    vi.useFakeTimers();
+    const probe = vi.spyOn(globalThis, 'fetch')
+      .mockRejectedValueOnce(new TypeError('unavailable'))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ status: 'ok', database: 'sqlite' })));
+    try {
+      expect(await service.checkHealth()).toBe(false);
+      await vi.advanceTimersByTimeAsync(4000);
+      expect(service.isOnline()).toBe(true);
+      expect(probe).toHaveBeenCalledTimes(2);
+    } finally {
+      probe.mockRestore();
+      vi.useRealTimers();
+    }
   });
 
   it('should detect BroadcastChannel support', () => {

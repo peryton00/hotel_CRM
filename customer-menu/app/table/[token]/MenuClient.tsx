@@ -37,7 +37,7 @@ export default function MenuClient({
   items: MenuItem[];
   token: string;
 }) {
-  const { add, update, items: cartItems, count, total } = useCart();
+  const { selectSession, add, update, items: cartItems, count, total } = useCart();
   const [menuItems, setMenuItems] = useState<MenuItem[]>(items);
   const [activeCat, setActiveCat] = useState<string | null>(null);
   const [search, setSearch] = useState("");
@@ -54,6 +54,7 @@ export default function MenuClient({
   const [seatingSessionId, setSeatingSessionId] = useState<string | undefined>(
     table.current_seating_session_id,
   );
+  useEffect(() => { selectSession(token, seatingSessionId); }, [selectSession, token, seatingSessionId]);
   const prevStatusRef = useRef((table.status || "AVAILABLE").toUpperCase());
 
   useEffect(() => {
@@ -82,7 +83,7 @@ export default function MenuClient({
       }
       if (newStatus) {
         setTableStatus(newStatus);
-        if (newStatus === "OCCUPIED") {
+        if (newStatus === "OCCUPIED" && (!silent || prevStatusRef.current !== newStatus)) {
           dynaura.success({
             title: `Table ${table.table_number || token} Seated!`,
             description: "Ordering unlocked! Welcome to GuruKripa Dhaba.",
@@ -106,128 +107,6 @@ export default function MenuClient({
       setIsCheckingTable(false);
     }
   };
-
-  // Option 1 (Live Push): Dual WebSocket & SSE event listener for table seating and settlement transitions
-  useEffect(() => {
-    let ws: WebSocket | null = null;
-    let sse: EventSource | null = null;
-    let reconnectTimeout: any = null;
-
-    const handleEventData = (rawText: string) => {
-      try {
-        const data = JSON.parse(rawText);
-        if (data.event === "RESTAURANT_STATUS_CHANGED" || data.type === "RESTAURANT_STATUS_CHANGED") {
-          setIsPosOnline(Boolean(data.is_online));
-          return;
-        }
-        if (data.event === "MENU_AVAILABILITY_CHANGED" || data.type === "MENU_AVAILABILITY_CHANGED") {
-          const itemId = data.item_id;
-          const isAvail = Boolean(data.is_available);
-          if (itemId) {
-            setMenuItems((prev) =>
-              prev.map((it) => (it.id === itemId ? { ...it, is_available: isAvail } : it))
-            );
-            if (!isAvail) {
-              setMenuItems((current) => {
-                const matched = current.find((it) => it.id === itemId);
-                dynaura.warning({
-                  title: "Item Sold Out",
-                  description: `${matched?.name || "An item"} was just marked sold out by the kitchen.`,
-                });
-                return current;
-              });
-            }
-          }
-          return;
-        }
-        if (data.event === "TABLE_STATUS_CHANGED") {
-          const dataTableNum = String(data.table_number || '').toLowerCase();
-          const currentTableNum = String(table.table_number || '').toLowerCase();
-          const matchesTable =
-            (data.table_id && data.table_id === table.id) ||
-            (dataTableNum && (
-              dataTableNum === currentTableNum ||
-              dataTableNum.replace(/^tbl-0?/, '').replace(/^t-0?/, '') === currentTableNum.replace(/^tbl-0?/, '').replace(/^t-0?/, '')
-            ));
-
-          if (matchesTable) {
-            const newStatus = (data.status || '').toUpperCase();
-            const prevStatus = (prevStatusRef.current || '').toUpperCase();
-            prevStatusRef.current = newStatus;
-            setTableStatus(newStatus);
-
-            if (data.seating_session_id) {
-              setSeatingSessionId(data.seating_session_id);
-            } else if (newStatus !== "OCCUPIED") {
-              setSeatingSessionId(undefined);
-            }
-
-            if (newStatus === "OCCUPIED" && prevStatus !== "OCCUPIED") {
-              dynaura.success({
-                title: `Table ${table.table_number} Seated!`,
-                description:
-                  "Floor host has opened your table. Live ordering is active!",
-              });
-            } else if (
-              newStatus !== "OCCUPIED" &&
-              prevStatus === "OCCUPIED"
-            ) {
-              dynaura.info({
-                title: `Table ${table.table_number} Dining Concluded`,
-                description:
-                  "Table session settled. Digital menu set to browse-only.",
-              });
-            }
-          }
-        }
-      } catch {}
-    };
-
-    const connectLiveStream = () => {
-      const apiBase = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3000";
-      const wsProtocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-      const wsHost = apiBase.startsWith("http")
-        ? apiBase.replace(/^http/, "ws")
-        : `${wsProtocol}//${window.location.hostname}:3000`;
-
-      try {
-        ws = new WebSocket(`${wsHost}/ws/orders`);
-        ws.onmessage = (event) => handleEventData(event.data);
-        ws.onerror = () => {
-          // Fall back to SSE if WebSocket encounters transport error
-          if (!sse && typeof EventSource !== 'undefined') {
-            try {
-              sse = new EventSource(`${apiBase}/events`);
-              sse.onmessage = (e) => handleEventData(e.data);
-            } catch {}
-          }
-        };
-        ws.onclose = () => {
-          if (!sse && typeof EventSource !== 'undefined') {
-            try {
-              sse = new EventSource(`${apiBase}/events`);
-              sse.onmessage = (e) => handleEventData(e.data);
-            } catch {}
-          }
-          reconnectTimeout = setTimeout(connectLiveStream, 5000);
-        };
-      } catch {
-        if (!sse && typeof EventSource !== 'undefined') {
-          try {
-            sse = new EventSource(`${apiBase}/events`);
-            sse.onmessage = (e) => handleEventData(e.data);
-          } catch {}
-        }
-      }
-    };
-
-    connectLiveStream();
-    return () => {
-      if (reconnectTimeout) clearTimeout(reconnectTimeout);
-      if (ws) ws.close();
-      if (sse) sse.close();
-    };
-  }, [table.id, table.table_number]);
 
   // Auto-poll table & POS online status
   useEffect(() => {
@@ -503,7 +382,7 @@ export default function MenuClient({
             Non-Veg
           </button>
 
-          <div className="ml-auto text-[11px] text-neutral-400 dark:text-neutral-500 font-medium whitespace-nowrap pl-2">
+          <div className="hidden min-[360px]:block ml-auto text-[11px] text-neutral-400 dark:text-neutral-500 font-medium whitespace-nowrap pl-2">
             {filtered.length} {filtered.length === 1 ? "item" : "items"}
           </div>
         </div>

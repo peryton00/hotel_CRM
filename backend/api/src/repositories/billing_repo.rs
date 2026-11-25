@@ -30,10 +30,14 @@ impl BillingRepository {
 
         // 1. Idempotency check
         if let Some(ref idem) = req.idempotency_key {
+            sqlx::query("SELECT pg_advisory_xact_lock(hashtextextended($1,0))")
+                .bind(idem)
+                .execute(&mut *tx)
+                .await?;
             let existing = sqlx::query_as::<_, Payment>(
                 r#"
                 SELECT id, restaurant_id, order_id, split_bill_id, amount_paise, payment_method,
-                       status, NULL::text as upi_transaction_ref, idempotency_key, settled_at, notes,
+                       status, upi_transaction_ref, idempotency_key, settled_at, notes,
                        created_at, created_at as updated_at, false as legacy_unknown_timestamp
                 FROM payments
                 WHERE restaurant_id = $1 AND idempotency_key = $2
@@ -45,6 +49,14 @@ impl BillingRepository {
             .await?;
 
             if let Some(payment) = existing {
+                if payment.order_id != order_id
+                    || payment.amount_paise != req.amount_paise
+                    || payment.payment_method != req.payment_method
+                {
+                    return Err(AppError::Conflict(
+                        "Payment key already belongs to another charge.".into(),
+                    ));
+                }
                 tx.rollback().await?;
                 return Ok(payment);
             }
@@ -160,14 +172,32 @@ impl BillingRepository {
             order.subtotal_paise + sibling_orders.iter().map(|s| s.subtotal_paise).sum::<i64>();
         let combined_tax_paise: i64 =
             order.tax_paise + sibling_orders.iter().map(|s| s.tax_paise).sum::<i64>();
-        let combined_gross_total_paise: i64 = combined_subtotal_paise + combined_tax_paise;
+        let service_charge = order.service_charge_paise
+            + sibling_orders
+                .iter()
+                .map(|o| o.service_charge_paise)
+                .sum::<i64>();
+        let combined_gross_total_paise: i64 =
+            combined_subtotal_paise + combined_tax_paise + service_charge;
 
         let has_coupon = req.applied_coupon_code.is_some() || order.applied_coupon_code.is_some();
         let raw_discount_paise = req.discount_paise.unwrap_or(order.discount_paise);
         let total_tax_rate = order.cgst_rate.unwrap_or(2.5) + order.sgst_rate.unwrap_or(2.5);
 
         let (final_discount_paise, final_tax_paise, final_total_paise, final_coupon_code) =
-            if has_coupon {
+            if req.discount_paise.is_none() && req.applied_coupon_code.is_none() {
+                (
+                    order.discount_paise
+                        + sibling_orders.iter().map(|s| s.discount_paise).sum::<i64>(),
+                    combined_tax_paise,
+                    order.total_amount_paise
+                        + sibling_orders
+                            .iter()
+                            .map(|s| s.total_amount_paise)
+                            .sum::<i64>(),
+                    order.applied_coupon_code.clone(),
+                )
+            } else if has_coupon {
                 // Coupon discount applies to total BEFORE taxes
                 let coupon_discount = raw_discount_paise.min(combined_subtotal_paise).max(0);
                 let taxable_paise = (combined_subtotal_paise - coupon_discount).max(0);
@@ -176,7 +206,7 @@ impl BillingRepository {
                 } else {
                     0
                 };
-                let unrounded_total = taxable_paise + tax_paise;
+                let unrounded_total = taxable_paise + tax_paise + service_charge;
                 // Round to nearest whole rupee (100 paise) so chargeable amount never shows pointed/decimal value
                 let rounded_rupees = ((unrounded_total as f64) / 100.0).round() as i64;
                 let final_total = (rounded_rupees * 100).max(0);
@@ -196,22 +226,23 @@ impl BillingRepository {
                 (admin_discount, combined_tax_paise, final_total, None)
             };
 
-        let payment_amount = if req.discount_paise.is_some() || !sibling_orders.is_empty() {
-            final_total_paise
-        } else {
-            req.amount_paise
-        };
+        if req.amount_paise != final_total_paise {
+            return Err(AppError::Conflict(
+                "The bill total changed. Refresh before settlement.".into(),
+            ));
+        }
+        let payment_amount = final_total_paise;
 
         // 4. Record payment
         let payment = sqlx::query_as::<_, Payment>(
             r#"
             INSERT INTO payments (
                 restaurant_id, order_id, amount_paise, payment_method, status,
-                idempotency_key, settled_at, notes
+                idempotency_key, settled_at, notes, upi_transaction_ref
             )
-            VALUES ($1, $2, $3, $4, 'completed', $5, $6, $7)
+            VALUES ($1, $2, $3, $4, 'completed', $5, $6, $7, $8)
             RETURNING id, restaurant_id, order_id, split_bill_id, amount_paise, payment_method,
-                      status, NULL::text as upi_transaction_ref, idempotency_key, settled_at, notes,
+                      status, upi_transaction_ref, idempotency_key, settled_at, notes,
                       created_at, created_at as updated_at, false as legacy_unknown_timestamp
             "#,
         )
@@ -222,6 +253,7 @@ impl BillingRepository {
         .bind(req.idempotency_key)
         .bind(now)
         .bind(req.notes)
+        .bind(req.upi_transaction_ref)
         .fetch_one(&mut *tx)
         .await?;
 
@@ -254,7 +286,7 @@ impl BillingRepository {
         .execute(&mut *tx)
         .await?;
 
-        let _ = sqlx::query(
+        sqlx::query(
             r#"
             UPDATE split_bills
             SET payment_status = 'paid',
@@ -268,7 +300,7 @@ impl BillingRepository {
         .bind(now)
         .bind(order.id)
         .execute(&mut *tx)
-        .await;
+        .await?;
 
         for sib in &sibling_orders {
             sqlx::query(
@@ -286,18 +318,6 @@ impl BillingRepository {
             .bind(now)
             .bind(restaurant_id)
             .bind(sib.id)
-            .execute(&mut *tx)
-            .await?;
-        }
-
-        // Clear seating_session_id for all orders in this session so the session is
-        // destroyed on billing completion — prevents new customers being merged into old bills
-        if let Some(session_id) = order.seating_session_id {
-            sqlx::query(
-                "UPDATE orders SET seating_session_id = NULL, updated_at = NOW() WHERE restaurant_id = $1 AND seating_session_id::text = $2::text",
-            )
-            .bind(restaurant_id)
-            .bind(session_id.to_string())
             .execute(&mut *tx)
             .await?;
         }
@@ -322,28 +342,13 @@ impl BillingRepository {
             }
         }
 
-        // 6. Generate and store unified invoice (wrapped in a savepoint)
+        // Persist the invoice and the payment in the same transaction.
         let invoice_num = format!("INV-{}", order.order_number);
-        let _ = sqlx::query("SAVEPOINT invoice_sp").execute(&mut *tx).await;
-        let inv_res = sqlx::query(
-            r#"
-            INSERT INTO invoices (
+        sqlx::query(
+            r#"INSERT INTO invoices (
                 restaurant_id, order_id, invoice_number, subtotal_paise,
-                discount_paise, discount_amount_paise, tax_paise, tax_amount_paise,
-                total_paise, total_amount_paise, payment_status
-            )
-            VALUES ($1, $2, $3, $4, $5, $5, $6, $6, $7, $7, 'PAID')
-            ON CONFLICT (restaurant_id, invoice_number) DO UPDATE
-            SET subtotal_paise = EXCLUDED.subtotal_paise,
-                discount_paise = EXCLUDED.discount_paise,
-                discount_amount_paise = EXCLUDED.discount_amount_paise,
-                tax_paise = EXCLUDED.tax_paise,
-                tax_amount_paise = EXCLUDED.tax_amount_paise,
-                total_paise = EXCLUDED.total_paise,
-                total_amount_paise = EXCLUDED.total_amount_paise,
-                payment_status = 'PAID',
-                updated_at = NOW()
-            "#,
+                discount_paise, tax_paise, total_paise, payment_status
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, 'PAID')"#,
         )
         .bind(restaurant_id)
         .bind(order.id)
@@ -353,17 +358,7 @@ impl BillingRepository {
         .bind(final_tax_paise)
         .bind(final_total_paise)
         .execute(&mut *tx)
-        .await;
-
-        if inv_res.is_err() {
-            let _ = sqlx::query("ROLLBACK TO SAVEPOINT invoice_sp")
-                .execute(&mut *tx)
-                .await;
-        } else {
-            let _ = sqlx::query("RELEASE SAVEPOINT invoice_sp")
-                .execute(&mut *tx)
-                .await;
-        }
+        .await?;
 
         // 7. Emit outbox event for sync
         let outbox_payload = serde_json::json!({
@@ -401,9 +396,31 @@ impl BillingRepository {
         restaurant_id: Uuid,
         req: CreatePaymentRequest,
     ) -> Result<Payment, AppError> {
+        if req.split_bill_id.is_none() {
+            return Self::settle_order(
+                pool,
+                restaurant_id,
+                req.order_id,
+                None,
+                SettleOrderRequest {
+                    payment_method: req.payment_method,
+                    amount_paise: req.amount_paise,
+                    upi_transaction_ref: req.upi_transaction_ref,
+                    idempotency_key: req.idempotency_key,
+                    notes: req.notes,
+                    discount_paise: None,
+                    applied_coupon_code: None,
+                },
+            )
+            .await;
+        }
         let mut tx = pool.begin().await?;
 
         if let Some(ref idem) = req.idempotency_key {
+            sqlx::query("SELECT pg_advisory_xact_lock(hashtextextended($1,0))")
+                .bind(idem)
+                .execute(&mut *tx)
+                .await?;
             let existing = sqlx::query_as::<_, Payment>(
                 r#"
                 SELECT id, restaurant_id, order_id, split_bill_id, amount_paise, payment_method,
@@ -419,11 +436,26 @@ impl BillingRepository {
             .await?;
 
             if let Some(payment) = existing {
+                if payment.order_id != req.order_id
+                    || payment.amount_paise != req.amount_paise
+                    || payment.payment_method != req.payment_method
+                {
+                    return Err(AppError::Conflict(
+                        "Payment key already belongs to another charge.".into(),
+                    ));
+                }
                 tx.rollback().await?;
                 return Ok(payment);
             }
         }
 
+        let payable: Option<i64> = sqlx::query_scalar("SELECT sb.amount_paise FROM orders o JOIN split_bills sb ON sb.order_id=o.id WHERE o.restaurant_id=$1 AND o.id=$2 AND sb.id=$3 AND sb.payment_status='pending' AND o.status<>'cancelled' AND o.payment_status<>'paid' FOR UPDATE OF o,sb")
+            .bind(restaurant_id).bind(req.order_id).bind(req.split_bill_id).fetch_optional(&mut *tx).await?;
+        if payable != Some(req.amount_paise) || req.amount_paise <= 0 {
+            return Err(AppError::Conflict(
+                "Split balance changed. Refresh the bill.".into(),
+            ));
+        }
         let now = Utc::now();
 
         let payment = sqlx::query_as::<_, Payment>(
@@ -630,19 +662,19 @@ impl BillingRepository {
             }
 
             // Clean up any extraneous higher split indices if re-split into fewer parts
-            let _ = sqlx::query("DELETE FROM split_bills WHERE order_id = $1 AND split_index > $2")
+            sqlx::query("DELETE FROM split_bills WHERE order_id = $1 AND split_index > $2")
                 .bind(order.id)
                 .bind(ways as i32)
                 .execute(&mut *tx)
-                .await;
+                .await?;
 
-            let _ = sqlx::query(
+            sqlx::query(
                 "UPDATE orders SET is_split = TRUE, split_count = $1, payment_status = 'partially_paid', updated_at = NOW() WHERE id = $2"
             )
             .bind(ways as i32)
             .bind(order.id)
             .execute(&mut *tx)
-            .await;
+            .await?;
         } else {
             return Err(AppError::BadRequest(
                 "Only 'equal' split type is currently supported".to_string(),
@@ -679,7 +711,7 @@ impl BillingRepository {
                    created_at, updated_at, settled_at, cancelled_at,
                    legacy_unknown_timestamp
             FROM orders
-            WHERE restaurant_id = $1 AND id = $2
+            WHERE restaurant_id = $1 AND id = $2 FOR UPDATE
             "#,
         )
         .bind(restaurant_id)
@@ -688,10 +720,13 @@ impl BillingRepository {
         .await?
         .ok_or_else(|| AppError::NotFound("Order not found".to_string()))?;
 
-        // Refund cannot exceed order total
-        if req.refund_amount_paise > order.total_amount_paise {
+        let (collected, reserved): (i64,i64) = sqlx::query_as("SELECT
+            (SELECT COALESCE(SUM(amount_paise),0)::bigint FROM payments WHERE order_id=$1 AND status='completed'),
+            (SELECT COALESCE(SUM(refund_amount_paise),0)::bigint FROM refunds WHERE order_id=$1 AND status IN ('completed','requested'))")
+            .bind(order.id).fetch_one(&mut *tx).await?;
+        if req.refund_amount_paise <= 0 || req.refund_amount_paise > collected - reserved {
             return Err(AppError::BadRequest(
-                "Refund amount cannot exceed the order total amount".to_string(),
+                "Refund exceeds the remaining collected balance".into(),
             ));
         }
 
@@ -827,7 +862,7 @@ impl BillingRepository {
         // If completed, check if order should be marked refunded
         if new_status == "completed" {
             let total_refunded_row: (Option<i64>,) = sqlx::query_as(
-                "SELECT SUM(refund_amount_paise) FROM refunds WHERE order_id = $1 AND status = 'completed'"
+                "SELECT SUM(refund_amount_paise)::bigint FROM refunds WHERE order_id = $1 AND status = 'completed'"
             )
             .bind(refund.order_id)
             .fetch_one(&mut *tx)
@@ -886,7 +921,7 @@ impl BillingRepository {
     ) -> Result<ReceiptData, AppError> {
         let restaurant = sqlx::query_as::<_, Restaurant>(
             r#"
-            SELECT id, name, slug, phone, email, address, city, state, postal_code,
+            SELECT id, name, slug, tagline, description, phone, email, address, city, state, postal_code,
                    gstin, fssai_license, currency, timezone, is_active, created_at, updated_at
             FROM restaurants
             WHERE id = $1
@@ -939,7 +974,7 @@ impl BillingRepository {
 
         let items = sqlx::query_as::<_, OrderItem>(
             r#"
-            SELECT id, order_id, menu_item_id, item_name, quantity, unit_price_paise,
+            SELECT id, order_id, menu_item_id, COALESCE(name,item_name) AS item_name, quantity, unit_price_paise,
                    subtotal_paise, tax_paise, discount_paise, total_paise, notes, status, created_at
             FROM order_items
             WHERE order_id = ANY($1)
@@ -962,7 +997,7 @@ impl BillingRepository {
 
         let table_number = if let Some(table_id) = order.table_id {
             let row: Option<(String,)> =
-                sqlx::query_as("SELECT table_number FROM tables WHERE id = $1")
+                sqlx::query_as("SELECT COALESCE(table_number,number) FROM tables WHERE id = $1")
                     .bind(table_id)
                     .fetch_optional(pool)
                     .await?;

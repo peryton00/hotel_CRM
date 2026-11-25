@@ -37,7 +37,7 @@ pub async fn check_restaurant_availability(
     Path(restaurant_id): Path<Uuid>,
     State(state): State<AppState>,
 ) -> Response {
-    let pool_to_check = state.cloud_pool.as_ref().unwrap_or(&state.pool);
+    let pool_to_check = &state.pool;
     let is_online =
         GatewayHeartbeatClient::is_restaurant_online(pool_to_check, restaurant_id).await;
 
@@ -64,4 +64,17 @@ pub async fn check_restaurant_availability(
         )
             .into_response()
     }
+}
+
+pub async fn sync_status(
+    _staff: crate::auth::TenantContext,
+    State(state): State<AppState>,
+) -> Result<Json<serde_json::Value>, crate::error::AppError> {
+    let status:serde_json::Value=sqlx::query_scalar("SELECT jsonb_build_object('last_success',(SELECT last_synced_timestamp FROM sync_checkpoints WHERE id='device_gateway'),
+        'online',COALESCE((SELECT last_synced_timestamp >= now()-interval '35 seconds' FROM sync_checkpoints WHERE id='device_gateway'),false),
+        'pending',(SELECT COUNT(*) FROM sync_outbox WHERE status='PENDING')+(SELECT COUNT(*) FROM catalog_publications)+(SELECT COUNT(*) FROM table_publications),
+        'oldest_pending',(SELECT MIN(created_at) FROM sync_outbox WHERE status='PENDING'))").fetch_one(&state.pool).await?;
+    Ok(Json(
+        json!({"configured":state.config.device_sync_url.is_some(),"sync":status}),
+    ))
 }

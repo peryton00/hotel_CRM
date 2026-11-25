@@ -72,23 +72,4 @@ INSERT INTO menu_items (
 ON CONFLICT (id) DO NOTHING;
 
 -- 5. Default Staff Admin
-INSERT INTO staff_members (id, restaurant_id, name, role, email, login_id, pin_hash, phone, phone_e164, is_active, shift, assigned_section)
-VALUES (
-    '44444444-0000-0000-0000-000000000001',
-    '00000000-0000-0000-0000-000000000001',
-    'Super Admin',
-    'ADMIN',
-    'admin@hotelcrm.com',
-    'admin',
-    'Admin@123',
-    '+91 98765 43210',
-    '+919876543210',
-    true,
-    'Management',
-    'Executive HQ'
-) ON CONFLICT (id) DO UPDATE SET
-    login_id = COALESCE(staff_members.login_id, EXCLUDED.login_id),
-    email = COALESCE(staff_members.email, EXCLUDED.email),
-    phone = COALESCE(staff_members.phone, EXCLUDED.phone),
-    shift = COALESCE(staff_members.shift, EXCLUDED.shift),
-    assigned_section = COALESCE(staff_members.assigned_section, EXCLUDED.assigned_section);
+-- Provision staff separately using migrate --init-admin.

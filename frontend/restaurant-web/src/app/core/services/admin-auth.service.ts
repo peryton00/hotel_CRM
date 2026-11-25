@@ -1,7 +1,7 @@
 import { Injectable, signal, computed, inject } from '@angular/core';
 import { Router } from '@angular/router';
 import { HttpClient, HttpHeaders } from '@angular/common/http';
-import { Observable, of, catchError, map, tap, Subject } from 'rxjs';
+import { Observable, of, catchError, map, switchMap, firstValueFrom, Subject } from 'rxjs';
 import { environment } from '../../../environments/environment';
 import { StaffMember, StaffRole } from '../models/staff.model';
 
@@ -25,8 +25,6 @@ export class AdminAuthService {
   private http = inject(HttpClient);
 
   private readonly apiUrl = environment.apiBaseUrl;
-  private readonly supabaseUrl = environment.supabaseUrl;
-  private readonly supabaseKey = environment.supabaseAnonKey;
 
   private parseStoredUser(): StaffMember | null {
     try {
@@ -113,43 +111,14 @@ export class AdminAuthService {
       this.isAuthenticated.set(false);
       this.currentUser.set(null);
     }
-    this.refreshAdminSecret();
+    localStorage.removeItem(ADMIN_PASSWORD_HASH_KEY);
   }
 
-  /**
-   * Refreshes the cached admin password secret from Supabase in the background
-   * so synchronous high-privilege checks (invoice reprints, voiding orders)
-   * can verify against the authentic Supabase admin password immediately.
-   */
-  refreshAdminSecret(): void {
-    if (!this.supabaseUrl || !this.supabaseKey) return;
-
-    const headers = new HttpHeaders({
-      apikey: this.supabaseKey,
-      Authorization: `Bearer ${this.supabaseKey}`,
-    });
-
-    this.http
-      .get<any[]>(
-        `${this.supabaseUrl}/rest/v1/staff_members?role=eq.ADMIN&is_active=eq.true&select=pin_hash&limit=1`,
-        { headers },
-      )
-      .pipe(
-        catchError(() => of([])),
-        tap((rows) => {
-          if (rows && rows.length > 0 && rows[0].pin_hash) {
-            localStorage.setItem(ADMIN_PASSWORD_HASH_KEY, rows[0].pin_hash);
-          }
-        }),
-      )
-      .subscribe();
+  firstAdminRequired() {
+    return this.http.get<{required:boolean}>(`${this.apiUrl}/auth/setup`);
   }
 
-  /**
-   * Primary authentication method: verifies ID and password strictly against Supabase
-   * (via backend API or direct Supabase PostgREST endpoint).
-   */
-  loginWithSupabase(loginId: string, secretPassword: string): Observable<AuthLoginResponse> {
+  loginWithSupabase(loginId: string, secretPassword: string, firstAdmin = false): Observable<AuthLoginResponse> {
     const id = loginId.trim();
     const pwd = secretPassword.trim();
 
@@ -163,7 +132,7 @@ export class AdminAuthService {
     // 1. Try Backend API first
     return this.http
       .post<{ success: boolean; data?: { token: string; user: any }; error?: any }>(
-        `${this.apiUrl}/auth/login`,
+        `${this.apiUrl}/auth/${firstAdmin ? 'setup' : 'login'}`,
         { login_id: id, password: pwd },
       )
       .pipe(
@@ -178,83 +147,15 @@ export class AdminAuthService {
           }
           return {
             success: false,
-            message: 'Invalid credentials. Access restricted to passwords set in Supabase.',
+            message: 'Invalid staff ID or password.',
           };
         }),
         catchError((backendErr) => {
-          // 2. If backend service is not reachable, fall back to direct Supabase PostgREST query
-          if (this.supabaseUrl && this.supabaseKey) {
-            return this.directSupabaseLogin(id, pwd);
-          }
-
           const msg =
             backendErr.error?.error?.message ||
             backendErr.error?.message ||
-            'Invalid credentials. Please verify your ID and password set in Supabase.';
+            'Unable to sign in. Check the local POS connection and your credentials.';
           return of({ success: false, message: msg });
-        }),
-      );
-  }
-
-  /**
-   * Direct Supabase verification fallback using PostgREST
-   */
-  private directSupabaseLogin(id: string, pwd: string): Observable<AuthLoginResponse> {
-    const headers = new HttpHeaders({
-      apikey: this.supabaseKey,
-      Authorization: `Bearer ${this.supabaseKey}`,
-      'Content-Type': 'application/json',
-    });
-
-    const filter = `or=(email.ilike.${id},login_id.ilike.${id},name.ilike.${id},phone.eq.${id},phone_e164.eq.${id})&is_active=eq.true&limit=1`;
-
-    return this.http
-      .get<any[]>(`${this.supabaseUrl}/rest/v1/staff_members?${filter}`, { headers })
-      .pipe(
-        map((rows) => {
-          if (!rows || rows.length === 0) {
-            return {
-              success: false,
-              message: 'Invalid access ID. No matching active staff account found in Supabase.',
-            };
-          }
-
-          const staff = rows[0];
-          // Compare password set in Supabase (direct match or hash check)
-          const stored = (staff.pin_hash || '').trim();
-          if (stored !== pwd) {
-            return {
-              success: false,
-              message: 'Incorrect password. Only the secret password set in Supabase is accepted.',
-            };
-          }
-
-          const roleStr = (staff.role || 'ADMIN').toLowerCase();
-          const token = `sb_jwt_${staff.id}_${roleStr}_${Date.now()}`;
-          const user: StaffMember = {
-            id: staff.id,
-            name: staff.name,
-            role: staff.role.toUpperCase() as StaffRole,
-            email: staff.email || '',
-            phone: staff.phone || staff.phone_e164 || '',
-            shift: staff.shift || 'General Shift',
-            status: 'ACTIVE',
-            assignedSection: staff.assigned_section || 'Main Dining Floor',
-            loginId: staff.login_id || staff.name.toLowerCase().replace(' ', '.'),
-          };
-
-          if (user.role === 'ADMIN') {
-            localStorage.setItem(ADMIN_PASSWORD_HASH_KEY, stored);
-          }
-
-          this.setSession(token, user);
-          return { success: true, user, token };
-        }),
-        catchError((err) => {
-          return of({
-            success: false,
-            message: 'Unable to connect to Supabase authentication service. Please check network.',
-          });
         }),
       );
   }
@@ -263,6 +164,7 @@ export class AdminAuthService {
     const role = (rawUser?.role || 'STAFF').toUpperCase();
     const user: StaffMember = {
       id: rawUser?.id || '',
+      permissions: Array.isArray(rawUser?.permissions) ? rawUser.permissions : [],
       restaurant_id: rawUser?.restaurant_id,
       name: rawUser?.name || 'Staff Member',
       role: role as StaffRole,
@@ -303,114 +205,33 @@ export class AdminAuthService {
     this.authEvent$.next({ type: 'LOGIN', user: this.currentUser() });
   }
 
-  /**
-   * Verifies an action against the authentic Admin password set in Supabase.
-   * Checks against cached secret or validates strictly.
-   */
-  verifyAdminPassword(passwordOrPin: string): boolean {
-    const val = passwordOrPin.trim();
-    if (!val) return false;
-
-    // Check against secret stored in Supabase
-    const storedSecret = localStorage.getItem(ADMIN_PASSWORD_HASH_KEY);
-    if (storedSecret) {
-      return val === storedSecret;
-    }
-
-    // Default Supabase seed admin password fallback if not yet fetched
-    return val === 'Admin@123' || val === '1234';
+  verifyAdminPassword(password: string): Promise<boolean> {
+    return firstValueFrom(this.verifyAdminPasswordAsync(password));
   }
 
-  /**
-   * Asynchronous check for Admin Password
-   */
+  private get authorizationHeaders(): HttpHeaders {
+    const token = localStorage.getItem(AUTH_TOKEN_KEY);
+    return token ? new HttpHeaders({ Authorization: `Bearer ${token}` }) : new HttpHeaders();
+  }
+
   verifyAdminPasswordAsync(password: string): Observable<boolean> {
-    const val = password.trim();
-    if (!val) return of(false);
-
-    return this.http
-      .post<{ success: boolean; data?: { valid: boolean } }>(
-        `${this.apiUrl}/auth/verify-admin-password`,
-        { password: val },
-      )
-      .pipe(
-        map((res) => !!res.data?.valid),
-        catchError(() => of(this.verifyAdminPassword(val))),
-      );
+    if (!password.trim()) return of(false);
+    return this.http.post<{ data?: { valid: boolean } }>(
+      `${this.apiUrl}/auth/verify-admin-password`, { password }, { headers: this.authorizationHeaders },
+    ).pipe(map(response => response.data?.valid === true), catchError(() => of(false)));
   }
 
-  /**
-   * Updates the Admin login password directly from Admin CRM.
-   * Syncs with backend staff record, Supabase database, and local session secret.
-   */
-  changeAdminPassword(
-    newPassword: string,
-    currentPassword?: string,
-  ): Observable<{ success: boolean; message: string }> {
-    const trimmedNew = (newPassword || '').trim();
-    if (!trimmedNew || trimmedNew.length < 4) {
-      return of({ success: false, message: 'Password must be at least 4 characters long.' });
-    }
-
-    if (currentPassword !== undefined && currentPassword !== null && currentPassword !== '') {
-      const trimmedCurr = currentPassword.trim();
-      if (!this.verifyAdminPassword(trimmedCurr)) {
-        return of({ success: false, message: 'Current admin password is incorrect.' });
-      }
-    }
-
-    const user = this.currentUser();
-    const adminId = user?.id || '00000000-0000-0000-0000-000000000002';
-
-    const directSupabaseUpdate = () => {
-      localStorage.setItem(ADMIN_PASSWORD_HASH_KEY, trimmedNew);
-      if (!this.supabaseUrl || !this.supabaseKey) {
-        return of({ success: true, message: 'Admin password updated.' });
-      }
-
-      const headers = new HttpHeaders({
-        apikey: this.supabaseKey,
-        Authorization: `Bearer ${this.supabaseKey}`,
-        'Content-Type': 'application/json',
-      });
-
-      const url = user?.id
-        ? `${this.supabaseUrl}/rest/v1/staff_members?id=eq.${user.id}`
-        : `${this.supabaseUrl}/rest/v1/staff_members?role=eq.ADMIN`;
-
-      return this.http.patch(url, { pin_hash: trimmedNew }, { headers }).pipe(
-        map(() => {
-          this.refreshAdminSecret();
-          return { success: true, message: 'Admin password updated successfully in Supabase.' };
-        }),
-        catchError(() => {
-          return of({ success: true, message: 'Admin password updated.' });
-        }),
+  changeAdminPassword(newPassword: string, currentPassword?: string): Observable<{ success: boolean; message: string }> {
+    if (newPassword.trim().length < 4) return of({ success: false, message: 'Password must be at least 4 characters long.' });
+    return this.verifyAdminPasswordAsync(currentPassword || '').pipe(switchMap(valid => {
+      if (!valid) return of({ success: false, message: 'Current admin password is incorrect.' });
+      const id = this.currentUser()?.id;
+      if (!id || !this.isAdmin()) return of({ success: false, message: 'Sign in as an administrator.' });
+      return this.http.put(`${this.apiUrl}/restaurants/staff/${id}`, { password: newPassword.trim() }, { headers: this.authorizationHeaders }).pipe(
+        map(() => ({ success: true, message: 'Admin password updated.' })),
+        catchError(() => of({ success: false, message: 'Password update failed.' })),
       );
-    };
-
-    const backendHeaders = new HttpHeaders({
-      'Content-Type': 'application/json',
-      'x-restaurant-id':
-        localStorage.getItem('active_restaurant_id') || '00000000-0000-0000-0000-000000000001',
-      'x-dev-role': 'admin',
-      'x-dev-user-id': adminId,
-    });
-
-    return this.http
-      .put<{ success: boolean; data?: any }>(
-        `${this.apiUrl}/restaurants/staff/${adminId}`,
-        { password: trimmedNew },
-        { headers: backendHeaders },
-      )
-      .pipe(
-        map(() => {
-          localStorage.setItem(ADMIN_PASSWORD_HASH_KEY, trimmedNew);
-          this.refreshAdminSecret();
-          return { success: true, message: 'Admin password updated successfully.' };
-        }),
-        catchError(() => directSupabaseUpdate()),
-      );
+    }));
   }
 
   /**

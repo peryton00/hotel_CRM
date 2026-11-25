@@ -181,6 +181,7 @@ fn test_jwt_claims_tenant_extraction() {
     let restaurant_uuid = Uuid::new_v4();
 
     let claims = SupabaseClaims {
+        phone: None,
         sub: user_uuid.to_string(),
         email: Some("owner@restaurant.local".to_string()),
         role: Some("authenticated".to_string()),

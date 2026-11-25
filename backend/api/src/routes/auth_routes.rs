@@ -9,7 +9,7 @@ use uuid::Uuid;
 use crate::{
     auth::{
         claims::{AppMetadata, SupabaseClaims, UserMetadata},
-        AuthenticatedUser,
+        TenantContext,
     },
     config::AppState,
     error::AppError,
@@ -40,6 +40,7 @@ struct StaffAuthRow {
     pub shift: Option<String>,
     pub assigned_section: Option<String>,
     pub login_id: Option<String>,
+    pub permissions: serde_json::Value,
 }
 
 pub fn hash_password(password: &str) -> Result<String, String> {
@@ -79,15 +80,14 @@ pub fn verify_password(stored: &str, entered: &str) -> bool {
             }
         }
     }
-    // Backward compatibility match for legacy unhashed entries
-    stored == entered
+    false
 }
 
-pub async fn get_me(user: AuthenticatedUser) -> impl IntoResponse {
+pub async fn get_me(tenant: TenantContext) -> impl IntoResponse {
     Json(ApiResponse::success(json!({
-        "user_id": user.user_id,
-        "email": user.email,
-        "role": user.role,
+        "user_id": tenant.user.user_id,
+        "email": tenant.user.email,
+        "role": tenant.staff_role,
     })))
 }
 
@@ -107,7 +107,7 @@ pub async fn login(
     let staff = sqlx::query_as::<_, StaffAuthRow>(
         r#"
         SELECT id, restaurant_id, name, role, email, phone, pin_hash, is_active,
-               shift, assigned_section, login_id
+               shift, assigned_section, login_id,permissions
         FROM staff_members
         WHERE is_active = true
           AND (
@@ -129,21 +129,20 @@ pub async fn login(
         Some(s) => s,
         None => {
             return Err(AppError::Unauthorized(
-                "Invalid ID or password. Access is restricted to credentials set in Supabase."
-                    .to_string(),
+                "Invalid staff ID or password.".to_string(),
             ));
         }
     };
 
     if !verify_password(&staff.pin_hash, password) {
         return Err(AppError::Unauthorized(
-            "Invalid ID or password. Access is restricted to credentials set in Supabase."
-                .to_string(),
+            "Invalid staff ID or password.".to_string(),
         ));
     }
 
     let exp = (Utc::now() + chrono::Duration::days(7)).timestamp();
     let claims = SupabaseClaims {
+        phone: None,
         sub: staff.id.to_string(),
         email: staff.email.clone(),
         role: Some(staff.role.to_lowercase()),
@@ -182,6 +181,7 @@ pub async fn login(
             "restaurant_id": staff.restaurant_id,
             "name": staff.name,
             "role": staff.role.to_uppercase(),
+            "permissions": staff.permissions,
             "email": staff.email.unwrap_or_else(|| "".to_string()),
             "phone": staff.phone.unwrap_or_else(|| "".to_string()),
             "shift": staff.shift.unwrap_or_else(|| "General Shift".to_string()),
@@ -192,6 +192,7 @@ pub async fn login(
 }
 
 pub async fn verify_admin_password(
+    tenant: crate::auth::TenantContext,
     State(state): State<AppState>,
     Json(payload): Json<VerifyAdminPasswordPayload>,
 ) -> Result<impl IntoResponse, AppError> {
@@ -203,11 +204,12 @@ pub async fn verify_admin_password(
     let admin_row: Option<(String,)> = sqlx::query_as(
         r#"
         SELECT pin_hash FROM staff_members
-        WHERE role = 'ADMIN' AND is_active = true
+        WHERE restaurant_id = $1 AND role = 'ADMIN' AND is_active = true
         ORDER BY created_at ASC
         LIMIT 1
         "#,
     )
+    .bind(tenant.restaurant_id)
     .fetch_optional(&state.pool)
     .await?;
 

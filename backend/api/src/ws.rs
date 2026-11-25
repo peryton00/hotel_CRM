@@ -1,11 +1,11 @@
+use crate::{auth::middleware::TenantContext, config::AppState, error::AppError};
 use axum::extract::{
     ws::{Message, WebSocket, WebSocketUpgrade},
-    Query,
+    FromRequestParts, State,
 };
+use axum::http::{header, HeaderMap, Request};
 use axum::response::sse::{Event, KeepAlive, Sse};
 use axum::response::IntoResponse;
-use serde::Deserialize;
-use std::collections::HashMap;
 use std::convert::Infallible;
 use std::sync::{Arc, Mutex, OnceLock};
 use tokio::sync::mpsc;
@@ -167,36 +167,57 @@ fn broadcast_str(order_json: &str) {
     list.retain(|tx| tx.send(order_json.to_string()).is_ok());
 }
 
-#[derive(Debug, Deserialize, Default)]
-pub struct SocketQuery {
-    pub client_type: Option<String>,
-    pub role: Option<String>,
-}
-
 pub async fn ws_handler(
     ws: WebSocketUpgrade,
-    Query(params): Query<HashMap<String, String>>,
-) -> impl IntoResponse {
-    let is_crm = params
-        .get("client_type")
-        .map(|v| {
-            v.to_lowercase() == "crm" || v.to_lowercase() == "pos" || v.to_lowercase() == "admin"
-        })
-        .unwrap_or(false)
-        || params
-            .get("role")
-            .map(|v| v.to_lowercase() == "admin" || v.to_lowercase() == "staff")
-            .unwrap_or(false);
-
-    ws.on_upgrade(move |socket| handle_socket(socket, is_crm))
+    State(state): State<AppState>,
+    headers: HeaderMap,
+) -> Result<impl IntoResponse, AppError> {
+    let mut parts = staff_upgrade_parts(&headers)?;
+    let staff = TenantContext::from_request_parts(&mut parts, &state).await?;
+    let lifetime = session_lifetime(&staff);
+    Ok(upgrade(ws, lifetime))
 }
 
-async fn handle_socket(mut socket: WebSocket, is_crm: bool) {
+pub(crate) fn staff_upgrade_parts(
+    headers: &HeaderMap,
+) -> Result<axum::http::request::Parts, AppError> {
+    // Browsers cannot set the Authorization header on a WebSocket upgrade.
+    let token = headers
+        .get(header::SEC_WEBSOCKET_PROTOCOL)
+        .and_then(|value| value.to_str().ok())
+        .and_then(|value| {
+            value
+                .split(',')
+                .find_map(|p| p.trim().strip_prefix("staff.jwt."))
+        })
+        .ok_or_else(|| AppError::Unauthorized("Staff session required".into()))?;
+    let (mut parts, _) = Request::new(()).into_parts();
+    parts.headers.insert(
+        header::AUTHORIZATION,
+        format!("Bearer {token}")
+            .parse()
+            .map_err(|_| AppError::Unauthorized("Invalid staff session".into()))?,
+    );
+    Ok(parts)
+}
+
+pub(crate) fn upgrade(ws: WebSocketUpgrade, lifetime: std::time::Duration) -> impl IntoResponse {
+    ws.protocols(["pos.orders"])
+        .on_upgrade(move |socket| async move {
+            let _ = tokio::time::timeout(lifetime, handle_socket(socket)).await;
+        })
+}
+
+fn session_lifetime(staff: &TenantContext) -> std::time::Duration {
+    std::time::Duration::from_secs(
+        (staff.user.claims.exp - chrono::Utc::now().timestamp()).clamp(0, 86400) as u64,
+    )
+}
+
+async fn handle_socket(mut socket: WebSocket) {
     let (tx, mut rx) = mpsc::unbounded_channel::<String>();
     clients().lock().unwrap().push(tx.clone());
-    if is_crm {
-        crm_clients().lock().unwrap().push(tx);
-    }
+    crm_clients().lock().unwrap().push(tx);
 
     loop {
         tokio::select! {
@@ -222,22 +243,22 @@ async fn handle_socket(mut socket: WebSocket, is_crm: bool) {
 
 /// SSE handler allowing clients or browsers with `EventSource` to receive live events
 pub async fn sse_handler(
-    Query(params): Query<HashMap<String, String>>,
+    staff: TenantContext,
 ) -> Sse<impl tokio_stream::Stream<Item = Result<Event, Infallible>>> {
-    let is_crm = params
-        .get("client_type")
-        .map(|v| {
-            v.to_lowercase() == "crm" || v.to_lowercase() == "pos" || v.to_lowercase() == "admin"
-        })
-        .unwrap_or(false);
-
+    event_stream(session_lifetime(&staff))
+}
+pub(crate) fn event_stream(
+    lifetime: std::time::Duration,
+) -> Sse<impl tokio_stream::Stream<Item = Result<Event, Infallible>>> {
     let (tx, rx) = mpsc::unbounded_channel::<String>();
     clients().lock().unwrap().push(tx.clone());
-    if is_crm {
-        crm_clients().lock().unwrap().push(tx);
-    }
+    crm_clients().lock().unwrap().push(tx);
 
-    let stream = UnboundedReceiverStream::new(rx).map(|msg| Ok(Event::default().data(msg)));
+    let stream = futures_util::StreamExt::take_until(
+        UnboundedReceiverStream::new(rx),
+        tokio::time::sleep(lifetime),
+    )
+    .map(|msg| Ok(Event::default().data(msg)));
 
     Sse::new(stream).keep_alive(KeepAlive::default())
 }

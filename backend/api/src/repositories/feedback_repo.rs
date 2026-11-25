@@ -127,17 +127,17 @@ impl FeedbackRepository {
     ) -> Result<Vec<CustomerFeedback>, AppError> {
         let feedback = sqlx::query_as::<_, CustomerFeedback>(
             r#"
-            SELECT f.id, f.restaurant_id, f.order_id,
+            SELECT f.id, f.restaurant_id, NULL::uuid AS order_id,
                    COALESCE(f.customer_name, c.name, 'Valued Guest') as customer_name,
                    '' as customer_phone,
-                   f.rating, f.comments, f.resolution_note,
-                   COALESCE(f.is_resolved, FALSE) as is_resolved,
+                   f.rating, f.comments, NULL::text AS resolution_note,
+                   false as is_resolved,
                    COALESCE(f.is_public, FALSE) as is_public,
                    f.created_at,
                    COALESCE(f.updated_at, f.created_at) as updated_at
             FROM customer_feedback f
             LEFT JOIN customers c ON f.customer_id = c.id
-            WHERE f.restaurant_id = $1 AND (COALESCE(f.is_public, FALSE) = TRUE OR (f.rating >= 4 AND f.comments IS NOT NULL AND LENGTH(TRIM(f.comments)) > 3))
+            WHERE f.restaurant_id = $1 AND f.is_public = TRUE
             ORDER BY f.created_at DESC
             LIMIT 20
             "#,

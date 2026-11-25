@@ -1,4 +1,5 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { AdminAuthService } from './services/admin-auth.service';
 import { TestBed } from '@angular/core/testing';
 import { provideHttpClient } from '@angular/common/http';
 import { MockDataService } from '../data-access/mock/mock-data.service';
@@ -200,24 +201,24 @@ describe('Live Order Stream & Active Queue Synchronization', () => {
     expect(current?.status).toBe('COMPLETED'); // Both paid and printed -> completed!
   });
 
-  it('allows changing server without password on active orders', () => {
+  it('allows changing server without password on active orders', async () => {
     const order = createDummyOrder('ord-server-1', 'PREPARING', '#ORD-881');
     mockService.orders.set([order]);
 
-    const res = mockService.assignOrderServer(order.id, 'staff-waiter-1');
+    const res = await mockService.assignOrderServer(order.id, 'staff-waiter-1');
     expect(res.success).toBe(true);
 
     const updated = mockService.orders().find((o) => o.id === order.id);
     expect(updated?.serverStaffId).toBe('staff-waiter-1');
   });
 
-  it('prohibits changing server on completed orders without admin password', () => {
+  it('prohibits changing server on completed orders without admin password', async () => {
     const order = createDummyOrder('ord-server-completed-1', 'COMPLETED', '#ORD-882');
     order.serverStaffId = 'staff-waiter-original';
     mockService.orders.set([order]);
 
     // 1. Attempt to change server without admin password
-    const failRes = mockService.assignOrderServer(order.id, 'staff-waiter-new');
+    const failRes = await mockService.assignOrderServer(order.id, 'staff-waiter-new');
     expect(failRes.success).toBe(false);
     expect(failRes.error).toContain('Admin password required');
 
@@ -225,15 +226,16 @@ describe('Live Order Stream & Active Queue Synchronization', () => {
     let current = mockService.orders().find((o) => o.id === order.id);
     expect(current?.serverStaffId).toBe('staff-waiter-original');
 
+    vi.spyOn(TestBed.inject(AdminAuthService), 'verifyAdminPassword').mockResolvedValueOnce(false).mockResolvedValueOnce(true);
     // 2. Attempt with incorrect admin password
-    const wrongPwdRes = mockService.assignOrderServer(order.id, 'staff-waiter-new', 'wrong-pin');
+    const wrongPwdRes = await mockService.assignOrderServer(order.id, 'staff-waiter-new', 'wrong-pin');
     expect(wrongPwdRes.success).toBe(false);
     expect(wrongPwdRes.error).toContain('Admin password required');
     current = mockService.orders().find((o) => o.id === order.id);
     expect(current?.serverStaffId).toBe('staff-waiter-original');
 
     // 3. Attempt with correct admin password (e.g. '1234')
-    const successRes = mockService.assignOrderServer(order.id, 'staff-waiter-new', '1234');
+    const successRes = await mockService.assignOrderServer(order.id, 'staff-waiter-new', '1234');
     expect(successRes.success).toBe(true);
     current = mockService.orders().find((o) => o.id === order.id);
     expect(current?.serverStaffId).toBe('staff-waiter-new');

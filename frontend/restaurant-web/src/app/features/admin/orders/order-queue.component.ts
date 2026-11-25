@@ -8735,6 +8735,7 @@ export class OrderQueueComponent {
   }
 
   openManualOrderModal(): void {
+    this.manualOrderRequestId = undefined;
     const firstAvail = this.tables().find((t) => t.status === 'AVAILABLE');
     this.manualOrderType = 'DINE_IN';
     this.manualPickupRef = `TK-${Math.floor(100 + Math.random() * 900)}`;
@@ -8802,7 +8803,9 @@ export class OrderQueueComponent {
 
   private isSubmittingManualOrder = false;
 
-  submitManualOrder(): void {
+  private manualOrderRequestId?: string;
+
+  async submitManualOrder(): Promise<void> {
     if (this.isSubmittingManualOrder || this.manualItems.length === 0) return;
     this.isSubmittingManualOrder = true;
     try {
@@ -8865,18 +8868,9 @@ export class OrderQueueComponent {
         selectedTable?.currentSeatingSessionId ||
         (!isTakeaway && selectedTable ? generateUuid() : undefined);
 
-      if (
-        !isTakeaway &&
-        selectedTable &&
-        !selectedTable.currentSeatingSessionId &&
-        assignedSessionId
-      ) {
-        selectedTable.currentSeatingSessionId = assignedSessionId;
-      }
-
       const orderNum = `#ORD-${Math.floor(100 + Math.random() * 900)}`;
 
-      const orderUuid = generateUuid();
+      const orderUuid = this.manualOrderRequestId ??= generateUuid();
 
       const newOrder: Order = {
         id: orderUuid,
@@ -8915,23 +8909,20 @@ export class OrderQueueComponent {
       };
 
       // Persist to backend database via API and record in memory/localStorage
-      this.dataService.addOrder(newOrder);
+      if (!(await this.dataService.addOrder(newOrder))) return;
+      this.manualOrderRequestId = undefined;
 
       // Reserve stock for the newly accepted manual order
       this.mock.reserveStockForOrder(newOrder.id);
 
-      // If dining at a table, mark table as OCCUPIED and link activeOrderId
       if (!isTakeaway && selectedTable) {
-        const updatedTables = this.mock
-          .tables()
-          .map((t) =>
-            t.id === selectedTable.id
-              ? { ...t, status: 'OCCUPIED' as const, activeOrderId: newOrder.id }
-              : t,
-          );
+        const confirmed = this.dataService.orders().find(o => o.id === newOrder.id);
+        const updatedTables = this.mock.tables().map(t => t.id === selectedTable.id
+          ? { ...t, status: 'OCCUPIED' as const, activeOrderId: newOrder.id,
+              currentSeatingSessionId: confirmed?.seatingSessionId }
+          : t);
         this.mock.tables.set(updatedTables);
         this.mock.saveLocal('tables', updatedTables);
-        this.mock.updateTableStatus(selectedTable.id, 'OCCUPIED');
       }
 
       this.toastService.success(
@@ -9059,12 +9050,12 @@ export class OrderQueueComponent {
     this.showServerAdminModal.set(true);
   }
 
-  confirmChangeCompletedServer(): void {
+  async confirmChangeCompletedServer(): Promise<void> {
     const ord = this.pendingServerOrder();
     if (!ord) return;
 
     const pwd = this.serverAdminPasswordInput().trim();
-    if (!this.adminAuth.verifyAdminPassword(pwd)) {
+    if (!await this.adminAuth.verifyAdminPassword(pwd)) {
       this.serverAdminPasswordError.set(
         'Incorrect admin password. Authorization required to change serving staff on completed orders.',
       );
@@ -9072,7 +9063,7 @@ export class OrderQueueComponent {
     }
 
     const newStaffId = this.selectedNewStaffId();
-    const res = this.dataService.assignOrderServer(ord.id, newStaffId ? newStaffId : null, pwd);
+    const res = await this.dataService.assignOrderServer(ord.id, newStaffId ? newStaffId : null, pwd);
 
     if (res.success) {
       const staffName = this.getServerStaffName(newStaffId) || 'Unassigned';
@@ -9093,7 +9084,7 @@ export class OrderQueueComponent {
     this.serverAdminPasswordError.set('');
   }
 
-  onAssignOrderServer(ord: Order, staffIdStr: string): void {
+  async onAssignOrderServer(ord: Order, staffIdStr: string): Promise<void> {
     if (this.isOrderPaid(ord)) {
       this.promptChangeCompletedServer(ord);
       return;
@@ -9101,7 +9092,11 @@ export class OrderQueueComponent {
     const staffId = staffIdStr && staffIdStr.trim().length > 0 ? staffIdStr : null;
     const sessionOrders = this.getSessionOrders(ord);
     for (const s of sessionOrders) {
-      this.dataService.assignOrderServer(s.id, staffId);
+      const result = await this.dataService.assignOrderServer(s.id, staffId);
+      if (!result.success) {
+        this.toastService.error(result.error || 'Server assignment failed.');
+        return;
+      }
     }
     this.toastService.success(`Server assigned for Table ${ord.tableNumber || ord.orderNumber}`);
   }
@@ -9263,7 +9258,7 @@ export class OrderQueueComponent {
     this.isSettling.set(false);
   }
 
-  confirmSettlement(): void {
+  async confirmSettlement(): Promise<void> {
     const ord = this.selectedOrderForSettlement();
     if (!ord || this.isSettling()) return;
 
@@ -9274,7 +9269,7 @@ export class OrderQueueComponent {
 
     // 1. If not yet marked PAID and not split, perform authoritative settlement
     if (ord.paymentStatus !== 'PAID' && !ord.isSplit) {
-      const settleRes = this.mock.settleOrder({
+      const settleRes = await this.mock.settleOrder({
         orderId: ord.id,
         paymentMethod: method,
         discountAmount: finalDiscount,
@@ -9354,9 +9349,9 @@ export class OrderQueueComponent {
     }
   }
 
-  confirmCreateSplit(order: Order): void {
+  async confirmCreateSplit(order: Order): Promise<void> {
     this.isSettling.set(true);
-    const res = this.mock.splitOrderEqual({
+    const res = await this.mock.splitOrderEqual({
       orderId: order.id,
       splitCount: this.splitCount(),
     });
@@ -9375,10 +9370,10 @@ export class OrderQueueComponent {
     }
   }
 
-  settleSplitPart(order: Order, split: SplitBill, method?: 'CASH' | 'UPI' | 'CARD'): void {
+  async settleSplitPart(order: Order, split: SplitBill, method?: 'CASH' | 'UPI' | 'CARD'): Promise<void> {
     const tender = method || this.selectedPaymentMethod();
     this.isSettling.set(true);
-    const res = this.mock.settleSplitBill({
+    const res = await this.mock.settleSplitBill({
       orderId: order.id,
       splitBillId: split.id,
       paymentMethod: tender,
@@ -9397,16 +9392,17 @@ export class OrderQueueComponent {
     }
   }
 
-  settleAllSplitParts(order: Order): void {
+  async settleAllSplitParts(order: Order): Promise<void> {
     const unpaid = this.getOrderSplitBills(order.id).filter((s) => s.paymentStatus !== 'PAID');
     const tender = this.selectedPaymentMethod();
     this.isSettling.set(true);
     for (const split of unpaid) {
-      this.mock.settleSplitBill({
-        orderId: order.id,
-        splitBillId: split.id,
-        paymentMethod: tender,
-      });
+      const result = await this.mock.settleSplitBill({ orderId:order.id,splitBillId:split.id,paymentMethod:tender });
+      if (!result.success) {
+        this.isSettling.set(false);
+        this.toastService.error(result.error || 'Split payment was not confirmed.');
+        return;
+      }
     }
     setTimeout(() => {
       this.isSettling.set(false);
@@ -9496,9 +9492,9 @@ export class OrderQueueComponent {
     this.startEditingOrder(order, false);
   }
 
-  verifyAdminPasswordForEdit(): void {
+  async verifyAdminPasswordForEdit(): Promise<void> {
     const input = this.adminPasswordInput();
-    if (!this.adminAuth.verifyAdminPassword(input)) {
+    if (!await this.adminAuth.verifyAdminPassword(input)) {
       this.adminPasswordError.set(
         'Incorrect admin password. Authorization required to modify paid orders.',
       );

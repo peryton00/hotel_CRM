@@ -149,8 +149,8 @@ pub async fn create_staff_member(
         .filter(|s| !s.trim().is_empty())
         .unwrap_or_else(|| "Main Dining Floor".to_string());
     let secret_password = payload.password.trim().to_string();
-    let hashed_pin = crate::routes::auth_routes::hash_password(&secret_password)
-        .unwrap_or_else(|_| secret_password.clone());
+    let hashed_pin =
+        crate::routes::auth_routes::hash_password(&secret_password).map_err(AppError::Internal)?;
     let monthly_salary = payload.monthly_salary_paise.unwrap_or(1500000);
     let cycle_start_day = payload.payroll_cycle_start_day.unwrap_or(1).clamp(1, 28);
     let perms_val = if role.to_uppercase() == "ADMIN" {
@@ -223,21 +223,14 @@ pub async fn update_staff_member(
         ));
     }
 
-    if let Some(ref pwd) = payload.password {
-        let trimmed_pwd = pwd.trim();
-        if !trimmed_pwd.is_empty() {
-            let hashed_pwd = crate::routes::auth_routes::hash_password(trimmed_pwd)
-                .unwrap_or_else(|_| trimmed_pwd.to_string());
-            sqlx::query(
-                "UPDATE staff_members SET pin_hash = $1, updated_at = NOW() WHERE id = $2 AND restaurant_id = $3",
-            )
-            .bind(hashed_pwd)
-            .bind(id)
-            .bind(tenant.restaurant_id)
-            .execute(&pool)
-            .await?;
-        }
-    }
+    let new_hash = payload
+        .password
+        .as_deref()
+        .map(str::trim)
+        .filter(|password| !password.is_empty())
+        .map(crate::routes::auth_routes::hash_password)
+        .transpose()
+        .map_err(AppError::Internal)?;
 
     sqlx::query(
         r#"
@@ -252,6 +245,7 @@ pub async fn update_staff_member(
             is_active = COALESCE($8, is_active),
             monthly_salary_paise = COALESCE($9, monthly_salary_paise),
             payroll_cycle_start_day = COALESCE($10, payroll_cycle_start_day),
+            pin_hash = COALESCE($13, pin_hash), permissions = COALESCE($14, permissions),
             updated_at = NOW()
         WHERE id = $11 AND restaurant_id = $12
         "#,
@@ -268,36 +262,10 @@ pub async fn update_staff_member(
     .bind(payload.payroll_cycle_start_day)
     .bind(id)
     .bind(tenant.restaurant_id)
+    .bind(new_hash)
+    .bind(payload.permissions.as_ref().map(|p| serde_json::json!(p)))
     .execute(&pool)
     .await?;
-
-    if let Some(ref perms) = payload.permissions {
-        let perms_val = serde_json::json!(perms);
-        sqlx::query(
-            "UPDATE staff_members SET permissions = $1, updated_at = NOW() WHERE id = $2 AND restaurant_id = $3",
-        )
-        .bind(perms_val)
-        .bind(id)
-        .bind(tenant.restaurant_id)
-        .execute(&pool)
-        .await?;
-    }
-
-    if let Some(ref new_pwd) = payload.password {
-        let trimmed = new_pwd.trim();
-        if !trimmed.is_empty() {
-            let hashed_pin = crate::routes::auth_routes::hash_password(trimmed)
-                .unwrap_or_else(|_| trimmed.to_string());
-            sqlx::query(
-                "UPDATE staff_members SET pin_hash = $1, updated_at = NOW() WHERE id = $2 AND restaurant_id = $3",
-            )
-            .bind(hashed_pin)
-            .bind(id)
-            .bind(tenant.restaurant_id)
-            .execute(&pool)
-            .await?;
-        }
-    }
 
     let staff = RestaurantRepository::get_staff_by_id(&pool, id, tenant.restaurant_id).await?;
     match staff {
@@ -402,25 +370,25 @@ pub async fn get_staff_performance(
     tenant: TenantContext,
     axum::extract::Query(query): axum::extract::Query<AttendanceQuery>,
 ) -> Result<impl IntoResponse, AppError> {
-    let month_str = query
-        .month
-        .unwrap_or_else(|| chrono::Utc::now().format("%Y-%m").to_string());
-
-    let (year, month): (i32, u32) = if let Some((y, m)) = month_str.split_once('-') {
-        (y.parse().unwrap_or(2026), m.parse().unwrap_or(11))
-    } else {
-        (2026, 11)
+    use chrono::Datelike;
+    let month_str = match query.month {
+        Some(month) => month,
+        None => sqlx::query_scalar(
+            "SELECT to_char(now() AT TIME ZONE timezone,'YYYY-MM') FROM restaurants WHERE id=$1",
+        )
+        .bind(tenant.restaurant_id)
+        .fetch_one(&pool)
+        .await?,
     };
-
-    let (next_year, next_month) = if month == 12 {
-        (year + 1, 1)
-    } else {
-        (year, month + 1)
-    };
-    let start_bound = chrono::NaiveDate::from_ymd_opt(year, month, 1)
-        .unwrap_or_else(|| chrono::NaiveDate::from_ymd_opt(2026, 1, 1).unwrap());
-    let end_bound = chrono::NaiveDate::from_ymd_opt(next_year, next_month, 28)
-        .unwrap_or_else(|| chrono::NaiveDate::from_ymd_opt(2026, 12, 31).unwrap());
+    let start_bound = chrono::NaiveDate::parse_from_str(&format!("{month_str}-01"), "%Y-%m-%d")
+        .map_err(|_| AppError::BadRequest("Use YYYY-MM for the payroll month.".into()))?;
+    let following = start_bound
+        .checked_add_months(chrono::Months::new(1))
+        .ok_or_else(|| AppError::BadRequest("Payroll month out of range.".into()))?;
+    let (year, month) = (start_bound.year(), start_bound.month());
+    let (next_year, next_month) = (following.year(), following.month());
+    // A payroll cycle can begin as late as day 28.
+    let end_bound = following.with_day(28).unwrap();
 
     let staff_members = RestaurantRepository::list_staff(&pool, tenant.restaurant_id).await?;
 
@@ -471,7 +439,7 @@ pub async fn get_staff_performance(
         order_list_map.entry(sid).or_default().push((total, dt));
     }
 
-    let total_days_in_month = 30i64;
+    let total_days_in_month = (following - start_bound).num_days();
 
     let mut performance_list = Vec::new();
     for member in staff_members {

@@ -30,6 +30,7 @@ import {
   createReservation,
   createFeedback,
   getPublicFeedback,
+  getPublicTables,
 } from '@/lib/api';
 import type {
   MenuItem,
@@ -138,16 +139,38 @@ export default function CustomerFrontHomeScreen() {
     loadDatabaseData();
   }, []);
 
-  const navigateToTable = (val: string) => {
-    const clean = val.trim();
-    if (!clean) return;
-    setIsTableSheetOpen(false);
-    router.push(`/table/${encodeURIComponent(clean)}`);
-  };
+  const [tableLookupError, setTableLookupError] = useState('');
+  const [findingTable, setFindingTable] = useState(false);
 
-  const handleTableSubmit = (e: React.FormEvent) => {
+  const handleTableSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    navigateToTable(tableInput);
+    const input = tableInput.trim();
+    if (!input || findingTable) return;
+    const normalize = (label: string) => {
+      const digits = /^(?:t(?:bl)?[- ]?)?0*(\d+)$/i.exec(label.trim());
+      return digits ? digits[1] : label.trim().toLowerCase();
+    };
+    setFindingTable(true);
+    setTableLookupError('');
+    try {
+      const { data } = await getPublicTables();
+      const tables = data as { number: string; table_number?: string; qr_token?: string }[];
+      const matches = tables.filter(t => [t.number, t.table_number].some(
+        label => label && normalize(label) === normalize(input),
+      ));
+      const table = matches.find(t => t.number === input) ?? (matches.length === 1 ? matches[0] : undefined);
+      if (!table) {
+        setTableLookupError('Could not find that table. Check the number or scan its QR code.');
+        return;
+      }
+      // Older API deployments omit the token for the starter tables.
+      const number = normalize(table.number);
+      const token = table.qr_token ?? (/^\d+$/.test(number) ? 'tbl-' + number.padStart(2, '0') : table.number);
+      setIsTableSheetOpen(false);
+      router.push(`/table/${encodeURIComponent(token)}`);
+    } finally {
+      setFindingTable(false);
+    }
   };
 
   const handleReservationSubmit = async (e: React.FormEvent) => {
@@ -735,13 +758,14 @@ export default function CustomerFrontHomeScreen() {
               Enter the table number shown on your table standee (e.g. 1, 2, 3) to view the menu and send food directly to the kitchen.
             </p>
 
+            {tableLookupError && <p role="alert">{tableLookupError}</p>}
             <form onSubmit={handleTableSubmit} className="space-y-4 pt-1">
               <div>
                 <input
                   type="text"
                   placeholder="e.g. 1, 2, 3 or T-01"
                   value={tableInput}
-                  onChange={(e) => setTableInput(e.target.value)}
+                  onChange={(e) => { setTableInput(e.target.value); setTableLookupError(''); }}
                   autoFocus
                   className="w-full bg-neutral-50 dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 rounded-2xl px-4 py-3 text-sm text-neutral-900 dark:text-white placeholder:text-neutral-400 focus:outline-none focus:ring-2 focus:ring-orange-500/20 font-medium"
                 />
@@ -749,7 +773,7 @@ export default function CustomerFrontHomeScreen() {
 
               <button
                 type="submit"
-                disabled={!tableInput.trim()}
+                disabled={!tableInput.trim() || findingTable}
                 className="touch-tactile w-full bg-orange-500 hover:bg-orange-600 active:scale-95 disabled:opacity-40 text-white font-bold text-xs py-3 rounded-2xl transition-all shadow-md flex items-center justify-center gap-2 cursor-pointer"
               >
                 <span>Open Digital Menu</span>

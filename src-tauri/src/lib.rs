@@ -4,7 +4,32 @@ use std::sync::Mutex;
 use tauri::Manager;
 
 struct AppShutdownState {
+    bridge: Mutex<Option<std::process::Child>>,
     shutdown_tx: Mutex<Option<tokio::sync::oneshot::Sender<()>>>,
+}
+
+fn start_bridge(data_dir: &std::path::Path) -> std::io::Result<std::process::Child> {
+    let mut cmd = if cfg!(debug_assertions) {
+        let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../whatsapp-bridge");
+        let mut cmd = std::process::Command::new("node");
+        cmd.arg(dir.join("index.js")).current_dir(dir);
+        cmd
+    } else {
+        let exe = std::env::current_exe()?;
+        let dir = exe.with_file_name("whatsapp-bridge");
+        let mut cmd = std::process::Command::new(dir.join("node.exe"));
+        cmd.arg(dir.join("index.js"))
+            .current_dir(dir)
+            .env("HOTEL_CRM_WHATSAPP_DATA", data_dir.join("whatsapp"))
+            .env("WHATSAPP_PORT", "3001");
+        cmd
+    };
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        cmd.creation_flags(0x08000000);
+    }
+    cmd.spawn()
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -27,55 +52,30 @@ pub fn run() {
             );
 
             let (shutdown_tx, shutdown_rx) = tokio::sync::oneshot::channel::<()>();
+            let config = hotel_crm_api::config::AppConfig::from_env();
+            let data_directory = app.path().app_local_data_dir()?;
+            let bridge = start_bridge(&data_directory)
+                .map_err(|err| {
+                    log::error!("WhatsApp bridge could not start: {err}");
+                })
+                .ok();
             app.manage(AppShutdownState {
+                bridge: Mutex::new(bridge),
                 shutdown_tx: Mutex::new(Some(shutdown_tx)),
             });
-
-            // Spawn the embedded Axum backend engine in the background
             tauri::async_runtime::spawn(async move {
-                log::info!("Initializing embedded Axum API engine (attendance timezone sync + double-click defense + google reviews)...");
-                let config = hotel_crm_api::config::AppConfig::from_env();
-                if let Err(e) = hotel_crm_api::server::start_server(config, Some(shutdown_rx)).await
-                {
-                    log::warn!("Embedded API engine notice: {}", e);
-                }
-            });
-
-            // Spawn the WhatsApp Baileys background gateway bridge
-            tauri::async_runtime::spawn(async move {
-                log::info!("Initializing WhatsApp Baileys background gateway service on port 3001...");
-                
-                // Locate whatsapp-bridge in current directory or parent directory
-                let candidate_paths = [
-                    std::path::PathBuf::from("whatsapp-bridge"),
-                    std::path::PathBuf::from("../whatsapp-bridge"),
-                    std::env::current_exe()
-                        .ok()
-                        .and_then(|p| p.parent().map(|d| d.join("whatsapp-bridge")))
-                        .unwrap_or_default(),
-                ];
-
-                for bridge_dir in candidate_paths {
-                    let script = bridge_dir.join("index.js");
-                    if script.exists() {
-                        let mut cmd = std::process::Command::new("node");
-                        cmd.arg(&script);
-                        cmd.current_dir(&bridge_dir);
-                        #[cfg(windows)]
-                        {
-                            use std::os::windows::process::CommandExt;
-                            const CREATE_NO_WINDOW: u32 = 0x08000000;
-                            cmd.creation_flags(CREATE_NO_WINDOW);
-                        }
-                        match cmd.spawn() {
-                            Ok(_) => {
-                                log::info!("WhatsApp bridge started successfully from {:?}", bridge_dir);
-                                break;
-                            }
-                            Err(e) => {
-                                log::warn!("Failed to spawn WhatsApp bridge from {:?}: {}", bridge_dir, e);
-                            }
-                        }
+                if config.is_offline_first {
+                    if let Err(error) =
+                        hotel_crm_api::server::start_server(config, Some(shutdown_rx)).await
+                    {
+                        log::error!("Local PostgreSQL API stopped: {error}");
+                    }
+                } else {
+                    log::info!("Starting local SQLite API in {}", data_directory.display());
+                    if let Err(error) =
+                        hotel_crm_api::local_database::serve(&data_directory, shutdown_rx).await
+                    {
+                        log::error!("Local SQLite API stopped: {error}");
                     }
                 }
             });
@@ -85,6 +85,12 @@ pub fn run() {
         .on_window_event(|window, event| {
             if let tauri::WindowEvent::Destroyed = event {
                 if let Some(state) = window.try_state::<AppShutdownState>() {
+                    if let Ok(mut bridge) = state.bridge.lock() {
+                        if let Some(mut child) = bridge.take() {
+                            let _ = child.kill();
+                            let _ = child.wait();
+                        }
+                    }
                     if let Ok(mut lock) = state.shutdown_tx.lock() {
                         if let Some(tx) = lock.take() {
                             let _ = tx.send(());

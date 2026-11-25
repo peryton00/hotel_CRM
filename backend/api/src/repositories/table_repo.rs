@@ -14,25 +14,6 @@ impl TableRepository {
         pool: &PgPool,
         restaurant_id: Uuid,
     ) -> Result<Vec<RestaurantTable>, AppError> {
-        // Automatically release any OCCUPIED table that has no active orders
-        let _ = sqlx::query(
-            r#"
-            UPDATE tables t
-            SET status = 'AVAILABLE'::table_status, active_order_id = NULL, current_seating_session_id = NULL, updated_at = NOW()
-            WHERE t.restaurant_id = $1
-              AND t.status = 'OCCUPIED'::table_status
-              AND NOT EXISTS (
-                  SELECT 1 FROM orders o
-                  WHERE o.table_id = t.id
-                    AND o.restaurant_id = t.restaurant_id
-                    AND LOWER(o.status) NOT IN ('completed', 'cancelled')
-              )
-            "#,
-        )
-        .bind(restaurant_id)
-        .execute(pool)
-        .await;
-
         let tables = sqlx::query_as::<_, RestaurantTable>(
             r#"
             SELECT id, restaurant_id,
@@ -110,7 +91,8 @@ impl TableRepository {
             "OCCUPIED" | "SEATED" | "ACTIVE" => "OCCUPIED".to_string(),
             "DIRTY" | "CLEANING" | "BILLED" => "DIRTY".to_string(),
             "RESERVED" => "RESERVED".to_string(),
-            _ => "AVAILABLE".to_string(),
+            "AVAILABLE" => "AVAILABLE".to_string(),
+            _ => return Err(AppError::BadRequest("Unrecognized table status".into())),
         };
         let new_active_order = if normalized_status == "OCCUPIED" {
             active_order_id.or(existing.active_order_id)
@@ -190,7 +172,7 @@ impl TableRepository {
         let qr_token = req
             .qr_code_identifier
             .clone()
-            .unwrap_or_else(|| format!("QR-{}", Uuid::new_v4().to_string()[..8].to_uppercase()));
+            .unwrap_or_else(|| Uuid::new_v4().to_string());
         let capacity = req.capacity.unwrap_or(4);
         let section = req.section.unwrap_or_else(|| "Main Dining".to_string());
         let table = sqlx::query_as::<_, RestaurantTable>(

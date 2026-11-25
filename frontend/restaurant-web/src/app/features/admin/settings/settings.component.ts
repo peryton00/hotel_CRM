@@ -7700,74 +7700,24 @@ export class SettingsComponent implements OnInit {
         }));
       });
 
-    // 2. Check Live Cloud Backend
-    const t0Cloud = performance.now();
-    this.http
-      .get<{ status: string }>('https://hotel-crm-api-vpxu.onrender.com/health/live')
-      .pipe(
-        timeout(5000),
-        catchError(() =>
-          this.http.get<{ status: string }>('https://hotel-crm-api-vpxu.onrender.com/health').pipe(
-            timeout(3000),
-            catchError(() => of(null)),
-          ),
-        ),
-      )
-      .subscribe((res) => {
-        const t1 = performance.now();
-        const duration = Math.round(t1 - t0Cloud);
-        const isOk = Boolean(
-          res &&
-          ((res as any).status === 'ok' ||
-            (res as any).status === 'alive' ||
-            (res as any).status === 'ready'),
-        );
-
-        this.systemStatuses.update((curr) => ({
-          ...curr,
-          liveBackend: {
-            online: isOk,
-            statusText: isOk ? 'Healthy / Active' : 'Standby / Sleep',
-            url: 'https://hotel-crm-api-vpxu.onrender.com/health/live',
-            details: isOk
-              ? 'Render cloud service active & responding with zero errors.'
-              : 'Render free-tier instance sleeping or spinning up.',
-            latencyMs: isOk ? duration : 0,
-          },
-        }));
-      });
-
-    // 3. Check Supabase PostgreSQL Database
-    const t0Db = performance.now();
-    const headers = new HttpHeaders({
-      apikey: environment.supabaseAnonKey,
-      Authorization: `Bearer ${environment.supabaseAnonKey}`,
-    });
-
-    this.http
-      .get<any[]>(`${environment.supabaseUrl}/rest/v1/restaurants?select=id&limit=1`, { headers })
-      .pipe(
-        timeout(4000),
-        catchError(() => of(null)),
-      )
-      .subscribe((res) => {
-        const t1 = performance.now();
-        const duration = Math.round(t1 - t0Db);
-        const isOk = Array.isArray(res);
-
-        this.systemStatuses.update((curr) => ({
-          ...curr,
-          database: {
-            online: isOk,
-            statusText: isOk ? 'Connected (PostgreSQL)' : 'Unreachable',
-            url: environment.supabaseUrl,
-            details: isOk
-              ? 'PostgreSQL cloud database connected & accepting operational queries.'
-              : 'PostgreSQL PostgREST endpoint timed out. Verify network connection.',
-            latencyMs: isOk ? duration : 0,
-          },
-        }));
-
+    const headers = new HttpHeaders({ Authorization: `Bearer ${localStorage.getItem('sb-access-token') || ''}` });
+    this.http.get<{configured:boolean;sync:{online:boolean;pending:number;last_success:string|null}}>(
+      `${environment.apiBaseUrl}/sync/status`, { headers }
+    ).pipe(timeout(5000),catchError(() => of(null))).subscribe(result => {
+      const online = Boolean(result?.configured && result.sync.online);
+      this.systemStatuses.update(curr => ({
+        ...curr,
+        liveBackend: {
+          online, statusText: online ? 'Sync active' : result?.configured ? 'Sync offline' : 'Sync unavailable',
+          url: 'Device gateway',
+          details: result ? `${result.sync.pending} changes pending. Last contact: ${result.sync.last_success || 'none yet'}.` : 'Local POS could not report sync status.',
+          latencyMs: 0,
+        },
+        database: {
+          online: !!result, statusText: result ? 'Local PostgreSQL ready' : 'Local database unavailable',
+          url: 'Local POS', details: 'Readiness is measured by querying the local synchronization queue.', latencyMs: 0,
+        },
+      }));
         this.lastCheckedTime.set(new Date());
         this.isCheckingHealth.set(false);
       });

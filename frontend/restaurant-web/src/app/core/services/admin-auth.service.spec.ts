@@ -112,12 +112,11 @@ describe('AdminAuthService & Controlled Access RBAC System', () => {
       expect(service.isAuthenticated()).toBe(false);
     });
 
-    it('verifies admin password set in Supabase for high-privilege operations', () => {
-      localStorage.setItem('supabase_admin_pwd_secret', 'SuperSecretAdmin2026');
-
-      expect(service.verifyAdminPassword('SuperSecretAdmin2026')).toBe(true);
-      expect(service.verifyAdminPassword('WrongAdminSecret')).toBe(false);
-      expect(service.verifyAdminPassword('')).toBe(false);
+    it('requires API confirmation even when a legacy password is cached', async () => {
+      localStorage.setItem(ADMIN_PASSWORD_HASH_KEY, 'legacy-secret');
+      const result = service.verifyAdminPassword('legacy-secret');
+      httpMock.expectOne(req => req.url.endsWith('/auth/verify-admin-password')).flush({ data: { valid: false } });
+      expect(await result).toBe(false);
     });
 
     it('authenticates assigned staff member with their secret password', () => {
@@ -160,13 +159,14 @@ describe('AdminAuthService & Controlled Access RBAC System', () => {
         status: 'ACTIVE',
         loginId: 'admin',
       });
-      localStorage.setItem(ADMIN_PASSWORD_HASH_KEY, 'Admin@123');
+
 
       let response: any;
       service.changeAdminPassword('NewAdminPass@2026', 'Admin@123').subscribe((res) => {
         response = res;
       });
 
+      httpMock.expectOne(req => req.url.endsWith('/auth/verify-admin-password')).flush({ data: { valid: true } });
       const putReq = httpMock.expectOne(
         'http://localhost:3000/api/v1/restaurants/staff/admin-uuid-001',
       );
@@ -174,16 +174,11 @@ describe('AdminAuthService & Controlled Access RBAC System', () => {
       expect(putReq.request.body).toEqual({ password: 'NewAdminPass@2026' });
       putReq.flush({ success: true, data: { id: 'admin-uuid-001' } });
 
-      // Handle background refreshAdminSecret request triggered on success
-      const refreshReqs = httpMock.match((r) => r.url.includes('staff_members?role=eq.ADMIN'));
-      refreshReqs.forEach((r) => r.flush([{ pin_hash: 'NewAdminPass@2026' }]));
-
       expect(response.success).toBe(true);
-      expect(localStorage.getItem(ADMIN_PASSWORD_HASH_KEY)).toBe('NewAdminPass@2026');
-      expect(service.verifyAdminPassword('NewAdminPass@2026')).toBe(true);
+      expect(localStorage.getItem(ADMIN_PASSWORD_HASH_KEY)).toBeNull();
     });
 
-    it('updates admin password via direct Supabase fallback when backend fails', () => {
+    it('reports an unsuccessful password update when the backend fails', () => {
       service.loginWithToken('admin-token', 'ADMIN');
       service.currentUser.set({
         id: 'admin-uuid-001',
@@ -195,45 +190,37 @@ describe('AdminAuthService & Controlled Access RBAC System', () => {
         status: 'ACTIVE',
         loginId: 'admin',
       });
-      localStorage.setItem(ADMIN_PASSWORD_HASH_KEY, 'Admin@123');
+
 
       let response: any;
-      service.changeAdminPassword('FallbackPass@2026').subscribe((res) => {
+      service.changeAdminPassword('FallbackPass@2026', 'current').subscribe((res) => {
         response = res;
       });
 
+      httpMock.expectOne(req => req.url.endsWith('/auth/verify-admin-password')).flush({ data: { valid: true } });
       const putReq = httpMock.expectOne(
         'http://localhost:3000/api/v1/restaurants/staff/admin-uuid-001',
       );
       putReq.flush('Server error', { status: 500, statusText: 'Internal Server Error' });
 
-      const patchReq = httpMock.expectOne(
-        (r) =>
-          r.url.includes('/rest/v1/staff_members?id=eq.admin-uuid-001') && r.method === 'PATCH',
-      );
-      expect(patchReq.request.body).toEqual({ pin_hash: 'FallbackPass@2026' });
-      patchReq.flush([{ id: 'admin-uuid-001', pin_hash: 'FallbackPass@2026' }]);
-
-      const refreshReqs = httpMock.match((r) => r.url.includes('staff_members?role=eq.ADMIN'));
-      refreshReqs.forEach((r) => r.flush([{ pin_hash: 'FallbackPass@2026' }]));
-
-      expect(response.success).toBe(true);
-      expect(localStorage.getItem(ADMIN_PASSWORD_HASH_KEY)).toBe('FallbackPass@2026');
+      expect(response.success).toBe(false);
+      expect(localStorage.getItem(ADMIN_PASSWORD_HASH_KEY)).toBeNull();
     });
 
     it('rejects password update when current password is provided but invalid', () => {
       service.loginWithToken('admin-token', 'ADMIN');
-      localStorage.setItem(ADMIN_PASSWORD_HASH_KEY, 'Admin@123');
+
 
       let response: any;
       service.changeAdminPassword('NewPass@123', 'WrongOldPass').subscribe((res) => {
         response = res;
       });
 
+      httpMock.expectOne(req => req.url.endsWith('/auth/verify-admin-password')).flush({ data: { valid: false } });
       httpMock.expectNone('http://localhost:3000/api/v1/restaurants/staff/admin-uuid-001');
       expect(response.success).toBe(false);
       expect(response.message).toContain('Current admin password is incorrect');
-      expect(localStorage.getItem(ADMIN_PASSWORD_HASH_KEY)).toBe('Admin@123');
+      expect(localStorage.getItem(ADMIN_PASSWORD_HASH_KEY)).toBeNull();
     });
 
     it('rejects password update when new password is too short', () => {

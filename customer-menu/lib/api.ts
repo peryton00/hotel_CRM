@@ -1,3 +1,4 @@
+import { dinerHeaders } from './diner-session';
 const BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000';
 const RID = process.env.NEXT_PUBLIC_RESTAURANT_ID || '00000000-0000-0000-0000-000000000001';
 
@@ -32,7 +33,7 @@ export async function getMenu() {
       next: { revalidate: 60 },
     });
     if (!res.ok) {
-      return { data: { categories: [], items: [] } };
+      throw new Error("Menu is temporarily unavailable");
     }
     const data = await res.json();
     if (typeof window !== 'undefined') {
@@ -45,7 +46,7 @@ export async function getMenu() {
     }
     return data;
   } catch {
-    return { data: { categories: [], items: [] } };
+    throw new Error("Menu is temporarily unavailable");
   }
 }
 
@@ -64,6 +65,7 @@ export async function getRestaurantStatus() {
 }
 
 export async function placeOrder(body: {
+  request_id: string;
   table_id?: string;
   table_number?: string;
   customer_name: string;
@@ -96,14 +98,19 @@ export async function placeOrder(body: {
           : typeof err?.message === 'string'
           ? err.message
           : 'Failed to submit order';
-      const isPosOffline = res.status === 409 || String(msg).includes('RESTAURANT_POS_OFFLINE');
+      const isPosOffline = String(msg).includes('RESTAURANT_POS_OFFLINE');
       throw {
         status: res.status,
         message: String(msg),
         isPosOffline,
       };
     }
-    return res.json();
+    const order = await res.json();
+    try {
+      const keys: string[] = JSON.parse(sessionStorage.getItem('guest-receipts') || '[]');
+      sessionStorage.setItem('guest-receipts', JSON.stringify([body.request_id, ...keys.filter(key => key !== body.request_id)].slice(0, 50)));
+    } catch {}
+    return order;
   } catch (e: any) {
     if (e.isPosOffline) throw e;
     const isNetworkError = !e.status || e.name === 'TypeError' || String(e.message).includes('fetch');
@@ -111,7 +118,7 @@ export async function placeOrder(body: {
     throw {
       status: e.status || 503,
       message: msgStr,
-      isPosOffline: isNetworkError || e.status === 409,
+      isPosOffline: isNetworkError,
     };
   }
 }
@@ -125,7 +132,9 @@ export async function getCustomerOrders(phone?: string, tableId?: string) {
     if (tableId && tableId.trim().length > 0) {
       url += `&table_id=${encodeURIComponent(tableId.trim())}`;
     }
-    const res = await fetch(url, { cache: 'no-store' });
+    const keys: string[] = JSON.parse(sessionStorage.getItem('guest-receipts') || '[]');
+    if (!keys.length) return { data: [] };
+    const res = await fetch(url, { cache: 'no-store', headers: { 'x-order-receipts': keys.join(',') } });
     if (!res.ok) {
       return { data: [] };
     }
@@ -143,7 +152,7 @@ export async function getCoupons(phone?: string) {
       url += `&phone=${encodeURIComponent(clean)}`;
     }
     const res = await fetch(url, {
-      cache: 'no-store',
+      cache: 'no-store', headers: dinerHeaders(phone),
     });
     if (!res.ok) return { data: [] };
     return res.json();
@@ -155,9 +164,9 @@ export async function getCoupons(phone?: string) {
 export async function getCustomerLoyalty(phone: string) {
   try {
     const clean = phone.replace(/\D/g, '');
-    if (clean.length < 10) return null;
+    if (!dinerHeaders(clean).Authorization) return null;
     const res = await fetch(`${BASE}/public/customer/loyalty?rid=${RID}&phone=${encodeURIComponent(clean)}`, {
-      cache: 'no-store',
+      cache: 'no-store', headers: dinerHeaders(phone),
     });
     if (!res.ok) return null;
     const json = await res.json();
@@ -175,7 +184,7 @@ export async function updateCustomerProfile(phone: string, name: string) {
     if (clean.length < 10 || !name.trim()) return null;
     const res = await fetch(`${BASE}/public/customer/profile`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...dinerHeaders(clean) },
       body: JSON.stringify({
         restaurant_id: RID,
         phone: clean,

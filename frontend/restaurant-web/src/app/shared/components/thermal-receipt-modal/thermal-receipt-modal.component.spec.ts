@@ -184,7 +184,7 @@ describe('ThermalReceiptModalComponent', () => {
     expect(component.statusMessage()?.text).toContain('Hardware communication verified');
   });
 
-  it('requires admin password for duplicate reprint when effectivePrintCount > 0', () => {
+  it('requires admin password for duplicate reprint when effectivePrintCount > 0', async () => {
     component.isOpen = true;
     component.order = mockOrder;
     component.effectivePrintCount = 1;
@@ -194,19 +194,19 @@ describe('ThermalReceiptModalComponent', () => {
     expect(component.showAdminAuth()).toBe(true);
 
     // Wrong password
-    vi.spyOn(adminAuthService, 'verifyAdminPassword').mockReturnValue(false);
+    vi.spyOn(adminAuthService, 'verifyAdminPassword').mockResolvedValue(false);
     component.adminPasswordInput = 'wrong';
-    component.authorizeAndPrint();
+    await component.authorizeAndPrint();
     expect(component.adminAuthError()).toContain('Incorrect admin password');
 
     // Correct password
-    vi.spyOn(adminAuthService, 'verifyAdminPassword').mockReturnValue(true);
+    vi.spyOn(adminAuthService, 'verifyAdminPassword').mockResolvedValue(true);
     const printOrderSpy = vi
       .spyOn(thermalService, 'printOrderReceipt')
       .mockReturnValue(of({ success: true, message: 'OK', bytes_written: 850 }));
 
     component.adminPasswordInput = '1234';
-    component.authorizeAndPrint();
+    await component.authorizeAndPrint();
 
     expect(component.showAdminAuth()).toBe(false);
     expect(printOrderSpy).toHaveBeenCalled();

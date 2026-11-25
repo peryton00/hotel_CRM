@@ -8,6 +8,13 @@
 @use './styles/mixins';
 @use './styles/utilities';
 @use './styles/admin-dark';
+@use '@fontsource/crimson-text/latin-400.css' as crimson400;
+@use '@fontsource/crimson-text/latin-600.css' as crimson600;
+@use '@fontsource/crimson-text/latin-700.css' as crimson700;
+@use '@fontsource/source-sans-3/latin-400.css' as source400;
+@use '@fontsource/source-sans-3/latin-500.css' as source500;
+@use '@fontsource/source-sans-3/latin-600.css' as source600;
+@use '@fontsource/source-sans-3/latin-700.css' as source700;
 @use 'dynaura/styles.css';
 
 // Dynaura Dynamic Island Brand Enhancements

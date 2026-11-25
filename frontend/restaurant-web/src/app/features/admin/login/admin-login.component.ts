@@ -22,8 +22,8 @@ import { ToastService } from '../../../core/services/toast.service';
         <div class="customer-warning-box">
           <i class="ph ph-shield-check"></i>
           <div>
-            <strong>Authorized Staff & Admin Login</strong>
-            <p>Access is authenticated strictly against credentials set in Supabase.</p>
+            <strong>{{ firstAdmin() ? 'Create the first administrator' : 'Staff sign in' }}</strong>
+            <p>{{ firstAdmin() ? 'Choose an admin password with at least 12 characters.' : 'Use your local staff ID and password.' }}</p>
           </div>
         </div>
 
@@ -33,7 +33,7 @@ import { ToastService } from '../../../core/services/toast.service';
             <div class="input-container">
               <i class="ph ph-identification-badge input-icon"></i>
               <input
-                id="loginId"
+                id="loginId" [readonly]="firstAdmin()"
                 type="text"
                 class="form-input with-icon"
                 placeholder="e.g. admin or assigned staff ID"
@@ -55,7 +55,7 @@ import { ToastService } from '../../../core/services/toast.service';
                 id="staffPassword"
                 [type]="showPassword() ? 'text' : 'password'"
                 class="form-input with-icon with-action"
-                placeholder="Enter password set in Supabase"
+                placeholder="Enter password on this till"
                 [(ngModel)]="password"
                 name="password"
                 autocomplete="current-password"
@@ -76,7 +76,7 @@ import { ToastService } from '../../../core/services/toast.service';
               </button>
             </div>
             <span class="hint-text"
-              >Admin password set in Supabase; assigned staff use their secret password</span
+              >Admin password on this till; assigned staff use their secret password</span
             >
           </div>
 
@@ -297,7 +297,13 @@ export class AdminLoginComponent implements OnInit {
   isLoading = signal<boolean>(false);
   errorMessage = signal<string>('');
 
+  firstAdmin = signal(false);
+
   ngOnInit(): void {
+    this.auth.firstAdminRequired().subscribe({next: status => {
+      this.firstAdmin.set(status.required);
+      if (status.required) this.loginId = 'admin';
+    }, error: () => {} });
     if (this.route.snapshot.queryParamMap.get('expired') === 'true') {
       this.errorMessage.set('Your session has expired. Please log in again to continue.');
     }
@@ -316,7 +322,7 @@ export class AdminLoginComponent implements OnInit {
     this.isLoading.set(true);
     this.errorMessage.set('');
 
-    this.auth.loginWithSupabase(this.loginId, this.password).subscribe({
+    this.auth.loginWithSupabase(this.loginId, this.password, this.firstAdmin()).subscribe({
       next: (res) => {
         this.isLoading.set(false);
         if (res.success) {
@@ -328,14 +334,14 @@ export class AdminLoginComponent implements OnInit {
         } else {
           this.errorMessage.set(
             res.message ||
-              'Invalid credentials. Please verify your ID and password set in Supabase.',
+              'Invalid credentials. Please verify your ID and password on this till.',
           );
         }
       },
       error: () => {
         this.isLoading.set(false);
         this.errorMessage.set(
-          'Authentication failed. Access is restricted to credentials set in Supabase.',
+          'Authentication failed. Access is restricted to credentials on this till.',
         );
       },
     });

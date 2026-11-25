@@ -11,6 +11,7 @@ import type { CustomerPastOrder, TableInfo } from '@/lib/types';
 const fmt = (paise: number) => `₹${(paise / 100).toFixed(2)}`;
 
 interface StoredOrder {
+  request_id?: string;
   order_id: string;
   order_number: string;
   table_number: string;
@@ -41,7 +42,7 @@ function ConfirmationContent() {
   const token = (params?.token as string) || '';
 
   const [order, setOrder] = useState<StoredOrder | null>(null);
-  const [orderStatus, setOrderStatus] = useState<string>('CONFIRMED');
+  const [orderStatus, setOrderStatus] = useState<string>('PENDING');
   const [pastOrders, setPastOrders] = useState<CustomerPastOrder[]>([]);
   const [selectedOrderForBill, setSelectedOrderForBill] = useState<CustomerPastOrder | null>(null);
   const [tableInfo, setTableInfo] = useState<TableInfo | null>(null);
@@ -93,32 +94,25 @@ function ConfirmationContent() {
     );
 
   useEffect(() => {
-    if (!order?.order_id) return;
-
-    const apiBase = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000';
-    let sse: EventSource | null = null;
-    try {
-      sse = new EventSource(`${apiBase}/events`);
-      sse.onmessage = (ev) => {
-        try {
-          const data = JSON.parse(ev.data);
-          if (
-            (data.event === 'ORDER_STATUS_CHANGED' || data.type === 'ORDER_STATUS_CHANGED') &&
-            data.order_id === order.order_id
-          ) {
-            const newSt = (data.status || '').toUpperCase();
-            if (newSt) {
-              setOrderStatus(newSt);
-            }
-          }
-        } catch {}
-      };
-    } catch {}
-
-    return () => {
-      if (sse) sse.close();
+    if (!order?.request_id) return;
+    const receipt = order.request_id;
+    const controller = new AbortController();
+    const base = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000';
+    let timer: ReturnType<typeof setTimeout>;
+    const poll = async () => {
+      try {
+        const res = await fetch(`${base}/public/receipts/${receipt}`, {cache:'no-store',signal:controller.signal});
+        if (res.ok) {
+          const {data} = await res.json();
+          setOrderStatus(data.accepted ? data.status.toUpperCase() : 'PENDING');
+          if (data.accepted && ['completed','cancelled'].includes(data.status)) return;
+        }
+      } catch { /* Retry when connectivity returns. */ }
+      if (!controller.signal.aborted) timer = setTimeout(poll, 4000);
     };
-  }, [order?.order_id]);
+    void poll();
+    return () => { controller.abort(); clearTimeout(timer); };
+  }, [order?.request_id]);
 
   useEffect(() => {
     try {
@@ -179,7 +173,7 @@ function ConfirmationContent() {
             <Check size={32} weight="bold" />
           </div>
           <h1 className="text-xl font-extrabold font-display text-neutral-900 dark:text-neutral-100 tracking-tight">
-            Order Sent to Kitchen!
+            {orderStatus === 'PENDING' ? 'Waiting for the restaurant' : 'Received by the restaurant'}
           </h1>
           <p className="text-neutral-500 dark:text-neutral-400 text-xs mt-1">
             Ticket <span className="font-bold text-neutral-800 dark:text-neutral-200">#{order.order_number}</span> • Table{' '}
@@ -210,7 +204,7 @@ function ConfirmationContent() {
                     ? 'Dishes Ready for Serving'
                     : orderStatus === 'IN_PREPARATION'
                     ? 'Chef Cooking Your Dishes'
-                    : 'Kitchen KOT Printed'}
+                    : orderStatus === 'PENDING' ? 'Awaiting kitchen acknowledgement' : 'Received by the POS'}
                 </div>
                 <div className="text-[10px] text-neutral-400 dark:text-neutral-500">
                   {orderStatus === 'COMPLETED'
@@ -221,7 +215,7 @@ function ConfirmationContent() {
                     ? 'Waiter bringing items to your table'
                     : orderStatus === 'IN_PREPARATION'
                     ? 'Freshly cooking on order'
-                    : 'Order received and queued in kitchen'}
+                    : orderStatus === 'PENDING' ? 'Your order request is saved.' : 'Order received at the restaurant'}
                 </div>
               </div>
             </div>
