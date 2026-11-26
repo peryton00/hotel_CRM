@@ -155,6 +155,10 @@ export default function CustomerFrontHomeScreen() {
     try {
       const { data } = await getPublicTables();
       const tables = data as { number: string; table_number?: string; qr_token?: string }[];
+      if (tables.length === 0) {
+        setTableLookupError('The restaurant has not published its tables yet. Please ask staff for the menu.');
+        return;
+      }
       const matches = tables.filter(t => [t.number, t.table_number].some(
         label => label && normalize(label) === normalize(input),
       ));
@@ -168,6 +172,8 @@ export default function CustomerFrontHomeScreen() {
       const token = table.qr_token ?? (/^\d+$/.test(number) ? 'tbl-' + number.padStart(2, '0') : table.number);
       setIsTableSheetOpen(false);
       router.push(`/table/${encodeURIComponent(token)}`);
+    } catch {
+      setTableLookupError('Unable to load the table list. Please try again.');
     } finally {
       setFindingTable(false);
     }

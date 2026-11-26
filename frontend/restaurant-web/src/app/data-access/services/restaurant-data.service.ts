@@ -922,7 +922,7 @@ export class RestaurantDataService {
           assignedStaffId: t.assigned_staff_id,
         }));
 
-        // Merge with any tables saved in localStorage so custom user-created tables or moved sections persist
+        // Restore layout and pending status only for tables confirmed by the API.
         try {
           const localStr = localStorage.getItem('tables');
           if (localStr) {
@@ -935,10 +935,8 @@ export class RestaurantDataService {
                   .filter(Boolean),
               );
               for (const lt of localTables) {
-                const existing = mapped.find((m) => m.id === lt.id || m.number === lt.number);
-                if (!existing) {
-                  mapped.push(lt);
-                } else {
+                const existing = mapped.find((m) => m.id === lt.id);
+                if (existing) {
                   if (lt.section) existing.section = lt.section;
                   if (lt.posX !== undefined) existing.posX = lt.posX;
                   if (lt.posY !== undefined) existing.posY = lt.posY;

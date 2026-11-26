@@ -245,15 +245,11 @@ export async function getRestaurantInfo() {
 }
 
 export async function getPublicTables() {
-  try {
-    const res = await fetch(`${BASE}/public/tables?rid=${RID}`, {
-      cache: 'no-store',
-    });
-    if (!res.ok) return { data: [] };
-    return res.json();
-  } catch {
-    return { data: [] };
-  }
+  const res = await fetch(`${BASE}/public/tables?rid=${RID}`, { cache: 'no-store' });
+  if (!res.ok) throw new Error('Table lookup unavailable');
+  const result = await res.json();
+  if (!Array.isArray(result?.data)) throw new Error('Invalid table list');
+  return result;
 }
 
 export async function getPublicFeedback() {
