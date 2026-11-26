@@ -146,13 +146,11 @@ export async function getCustomerOrders(phone?: string, tableId?: string) {
 
 export async function getCoupons(phone?: string) {
   try {
-    let url = `${BASE}/public/coupons?rid=${RID}`;
-    if (phone && phone.trim().length >= 10) {
-      const clean = phone.replace(/\D/g, '');
-      url += `&phone=${encodeURIComponent(clean)}`;
-    }
-    const res = await fetch(url, {
-      cache: 'no-store', headers: dinerHeaders(phone),
+    const clean = phone?.replace(/\D/g, '');
+    const headers = dinerHeaders(clean);
+    if (!clean || !headers.Authorization) return { data: [] };
+    const res = await fetch(`${BASE}/public/coupons?rid=${RID}&phone=${encodeURIComponent(clean)}`, {
+      cache: 'no-store', headers,
     });
     if (!res.ok) return { data: [] };
     return res.json();

@@ -242,15 +242,17 @@ impl OrderRepository {
                 None
             };
 
-            let is_repeat_in_session: bool = if let Some(sid) = resolved_seating_session_id {
+            let is_repeat_in_session: bool = if let (Some(sid), Some(cid)) =
+                (resolved_seating_session_id, existing_id)
+            {
                 sqlx::query_scalar::<_, bool>(
-                    "SELECT EXISTS(SELECT 1 FROM orders WHERE restaurant_id = $1 AND seating_session_id::text = $2::text LIMIT 1)",
+                    "SELECT EXISTS(SELECT 1 FROM orders WHERE restaurant_id = $1 AND seating_session_id::text = $2::text AND customer_id=$3 LIMIT 1)",
                 )
                 .bind(restaurant_id)
                 .bind(sid.to_string())
+                .bind(cid)
                 .fetch_one(&mut *tx)
-                .await
-                .unwrap_or(false)
+                .await?
             } else {
                 false
             };

@@ -776,7 +776,7 @@ pub async fn get_public_customer_loyalty(
     let row = sqlx::query_as::<_, CustomerLoyaltyRow>(
         r#"
         SELECT name,
-               COALESCE(total_orders, visit_count, 0) AS visit_count,
+               COALESCE(visit_count, total_orders, 0) AS visit_count,
                COALESCE(loyalty_tier::text, 'BRONZE') AS loyalty_tier
         FROM customers
         WHERE restaurant_id = $1
@@ -838,7 +838,7 @@ pub async fn get_public_customer_loyalty(
     if visits == 0 {
         if let Ok(Some(cnt)) = sqlx::query_scalar::<_, i32>(
             r#"
-            SELECT COUNT(*)::int
+            SELECT COUNT(DISTINCT COALESCE(seating_session_id::text,id::text))::int
             FROM orders
             WHERE restaurant_id = $1
               AND (

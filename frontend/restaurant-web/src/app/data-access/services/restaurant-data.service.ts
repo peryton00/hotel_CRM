@@ -1097,7 +1097,7 @@ export class RestaurantDataService {
           phone: c.phone,
           email: c.email || '',
           customerSince: c.created_at,
-          visitCount: c.visit_count || 1,
+          visitCount: c.visit_count ?? 0,
           lastVisit: c.updated_at || c.created_at || new Date().toISOString(),
           totalSpend: (c.total_spend_paise || 0) / 100,
           avgOrderValue: c.visit_count ? (c.total_spend_paise || 0) / (c.visit_count * 100) : 0,
@@ -1318,7 +1318,7 @@ export class RestaurantDataService {
           phone: c.phone,
           email: c.email || '',
           customerSince: c.created_at,
-          visitCount: c.visit_count || 1,
+          visitCount: c.visit_count ?? 0,
           lastVisit: c.updated_at || c.created_at || new Date().toISOString(),
           totalSpend: (c.total_spend_paise || 0) / 100,
           avgOrderValue: c.visit_count ? (c.total_spend_paise || 0) / (c.visit_count * 100) : 0,
@@ -2656,6 +2656,10 @@ export class RestaurantDataService {
 
   syncCustomerFromOrder(order: Order): void {
     if (!order || !order.customerPhone) return;
+    if (!this.testMock) {
+      this.loadCustomers();
+      return;
+    }
     const phoneRaw = order.customerPhone.trim();
     if (phoneRaw.length < 10) return;
 
@@ -3419,7 +3423,7 @@ export class RestaurantDataService {
             return !matchesLocal;
           });
           if (newOrders.length > 0) {
-            newOrders.forEach((m: any) => this.syncCustomerFromOrder(m));
+            if (newOrders.some((m: Order) => m.customerPhone)) this.loadCustomers();
             const pendingOutbox = this.offlineOutbox();
             const pendingLocalOrders = currentOrders.filter((localOrd) =>
               pendingOutbox.some((act) => act.orderId === localOrd.id),
