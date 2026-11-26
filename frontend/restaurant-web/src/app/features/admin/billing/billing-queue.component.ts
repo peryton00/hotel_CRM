@@ -3246,105 +3246,7 @@ export class BillingQueueComponent {
     if (ord.orderType === 'TAKEAWAY' || (!ord.tableId && !ord.tableNumber)) {
       return [ord];
     }
-    const siblings = this.orders().filter((o) => {
-      if (o.id === ord.id || o.status === 'CANCELLED' || o.orderType === 'TAKEAWAY') {
-        return false;
-      }
-      // Must have same paymentStatus (don't mix unpaid with paid)
-      if (o.paymentStatus !== ord.paymentStatus) return false;
-
-      // 1. Strict seatingSessionId check if both have one
-      if (ord.seatingSessionId && o.seatingSessionId) {
-        return o.seatingSessionId === ord.seatingSessionId;
-      }
-
-      // 2. Exact table match (must match tableId if both present)
-      if (ord.tableId && o.tableId && ord.tableId !== o.tableId) {
-        return false;
-      }
-      const sameTable =
-        (ord.tableId && o.tableId === ord.tableId) ||
-        (ord.tableNumber &&
-          o.tableNumber &&
-          ord.tableNumber.trim().toLowerCase() === o.tableNumber.trim().toLowerCase());
-      if (!sameTable) return false;
-
-      // 3. Time guard: Never mix orders created > 3 hours apart
-      const timeDiff = Math.abs(
-        new Date(ord.createdAt).getTime() - new Date(o.createdAt).getTime(),
-      );
-      return timeDiff <= 3 * 60 * 60 * 1000;
-    });
-    return [ord, ...siblings].sort(
-      (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
-    );
-  }
-
-  consolidateOrdersForBilling(ordersList: Order[]): Order[] {
-    const tableMap = new Map<string, Order[]>();
-    const nonTableOrders: Order[] = [];
-
-    for (const ord of ordersList) {
-      if (ord.orderType !== 'TAKEAWAY' && (ord.tableId || ord.tableNumber)) {
-        let key = '';
-        if (ord.seatingSessionId) {
-          // Group by seating session — multiple rounds share one bill
-          key = `sess_${ord.seatingSessionId}`;
-        } else if (ord.paymentStatus === 'PAID') {
-          // PAID orders with no session ID are independent bills — never re-group them
-          // ponytail: using ord.id as the key so each settled order is its own bucket
-          key = `paid_${ord.id}`;
-        } else {
-          key = `tbl_active_${ord.tableId || ord.tableNumber}`;
-        }
-        if (!tableMap.has(key)) {
-          tableMap.set(key, []);
-        }
-        tableMap.get(key)!.push(ord);
-      } else {
-        nonTableOrders.push(ord);
-      }
-    }
-
-    const consolidatedList: Order[] = [...nonTableOrders];
-
-    for (const [, ordersGroup] of tableMap.entries()) {
-      if (ordersGroup.length === 1) {
-        consolidatedList.push(ordersGroup[0]);
-      } else {
-        const sorted = [...ordersGroup].sort(
-          (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
-        );
-        const primary = sorted[0];
-        const combinedSubtotal =
-          Math.round(sorted.reduce((sum, r) => sum + (r.subtotal || 0), 0) * 100) / 100;
-        const combinedTax =
-          Math.round(sorted.reduce((sum, r) => sum + (r.taxAmount || 0), 0) * 100) / 100;
-        const combinedTotal = Math.round((combinedSubtotal + combinedTax) * 100) / 100;
-        const allItems = sorted.flatMap((r) => r.items);
-        const allPaid = sorted.every((r) => r.paymentStatus === 'PAID');
-        const latestSettledAt = sorted
-          .map((r) => r.settledAt)
-          .filter((s): s is string => Boolean(s))
-          .sort()
-          .pop();
-
-        consolidatedList.push({
-          ...primary,
-          paymentStatus: allPaid ? 'PAID' : primary.paymentStatus,
-          items: allItems,
-          subtotal: combinedSubtotal,
-          taxAmount: combinedTax,
-          totalAmount: combinedTotal,
-          isSessionConsolidated: true,
-          sessionRoundsCount: sorted.length,
-          sessionRounds: sorted,
-          settledAt: latestSettledAt || primary.settledAt,
-        });
-      }
-    }
-
-    return consolidatedList;
+    return ord.sessionRounds ?? [ord];
   }
 
   getOrderCompletionTimestamp(ord: Order): number {
@@ -3419,7 +3321,7 @@ export class BillingQueueComponent {
       list = list.filter((o) => o.paymentStatus === 'PAID');
     }
 
-    const consolidated = this.consolidateOrdersForBilling(list);
+    const consolidated = list;
     list = consolidated;
 
     // Filter by Completion/Event Date
@@ -3652,9 +3554,7 @@ export class BillingQueueComponent {
 
     this.isSettling.set(false);
     if (res.success) {
-      if (ord.tableId || ord.tableNumber) {
-        this.mock.recalculateTableStatus(ord.tableId || ord.tableNumber!);
-      }
+      if (ord.tableId) this.mock.refreshTables();
       const roundsCount = this.selectedSessionOrders().length;
       const msg =
         roundsCount > 1

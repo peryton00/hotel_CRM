@@ -234,7 +234,7 @@ async fn create(
     // seating ID cached after the final tender closes the table.
     let session = if let Some(t) = &table {
         Some(sqlx::query_scalar::<_, String>(
-            "UPDATE tables SET status='OCCUPIED',current_seating_session_id=COALESCE(current_seating_session_id,?),active_order_id=? WHERE id=? AND restaurant_id=? RETURNING current_seating_session_id",
+            "UPDATE tables SET status='OCCUPIED',current_seating_session_id=COALESCE(CASE WHEN status='OCCUPIED' THEN current_seating_session_id END,?),active_order_id=? WHERE id=? AND restaurant_id=? RETURNING current_seating_session_id",
         )
         .bind(Uuid::new_v4().to_string())
         .bind(&id)
@@ -447,8 +447,9 @@ async fn settle_payment(
         .await?;
     let receipt = json!({"restaurant_name":restaurant["name"],"gstin":restaurant["gstin"],"fssai_license":restaurant["fssai_license"],"address":restaurant["address"],"order_number":o["order_number"],"order_type":o["order_type"],"table_number":number,"customer_name":o["customer_name"],"customer_phone":o["customer_phone_e164"],"date":now,"items":data["items"],"subtotal_paise":o["subtotal_paise"],"discount_paise":o["discount_paise"],"tax_paise":o["tax_paise"],"service_charge_paise":o["service_charge_paise"],"round_off_paise":o["round_off_paise"],"final_amount_paise":o["total_amount_paise"],"payment_status":"PAID","payment_method":method});
     sqlx::query("INSERT INTO invoices(id,restaurant_id,order_id,invoice_number,subtotal_paise,tax_paise,discount_paise,round_off_paise,total_paise,receipt_json) SELECT ?,restaurant_id,id,order_number,subtotal_paise,tax_paise,discount_paise,round_off_paise,total_amount_paise,? FROM orders WHERE id=?").bind(Uuid::new_v4().to_string()).bind(receipt.to_string()).bind(&id).execute(&mut *tx).await?;
-    sqlx::query("UPDATE tables SET active_order_id=NULL,current_seating_session_id=NULL,status='AVAILABLE' WHERE id=? AND NOT EXISTS(SELECT 1 FROM orders WHERE table_id=? AND payment_status IN ('UNPAID','PARTIAL') AND status!='CANCELLED')").bind(table).bind(table).execute(&mut *tx).await?;
+    sqlx::query("UPDATE tables SET active_order_id=NULL,current_seating_session_id=NULL,status='AVAILABLE' WHERE id=?1 AND current_seating_session_id IS ?2 AND NOT EXISTS(SELECT 1 FROM orders WHERE table_id=?1 AND seating_session_id IS ?2 AND payment_status IN ('UNPAID','PARTIAL') AND status!='CANCELLED')").bind(table).bind(o["seating_session_id"].as_str()).execute(&mut *tx).await?;
     tx.commit().await?;
+    crate::sync::sqlite::table_committed();
     ok(payment)
 }
 async fn receipt(State(s): State<StaffState>, h: HeaderMap, Path(id): Path<String>) -> Response {
@@ -533,7 +534,7 @@ async fn table_status(
             .fetch_optional(&mut *tx)
             .await?
             .ok_or_else(|| bad("Unknown table"))?;
-    let row=sqlx::query("UPDATE tables SET status=COALESCE(?1,status),ordering_enabled=COALESCE(?2,ordering_enabled),current_seating_session_id=CASE WHEN ?1='OCCUPIED' THEN COALESCE(current_seating_session_id,?3) WHEN ?1='AVAILABLE' THEN NULL ELSE current_seating_session_id END,active_order_id=CASE WHEN ?1='AVAILABLE' THEN NULL ELSE COALESCE(?4,active_order_id) END WHERE id=?5 AND restaurant_id=?6 RETURNING *")
+    let row=sqlx::query("UPDATE tables SET status=COALESCE(?1,status),ordering_enabled=COALESCE(?2,ordering_enabled),current_seating_session_id=CASE WHEN ?1='OCCUPIED' THEN COALESCE(CASE WHEN status='OCCUPIED' THEN current_seating_session_id END,?3) WHEN ?1='AVAILABLE' THEN NULL ELSE current_seating_session_id END,active_order_id=CASE WHEN ?1='AVAILABLE' THEN NULL ELSE COALESCE(?4,active_order_id) END WHERE id=?5 AND restaurant_id=?6 RETURNING *")
         .bind(status).bind(req.ordering_enabled).bind(Uuid::new_v4().to_string()).bind(req.active_order_id.map(|v|v.to_string())).bind(&id).bind(&rid).fetch_optional(&mut *tx).await?.ok_or_else(||bad("Unknown table"))?;
     let updated = record(row)?;
     let after = updated["status"].as_str().unwrap_or_default();

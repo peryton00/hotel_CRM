@@ -1688,7 +1688,7 @@ export interface OrderSessionGroup {
 
             <div class="modal-body">
               <!-- Mode Tabs if order is not split yet -->
-              @if (!ord.isSplit && getOrderSplitBills(ord.id).length === 0) {
+              @if (!ord.isSplit && settlementParts(ord).length === 0) {
                 <div class="settle-mode-tabs">
                   <button
                     type="button"
@@ -2022,32 +2022,30 @@ export interface OrderSessionGroup {
                   <div class="split-banner-notice">
                     <i class="ph ph-split-horizontal"></i>
                     <span
-                      >This dining order is split into
-                      {{ getOrderSplitBills(ord.id).length }} individual bills.</span
+                      >This dining order is split into {{ settlementShares(ord).length }} individual
+                      bills.</span
                     >
                   </div>
 
                   <div class="split-cards-stream">
-                    @for (split of getOrderSplitBills(ord.id); track split.id) {
-                      <div class="split-card-row" [class.is-paid]="split.paymentStatus === 'PAID'">
+                    @for (split of settlementShares(ord); track split.index) {
+                      <div class="split-card-row" [class.is-paid]="split.paid">
                         <div class="split-card-info">
                           <strong
-                            >Part #{{ split.splitIndex }} of {{ split.splitTotalCount }}</strong
+                            >Part #{{ split.index }} of {{ settlementShares(ord).length }}</strong
                           >
                           <span class="split-amount">{{ split.totalAmount | currencyInr }}</span>
                         </div>
                         <div class="split-card-actions">
-                          @if (split.paymentStatus === 'PAID') {
+                          @if (split.paid) {
                             <span class="badge badge-success"
-                              ><i class="ph ph-check"></i> Paid ({{
-                                split.paymentMethod || 'PAID'
-                              }})</span
+                              ><i class="ph ph-check"></i> Paid</span
                             >
                           } @else {
                             <button
                               type="button"
                               class="btn btn-secondary btn-xs"
-                              (click)="settleSplitPart(ord, split, 'UPI')"
+                              (click)="settleParts(split.parts, 'UPI')"
                               [disabled]="isSettling()"
                               title="Settle with UPI"
                             >
@@ -2056,7 +2054,7 @@ export interface OrderSessionGroup {
                             <button
                               type="button"
                               class="btn btn-secondary btn-xs"
-                              (click)="settleSplitPart(ord, split, 'CASH')"
+                              (click)="settleParts(split.parts, 'CASH')"
                               [disabled]="isSettling()"
                               title="Settle with Cash"
                             >
@@ -2065,7 +2063,7 @@ export interface OrderSessionGroup {
                             <button
                               type="button"
                               class="btn btn-secondary btn-xs"
-                              (click)="settleSplitPart(ord, split, 'CARD')"
+                              (click)="settleParts(split.parts, 'CARD')"
                               [disabled]="isSettling()"
                               title="Settle with Card"
                             >
@@ -2077,7 +2075,7 @@ export interface OrderSessionGroup {
                     }
                   </div>
 
-                  @if (areAllSplitBillsPaid(ord.id)) {
+                  @if (settlementParts(ord).length > 0 && settlementFullyPaid(ord)) {
                     <div class="alert-box success" style="margin-top: 12px;">
                       <i class="ph ph-check-circle"></i>
                       <span>All split parts have been paid in full! Ready to complete order.</span>
@@ -2136,7 +2134,7 @@ export interface OrderSessionGroup {
                 }
 
                 @if (ord.isSplit) {
-                  @if (areAllSplitBillsPaid(ord.id)) {
+                  @if (settlementParts(ord).length > 0 && settlementFullyPaid(ord)) {
                     <button
                       class="btn btn-success"
                       (click)="confirmSettlement()"
@@ -2157,7 +2155,7 @@ export interface OrderSessionGroup {
                   } @else {
                     <button
                       class="btn btn-primary"
-                      (click)="settleAllSplitParts(ord)"
+                      (click)="settleParts(settlementParts(ord), selectedPaymentMethod())"
                       [disabled]="isSettling()"
                     >
                       @if (isSettling()) {
@@ -8188,7 +8186,8 @@ export class OrderQueueComponent {
   }
 
   handleCheckoutAndPrint(session: any): void {
-    const ord = session.primaryOrder;
+    const ord =
+      session.orders.find((round: Order) => !this.isOrderPaid(round)) ?? session.primaryOrder;
     if (!ord) return;
     if (session.isAllPaid || this.isOrderPaid(ord)) {
       this.handlePrintInvoice(ord);
@@ -8201,7 +8200,7 @@ export class OrderQueueComponent {
     if (!order) return false;
     const ps = (order.paymentStatus || '').toUpperCase();
     if (ps === 'PAID' || ps === 'COMPLETED') return true;
-    if (order.status === 'COMPLETED' || !!order.settledAt) return true;
+    if (!order.paymentStatus && !!order.settledAt) return true;
     if (order.isSplit && this.areAllSplitBillsPaid(order.id)) return true;
     return false;
   }
@@ -8486,10 +8485,22 @@ export class OrderQueueComponent {
   groupOrdersIntoSessions(ordersList: Order[]): OrderSessionGroup[] {
     const sessionMap = new Map<string, Order[]>();
 
+    // Older tills could reuse a visit after closing only its first round.
+    const closures = new Map<string, number[]>();
+    for (const order of ordersList) {
+      if (!order.seatingSessionId || !order.settledAt || !this.isOrderPaid(order)) continue;
+      const times = closures.get(order.seatingSessionId) ?? [];
+      times.push(Date.parse(order.settledAt));
+      closures.set(order.seatingSessionId, times);
+    }
+
     for (const ord of ordersList) {
       let key = '';
       if (ord.seatingSessionId) {
-        key = `sess_${ord.seatingSessionId}`;
+        const visit = (closures.get(ord.seatingSessionId) ?? []).filter(
+          (t) => t < Date.parse(ord.createdAt),
+        ).length;
+        key = `sess_${ord.seatingSessionId}_${visit}_${ord.paymentStatus === 'PAID' || ord.paymentStatus === 'REFUNDED' ? 'closed' : ord.status === 'CANCELLED' ? ord.id : ord.isSplit ? 'split_' + ord.splitCount : 'open'}`;
       } else {
         // No session ID → each order is its own standalone session.
         // Never group by table alone: different customer visits at the same table
@@ -9277,40 +9288,35 @@ export class OrderQueueComponent {
     const finalDiscount = this.getEffectiveDiscount(ord);
     const appliedCode = this.settleDiscountMode() === 'COUPON' ? this.selectedCouponCode() : '';
 
-    // 1. If not yet marked PAID and not split, perform authoritative settlement
-    if (ord.paymentStatus !== 'PAID' && !ord.isSplit) {
-      const settleRes = await this.mock.settleOrder({
-        orderId: ord.id,
+    const rounds = ord.sessionRounds ?? [ord];
+    const outstanding = rounds.filter(
+      (round) => !this.isOrderPaid(this.orders().find((o) => o.id === round.id) ?? round),
+    );
+    if (outstanding.some((round) => round.isSplit)) {
+      this.isSettling.set(false);
+      this.toastService.warning('Settle the remaining split parts first.');
+      return;
+    }
+    if (outstanding.length > 1 && (finalDiscount || appliedCode)) {
+      this.isSettling.set(false);
+      this.toastService.warning('Apply discounts or coupons to individual rounds in Billing.');
+      return;
+    }
+    for (const round of outstanding) {
+      const result = await this.mock.settleOrder({
+        orderId: round.id,
         paymentMethod: method,
         discountAmount: finalDiscount,
         appliedCouponCode: appliedCode,
       });
-
-      if (!settleRes.success) {
-        this.toastService.warning(settleRes.error || 'Failed to settle order');
-        this.isSettling.set(false);
+      if (!result.success) {
         this.closeSettleModal();
+        this.toastService.warning(
+          result.error || 'Settlement stopped. Reopen the unpaid rounds to continue.',
+        );
         return;
       }
     }
-
-    // 2. Advance operational status to COMPLETED for this order and any sibling session rounds
-    const rounds =
-      ord.sessionRounds && ord.sessionRounds.length > 0
-        ? ord.sessionRounds
-        : this.getSessionOrders(ord);
-    for (const r of rounds) {
-      if (r.id !== ord.id) {
-        this.mock.updateOrderStatusAtomic(r.id, 'COMPLETED', {
-          note: `Consolidated & settled under Master Bill #${ord.orderNumber} via ${method}`,
-        });
-      }
-    }
-
-    if (ord.tableId || ord.tableNumber) {
-      this.mock.recalculateTableStatus(ord.tableId || ord.tableNumber!);
-    }
-
     this.toastService.success(
       `Order ${ord.orderNumber} successfully settled & marked COMPLETED via ${method}`,
     );
@@ -9341,10 +9347,12 @@ export class OrderQueueComponent {
 
   getEqualSplitPartAmount(order: Order, index: number): number {
     const n = this.splitCount();
-    const totalCents = Math.round(order.totalAmount * 100);
-    const baseCents = Math.floor(totalCents / n);
-    const rem = totalCents % n;
-    return (baseCents + (index < rem ? 1 : 0)) / 100;
+    return (
+      (order.sessionRounds ?? [order]).reduce((sum, round) => {
+        const cents = Math.round(round.totalAmount * 100);
+        return sum + Math.floor(cents / n) + Number(index < cents % n);
+      }, 0) / 100
+    );
   }
 
   incrementSplitCount(): void {
@@ -9361,77 +9369,75 @@ export class OrderQueueComponent {
 
   async confirmCreateSplit(order: Order): Promise<void> {
     this.isSettling.set(true);
-    const res = await this.mock.splitOrderEqual({
-      orderId: order.id,
-      splitCount: this.splitCount(),
-    });
-    this.isSettling.set(false);
-
-    if (res.success) {
-      this.toastService.success(
-        `Order ${order.orderNumber} successfully divided into ${this.splitCount()} equal bills.`,
-      );
-      const updatedOrder = this.orders().find((o) => o.id === order.id);
-      if (updatedOrder) {
-        this.selectedOrderForSettlement.set(updatedOrder);
-      }
-    } else {
-      this.toastService.error(res.error || 'Failed to split bill');
-    }
-  }
-
-  async settleSplitPart(
-    order: Order,
-    split: SplitBill,
-    method?: 'CASH' | 'UPI' | 'CARD',
-  ): Promise<void> {
-    const tender = method || this.selectedPaymentMethod();
-    this.isSettling.set(true);
-    const res = await this.mock.settleSplitBill({
-      orderId: order.id,
-      splitBillId: split.id,
-      paymentMethod: tender,
-    });
-    this.isSettling.set(false);
-
-    if (res.success) {
-      this.toastService.success(
-        `Part #${split.splitIndex} (${split.totalAmount}) settled via ${tender}.`,
-      );
-      if (this.areAllSplitBillsPaid(order.id)) {
-        this.toastService.info('All split bills are paid! You can now complete the order.');
-      }
-    } else {
-      this.toastService.error(res.error || 'Failed to settle split bill');
-    }
-  }
-
-  async settleAllSplitParts(order: Order): Promise<void> {
-    const unpaid = this.getOrderSplitBills(order.id).filter((s) => s.paymentStatus !== 'PAID');
-    const tender = this.selectedPaymentMethod();
-    this.isSettling.set(true);
-    for (const split of unpaid) {
-      const result = await this.mock.settleSplitBill({
-        orderId: order.id,
-        splitBillId: split.id,
-        paymentMethod: tender,
+    for (const round of order.sessionRounds ?? [order]) {
+      const result = await this.mock.splitOrderEqual({
+        orderId: round.id,
+        splitCount: this.splitCount(),
       });
       if (!result.success) {
-        this.isSettling.set(false);
-        this.toastService.error(result.error || 'Split payment was not confirmed.');
+        this.closeSettleModal();
+        this.toastService.error(
+          result.error || 'Split creation stopped. Reopen the remaining rounds.',
+        );
         return;
       }
     }
-    setTimeout(() => {
-      this.isSettling.set(false);
-      this.mock.updateOrderStatusAtomic(order.id, 'COMPLETED');
-      if (order.tableId || order.tableNumber) {
-        this.mock.recalculateTableStatus(order.tableId || order.tableNumber!);
+    this.selectedOrderForSettlement.set({ ...order, isSplit: true, splitCount: this.splitCount() });
+    this.isSettling.set(false);
+  }
+
+  settlementParts(order: Order): SplitBill[] {
+    const ids = new Set((order.sessionRounds ?? [order]).map((round) => round.id));
+    return this.mock.splitBills().filter((part) => ids.has(part.orderId));
+  }
+
+  settlementShares(order: Order) {
+    const groups = new Map<number, SplitBill[]>();
+    for (const part of this.settlementParts(order)) {
+      const parts = groups.get(part.splitIndex) ?? [];
+      parts.push(part);
+      groups.set(part.splitIndex, parts);
+    }
+    return Array.from(groups, ([index, parts]) => {
+      const due = parts.filter((part) => part.paymentStatus === 'UNPAID');
+      return {
+        index,
+        parts,
+        paid: due.length === 0,
+        totalAmount:
+          (due.length ? due : parts).reduce((sum, p) => sum + Math.round(p.totalAmount * 100), 0) /
+          100,
+      };
+    }).sort((a, b) => a.index - b.index);
+  }
+
+  settlementFullyPaid(order: Order): boolean {
+    return this.settlementParts(order).every((part) => part.paymentStatus === 'PAID');
+  }
+
+  async settleParts(parts: SplitBill[], method: 'CASH' | 'UPI' | 'CARD'): Promise<void> {
+    if (this.isSettling()) return;
+    this.isSettling.set(true);
+    try {
+      for (const part of parts.filter((part) => part.paymentStatus === 'UNPAID')) {
+        const result = await this.mock.settleSplitBill({
+          orderId: part.orderId,
+          splitBillId: part.id,
+          paymentMethod: method,
+        });
+        if (!result.success) {
+          this.toastService.error(result.error || 'Payment stopped. Check the remaining parts.');
+          return;
+        }
       }
-      this.toastService.success(`All remaining split parts settled via ${tender}.`);
-      this.closeSettleModal();
-      this.printOrderReceipt(order);
-    }, 400);
+      const order = this.selectedOrderForSettlement();
+      if (order && this.settlementParts(order).every((part) => part.paymentStatus === 'PAID')) {
+        this.closeSettleModal();
+        this.toastService.success('All split parts settled.');
+      }
+    } finally {
+      this.isSettling.set(false);
+    }
   }
 
   // --- Order Cancellation Handlers ---

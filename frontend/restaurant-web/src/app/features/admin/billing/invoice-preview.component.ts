@@ -2987,62 +2987,8 @@ export class InvoicePreviewComponent implements OnInit {
       ];
     }
 
-    // 1. If pre-attached sessionRounds exists on order
-    let allOrders: Order[] = [];
-    if (raw.sessionRounds && raw.sessionRounds.length > 0) {
-      allOrders = [...raw.sessionRounds];
-      if (!allOrders.some((o) => o.id === raw.id)) {
-        allOrders.push(raw);
-      }
-    } else {
-      // 2. Discover all sibling orders belonging to this dining session
-      const siblings = this.mock.orders().filter((o) => {
-        if (o.id === raw.id || o.status === 'CANCELLED' || o.orderType === 'TAKEAWAY') {
-          return false;
-        }
-
-        // Seating session match if available on both
-        if (raw.seatingSessionId && o.seatingSessionId) {
-          return o.seatingSessionId === raw.seatingSessionId;
-        }
-
-        // Exact table matching (must match tableId if both present)
-        if (raw.tableId && o.tableId && raw.tableId !== o.tableId) {
-          return false;
-        }
-        const sameTable =
-          (raw.tableId && o.tableId === raw.tableId) ||
-          (raw.tableNumber &&
-            o.tableNumber &&
-            raw.tableNumber.trim().toLowerCase() === o.tableNumber.trim().toLowerCase());
-        if (!sameTable) return false;
-
-        // Time guard: Never mix orders across different dining times (> 3 hours apart)
-        const timeDiff = Math.abs(
-          new Date(raw.createdAt).getTime() - new Date(o.createdAt).getTime(),
-        );
-        if (timeDiff > 3 * 60 * 60 * 1000) return false;
-
-        // If raw is settled, siblings must either be settled around the same time or absorbed
-        if (raw.paymentStatus === 'PAID') {
-          if (o.paymentStatus === 'PAID') {
-            if (raw.settledAt && o.settledAt) {
-              const diffMs = Math.abs(
-                new Date(raw.settledAt).getTime() - new Date(o.settledAt).getTime(),
-              );
-              return diffMs <= 10 * 60 * 1000;
-            }
-            return o.totalAmount === 0 || raw.totalAmount === 0;
-          }
-          return false;
-        }
-
-        // Both unpaid on same table within 3 hours
-        return o.paymentStatus === 'UNPAID';
-      });
-
-      allOrders = [raw, ...siblings];
-    }
+    // An invoice belongs to its recorded rounds; a seating ID alone is not a receipt.
+    const allOrders = raw.sessionRounds?.length ? [...raw.sessionRounds] : [raw];
 
     const sorted = allOrders.sort(
       (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),

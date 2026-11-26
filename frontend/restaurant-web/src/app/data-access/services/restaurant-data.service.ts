@@ -598,7 +598,8 @@ export class RestaurantDataService {
           status: (t.status || 'available').toUpperCase() as TableStatus,
           qrToken: t.qr_code_identifier || t.qr_token || `tbl-${t.table_number}`,
           qrUrl: `/table/${t.qr_code_identifier}`,
-          orderingEnabled: true,
+          orderingEnabled: t.ordering_enabled !== false,
+          currentSeatingSessionId: t.current_seating_session_id,
           activeOrderId: t.active_order_id,
           assignedStaffId: t.assigned_staff_id,
         }));
@@ -1334,7 +1335,8 @@ export class RestaurantDataService {
           status: (t.status || 'available').toUpperCase() as TableStatus,
           qrToken: t.qr_code_identifier || t.qr_token || `tbl-${t.table_number}`,
           qrUrl: `/table/${t.qr_code_identifier}`,
-          orderingEnabled: true,
+          orderingEnabled: t.ordering_enabled !== false,
+          currentSeatingSessionId: t.current_seating_session_id,
           activeOrderId: t.active_order_id,
           assignedStaffId: t.assigned_staff_id,
         }));
@@ -1491,12 +1493,16 @@ export class RestaurantDataService {
       customerPhoneE164:
         base.customer_phone_e164 || base.customer_phone || base.customerPhone || '',
       status: this.mapApiStatus(base.status),
-      paymentStatus: ((base.payment_status || '').toUpperCase() === 'PARTIALLY_PAID'
+      paymentStatus: (['PARTIALLY_PAID', 'PARTIAL'].includes(
+        (base.payment_status || '').toUpperCase(),
+      )
         ? 'PARTIALLY_PAID'
         : (base.payment_status || '').toUpperCase() === 'PAID' ||
             (base.payment_status || '').toUpperCase() === 'COMPLETED'
           ? 'PAID'
-          : 'UNPAID') as PaymentStatus,
+          : base.payment_status?.toUpperCase() === 'REFUNDED'
+            ? 'REFUNDED'
+            : 'UNPAID') as PaymentStatus,
       isSplit: Boolean(
         base.is_split ?? base.isSplit ?? this.splitBills().some((s) => s.orderId === base.id),
       ),
@@ -3196,31 +3202,9 @@ export class RestaurantDataService {
       return { success: false, error: 'Save the order to the local POS before taking payment.' };
     const targetStatus: OrderStatus = 'COMPLETED';
 
-    // Detect if this table has multiple rounds/orders that must be unified into one bill
-    const siblingOrders =
-      (order.tableId || order.tableNumber) && order.orderType !== 'TAKEAWAY'
-        ? this.orders().filter(
-            (o) =>
-              o.id !== order.id &&
-              o.status !== 'CANCELLED' &&
-              o.paymentStatus !== 'PAID' &&
-              (!order.seatingSessionId || o.seatingSessionId === order.seatingSessionId) &&
-              ((order.tableId && o.tableId === order.tableId) ||
-                (order.tableNumber && o.tableNumber === order.tableNumber)),
-          )
-        : [];
-
-    const combinedSubtotal =
-      Math.round(
-        (order.subtotal + siblingOrders.reduce((sum, s) => sum + (s.subtotal || 0), 0)) * 100,
-      ) / 100;
-    const combinedTax =
-      Math.round(
-        (order.taxAmount + siblingOrders.reduce((sum, s) => sum + (s.taxAmount || 0), 0)) * 100,
-      ) / 100;
-    const serviceCharge =
-      (order.serviceChargeAmount || 0) +
-      siblingOrders.reduce((sum, s) => sum + (s.serviceChargeAmount || 0), 0);
+    const combinedSubtotal = order.subtotal;
+    const combinedTax = order.taxAmount;
+    const serviceCharge = order.serviceChargeAmount || 0;
     const grossTotal = combinedSubtotal + combinedTax + serviceCharge;
     const finalDiscount = Math.min(
       grossTotal,
@@ -3242,7 +3226,7 @@ export class RestaurantDataService {
             ? taxable + Math.round(taxable * taxRate) / 100 + serviceCharge
             : grossTotal - finalDiscount,
         )
-      : order.totalAmount + siblingOrders.reduce((sum, s) => sum + s.totalAmount, 0);
+      : order.totalAmount;
     let payment: { amount_paise: number; settled_at: string };
     try {
       payment = await firstValueFrom(
@@ -3267,7 +3251,7 @@ export class RestaurantDataService {
       };
     }
     const totalAmount = payment.amount_paise / 100;
-    const now = payment.settled_at;
+    const now = payment.settled_at || new Date().toISOString();
     const settledOrder: Order = {
       ...order,
       subtotal: combinedSubtotal,
@@ -3282,20 +3266,7 @@ export class RestaurantDataService {
       settledAt: now,
     };
 
-    const siblingIds = new Set(siblingOrders.map((s) => s.id));
-    const updatedOrders = this.orders().map((o) => {
-      if (o.id === req.orderId) return settledOrder;
-      if (siblingIds.has(o.id)) {
-        return {
-          ...o,
-          status: 'COMPLETED' as const,
-          paymentStatus: 'PAID' as PaymentStatus,
-          paymentMethod: req.paymentMethod,
-          settledAt: now,
-        };
-      }
-      return o;
-    });
+    const updatedOrders = this.orders().map((o) => (o.id === order.id ? settledOrder : o));
     this.orders.set(updatedOrders);
     this.saveLocal('orders', updatedOrders);
 
