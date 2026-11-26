@@ -498,6 +498,9 @@ impl OrderRepository {
         }
         tx.commit().await?;
 
+        if guest_request.is_some() {
+            crate::sync::device::guest_committed();
+        }
         Ok(OrderWithItems {
             order,
             items: inserted_items,

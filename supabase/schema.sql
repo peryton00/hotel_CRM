@@ -1457,4 +1457,24 @@ END $$;
 
 INSERT INTO public._sqlx_migrations (version, description, success, checksum, execution_time) VALUES (6, 'cloud access', true, decode('a79c93feb1160d8a6a443e85a2cc80885d33f4277d13c562ec912affc9ed3451093ccb250a25773defd4dcf0f11f9aef', 'hex'), 0);
 
+-- 007_table_notifications.sql
+
+-- Empty invalidation only. The customer fetches authoritative state through Render.
+CREATE FUNCTION public.broadcast_dining_table_change() RETURNS trigger
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = '' AS $$
+BEGIN
+    IF to_regprocedure('realtime.send(jsonb,text,text,boolean)') IS NOT NULL THEN
+        PERFORM realtime.send('{}'::jsonb, 'changed', 'table:' || NEW.id::text, false);
+    END IF;
+    RETURN NEW;
+END;
+$$;
+REVOKE ALL ON FUNCTION public.broadcast_dining_table_change() FROM PUBLIC;
+CREATE TRIGGER notify_dining_table_change AFTER UPDATE ON public.tables
+FOR EACH ROW WHEN ((OLD.status, OLD.ordering_enabled, OLD.current_seating_session_id)
+    IS DISTINCT FROM (NEW.status, NEW.ordering_enabled, NEW.current_seating_session_id))
+EXECUTE FUNCTION public.broadcast_dining_table_change();
+
+INSERT INTO public._sqlx_migrations (version, description, success, checksum, execution_time) VALUES (7, 'table notifications', true, decode('86cb2fbaa6109166a2a781660a7eff6a8421ff7dec5a5c09ee40c217eb0eb3ade1ffb75eb1c404742c1ee6bec69c862b', 'hex'), 0);
+
 COMMIT;

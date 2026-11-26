@@ -1,5 +1,6 @@
 "use client";
 
+import { watchTable } from "@/lib/table-notifications";
 import { useState, useMemo, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useCart } from "@/lib/cart-context";
@@ -65,8 +66,9 @@ export default function MenuClient({
   const router = useRouter();
   const searchInputRef = useRef<HTMLInputElement>(null);
 
+  const [orderingEnabled, setOrderingEnabled] = useState(table.ordering_enabled);
   const isTableSeated =
-    (tableStatus || '').toUpperCase() === "OCCUPIED" && table.ordering_enabled !== false;
+    (tableStatus || '').toUpperCase() === "OCCUPIED" && orderingEnabled !== false;
 
   const checkStatusNow = async (silent = false) => {
     setIsCheckingTable(true);
@@ -75,6 +77,7 @@ export default function MenuClient({
       if (res?.data?.is_pos_online !== undefined) {
         setIsPosOnline(Boolean(res.data.is_pos_online));
       }
+      if (res?.data) setOrderingEnabled(res.data.ordering_enabled);
       const newStatus = res?.data?.status ? res.data.status.toUpperCase() : undefined;
       if (res?.data?.current_seating_session_id) {
         setSeatingSessionId(res.data.current_seating_session_id);
@@ -113,8 +116,9 @@ export default function MenuClient({
     const interval = setInterval(() => {
       checkStatusNow(true);
     }, tableStatus === "OCCUPIED" ? 12000 : 6000);
-    return () => clearInterval(interval);
-  }, [tableStatus, token]);
+    const stop = watchTable(table.id, () => void checkStatusNow(true));
+    return () => { clearInterval(interval); stop(); };
+  }, [tableStatus, token, table.id]);
 
   // Initialize theme from document/localStorage
   useEffect(() => {

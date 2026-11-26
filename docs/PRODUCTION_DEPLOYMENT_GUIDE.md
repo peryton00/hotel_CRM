@@ -58,7 +58,9 @@ NEXT_PUBLIC_RESTAURANT_ID: 00000000-0000-0000-0000-000000000001
 
 The UUID above is the restaurant row created by the schema and used by the till. The API URL is the Render origin without an `/api/v1` suffix. Redeploy Vercel after changing public variables so the new values reach the browser.
 
-**Optional diner phone sign-in:** enable the Phone provider in Supabase Authentication, configure an SMS provider, confirm the signing setup in step 1, then add both values below in Vercel and redeploy. Keep both unset for guest-only checkout. Only public values belong in the `NEXT_PUBLIC_` variables. [Phone provider settings](https://supabase.com/dashboard/project/_/auth/providers) · [Phone login and SMS setup](https://supabase.com/docs/guides/auth/phone-login)
+For live table notifications, set `NEXT_PUBLIC_SUPABASE_URL` to the project URL and `NEXT_PUBLIC_SUPABASE_ANON_KEY` to the public anon or publishable key. A table change sends an empty Broadcast message and the menu fetches the current status from Render. Allow public Realtime channels for this feature. Polling continues if Broadcast is unavailable. The desktop receives private order notifications through the existing authenticated Render device gateway.
+
+**Optional diner phone sign-in:** enable the Phone provider in Supabase Authentication, configure an SMS provider, confirm the signing setup in step 1, then add both values below in Vercel and redeploy. Leave `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` unset for guest-only checkout. Only public values belong in the `NEXT_PUBLIC_` variables. [Phone provider settings](https://supabase.com/dashboard/project/_/auth/providers) · [Phone login and SMS setup](https://supabase.com/docs/guides/auth/phone-login)
 
 ```text
 NEXT_PUBLIC_SUPABASE_URL: https://<project-ref>.supabase.co

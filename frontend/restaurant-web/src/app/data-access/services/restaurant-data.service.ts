@@ -229,346 +229,25 @@ export class RestaurantDataService {
     : signal<CouponRedemption[]>([]);
   private getInitialAuditLogs(): AuditLogEntry[] {
     const cached = this.readLocal<AuditLogEntry[]>('hotel_crm_audit_logs', []);
-    if (cached && cached.length >= 15) return cached;
 
-    const baseTime = Date.now();
-    const defaults: AuditLogEntry[] = [
-      {
-        id: 'aud-sys-001',
-        restaurantId: '00000000-0000-0000-0000-000000000001',
-        actorRole: 'SYSTEM',
-        actorLabel: 'POS Runtime Engine',
-        action: 'ORDER_STATUS_CHANGED',
-        entityType: 'ORDER',
-        entityId: 'ORD-108',
-        notes: 'POS engine booted and local state synchronized with Supabase.',
-        timestamp: new Date(baseTime - 120000).toISOString(),
-      },
-      {
-        id: 'aud-sys-002',
-        restaurantId: '00000000-0000-0000-0000-000000000001',
-        actorRole: 'ADMIN',
-        actorLabel: 'Ranveer B. (Admin)',
-        action: 'USER_LOGIN',
-        entityType: 'SESSION',
-        entityId: 'usr-admin-01',
-        notes: 'Admin master session authenticated via Supabase credentials.',
-        timestamp: new Date(baseTime - 360000).toISOString(),
-      },
-      {
-        id: 'aud-sys-003',
-        restaurantId: '00000000-0000-0000-0000-000000000001',
-        actorRole: 'STAFF',
-        actorLabel: 'Pooja S. (Cashier)',
-        action: 'RECEIPT_GENERATED',
-        entityType: 'RECEIPT',
-        entityId: 'ORD-107',
-        notes: 'Generated 80mm ESC/POS thermal receipt for Dine-In Table 4.',
-        timestamp: new Date(baseTime - 720000).toISOString(),
-      },
-      {
-        id: 'aud-sys-004',
-        restaurantId: '00000000-0000-0000-0000-000000000001',
-        actorRole: 'STAFF',
-        actorLabel: 'Pooja S. (Cashier)',
-        action: 'INVOICE_GENERATED',
-        entityType: 'INVOICE',
-        entityId: 'INV-2026-107',
-        notes: 'GST tax invoice created and marked as PAID (UPI QR ₹1,420).',
-        timestamp: new Date(baseTime - 750000).toISOString(),
-      },
-      {
-        id: 'aud-sys-005',
-        restaurantId: '00000000-0000-0000-0000-000000000001',
-        actorRole: 'ADMIN',
-        actorLabel: 'Ranveer B. (Admin)',
-        action: 'RECEIPT_PRINTED',
-        entityType: 'RECEIPT',
-        entityId: 'ORD-106',
-        notes: 'Reprint authorized by Admin (Duplicate Copy #2) for Table 1.',
-        timestamp: new Date(baseTime - 1200000).toISOString(),
-      },
-      {
-        id: 'aud-sys-006',
-        restaurantId: '00000000-0000-0000-0000-000000000001',
-        actorRole: 'STAFF',
-        actorLabel: 'Kiran V. (Waiter)',
-        action: 'ORDER_CREATED',
-        entityType: 'ORDER',
-        entityId: 'ORD-106',
-        notes: 'New dine-in order submitted for Table 1 (3 items, ₹890).',
-        timestamp: new Date(baseTime - 1800000).toISOString(),
-      },
-      {
-        id: 'aud-sys-007',
-        restaurantId: '00000000-0000-0000-0000-000000000001',
-        actorRole: 'STAFF',
-        actorLabel: 'Kiran V. (Waiter)',
-        action: 'USER_LOGIN',
-        entityType: 'SESSION',
-        entityId: 'usr-waiter-01',
-        notes: 'Floor staff logged in for General Morning Shift.',
-        timestamp: new Date(baseTime - 2400000).toISOString(),
-      },
-      {
-        id: 'aud-sys-008',
-        restaurantId: '00000000-0000-0000-0000-000000000001',
-        actorRole: 'ADMIN',
-        actorLabel: 'Ranveer B. (Admin)',
-        action: 'COUPON_CREATED',
-        entityType: 'COUPON',
-        entityId: 'CPN-TASTE20',
-        notes: 'Promotional discount created: 20% off up to ₹150.',
-        timestamp: new Date(baseTime - 3600000).toISOString(),
-      },
-      {
-        id: 'aud-sys-009',
-        restaurantId: '00000000-0000-0000-0000-000000000001',
-        actorRole: 'STAFF',
-        actorLabel: 'Pooja S. (Cashier)',
-        action: 'COUPON_REDEEMED',
-        entityType: 'COUPON_REDEMPTION',
-        entityId: 'CPN-TASTE20',
-        notes: 'Applied discount ₹150 on Order #ORD-105.',
-        timestamp: new Date(baseTime - 4200000).toISOString(),
-      },
-      {
-        id: 'aud-sys-010',
-        restaurantId: '00000000-0000-0000-0000-000000000001',
-        actorRole: 'STAFF',
-        actorLabel: 'Pooja S. (Cashier)',
-        action: 'RECEIPT_GENERATED',
-        entityType: 'RECEIPT',
-        entityId: 'ORD-105',
-        notes: 'Generated takeaway receipt for Takeaway Order #105.',
-        timestamp: new Date(baseTime - 4300000).toISOString(),
-      },
-      {
-        id: 'aud-sys-011',
-        restaurantId: '00000000-0000-0000-0000-000000000001',
-        actorRole: 'STAFF',
-        actorLabel: 'Pooja S. (Cashier)',
-        action: 'INVOICE_GENERATED',
-        entityType: 'INVOICE',
-        entityId: 'INV-2026-105',
-        notes: 'Billed and settled via Cash payment ₹620.',
-        timestamp: new Date(baseTime - 4400000).toISOString(),
-      },
-      {
-        id: 'aud-sys-012',
-        restaurantId: '00000000-0000-0000-0000-000000000001',
-        actorRole: 'STAFF',
-        actorLabel: 'Vikram M. (Night Cashier)',
-        action: 'USER_LOGOUT',
-        entityType: 'SESSION',
-        entityId: 'usr-cashier-02',
-        notes: 'Night shift cashier logged out and submitted register tally.',
-        timestamp: new Date(baseTime - 28800000).toISOString(),
-      },
-      {
-        id: 'aud-sys-013',
-        restaurantId: '00000000-0000-0000-0000-000000000001',
-        actorRole: 'STAFF',
-        actorLabel: 'Vikram M. (Night Cashier)',
-        action: 'RECEIPT_GENERATED',
-        entityType: 'RECEIPT',
-        entityId: 'ORD-104',
-        notes: 'Night dine-in receipt printed for Table 7 (₹2,180).',
-        timestamp: new Date(baseTime - 29500000).toISOString(),
-      },
-      {
-        id: 'aud-sys-014',
-        restaurantId: '00000000-0000-0000-0000-000000000001',
-        actorRole: 'SYSTEM',
-        actorLabel: 'POS Shell Runtime',
-        action: 'ORDER_STATUS_CHANGED',
-        entityType: 'ORDER',
-        entityId: 'ORD-104',
-        notes: 'Order status marked as COMPLETED upon full payment.',
-        timestamp: new Date(baseTime - 29700000).toISOString(),
-      },
-      {
-        id: 'aud-sys-015',
-        restaurantId: '00000000-0000-0000-0000-000000000001',
-        actorRole: 'STAFF',
-        actorLabel: 'Vikram M. (Night Cashier)',
-        action: 'USER_LOGIN',
-        entityType: 'SESSION',
-        entityId: 'usr-cashier-02',
-        notes: 'Night cashier logged in to Terminal 1.',
-        timestamp: new Date(baseTime - 43200000).toISOString(),
-      },
-      {
-        id: 'aud-sys-016',
-        restaurantId: '00000000-0000-0000-0000-000000000001',
-        actorRole: 'ADMIN',
-        actorLabel: 'Ranveer B. (Admin)',
-        action: 'USER_LOGOUT',
-        entityType: 'SESSION',
-        entityId: 'usr-admin-01',
-        notes: 'Admin closed supervisor terminal after daily audit.',
-        timestamp: new Date(baseTime - 46800000).toISOString(),
-      },
-      {
-        id: 'aud-sys-017',
-        restaurantId: '00000000-0000-0000-0000-000000000001',
-        actorRole: 'STAFF',
-        actorLabel: 'Pooja S. (Cashier)',
-        action: 'RECEIPT_GENERATED',
-        entityType: 'RECEIPT',
-        entityId: 'ORD-103',
-        notes: 'Thermal receipt issued for Takeaway Order #103 (₹450).',
-        timestamp: new Date(baseTime - 50400000).toISOString(),
-      },
-      {
-        id: 'aud-sys-018',
-        restaurantId: '00000000-0000-0000-0000-000000000001',
-        actorRole: 'STAFF',
-        actorLabel: 'Kiran V. (Waiter)',
-        action: 'ORDER_CREATED',
-        entityType: 'ORDER',
-        entityId: 'ORD-103',
-        notes: 'Takeaway counter order initiated.',
-        timestamp: new Date(baseTime - 50800000).toISOString(),
-      },
-      {
-        id: 'aud-sys-019',
-        restaurantId: '00000000-0000-0000-0000-000000000001',
-        actorRole: 'STAFF',
-        actorLabel: 'Kiran V. (Waiter)',
-        action: 'ORDER_STATUS_CHANGED',
-        entityType: 'ORDER',
-        entityId: 'ORD-102',
-        notes: 'Order status transitioned to READY in kitchen queue.',
-        timestamp: new Date(baseTime - 54000000).toISOString(),
-      },
-      {
-        id: 'aud-sys-020',
-        restaurantId: '00000000-0000-0000-0000-000000000001',
-        actorRole: 'STAFF',
-        actorLabel: 'Pooja S. (Cashier)',
-        action: 'RECEIPT_GENERATED',
-        entityType: 'RECEIPT',
-        entityId: 'ORD-102',
-        notes: 'Generated thermal customer receipt for Table 2 (₹1,090).',
-        timestamp: new Date(baseTime - 57600000).toISOString(),
-      },
-      {
-        id: 'aud-sys-021',
-        restaurantId: '00000000-0000-0000-0000-000000000001',
-        actorRole: 'STAFF',
-        actorLabel: 'Pooja S. (Cashier)',
-        action: 'INVOICE_GENERATED',
-        entityType: 'INVOICE',
-        entityId: 'INV-2026-102',
-        notes: 'Invoice generated and closed with Split Payment (Card + Cash).',
-        timestamp: new Date(baseTime - 58000000).toISOString(),
-      },
-      {
-        id: 'aud-sys-022',
-        restaurantId: '00000000-0000-0000-0000-000000000001',
-        actorRole: 'STAFF',
-        actorLabel: 'Kiran V. (Waiter)',
-        action: 'ORDER_CREATED',
-        entityType: 'ORDER',
-        entityId: 'ORD-102',
-        notes: 'Dine-in order placed for Table 2 (Mughlai Biryani & Butter Naan).',
-        timestamp: new Date(baseTime - 61200000).toISOString(),
-      },
-      {
-        id: 'aud-sys-023',
-        restaurantId: '00000000-0000-0000-0000-000000000001',
-        actorRole: 'ADMIN',
-        actorLabel: 'Ranveer B. (Admin)',
-        action: 'USER_LOGIN',
-        entityType: 'SESSION',
-        entityId: 'usr-admin-01',
-        notes: 'Admin login for morning menu price updates.',
-        timestamp: new Date(baseTime - 64800000).toISOString(),
-      },
-      {
-        id: 'aud-sys-024',
-        restaurantId: '00000000-0000-0000-0000-000000000001',
-        actorRole: 'STAFF',
-        actorLabel: 'Pooja S. (Cashier)',
-        action: 'USER_LOGIN',
-        entityType: 'SESSION',
-        entityId: 'usr-cashier-01',
-        notes: 'Cashier logged in to POS Terminal 1.',
-        timestamp: new Date(baseTime - 68400000).toISOString(),
-      },
-      {
-        id: 'aud-sys-025',
-        restaurantId: '00000000-0000-0000-0000-000000000001',
-        actorRole: 'SYSTEM',
-        actorLabel: 'POS Shell Runtime',
-        action: 'PHONE_VERIFIED',
-        entityType: 'CUSTOMER',
-        entityId: 'cust-9845012345',
-        notes: 'Customer phone verified for loyalty reward accrual.',
-        timestamp: new Date(baseTime - 72000000).toISOString(),
-      },
-      {
-        id: 'aud-sys-026',
-        restaurantId: '00000000-0000-0000-0000-000000000001',
-        actorRole: 'STAFF',
-        actorLabel: 'Pooja S. (Cashier)',
-        action: 'RECEIPT_GENERATED',
-        entityType: 'RECEIPT',
-        entityId: 'ORD-101',
-        notes: 'Generated initial thermal receipt for Order #ORD-101.',
-        timestamp: new Date(baseTime - 75600000).toISOString(),
-      },
-      {
-        id: 'aud-sys-027',
-        restaurantId: '00000000-0000-0000-0000-000000000001',
-        actorRole: 'STAFF',
-        actorLabel: 'Pooja S. (Cashier)',
-        action: 'INVOICE_GENERATED',
-        entityType: 'INVOICE',
-        entityId: 'INV-2026-101',
-        notes: 'Settled bill payment of ₹780 via Card POS.',
-        timestamp: new Date(baseTime - 76000000).toISOString(),
-      },
-      {
-        id: 'aud-sys-028',
-        restaurantId: '00000000-0000-0000-0000-000000000001',
-        actorRole: 'STAFF',
-        actorLabel: 'Kiran V. (Waiter)',
-        action: 'ORDER_CREATED',
-        entityType: 'ORDER',
-        entityId: 'ORD-101',
-        notes: 'First order of the day registered for Table 5.',
-        timestamp: new Date(baseTime - 79200000).toISOString(),
-      },
-      {
-        id: 'aud-sys-029',
-        restaurantId: '00000000-0000-0000-0000-000000000001',
-        actorRole: 'STAFF',
-        actorLabel: 'Kiran V. (Waiter)',
-        action: 'USER_LOGIN',
-        entityType: 'SESSION',
-        entityId: 'usr-waiter-01',
-        notes: 'Staff clocked in for opening restaurant preparation.',
-        timestamp: new Date(baseTime - 82800000).toISOString(),
-      },
-      {
-        id: 'aud-sys-030',
-        restaurantId: '00000000-0000-0000-0000-000000000001',
-        actorRole: 'SYSTEM',
-        actorLabel: 'POS Hardware Daemon',
-        action: 'RECEIPT_PRINTED',
-        entityType: 'RECEIPT',
-        entityId: 'TST-PRN-01',
-        notes: 'Hardware ESC/POS thermal printer test diagnostic passed.',
-        timestamp: new Date(baseTime - 86400000).toISOString(),
-      },
-    ];
+    return cached.filter((entry) => !/^aud-sys-0(0[1-9]|[12][0-9]|30)$/.test(entry.id));
+  }
 
-    if (cached && cached.length > 0) {
-      return [...cached, ...defaults.filter((d) => !cached.some((c) => c.id === d.id))];
-    }
-    return defaults;
+  readonly activityHistory = signal<AuditLogEntry[]>([]);
+  readonly activityHistoryError = signal(false);
+
+  refreshActivityHistory(): void {
+    if (this.testMock) return;
+    this.api.get<AuditLogEntry[]>('/activity-history').subscribe({
+      next: (rows) => {
+        this.activityHistory.set(rows);
+        this.activityHistoryError.set(false);
+      },
+      error: () => {
+        this.activityHistory.set([]);
+        this.activityHistoryError.set(true);
+      },
+    });
   }
 
   readonly auditLogs = this.testMock
@@ -738,6 +417,7 @@ export class RestaurantDataService {
           this.connectOrderWebSocket();
           this.recordAuditLog({
             actorRole: (evt.user.role as any) || 'STAFF',
+            actorId: evt.user.id,
             actorLabel: `${evt.user.name} (${evt.user.role})`,
             action: 'USER_LOGIN',
             entityType: 'SESSION',
@@ -749,6 +429,7 @@ export class RestaurantDataService {
           const u = evt.user;
           this.recordAuditLog({
             actorRole: (u?.role as any) || 'STAFF',
+            actorId: u?.id,
             actorLabel: u ? `${u.name} (${u.role})` : 'Terminal Staff',
             action: 'USER_LOGOUT',
             entityType: 'SESSION',
@@ -1045,6 +726,7 @@ export class RestaurantDataService {
       },
     });
 
+    this.startOrderLivePolling();
     // 5. Fetch Orders
     this.isOrdersLoading.set(true);
     this.startInitialRequest();
@@ -1071,8 +753,6 @@ export class RestaurantDataService {
         if (pendingOutbox.length > 0) {
           this.flushOfflineQueue();
         }
-        // Start background polling for real-time live incoming orders from backend
-        this.startOrderLivePolling();
         this.fetchSplitBills();
         this.fetchRefunds();
       },
@@ -3240,55 +2920,11 @@ export class RestaurantDataService {
         return;
       }
 
-      // Check if an existing optimistic/manual order matches this incoming server order
-      // to avoid duplicating orders created locally on this POS device
-      const matchIdx = current.findIndex((o) => {
-        const matchTable =
-          Boolean(incoming.tableId && o.tableId === incoming.tableId) ||
-          Boolean(incoming.tableNumber && o.tableNumber === incoming.tableNumber);
-        const matchPickup = Boolean(
-          incoming.pickupReference && o.pickupReference === incoming.pickupReference,
-        );
-        const matchCustomer = Boolean(
-          incoming.customerPhone && o.customerPhone && o.customerPhone === incoming.customerPhone,
-        );
-        const isRecent =
-          Math.abs(
-            new Date(o.createdAt || Date.now()).getTime() -
-              new Date(incoming.createdAt || Date.now()).getTime(),
-          ) < 120000;
-
-        return (matchTable || matchPickup || matchCustomer) && isRecent;
-      });
-
-      if (matchIdx !== -1) {
-        // Harmonize and replace optimistic local entry with server authoritative order
-        const existing = current[matchIdx];
-        const updated = [...current];
-        updated[matchIdx] = {
-          ...existing,
-          ...incoming,
-          id: incoming.id,
-          customerName:
-            existing.customerName && existing.customerName !== 'Walk-in Guest'
-              ? existing.customerName
-              : incoming.customerName,
-          customerPhone: existing.customerPhone || incoming.customerPhone,
-          tableNumber: existing.tableNumber || incoming.tableNumber,
-        };
-        const deduped = updated.filter(
-          (o, idx, arr) => arr.findIndex((x) => x.id === o.id) === idx,
-        );
-        this.orders.set(deduped);
-        this.saveLocal('orders', deduped);
-      } else {
-        const deduped = [incoming, ...current.filter((o) => o.id !== incoming.id)];
-        this.orders.set(deduped);
-        this.saveLocal('orders', deduped);
-        this.liveOrderEvent.set({ type: 'ORDER_CREATED', order: incoming, timestamp: Date.now() });
-        this.soundService?.playOrderArrivalSound();
-        this.syncCustomerFromOrder(incoming);
-      }
+      this.orders.set([incoming, ...current]);
+      this.saveLocal('orders', this.orders());
+      this.liveOrderEvent.set({ type: 'ORDER_CREATED', order: incoming, timestamp: Date.now() });
+      this.soundService?.playOrderArrivalSound();
+      this.syncCustomerFromOrder(incoming);
     } else if (ev.type === 'ORDER_UPDATED' && ev.order) {
       const incoming: Order = ev.order;
       if (!incoming.id) return;
@@ -3397,31 +3033,8 @@ export class RestaurantDataService {
             .map((o: any) => this.mapApiOrder(o))
             .filter((m: any) => m.id && (m.items || []).length > 0);
 
-          // Detect brand new orders arrived from external devices/customers, filtering out any matching local optimistic orders
-          const newOrders = mappedOrders.filter((m: any) => {
-            if (currentIds.has(m.id)) return false;
-            // Also check for matching optimistic local order (table/pickup, amount, items count, timestamp within 30s)
-            const matchesLocal = currentOrders.some((o) => {
-              const matchTable =
-                Boolean(m.tableId && o.tableId === m.tableId) ||
-                Boolean(m.tableNumber && o.tableNumber === m.tableNumber);
-              const matchPickup = Boolean(
-                m.pickupReference && o.pickupReference === m.pickupReference,
-              );
-              const matchCustomer = m.customerPhone && o.customerPhone === m.customerPhone;
-              const matchAmount = Math.abs((o.totalAmount || 0) - (m.totalAmount || 0)) < 0.01;
-              const matchItemsCount = (o.items || []).length === (m.items || []).length;
-              const isRecent =
-                Math.abs(new Date(o.createdAt).getTime() - new Date(m.createdAt).getTime()) < 30000;
-              return (
-                (matchTable || matchPickup || matchCustomer) &&
-                matchAmount &&
-                matchItemsCount &&
-                isRecent
-              );
-            });
-            return !matchesLocal;
-          });
+          // Distinct tickets can have the same table, items and total.
+          const newOrders = mappedOrders.filter((m: Order) => !currentIds.has(m.id));
           if (newOrders.length > 0) {
             if (newOrders.some((m: Order) => m.customerPhone)) this.loadCustomers();
             const pendingOutbox = this.offlineOutbox();
@@ -3446,11 +3059,7 @@ export class RestaurantDataService {
                     };
                   }
                   return m;
-                })
-                // Only retain un-synced local orders that are still pending in the offline outbox
-                .concat(
-                  pendingLocalOrders.filter((p) => !mappedOrders.some((m: any) => m.id === p.id)),
-                ),
+                }),
             ];
             this.orders.set(merged);
             this.saveLocal('orders', merged);
@@ -4717,6 +4326,7 @@ export class RestaurantDataService {
       const currentUser = this.adminAuth.currentUser();
       this.recordAuditLog({
         actorRole: (currentUser?.role as any) || (isAdmin ? 'ADMIN' : 'STAFF'),
+        actorId: currentUser?.id,
         actorLabel: currentUser
           ? `${currentUser.name} (${currentUser.role})`
           : role || 'Terminal Staff',
@@ -4741,6 +4351,7 @@ export class RestaurantDataService {
     const currentUser = this.adminAuth.currentUser();
     this.recordAuditLog({
       actorRole: (currentUser?.role as any) || 'STAFF',
+      actorId: currentUser?.id,
       actorLabel: currentUser ? `${currentUser.name} (${currentUser.role})` : staffName,
       action: isReprint ? 'RECEIPT_PRINTED' : 'RECEIPT_GENERATED',
       entityType: 'RECEIPT',

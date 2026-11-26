@@ -29,6 +29,9 @@ pub(super) enum SyncRequest {
     Event {
         event: OutboxRow,
     },
+    WaitForGuest {
+        cursor: Option<Uuid>,
+    },
     Pending,
     Acknowledge {
         id: Uuid,
@@ -36,6 +39,16 @@ pub(super) enum SyncRequest {
     Heartbeat {
         restaurant_id: Uuid,
     },
+}
+
+fn guest_changes() -> &'static tokio::sync::watch::Sender<Uuid> {
+    static CHANGES: std::sync::OnceLock<tokio::sync::watch::Sender<Uuid>> =
+        std::sync::OnceLock::new();
+    CHANGES.get_or_init(|| tokio::sync::watch::channel(Uuid::new_v4()).0)
+}
+
+pub(crate) fn guest_committed() {
+    guest_changes().send_replace(Uuid::new_v4());
 }
 
 pub struct DeviceClient {
@@ -157,6 +170,17 @@ async fn apply(pool: &PgPool, request: SyncRequest) -> Result<Value, sqlx::Error
             }
         }
         SyncRequest::Event { event } => apply_event(pool, &event).await?,
+        SyncRequest::WaitForGuest { cursor } => {
+            let mut receiver = guest_changes().subscribe();
+            let current = *receiver.borrow_and_update();
+            if cursor == Some(current) {
+                let _ =
+                    tokio::time::timeout(std::time::Duration::from_secs(12), receiver.changed())
+                        .await;
+            }
+            let latest = *receiver.borrow();
+            return Ok(json!(latest));
+        }
         SyncRequest::Pending => {
             let pending: Vec<(Uuid,Uuid)> = sqlx::query_as("SELECT o.id,o.restaurant_id FROM orders o JOIN guest_order_receipts r ON r.order_id=o.id WHERE r.received_at IS NULL ORDER BY o.created_at,o.id LIMIT 10")
             .fetch_all(pool).await?;
@@ -484,4 +508,48 @@ async fn apply_event(pool: &PgPool, event: &OutboxRow) -> Result<(), sqlx::Error
 
     tx.commit().await?;
     Ok(())
+}
+
+#[cfg(test)]
+mod notification_tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn guest_commit_wakes_waiter_and_survives_registration_race() {
+        let pool = sqlx::postgres::PgPoolOptions::new()
+            .connect_lazy("postgres://localhost/unused")
+            .unwrap();
+        let baseline = *guest_changes().borrow();
+        let wait = apply(
+            &pool,
+            SyncRequest::WaitForGuest {
+                cursor: Some(baseline),
+            },
+        );
+        tokio::pin!(wait);
+        assert!(
+            tokio::time::timeout(std::time::Duration::from_millis(20), &mut wait)
+                .await
+                .is_err()
+        );
+        guest_committed();
+        let next = tokio::time::timeout(std::time::Duration::from_secs(1), wait)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_ne!(next, json!(baseline));
+        let late = apply(
+            &pool,
+            SyncRequest::WaitForGuest {
+                cursor: Some(baseline),
+            },
+        );
+        assert_eq!(
+            tokio::time::timeout(std::time::Duration::from_secs(1), late)
+                .await
+                .unwrap()
+                .unwrap(),
+            next
+        );
+    }
 }

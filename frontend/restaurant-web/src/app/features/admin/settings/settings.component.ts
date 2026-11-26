@@ -2007,12 +2007,21 @@ type SettingsTab =
                     <div class="panel-title-text">
                       <h2 class="heading-card">System &amp; Transaction Audit Logs</h2>
                       <p class="panel-subtitle">
-                        Immutable event ledger tracking administrative overrides, orders, bill
-                        settlements, and operational states.
+                        Recent desktop activity and the latest 200 database audit events.
                       </p>
                     </div>
                   </div>
                   <div class="audit-toolbar-actions">
+                    @if (mock.activityHistoryError()) {
+                      <span>Database history unavailable</span>
+                    }
+                    <button
+                      type="button"
+                      class="btn btn-secondary btn-sm"
+                      (click)="mock.refreshActivityHistory()"
+                    >
+                      Refresh
+                    </button>
                     <button
                       type="button"
                       class="btn btn-secondary btn-sm apple-action-pill"
@@ -2029,7 +2038,18 @@ type SettingsTab =
                 <div class="audit-filter-controls">
                   <div class="audit-filter-chips">
                     @for (
-                      cat of ['ALL', 'AUTH', 'ORDER', 'RECEIPT', 'INVOICE', 'COUPON', 'SYSTEM'];
+                      cat of [
+                        'ALL',
+                        'AUTH',
+                        'TABLE',
+                        'ORDER',
+                        'PAYMENT',
+                        'REFUND',
+                        'RECEIPT',
+                        'INVOICE',
+                        'COUPON',
+                        'SYSTEM',
+                      ];
                       track cat
                     ) {
                       <button
@@ -2072,7 +2092,7 @@ type SettingsTab =
                               {{ entry.action.replaceAll('_', ' ') }}
                             </span>
                             <span class="audit-entity-label">
-                              {{ entry.entityType }}: <code>{{ entry.entityId.slice(0, 14) }}</code>
+                              {{ entry.entityType }}: <code>{{ entry.entityId }}</code>
                             </span>
                           </div>
                           <div class="audit-notes-cell">
@@ -2085,7 +2105,7 @@ type SettingsTab =
                               {{ entry.actorRole }}
                             </span>
                             <span class="actor-name-text">{{
-                              entry.actorLabel || 'Authorized User'
+                              entry.actorLabel || entry.actorId || entry.actorRole
                             }}</span>
                           </div>
                         </div>
@@ -6802,7 +6822,7 @@ type SettingsTab =
 })
 export class SettingsComponent implements OnInit {
   private dataService = inject(RestaurantDataService);
-  private mock = this.dataService;
+  protected readonly mock = this.dataService;
   private toastService = inject(ToastService);
   private http = inject(HttpClient);
   auth = inject(AdminAuthService);
@@ -6871,7 +6891,11 @@ export class SettingsComponent implements OnInit {
   auditCategoryFilter = signal<string>('ALL');
   auditSearchText = signal<string>('');
   auditDisplayLimit = signal<number>(20);
-  auditLogs = this.mock.auditLogs;
+  auditLogs = computed(() =>
+    [...this.mock.auditLogs(), ...this.mock.activityHistory()].sort((a, b) =>
+      b.timestamp.localeCompare(a.timestamp),
+    ),
+  );
 
   filteredAuditLogs = computed(() => {
     const filter = this.auditCategoryFilter();
@@ -6881,6 +6905,7 @@ export class SettingsComponent implements OnInit {
     return logs.filter((log) => {
       const matchesCategory =
         filter === 'ALL' ||
+        filter === log.entityType ||
         (filter === 'AUTH' &&
           (log.action === 'USER_LOGIN' ||
             log.action === 'USER_LOGOUT' ||
@@ -6903,6 +6928,7 @@ export class SettingsComponent implements OnInit {
       if (!query) return true;
 
       return (
+        log.actorId?.toLowerCase().includes(query) ||
         log.actorLabel?.toLowerCase().includes(query) ||
         log.action?.toLowerCase().includes(query) ||
         log.notes?.toLowerCase().includes(query) ||
@@ -6940,6 +6966,7 @@ export class SettingsComponent implements OnInit {
   }
   set activeTab(val: SettingsTab) {
     this._activeTab.set(val);
+    if (val === 'maintenance') this.mock.refreshActivityHistory();
   }
 
   setGstPreset(cgst: number, sgst: number): void {

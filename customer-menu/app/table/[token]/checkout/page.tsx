@@ -1,5 +1,6 @@
 'use client';
 
+import { watchTable } from "@/lib/table-notifications";
 import { useState, useEffect, useMemo, useRef, Suspense } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { useCart } from '@/lib/cart-context';
@@ -137,7 +138,7 @@ function CheckoutContent() {
   // Fallback auto-poll table status every 5 seconds when unseated
   useEffect(() => {
     if (!token) return;
-    const interval = setInterval(() => {
+    const refresh = () => {
       getTable(token)
         .then((res) => {
           if (res?.data) {
@@ -157,9 +158,11 @@ function CheckoutContent() {
           }
         })
         .catch(() => {});
-    }, 5000);
-    return () => clearInterval(interval);
-  }, [isTableSeated, token]);
+    };
+    const interval = setInterval(refresh, 5000);
+    const stop = watchTable(tableInfo?.id, refresh);
+    return () => { clearInterval(interval); stop(); };
+  }, [tableInfo?.id, token]);
 
   const loadPast = async (ph?: string, tId?: string) => {
     const clean = (ph || '').replace(/\D/g, '');

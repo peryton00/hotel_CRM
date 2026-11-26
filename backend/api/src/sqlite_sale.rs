@@ -65,6 +65,7 @@ pub(super) fn routes() -> Router<StaffState> {
     Router::new()
         .merge(guest_records::routes())
         .merge(team::routes())
+        .route("/api/v1/activity-history", get(activity_history))
         .merge(floor::routes())
         .merge(inventory::routes())
         .merge(coupons::routes())
@@ -116,7 +117,11 @@ pub(super) fn routes() -> Router<StaffState> {
         )
         .route("/api/v1/sync/status", get(sync_status))
 }
-async fn snapshot(db: &mut SqliteConnection, rid: &str, id: &str) -> Result<Value, AppError> {
+pub(crate) async fn snapshot(
+    db: &mut SqliteConnection,
+    rid: &str,
+    id: &str,
+) -> Result<Value, AppError> {
     let order = sqlx::query("SELECT * FROM orders WHERE restaurant_id=? AND id=?")
         .bind(rid)
         .bind(id)
@@ -512,7 +517,7 @@ async fn table_status(
     Path(id): Path<String>,
     Json(req): Json<crate::models::table::UpdateTableStatusRequest>,
 ) -> Response {
-    let (_, _, _, rid) = identity(&s, &h).await?;
+    let (actor, label, role, rid) = identity(&s, &h).await?;
     let status = req.status.map(|v| v.to_uppercase());
     if status
         .as_ref()
@@ -520,9 +525,42 @@ async fn table_status(
     {
         return Err(bad("Invalid table status"));
     }
+    let mut tx = s.pool.begin_with("BEGIN IMMEDIATE").await?;
+    let before: (String, bool) =
+        sqlx::query_as("SELECT status,ordering_enabled FROM tables WHERE id=? AND restaurant_id=?")
+            .bind(&id)
+            .bind(&rid)
+            .fetch_optional(&mut *tx)
+            .await?
+            .ok_or_else(|| bad("Unknown table"))?;
     let row=sqlx::query("UPDATE tables SET status=COALESCE(?1,status),ordering_enabled=COALESCE(?2,ordering_enabled),current_seating_session_id=CASE WHEN ?1='OCCUPIED' THEN COALESCE(current_seating_session_id,?3) WHEN ?1='AVAILABLE' THEN NULL ELSE current_seating_session_id END,active_order_id=CASE WHEN ?1='AVAILABLE' THEN NULL ELSE COALESCE(?4,active_order_id) END WHERE id=?5 AND restaurant_id=?6 RETURNING *")
-        .bind(status).bind(req.ordering_enabled).bind(Uuid::new_v4().to_string()).bind(req.active_order_id.map(|v|v.to_string())).bind(id).bind(rid).fetch_optional(&s.pool).await?.ok_or_else(||bad("Unknown table"))?;
-    ok(record(row)?)
+        .bind(status).bind(req.ordering_enabled).bind(Uuid::new_v4().to_string()).bind(req.active_order_id.map(|v|v.to_string())).bind(&id).bind(&rid).fetch_optional(&mut *tx).await?.ok_or_else(||bad("Unknown table"))?;
+    let updated = record(row)?;
+    let after = updated["status"].as_str().unwrap_or_default();
+    let enabled = updated["ordering_enabled"].as_bool().unwrap_or_default();
+    if before.0 != after || before.1 != enabled {
+        let notes = format!(
+            "Table {}: {} to {}; ordering enabled {} to {}",
+            updated["number"], before.0, after, before.1, enabled
+        );
+        sqlx::query("INSERT INTO activity_history(restaurant_id,action,entity_type,entity_id,notes,actor_id,actor_role,actor_label) VALUES(?,'TABLE_UPDATED','TABLE',?,?,?,?,?)")
+            .bind(&rid).bind(&id).bind(notes).bind(actor).bind(role).bind(label).execute(&mut *tx).await?;
+    }
+    tx.commit().await?;
+    crate::sync::sqlite::table_committed();
+    ok(updated)
+}
+async fn activity_history(State(s): State<StaffState>, h: HeaderMap) -> Response {
+    let (_, _, role, rid) = identity(&s, &h).await?;
+    if !matches!(role.to_uppercase().as_str(), "ADMIN" | "MANAGER") {
+        return Err(AppError::Forbidden("Manager access required".into()));
+    }
+    let rows = sqlx::query("SELECT 'sqlite-' || id AS id, restaurant_id AS restaurantId, action,entity_type AS entityType,entity_id AS entityId,notes,actor_id AS actorId,actor_role AS actorRole,actor_label AS actorLabel,timestamp FROM activity_history WHERE restaurant_id=? ORDER BY id DESC LIMIT 200")
+        .bind(rid).fetch_all(&s.pool).await?;
+    ok(json!(rows
+        .into_iter()
+        .map(record)
+        .collect::<Result<Vec<_>, _>>()?))
 }
 async fn sync_status(State(s): State<StaffState>, h: HeaderMap) -> Response {
     identity(&s, &h).await?;

@@ -5,13 +5,33 @@ use super::{
 use sqlx::{Row, SqlitePool};
 use uuid::Uuid;
 
+static LOCAL_CHANGE: tokio::sync::Notify = tokio::sync::Notify::const_new();
+
+pub(crate) fn table_committed() {
+    LOCAL_CHANGE.notify_one();
+}
+
 pub async fn run(pool: SqlitePool, client: DeviceClient) {
     let mut last = None;
+    let mut cursor = None;
     loop {
         if let Err(error) = cycle(&pool, &client, &mut last).await {
             tracing::warn!("SQLite device sync pending: {error}");
         }
-        tokio::time::sleep(std::time::Duration::from_secs(10)).await;
+        let wait = SyncRequest::WaitForGuest { cursor };
+        tokio::select! {
+            _ = LOCAL_CHANGE.notified() => {},
+            _ = tokio::time::sleep(std::time::Duration::from_secs(15)) => {},
+            response = client.post::<Uuid>(&wait) => {
+                match response {
+                    Ok(value) => cursor = Some(value),
+                    Err(_) => tokio::select! {
+                        _ = LOCAL_CHANGE.notified() => {},
+                        _ = tokio::time::sleep(std::time::Duration::from_secs(10)) => {},
+                    },
+                }
+            }
+        }
     }
 }
 
@@ -70,7 +90,10 @@ async fn cycle(
     let tables = rows(&mut tx, "SELECT * FROM tables ORDER BY id").await?;
     tx.commit().await?;
     let state = serde_json::json!([restaurant, categories, items, tables]);
-    if last.as_ref() != Some(&state) {
+    if last
+        .as_ref()
+        .is_none_or(|old| old.as_array().unwrap()[..3] != state.as_array().unwrap()[..3])
+    {
         client
             .post::<()>(&SyncRequest::Catalog {
                 id,
@@ -79,7 +102,16 @@ async fn cycle(
                 items: items.into(),
             })
             .await?;
+    }
+    if last.as_ref() != Some(&state) {
         for table in tables {
+            if last
+                .as_ref()
+                .and_then(|old| old[3].as_array())
+                .is_some_and(|previous| previous.contains(&table))
+            {
+                continue;
+            }
             client
                 .post::<()>(&SyncRequest::Table {
                     id: Uuid::parse_str(table["id"].as_str().ok_or("Invalid table ID")?)?,
@@ -112,7 +144,15 @@ async fn cycle(
             }
             sqlx::query("INSERT INTO sync_inbox(inbox_id,event_type,aggregate_id,payload,idempotency_key,status) VALUES(?,'ORDER_CREATED',?,'{}',?,'PROCESSED')").bind(&order).bind(&order).bind(&order).execute(&mut *tx).await?;
         }
+        let notification = if known {
+            None
+        } else {
+            Some(crate::sqlite_sale::snapshot(&mut tx, &id.to_string(), &order).await?)
+        };
         tx.commit().await?;
+        if let Some(order) = notification {
+            crate::ws::broadcast_new_order(&order);
+        }
         client
             .post::<()>(&SyncRequest::Acknowledge { id: o.id })
             .await?;
@@ -168,6 +208,14 @@ mod tests {
         }
         let counts:(i64,i64,i64)=sqlx::query_as("SELECT (SELECT count(*) FROM orders),(SELECT count(*) FROM order_items),(SELECT count(*) FROM sync_inbox)").fetch_one(&pool).await.unwrap();
         assert_eq!(counts, (1, 1, 1));
+        let entries: i64 = sqlx::query_scalar(
+            "SELECT count(*) FROM activity_history WHERE action='ORDER_CREATED' AND entity_id=?",
+        )
+        .bind(id.to_string())
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+        assert_eq!(entries, 1);
         task.abort();
     }
 }
