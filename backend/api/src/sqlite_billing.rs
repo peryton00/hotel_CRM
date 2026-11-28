@@ -165,12 +165,12 @@ async fn split_round(
     {
         return Err(bad("Choose between 2 and 100 equal shares"));
     }
-    let (total,status,payment):(i64,String,String)=sqlx::query_as("SELECT total_amount_paise,status,payment_status FROM orders WHERE restaurant_id=? AND id=?").bind(&rid).bind(&id).fetch_optional(&mut *db).await?.ok_or_else(missing)?;
+    let (total,status,payment):(i64,String,String)=sqlx::query_as("SELECT total_amount_paise,status,payment_status FROM orders WHERE restaurant_id=? AND id=?").bind(rid).bind(id).fetch_optional(&mut *db).await?.ok_or_else(missing)?;
     if total < ways as i64 || status == "CANCELLED" || payment != "UNPAID" {
         return Err(bad("This order cannot be split"));
     }
     let count: i64 = sqlx::query_scalar("SELECT count(*) FROM split_bills WHERE order_id=?")
-        .bind(&id)
+        .bind(id)
         .fetch_one(&mut *db)
         .await?;
     if count != 0 && count != ways as i64 {
@@ -183,7 +183,7 @@ async fn split_round(
     if kind == "item" {
         let lines: Vec<(String, i64, i64)> =
             sqlx::query_as("SELECT id,quantity,unit_price_paise FROM order_items WHERE order_id=?")
-                .bind(&id)
+                .bind(id)
                 .fetch_all(&mut *db)
                 .await?;
         let mut available: HashMap<String, (i64, i64)> =
@@ -228,8 +228,8 @@ async fn split_round(
         }
     }
     if count > 0 {
-        let existing:Vec<(String,i64)>=sqlx::query_as("SELECT split_type,amount_paise FROM split_bills WHERE order_id=? ORDER BY split_number").bind(&id).fetch_all(&mut *db).await?;
-        let existing_lines:Vec<(i32,String,i64)>=sqlx::query_as("SELECT b.split_number,a.order_item_id,a.quantity FROM split_item_allocations a JOIN split_bills b ON b.id=a.split_bill_id WHERE b.order_id=?").bind(&id).fetch_all(&mut *db).await?;
+        let existing:Vec<(String,i64)>=sqlx::query_as("SELECT split_type,amount_paise FROM split_bills WHERE order_id=? ORDER BY split_number").bind(id).fetch_all(&mut *db).await?;
+        let existing_lines:Vec<(i32,String,i64)>=sqlx::query_as("SELECT b.split_number,a.order_item_id,a.quantity FROM split_item_allocations a JOIN split_bills b ON b.id=a.split_bill_id WHERE b.order_id=?").bind(id).fetch_all(&mut *db).await?;
         if existing
             .iter()
             .zip(&shares)
@@ -245,14 +245,14 @@ async fn split_round(
     if count == 0 {
         for (i, amount) in shares.into_iter().enumerate() {
             let sid = Uuid::new_v4().to_string();
-            sqlx::query("INSERT INTO split_bills(id,order_id,split_number,split_total_count,split_type,amount_paise) VALUES(?,?,?,?,?,?)").bind(&sid).bind(&id).bind((i+1) as i64).bind(ways as i64).bind(&kind).bind(amount).execute(&mut *db).await?;
+            sqlx::query("INSERT INTO split_bills(id,order_id,split_number,split_total_count,split_type,amount_paise) VALUES(?,?,?,?,?,?)").bind(&sid).bind(id).bind((i+1) as i64).bind(ways as i64).bind(&kind).bind(amount).execute(&mut *db).await?;
             for ((_, item), quantity) in by_share.iter().filter(|((index, _), _)| *index == i) {
                 sqlx::query("INSERT INTO split_item_allocations(split_bill_id,order_item_id,quantity) VALUES(?,?,?)").bind(&sid).bind(item).bind(quantity).execute(&mut *db).await?;
             }
         }
         sqlx::query("UPDATE orders SET is_split=1,split_count=? WHERE id=?")
             .bind(ways as i64)
-            .bind(&id)
+            .bind(id)
             .execute(&mut *db)
             .await?;
     }
@@ -260,10 +260,7 @@ async fn split_round(
         .bind(id)
         .fetch_all(&mut *db)
         .await?;
-    Ok(rows
-        .into_iter()
-        .map(record)
-        .collect::<Result<Vec<_>, _>>()?)
+    rows.into_iter().map(record).collect()
 }
 pub(super) async fn list_refunds(State(s): State<StaffState>, h: HeaderMap) -> Response {
     let (_, _, _, rid) = identity(&s, &h).await?;
