@@ -32,6 +32,23 @@ pub(super) enum SyncRequest {
     WaitForGuest {
         cursor: Option<Uuid>,
     },
+    ReservationPage {
+        restaurant_id: Uuid,
+        after_time: String,
+        after_id: Uuid,
+    },
+    FeedbackPage {
+        restaurant_id: Uuid,
+        after_time: String,
+        after_id: Uuid,
+    },
+    RewardClaims {
+        restaurant_id: Uuid,
+    },
+    RewardDelivered {
+        restaurant_id: Uuid,
+        request_id: Uuid,
+    },
     Pending,
     Acknowledge {
         id: Uuid,
@@ -40,6 +57,8 @@ pub(super) enum SyncRequest {
         restaurant_id: Uuid,
     },
 }
+
+const REWARD_COUPON: &str = "INSERT INTO coupons(restaurant_id,code,title,discount_type,discount_value,min_order_amount_paise,max_discount_paise,valid_from,valid_until,is_active,one_time_per_customer,is_targeted) SELECT ($1->>'restaurant_id')::uuid,$1->>'code',$1->>'title',$1->>'discount_type',($1->>'discount_value')::float8,($1->>'min')::bigint,($1->>'cap')::bigint,($1->>'start')::timestamptz,($1->>'end')::timestamptz,($1->>'active')::int=1,false,true ON CONFLICT(restaurant_id,code) DO UPDATE SET title=excluded.title,discount_type=excluded.discount_type,discount_value=excluded.discount_value,min_order_amount_paise=excluded.min_order_amount_paise,max_discount_paise=excluded.max_discount_paise,valid_from=excluded.valid_from,valid_until=excluded.valid_until,is_active=excluded.is_active,is_targeted=true,one_time_per_customer=false RETURNING id";
 
 fn guest_changes() -> &'static tokio::sync::watch::Sender<Uuid> {
     static CHANGES: std::sync::OnceLock<tokio::sync::watch::Sender<Uuid>> =
@@ -135,6 +154,38 @@ async fn handle(
 
 async fn apply(pool: &PgPool, request: SyncRequest) -> Result<Value, sqlx::Error> {
     match request {
+        SyncRequest::RewardClaims { restaurant_id } => {
+            let claims:Vec<Value>=sqlx::query_scalar("SELECT jsonb_build_object('request',r.request_id,'phone',u.phone,'code',c.code) FROM points_rewards r JOIN coupons c ON c.id=r.coupon_id JOIN customers u ON u.id=r.customer_id WHERE r.restaurant_id=$1 AND r.delivered_at IS NULL ORDER BY r.request_id LIMIT 100").bind(restaurant_id).fetch_all(pool).await?;
+            return Ok(json!(claims));
+        }
+        SyncRequest::RewardDelivered {
+            restaurant_id,
+            request_id,
+        } => {
+            sqlx::query("UPDATE points_rewards SET delivered_at=coalesce(delivered_at,now()) WHERE restaurant_id=$1 AND request_id=$2").bind(restaurant_id).bind(request_id).execute(pool).await?;
+        }
+        SyncRequest::ReservationPage {
+            restaurant_id,
+            after_time,
+            after_id,
+        } => {
+            let rows: Vec<crate::models::customer::Reservation> = sqlx::query_as(
+                "SELECT id, restaurant_id, table_id, customer_id, customer_name, coalesce(customer_phone, '') AS customer_phone,
+                 guest_count, reservation_time, status::text AS status, special_requests, created_at, updated_at
+                 FROM reservations WHERE restaurant_id=$1 AND (created_at,id)>($2::text::timestamptz,$3)
+                 ORDER BY created_at,id LIMIT 100")
+                .bind(restaurant_id).bind(after_time).bind(after_id).fetch_all(pool).await?;
+            return Ok(json!(rows));
+        }
+        SyncRequest::FeedbackPage {
+            restaurant_id,
+            after_time,
+            after_id,
+        } => {
+            let rows: Vec<crate::models::feedback::CustomerFeedback> = sqlx::query_as("SELECT id,restaurant_id,order_id,customer_name,customer_phone,rating,comments,resolution_note,coalesce(is_resolved,false) AS is_resolved,coalesce(is_public,false) AS is_public,created_at,coalesce(updated_at,created_at) AS updated_at FROM customer_feedback WHERE restaurant_id=$1 AND (created_at,id)>($2::text::timestamptz,$3) ORDER BY created_at,id LIMIT 100")
+                .bind(restaurant_id).bind(after_time).bind(after_id).fetch_all(pool).await?;
+            return Ok(json!(rows));
+        }
         SyncRequest::Catalog {
             id,
             restaurant,
@@ -216,6 +267,29 @@ async fn apply_event(pool: &PgPool, event: &OutboxRow) -> Result<(), sqlx::Error
         return Ok(());
     }
     match event.event_type.as_str() {
+        "POLICY_UPDATED" => {
+            if let Some(coupons) = event.payload["coupons"].as_array() {
+                for coupon in coupons {
+                    sqlx::query_scalar::<_, Uuid>(REWARD_COUPON)
+                        .bind(coupon)
+                        .fetch_one(&mut *tx)
+                        .await?;
+                }
+            }
+            sqlx::query("INSERT INTO reward_policy SELECT ($1->>'restaurant_id')::uuid,$1->'config' ON CONFLICT(restaurant_id) DO UPDATE SET config=excluded.config")
+              .bind(&event.payload).execute(&mut *tx).await?;
+        }
+        "WALLET_UPDATED" => {
+            let data = &event.payload;
+            let customer:Uuid=sqlx::query_scalar("INSERT INTO customers(restaurant_id,name,phone) SELECT ($1->>'restaurant_id')::uuid,$1->>'name',$1->>'phone' ON CONFLICT(restaurant_id,phone) DO UPDATE SET name=excluded.name RETURNING id")
+              .bind(data).fetch_one(&mut *tx).await?;
+            let coupon = sqlx::query_scalar::<_, Uuid>(REWARD_COUPON)
+                .bind(data)
+                .fetch_one(&mut *tx)
+                .await?;
+            sqlx::query("INSERT INTO coupon_assignments(restaurant_id,customer_id,coupon_id,max_redemptions,status) SELECT ($1->>'restaurant_id')::uuid,$2,$3,($1->>'limit')::int+(SELECT count(*)::int FROM points_rewards WHERE customer_id=$2 AND coupon_id=$3),$1->>'status' ON CONFLICT(coupon_id,customer_id) DO UPDATE SET max_redemptions=excluded.max_redemptions,status=excluded.status")
+              .bind(data).bind(customer).bind(coupon).execute(&mut *tx).await?;
+        }
         "ORDER_CREATED" | "ORDER_LINES_UPDATED" => {
             let p = &event.payload;
             let id = p

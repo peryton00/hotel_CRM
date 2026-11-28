@@ -95,6 +95,7 @@ pub(super) fn routes() -> Router<StaffState> {
             "/api/v1/orders/:id/split",
             post(billing::split).get(billing::order_splits),
         )
+        .route("/api/v1/session-split", post(billing::session_split))
         .route("/api/v1/split-bills", get(billing::splits))
         .route("/api/v1/payments", post(pay))
         .route("/api/v1/refunds", get(billing::list_refunds))
@@ -951,6 +952,51 @@ mod sale_tests {
         let (status, round) = call(&app, "POST", "orders", ticket, token).await;
         assert_eq!(status, 200, "{round}");
         assert_eq!(round["data"]["seating_session_id"], next_session);
+        let round_ids = [next["data"]["id"].clone(), round["data"]["id"].clone()];
+        let split_request = json!({"order_ids":round_ids,"ways":2,"discount_paise":1001});
+        assert_ne!(
+            call(&app, "POST", "session-split", split_request.clone(), token)
+                .await
+                .0,
+            200
+        );
+        for round_id in &round_ids {
+            let path = format!("orders/{}/status", round_id.as_str().unwrap());
+            let (status, body) =
+                call(&app, "PUT", &path, json!({"status":"PREPARING"}), token).await;
+            assert_eq!(status, 200, "{body}");
+        }
+        let stale = json!({"order_ids":[round_ids[0]],"ways":2});
+        assert_eq!(
+            call(&app, "POST", "session-split", stale, token).await.0,
+            400
+        );
+        let (status, bill) = call(&app, "POST", "session-split", split_request, token).await;
+        assert_eq!(status, 200, "{bill}");
+        let rounds = bill["data"].as_array().unwrap();
+        assert_eq!(rounds.len(), 2);
+        assert_eq!(
+            rounds
+                .iter()
+                .map(|r| r["order"]["discount_paise"].as_i64().unwrap())
+                .sum::<i64>(),
+            1001
+        );
+        for (idx, round) in rounds.iter().enumerate() {
+            for share in round["shares"].as_array().unwrap() {
+                let (status,payment)=call(&app,"POST","payments",json!({"order_id":round["order"]["id"],"split_bill_id":share["id"],"payment_method":"cash","amount_paise":share["amount_paise"]}),token).await;
+                assert_eq!(status, 200, "{payment}");
+            }
+            let state: String = sqlx::query_scalar("SELECT status FROM tables WHERE id=?")
+                .bind(table)
+                .fetch_one(&pool)
+                .await
+                .unwrap();
+            assert_eq!(state, if idx == 0 { "OCCUPIED" } else { "AVAILABLE" });
+        }
+        let (_,fresh)=call(&app,"POST","orders",json!({"order_type":"dine_in","table_id":table,"items":[{"menu_item_id":item["data"]["id"],"quantity":1}]}),token).await;
+        assert_ne!(fresh["data"]["seating_session_id"], next_session);
+        assert_eq!(fresh["data"]["payment_status"], "UNPAID");
         let amount = o["data"]["total_amount_paise"].clone();
         let request =
             json!({"refund_amount_paise":amount,"reason":"Returned","idempotency_key":"refund-1"});
@@ -991,7 +1037,7 @@ mod sale_tests {
             "REFUNDED"
         );
         let counts:(i64,i64,i64)=sqlx::query_as("SELECT (SELECT count(*) FROM payments),(SELECT count(*) FROM invoices),(SELECT count(*) FROM refunds)").fetch_one(&pool).await.unwrap();
-        assert_eq!(counts, (2, 1, 1));
+        assert_eq!(counts, (6, 3, 1));
     }
 
     #[tokio::test]

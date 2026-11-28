@@ -237,6 +237,10 @@ pub fn create_router(state: AppState) -> Router {
             "/public/restaurant-info",
             get(public_routes::get_public_restaurant_info),
         )
+        .route(
+            "/public/customer/points-reward",
+            post(public_routes::claim_points),
+        )
         .route("/public/tables", get(public_routes::list_public_tables))
         .route(
             "/public/loyalty-config",

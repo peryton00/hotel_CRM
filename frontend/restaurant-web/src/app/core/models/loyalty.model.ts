@@ -56,6 +56,8 @@ export interface LoyaltyTransaction {
 }
 
 export interface LoyaltyMilestoneRewardConfig {
+  pointsCouponCode?: string;
+  tierVisits?: Record<string, number>;
   targetVisits: number;
   rewardType: 'PERCENT_DISCOUNT' | 'FLAT_DISCOUNT' | 'FREE_MEAL';
   discountPercent?: number;
@@ -80,3 +82,18 @@ export const DEFAULT_MILESTONE_REWARD: LoyaltyMilestoneRewardConfig = {
     'Enjoy 50% OFF your bill (up to ₹500) as a special thank-you on your 7th dining visit.',
   isActive: true,
 };
+
+export function visitTiers(overrides?: Record<string, number>) {
+  return DEFAULT_LOYALTY_TIERS.map(({ tier, minVisits }) => ({
+    tier,
+    minVisits: overrides?.[tier] ?? minVisits ?? 0,
+  })).sort((a, b) => a.minVisits - b.minVisits);
+}
+
+export function visitTier(visits: number, overrides?: Record<string, number>) {
+  return (
+    visitTiers(overrides)
+      .reverse()
+      .find((tier) => visits >= tier.minVisits)?.tier ?? 'BRONZE'
+  );
+}

@@ -46,7 +46,11 @@ describe('multi-round settlement', () => {
     expect(queue.groupOrdersIntoSessions(rounds)).toHaveLength(1);
     const amounts = [0, 1, 2].map((i) =>
       queue.getEqualSplitPartAmount.call(
-        { splitCount: () => 3 } as OrderQueueComponent,
+        {
+          splitCount: () => 3,
+          getEffectiveDiscount: () => 0,
+          selectedCouponCode: () => '',
+        } as unknown as OrderQueueComponent,
         { ...rounds[0], sessionRounds: rounds },
         i,
       ),

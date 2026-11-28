@@ -32,6 +32,8 @@ DROP TABLE IF EXISTS
     public.recipe_ingredients,
     public.stock_movements,
     public.wastage_records,
+    public.points_rewards,
+    public.reward_policy,
     public.coupons,
     public.coupon_assignments,
     public.coupon_redemptions,

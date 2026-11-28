@@ -221,6 +221,7 @@ pub struct PublicCreateOrderRequest {
 }
 
 pub async fn create_public_order(
+    user: Option<crate::auth::AuthenticatedUser>,
     State(pool): State<PgPool>,
     Json(req): Json<PublicCreateOrderRequest>,
 ) -> Result<Json<ApiResponse<crate::models::order::OrderWithItems>>, AppError> {
@@ -229,11 +230,22 @@ pub async fn create_public_order(
             "Customer name is required".to_string(),
         ));
     }
-    if req.customer_phone.trim().len() < 10 {
+    let mut req = req;
+    let number = req.customer_phone.trim();
+    let local = number
+        .strip_prefix("+91")
+        .or_else(|| {
+            (number.len() == 12)
+                .then(|| number.strip_prefix("91"))
+                .flatten()
+        })
+        .unwrap_or(number);
+    if local.len() != 10 || !local.bytes().all(|byte| byte.is_ascii_digit()) {
         return Err(AppError::BadRequest(
-            "Customer phone must be at least 10 characters".to_string(),
+            "A 10-digit mobile number is required".into(),
         ));
     }
+    req.customer_phone = local.to_owned();
 
     if req.items.is_empty() {
         return Err(AppError::BadRequest(
@@ -269,6 +281,17 @@ pub async fn create_public_order(
         ));
     }
 
+    let verified_customer = if req.coupon_code.is_some() {
+        if let Some(user) = user {
+            require_verified_phone(&user, &req.customer_phone)?;
+            sqlx::query_scalar::<_,Uuid>("SELECT id FROM customers WHERE restaurant_id=$1 AND right(phone,10)=right($2,10) ORDER BY updated_at DESC LIMIT 1")
+                .bind(req.restaurant_id).bind(&req.customer_phone).fetch_optional(&pool).await?
+        } else {
+            None
+        }
+    } else {
+        None
+    };
     let create_req = CreateOrderRequest {
         id: None,
         order_type: "DINE_IN".to_string(),
@@ -290,7 +313,7 @@ pub async fn create_public_order(
         discount_paise: req.discount_paise,
         applied_coupon_code: req.coupon_code,
         pickup_reference: None,
-        customer_id: None,
+        customer_id: verified_customer,
         seating_session_id: req.seating_session_id,
     };
 
@@ -436,6 +459,7 @@ pub async fn create_public_reservation(
         CustomerRepository::create_reservation(&pool, req.restaurant_id, create_req).await?;
 
     // Real-time broadcast to connected local Admin CRM instances (which handle local WhatsApp dispatch)
+    crate::sync::device::guest_committed();
     crate::ws::broadcast_new_reservation(&reservation);
 
     Ok(Json(ApiResponse::success(reservation)))
@@ -478,6 +502,16 @@ pub async fn create_public_feedback(
     let clean_phone = req
         .customer_phone
         .map(|p| p.chars().filter(|c| c.is_ascii_digit()).collect::<String>());
+
+    if req.customer_name.as_deref().unwrap_or("").trim().is_empty()
+        || !clean_phone
+            .as_ref()
+            .is_some_and(|p| (10..=15).contains(&p.len()))
+    {
+        return Err(AppError::BadRequest(
+            "Enter your name and phone number".into(),
+        ));
+    }
 
     // PentAGI Rapid Double-Click Defense:
     if let Some(ref phone) = clean_phone {
@@ -528,9 +562,18 @@ pub async fn create_public_feedback(
 pub async fn get_public_feedback(
     State(pool): State<PgPool>,
     Query(q): Query<RestaurantIdQuery>,
-) -> Result<Json<ApiResponse<Vec<crate::models::feedback::CustomerFeedback>>>, AppError> {
+) -> Result<Json<ApiResponse<Vec<serde_json::Value>>>, AppError> {
     let list = FeedbackRepository::list_public_feedback(&pool, q.rid).await?;
-    Ok(Json(ApiResponse::success(list)))
+    let reviews = list
+        .into_iter()
+        .map(|review| {
+            serde_json::json!({
+                "id": review.id, "customer_name": review.customer_name, "rating": review.rating,
+                "comments": review.comments, "created_at": review.created_at
+            })
+        })
+        .collect();
+    Ok(Json(ApiResponse::success(reviews)))
 }
 
 // ─── Handler 7: Public Active Offers/Coupons ─────────────────────────────────
@@ -591,6 +634,7 @@ pub async fn get_public_coupons(
         INNER JOIN coupon_assignments ca ON ca.coupon_id = c.id
         INNER JOIN customers cust ON cust.id = ca.customer_id
         WHERE c.restaurant_id = $1
+          AND ca.status='ACTIVE' AND ca.redemptions_used<ca.max_redemptions AND now() BETWEEN c.valid_from AND c.valid_until
           AND c.is_active = true
           AND (
             cust.phone = $2
@@ -725,6 +769,7 @@ pub struct PublicLoyaltyMilestoneConfig {
 
 #[derive(Debug, Serialize)]
 pub struct PublicCustomerLoyaltyResponse {
+    pub loyalty_points: i64,
     pub phone: String,
     pub name: Option<String>,
     pub visit_count: i32,
@@ -739,21 +784,26 @@ pub struct PublicCustomerLoyaltyResponse {
 }
 
 pub async fn get_public_loyalty_config(
-    State(_pool): State<PgPool>,
-    Query(_q): Query<RestaurantIdQuery>,
+    State(pool): State<PgPool>,
+    Query(q): Query<RestaurantIdQuery>,
 ) -> Result<Json<ApiResponse<PublicLoyaltyMilestoneConfig>>, AppError> {
+    let policy: serde_json::Value =
+        sqlx::query_scalar("SELECT config FROM reward_policy WHERE restaurant_id=$1")
+            .bind(q.rid)
+            .fetch_optional(&pool)
+            .await?
+            .unwrap_or_default();
+    let text = |key: &str| policy[key].as_str().unwrap_or_default().to_owned();
     Ok(Json(ApiResponse::success(PublicLoyaltyMilestoneConfig {
-        target_visits: 7,
-        reward_type: "PERCENT_DISCOUNT".to_string(),
-        discount_percent: Some(50.0),
-        max_discount_paise: Some(50000),
-        flat_discount_paise: Some(30000),
-        coupon_code: "VISIT7FREE".to_string(),
-        title: "7th Visit Celebration Reward".to_string(),
-        description:
-            "Enjoy 50% OFF your bill (up to ₹500) as a special thank-you on your 7th dining visit."
-                .to_string(),
-        is_active: true,
+        target_visits: policy["targetVisits"].as_i64().unwrap_or(7).clamp(1, 1000) as i32,
+        reward_type: text("rewardType"),
+        discount_percent: policy["discountPercent"].as_f64(),
+        max_discount_paise: policy["maxDiscountPaise"].as_i64(),
+        flat_discount_paise: policy["flatDiscountPaise"].as_i64(),
+        coupon_code: text("couponCode"),
+        title: text("title"),
+        description: text("description"),
+        is_active: policy["isActive"].as_bool().unwrap_or(false),
     })))
 }
 
@@ -797,7 +847,13 @@ pub async fn get_public_customer_loyalty(
     .fetch_optional(&pool)
     .await?;
 
-    let target_visits = 7;
+    let policy: serde_json::Value =
+        sqlx::query_scalar("SELECT config FROM reward_policy WHERE restaurant_id=$1")
+            .bind(q.rid)
+            .fetch_optional(&pool)
+            .await?
+            .unwrap_or_default();
+    let target_visits = policy["targetVisits"].as_i64().unwrap_or(7).clamp(1, 1000) as i32;
     let (mut name, mut visits, tier) = match row {
         Some(r) => (
             r.name.filter(|n| !n.trim().is_empty()),
@@ -834,37 +890,32 @@ pub async fn get_public_customer_loyalty(
         }
     }
 
-    // Fallback: If visit_count is 0, count orders from orders table
-    if visits == 0 {
-        if let Ok(Some(cnt)) = sqlx::query_scalar::<_, i32>(
-            r#"
-            SELECT COUNT(DISTINCT COALESCE(seating_session_id::text,id::text))::int
-            FROM orders
-            WHERE restaurant_id = $1
-              AND (
-                customer_phone = $2
-                OR customer_phone_e164 = $2
-                OR RIGHT(customer_phone, 10) = RIGHT($2, 10)
-              )
-            "#,
-        )
-        .bind(q.rid)
-        .bind(&clean_phone)
-        .fetch_optional(&pool)
-        .await
-        {
-            if cnt > 0 {
-                visits = cnt;
-            }
-        }
-    }
+    let recorded: i32 = sqlx::query_scalar(
+        "SELECT count(DISTINCT coalesce(seating_session_id::text,id::text))::int FROM orders WHERE restaurant_id=$1 AND right(coalesce(nullif(customer_phone_e164,''),customer_phone),10)=right($2,10)"
+    ).bind(q.rid).bind(&clean_phone).fetch_one(&pool).await?;
+    visits = visits.max(recorded);
 
-    let milestone_unlocked = visits >= target_visits;
+    let loyalty_points: i64 = sqlx::query_scalar("SELECT (COALESCE(SUM(p.amount_paise),0)::bigint - (SELECT coalesce(sum(r.refund_amount_paise),0)::bigint FROM refunds r JOIN orders x ON x.id=r.order_id WHERE x.restaurant_id=$1 AND right(x.customer_phone_e164,10)=right($2,10) AND lower(r.status::text)='completed'))/1000 FROM payments p JOIN orders o ON o.id=p.order_id WHERE o.restaurant_id=$1 AND right(o.customer_phone_e164,10)=right($2,10) AND lower(p.status::text)='completed'").bind(q.rid).bind(&clean_phone).fetch_one(&pool).await?;
+    let tier = policy["tierVisits"]
+        .as_object()
+        .and_then(|tiers| {
+            tiers
+                .iter()
+                .filter_map(|(name, v)| Some((v.as_i64()?, name)))
+                .filter(|(min, _)| *min <= i64::from(visits))
+                .max_by_key(|(min, _)| *min)
+                .map(|(_, name)| name.clone())
+        })
+        .unwrap_or(tier);
+    let milestone_unlocked = false; // Earned coupons are read from the wallet.
+    let redeemed:i64=sqlx::query_scalar("SELECT count(*) FROM points_rewards r JOIN customers c ON c.id=r.customer_id WHERE r.restaurant_id=$1 AND right(c.phone,10)=right($2,10)").bind(q.rid).bind(&clean_phone).fetch_one(&pool).await?;
+    let loyalty_points = (loyalty_points - redeemed * 1000).max(0);
 
     Ok(Json(ApiResponse::success(PublicCustomerLoyaltyResponse {
+        loyalty_points,
         phone: clean_phone,
         name,
-        visit_count: visits,
+        visit_count: visits % target_visits,
         loyalty_tier: tier,
         target_visits,
         milestone_unlocked,
@@ -962,9 +1013,50 @@ pub async fn guest_order_status(
     State(pool): State<PgPool>,
     Path(key): Path<Uuid>,
 ) -> Result<Json<ApiResponse<serde_json::Value>>, AppError> {
-    let (accepted, status): (bool, String) = sqlx::query_as("SELECT r.received_at IS NOT NULL,o.status FROM guest_order_receipts r JOIN orders o ON o.id=r.order_id WHERE r.request_id=$1")
+    let (accepted, status, settled): (bool, String, bool) = sqlx::query_as("SELECT r.received_at IS NOT NULL,o.status,lower(o.payment_status::text)='paid' AND NOT EXISTS(SELECT 1 FROM orders sibling WHERE sibling.restaurant_id=o.restaurant_id AND sibling.seating_session_id=o.seating_session_id AND lower(sibling.status::text)<>'cancelled' AND lower(sibling.payment_status::text) NOT IN ('paid','refunded')) FROM guest_order_receipts r JOIN orders o ON o.id=r.order_id WHERE r.request_id=$1")
         .bind(key).fetch_optional(&pool).await?.ok_or_else(|| AppError::NotFound("Receipt unavailable".into()))?;
     Ok(Json(ApiResponse::success(
-        json!({"accepted":accepted,"status":if accepted {status} else {"pending".into()}}),
+        json!({"accepted":accepted,"settled":settled,"status":if accepted {status} else {"pending".into()}}),
     )))
+}
+
+#[derive(Deserialize)]
+pub struct PointsClaim {
+    restaurant_id: Uuid,
+    phone: String,
+    request_id: Uuid,
+}
+pub async fn claim_points(
+    user: crate::auth::AuthenticatedUser,
+    State(pool): State<PgPool>,
+    Json(req): Json<PointsClaim>,
+) -> Result<Json<ApiResponse<bool>>, AppError> {
+    require_verified_phone(&user, &req.phone)?;
+    let mut tx = pool.begin().await?;
+    let customer:Uuid=sqlx::query_scalar("SELECT id FROM customers WHERE restaurant_id=$1 AND right(phone,10)=right($2,10) ORDER BY updated_at DESC LIMIT 1 FOR UPDATE").bind(req.restaurant_id).bind(&req.phone).fetch_optional(&mut *tx).await?.ok_or_else(||AppError::BadRequest("Customer unavailable".into()))?;
+    if sqlx::query_scalar::<_, bool>(
+        "SELECT EXISTS(SELECT 1 FROM points_rewards WHERE request_id=$1 AND customer_id=$2)",
+    )
+    .bind(req.request_id)
+    .bind(customer)
+    .fetch_one(&mut *tx)
+    .await?
+    {
+        return Ok(Json(ApiResponse::success(true)));
+    }
+    let points:i64=sqlx::query_scalar("SELECT (COALESCE(SUM(p.amount_paise),0)::bigint - (SELECT coalesce(sum(r.refund_amount_paise),0)::bigint FROM refunds r JOIN orders x ON x.id=r.order_id WHERE x.restaurant_id=$1 AND right(x.customer_phone_e164,10)=right($2,10) AND lower(r.status::text)='completed'))/1000-(SELECT count(*)*1000 FROM points_rewards WHERE customer_id=$3) FROM payments p JOIN orders o ON o.id=p.order_id WHERE o.restaurant_id=$1 AND right(o.customer_phone_e164,10)=right($2,10) AND lower(p.status::text)='completed'").bind(req.restaurant_id).bind(&req.phone).bind(customer).fetch_one(&mut *tx).await?;
+    if points < 1000 {
+        return Err(AppError::BadRequest("1000 points required".into()));
+    }
+    let coupon:Uuid=sqlx::query_scalar("SELECT c.id FROM reward_policy r JOIN coupons c ON c.restaurant_id=r.restaurant_id AND upper(c.code)=upper(r.config->>'pointsCouponCode') WHERE r.restaurant_id=$1 AND c.is_active AND now() BETWEEN c.valid_from AND c.valid_until").bind(req.restaurant_id).fetch_optional(&mut *tx).await?.ok_or_else(||AppError::BadRequest("Points reward is unavailable".into()))?;
+    sqlx::query("INSERT INTO points_rewards(request_id,restaurant_id,customer_id,coupon_id) VALUES($1,$2,$3,$4)")
+        .bind(req.request_id)
+        .bind(req.restaurant_id)
+        .bind(customer)
+        .bind(coupon)
+        .execute(&mut *tx)
+        .await?;
+    sqlx::query("INSERT INTO coupon_assignments(restaurant_id,customer_id,coupon_id,max_redemptions,status) VALUES($1,$2,$3,1,'ACTIVE') ON CONFLICT(coupon_id,customer_id) DO UPDATE SET max_redemptions=coupon_assignments.max_redemptions+1,status='ACTIVE'").bind(req.restaurant_id).bind(customer).bind(coupon).execute(&mut *tx).await?;
+    tx.commit().await?;
+    Ok(Json(ApiResponse::success(true)))
 }

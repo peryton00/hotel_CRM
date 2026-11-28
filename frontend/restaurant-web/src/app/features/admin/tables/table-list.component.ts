@@ -1,4 +1,9 @@
 import {
+  groupOrdersIntoSessions,
+  needsKitchen,
+  OrderSessionGroup,
+} from '../../../core/models/order-session';
+import {
   Component,
   inject,
   signal,
@@ -1597,234 +1602,33 @@ import { environment } from '../../../../environments/environment';
                   </div>
                 </div>
 
-                @if (getActiveOrdersByTable(insTbl); as actOrders) {
-                  @if (actOrders.length > 0) {
-                    <div class="orders-accordion-list">
-                      @for (actOrder of actOrders; track actOrder.id; let ordIdx = $index) {
-                        <div
-                          class="active-order-card"
-                          [class.order-ready]="actOrder.status === 'READY'"
-                          [class.order-served]="actOrder.status === 'SERVED'"
+                @for (session of canvasSessions(insTbl); track session.sessionId) {
+                  <div class="active-order-card">
+                    <strong>Table {{ insTbl.number }} · {{ session.customerName }}</strong>
+                    @for (round of session.orders; track round.id; let i = $index) {
+                      <section class="card-footer-actions-apple">
+                        <strong
+                          >Round {{ i + 1 }} · {{ round.orderNumber }} · {{ round.status }}</strong
                         >
-                          <!-- Apple Card Top Accent Strip -->
-                          <div class="apple-card-accent"></div>
-
-                          <!-- 1. Header: Table Pill + Round Badge + Order ID + Time + Status Badge -->
-                          <div class="card-top apple-card-top">
-                            <div class="header-left-cluster">
-                              <span class="apple-table-pill">
-                                <i class="ph ph-table"></i>
-                                <span>Table {{ insTbl.number }}</span>
-                              </span>
-                              <span class="round-badge">Round {{ ordIdx + 1 }}</span>
-                              <span class="ord-num apple-ord-num">#{{ actOrder.orderNumber }}</span>
-                            </div>
-
-                            <div class="header-right-cluster">
-                              <span class="ord-time apple-ord-time">
-                                <i class="ph ph-clock"></i>
-                                {{ actOrder.createdAt | date: 'shortTime' }}
-                              </span>
-                              <app-status-badge [status]="actOrder.status"></app-status-badge>
-                            </div>
-                          </div>
-
-                          <!-- 2. Guest & Server Info Strip (Apple Recessed Surface) -->
-                          <div class="guest-server-recessed">
-                            <div class="guest-compact-meta">
-                              <div class="guest-avatar-disc">
-                                {{ (actOrder.customerName || 'G').charAt(0).toUpperCase() }}
-                              </div>
-                              <div class="guest-text-col truncate">
-                                <span
-                                  class="cust-name-clean truncate"
-                                  [title]="actOrder.customerName"
-                                  >{{ actOrder.customerName || 'Walk-in Guest' }}</span
-                                >
-                                @if (actOrder.customerPhone) {
-                                  <span class="phone-sub-clean">
-                                    <i class="ph ph-phone"></i> {{ actOrder.customerPhone }}
-                                  </span>
-                                }
-                              </div>
-                            </div>
-
-                            <div
-                              class="server-inline-picker"
-                              [class.server-bar-locked]="isOrderPaid(actOrder)"
-                            >
-                              @if (isOrderPaid(actOrder)) {
-                                <div class="server-completed-pill" title="Serving Staff">
-                                  <i class="ph ph-lock-key"></i>
-                                  <span class="truncate">{{
-                                    getServerStaffName(actOrder.serverStaffId) || 'Staff'
-                                  }}</span>
-                                  <button
-                                    type="button"
-                                    class="btn-unlock-inline"
-                                    (click)="
-                                      promptChangePaidServer(actOrder); $event.stopPropagation()
-                                    "
-                                    title="Change serving staff on paid order"
-                                  >
-                                    <i class="ph ph-pencil-simple"></i>
-                                  </button>
-                                </div>
-                              } @else {
-                                <div class="server-select-pill">
-                                  <i class="ph ph-user-check"></i>
-                                  <select
-                                    [id]="'server-' + actOrder.id"
-                                    class="server-select-clean"
-                                    [class.is-unassigned]="!actOrder.serverStaffId"
-                                    [ngModel]="actOrder.serverStaffId || ''"
-                                    (ngModelChange)="onAssignActiveOrderServer(actOrder, $event)"
-                                    (click)="$event.stopPropagation()"
-                                    title="Assign staff handling this order"
-                                  >
-                                    <option value="">Server...</option>
-                                    @for (s of staffMembers(); track s.id) {
-                                      <option [value]="s.id">{{ s.name }} ({{ s.role }})</option>
-                                    }
-                                  </select>
-                                  <i class="ph ph-caret-down pill-caret"></i>
-                                </div>
-                              }
-                            </div>
-                          </div>
-
-                          <!-- 3. Arrived Order Items Stream (Editorial Receipt Style) -->
-                          <div class="session-receipt-stream">
-                            <div class="receipt-stream-header">
-                              <span class="receipt-stream-title">
-                                <i class="ph ph-receipt"></i>
-                                Ordered Items ({{ actOrder.items.length }}
-                                {{ actOrder.items.length === 1 ? 'Item' : 'Items' }})
-                              </span>
-                              <span class="receipt-stream-subtotal">
-                                {{ actOrder.subtotal || actOrder.totalAmount | currencyInr }}
-                              </span>
-                            </div>
-
-                            <div class="receipt-rounds-body">
-                              <div
-                                class="receipt-round-segment"
-                                [class.round-pending-soft]="actOrder.status === 'PENDING'"
-                              >
-                                <div class="round-items-clean">
-                                  @for (it of actOrder.items; track it.id) {
-                                    <div class="receipt-item-row">
-                                      <div class="item-name-cluster">
-                                        <span class="qty-bubble">{{ it.quantity }}×</span>
-                                        <span class="item-title truncate" [title]="it.name">{{
-                                          it.name
-                                        }}</span>
-                                        @if (it.selectedPortion) {
-                                          <span class="portion-tag">{{
-                                            it.selectedPortion.label
-                                          }}</span>
-                                        }
-                                      </div>
-                                      <span class="item-price">{{
-                                        it.itemTotal || it.unitPrice * it.quantity | currencyInr
-                                      }}</span>
-                                    </div>
-                                  }
-                                </div>
-                              </div>
-                            </div>
-                          </div>
-
-                          <!-- 4. Grand Total Financial Breakdown Strip -->
-                          <div class="bill-strip grand-bill-strip-apple">
-                            <div class="sub-line">
-                              <span class="bill-label">Subtotal</span>
-                              <span class="bill-val">{{
-                                actOrder.subtotal || actOrder.totalAmount | currencyInr
-                              }}</span>
-                            </div>
-                            @if (actOrder.discountAmount && actOrder.discountAmount > 0) {
-                              <div class="sub-line discount">
-                                <span class="bill-label"
-                                  ><i class="ph ph-tag"></i>
-                                  {{ actOrder.appliedCouponCode || 'Discount' }}</span
-                                >
-                                <span class="bill-val"
-                                  >-{{ actOrder.discountAmount | currencyInr }}</span
-                                >
-                              </div>
-                            }
-                            <div class="total-row-apple">
-                              <div class="total-meta-left">
-                                <span class="total-label-apple">Payable Total</span>
-                                @if (isOrderPaid(actOrder)) {
-                                  <span class="status-pill-chip paid"
-                                    ><i class="ph ph-check-circle"></i> PAID</span
-                                  >
-                                } @else {
-                                  <span class="status-pill-chip unpaid"
-                                    ><i class="ph ph-clock"></i> UNPAID</span
-                                  >
-                                }
-                              </div>
-                              <span class="payable-val-apple">{{
-                                actOrder.totalAmount | currencyInr
-                              }}</span>
-                            </div>
-                          </div>
-
-                          <!-- 5. Tactile Action Controls -->
-                          <div class="card-footer-actions-apple">
-                            @if (!isOrderPaid(actOrder)) {
-                              <div class="action-row-primary">
-                                <button
-                                  type="button"
-                                  class="apple-btn-primary"
-                                  (click)="
-                                    openCanvasSettleModal(actOrder); $event.stopPropagation()
-                                  "
-                                  title="Settle payment for Order #{{ actOrder.orderNumber }}"
-                                >
-                                  <i class="ph ph-credit-card"></i>
-                                  <span
-                                    >Settle Bill ({{ actOrder.totalAmount | currencyInr }})</span
-                                  >
-                                </button>
-                              </div>
-                            }
-
-                            <div class="apple-util-grid" [class.is-settled]="isOrderPaid(actOrder)">
-                              <a
-                                [routerLink]="['/admin/orders']"
-                                class="apple-util-btn"
-                                title="View in Live Order Queue"
-                              >
-                                <i class="ph ph-list-dashes"></i>
-                                <span>Queue</span>
-                              </a>
-
-                              @if (isOrderPaid(actOrder) && actOrder.status !== 'CANCELLED') {
-                                <button
-                                  type="button"
-                                  class="apple-util-btn"
-                                  (click)="printBillForOrder(actOrder); $event.stopPropagation()"
-                                  title="Print customer receipt"
-                                >
-                                  <i class="ph ph-printer"></i>
-                                  <span>Print Bill</span>
-                                </button>
-                              }
-                            </div>
-                          </div>
-                        </div>
-                      }
-                    </div>
-                  } @else {
-                    <div class="no-orders-box">
-                      <i class="ph ph-tray text-muted"></i>
-                      <span>No active food orders for Table {{ insTbl.number }}.</span>
-                    </div>
-                  }
+                        @for (item of round.items; track $index) {
+                          <div>{{ item.quantity }} × {{ item.name }}</div>
+                        }
+                        @if (needsKitchen(round)) {
+                          <button class="apple-btn-primary" (click)="sendRound(round)">
+                            Send round {{ i + 1 }} to kitchen
+                          </button>
+                        }
+                      </section>
+                    }
+                    @if (!awaitingKitchen(session)) {
+                      <button class="apple-btn-primary" (click)="settleCanvasSession(session)">
+                        Settle bill ({{ session.grandTotal | currencyInr }})
+                      </button>
+                    }
+                    <a [routerLink]="['/admin/orders']">Live Orders</a>
+                  </div>
+                } @empty {
+                  <p>No active orders for this table.</p>
                 }
               </div>
 
@@ -9036,6 +8840,7 @@ export class TableListComponent implements OnInit {
   });
 
   ngOnInit(): void {
+    this.dataService.refreshTables();
     this.dataService.loadStaff();
     this.loadCustomPlaces();
     this.loadFloorElements();
@@ -10623,6 +10428,23 @@ export class TableListComponent implements OnInit {
     }, 350);
   }
 
+  needsKitchen = needsKitchen;
+  canvasSessions(table: Table) {
+    return groupOrdersIntoSessions(
+      this.mock.orders().filter((o) => o.tableId === table.id || o.tableNumber === table.number),
+    ).filter(
+      (group) => !group.isAllPaid && !group.isAllCompleted && group.effectiveStatus !== 'CANCELLED',
+    );
+  }
+  awaitingKitchen(session: OrderSessionGroup) {
+    return session.orders.some(needsKitchen);
+  }
+  sendRound(round: Order) {
+    this.mock.updateOrderStatusAtomic(round.id, 'PREPARING');
+  }
+  settleCanvasSession(session: OrderSessionGroup) {
+    this.router.navigate(['/admin/orders'], { state: { settleOrderId: session.primaryOrder.id } });
+  }
   getActiveOrdersByTable(table: Table): Order[] {
     return this.mock
       .orders()
@@ -10858,23 +10680,11 @@ export class TableListComponent implements OnInit {
   }
 
   getCustomerMenuBaseUrl(): string {
-    const hostedDefault = 'https://gurukripadhaba-menu.vercel.app';
-    let base = localStorage.getItem('hotel_crm_customer_menu_url')?.trim();
-
-    // Enforce hosted production link: If base is missing, invalid, or contains localhost/127.0.0.1/tauri, reset to hosted URL
-    if (
-      !base ||
-      base.includes('localhost') ||
-      base.includes('127.0.0.1') ||
-      base.startsWith('tauri:') ||
-      !base.startsWith('http')
-    ) {
-      base = environment.customerMenuUrl?.trim() || hostedDefault;
-      if (base.includes('localhost') || base.includes('127.0.0.1') || !base.startsWith('http')) {
-        base = hostedDefault;
-      }
-      localStorage.setItem('hotel_crm_customer_menu_url', base);
-    }
+    const configured =
+      localStorage.getItem('hotel_crm_customer_menu_url')?.trim() ||
+      this.mock.restaurant()?.contact?.website?.trim();
+    const base =
+      configured && /^https?:\/\//i.test(configured) ? configured : environment.customerMenuUrl;
     return base.replace(/\/+$/, '');
   }
 

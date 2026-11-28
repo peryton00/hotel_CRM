@@ -1,3 +1,4 @@
+import { visitTier } from '../../../core/models/loyalty.model';
 import { Component, inject, signal, computed, effect, HostListener } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { RouterModule, Router } from '@angular/router';
@@ -25,34 +26,12 @@ import {
 } from '../../../core/utils/whatsapp-bill.util';
 import { WhatsAppBridgeService } from '../../../core/services/whatsapp-bridge.service';
 
-export interface OrderSessionGroup {
-  sessionId: string;
-  primaryOrder: Order;
-  latestOrder: Order;
-  orders: Order[];
-  isMultiRound: boolean;
-  orderCount: number;
-  tableNumber?: string;
-  tableId?: string;
-  orderType: 'DINE_IN' | 'TAKEAWAY';
-  pickupReference?: string;
-  customerName: string;
-  customerPhone?: string;
-  serverStaffId?: string;
-  createdAt: string;
-  latestCreatedAt: string;
-  grandSubtotal: number;
-  grandTax: number;
-  grandDiscount: number;
-  grandTotal: number;
-  effectiveStatus: OrderStatus;
-  isAllCompleted: boolean;
-  isAllPaid: boolean;
-  isSplit?: boolean;
-  splitCount?: number;
-  printCount?: number;
-  paymentMethod?: string;
-}
+import {
+  groupOrdersIntoSessions,
+  needsKitchen,
+  OrderSessionGroup,
+} from '../../../core/models/order-session';
+export type { OrderSessionGroup } from '../../../core/models/order-session';
 
 @Component({
   selector: 'app-order-queue',
@@ -448,6 +427,9 @@ export interface OrderSessionGroup {
                       @if (session.customerPhone) {
                         <span class="phone-sub-clean">
                           <i class="ph ph-phone"></i> {{ session.customerPhone }}
+                          @if (tiersByPhone().get(phoneKey(session.customerPhone)); as tier) {
+                            · {{ tier }}
+                          }
                         </span>
                       }
                     </div>
@@ -598,29 +580,43 @@ export interface OrderSessionGroup {
                 <div class="card-footer-actions-apple">
                   <!-- Primary Action Button: Direct Feedback -->
                   <div class="action-row-primary">
-                    <button
-                      type="button"
-                      (click)="$event.stopPropagation(); handleCheckoutAndPrint(session)"
-                      class="apple-btn-primary"
-                      [disabled]="
-                        isProcessingCheckout() === session.primaryOrder.id ||
-                        isNavigatingToInvoice() === session.primaryOrder.id
-                      "
-                    >
-                      @if (isProcessingCheckout() === session.primaryOrder.id) {
-                        <i class="ph ph-spinner ph-spin"></i>
-                        <span>Opening Checkout...</span>
-                      } @else if (isNavigatingToInvoice() === session.primaryOrder.id) {
-                        <i class="ph ph-spinner ph-spin"></i>
-                        <span>Opening Invoice...</span>
-                      } @else if (!session.isAllPaid) {
-                        <i class="ph ph-credit-card"></i>
-                        <span>Settle Bill ({{ session.grandTotal | currencyInr }})</span>
-                      } @else {
-                        <i class="ph ph-receipt"></i>
-                        <span>Print Invoice ({{ session.grandTotal | currencyInr }})</span>
+                    @if (awaitingKitchen(session.orders)) {
+                      @for (round of session.orders; track round.id; let i = $index) {
+                        @if (needsKitchen(round)) {
+                          <button
+                            type="button"
+                            class="apple-btn-primary"
+                            (click)="$event.stopPropagation(); sendToKitchen(round)"
+                          >
+                            Send round {{ i + 1 }} to kitchen
+                          </button>
+                        }
                       }
-                    </button>
+                    } @else {
+                      <button
+                        type="button"
+                        (click)="$event.stopPropagation(); handleCheckoutAndPrint(session)"
+                        class="apple-btn-primary"
+                        [disabled]="
+                          isProcessingCheckout() === session.primaryOrder.id ||
+                          isNavigatingToInvoice() === session.primaryOrder.id
+                        "
+                      >
+                        @if (isProcessingCheckout() === session.primaryOrder.id) {
+                          <i class="ph ph-spinner ph-spin"></i>
+                          <span>Opening Checkout...</span>
+                        } @else if (isNavigatingToInvoice() === session.primaryOrder.id) {
+                          <i class="ph ph-spinner ph-spin"></i>
+                          <span>Opening Invoice...</span>
+                        } @else if (!session.isAllPaid) {
+                          <i class="ph ph-credit-card"></i>
+                          <span>Settle Bill ({{ session.grandTotal | currencyInr }})</span>
+                        } @else {
+                          <i class="ph ph-receipt"></i>
+                          <span>Print Invoice ({{ session.grandTotal | currencyInr }})</span>
+                        }
+                      </button>
+                    }
                   </div>
 
                   <!-- Secondary 4-Column Utility Grid -->
@@ -1711,77 +1707,7 @@ export interface OrderSessionGroup {
                 </div>
               }
 
-              <!-- 1. FULL BILL SETTLEMENT VIEW -->
-              @if (!ord.isSplit && settleMode() === 'FULL') {
-                <div class="settle-summary-box">
-                  <div class="settle-row">
-                    <span>Guest Name</span>
-                    <strong>{{ ord.customerName }}</strong>
-                  </div>
-
-                  <!-- Itemized dishes breakdown -->
-                  <div class="settle-items-section">
-                    <div class="settle-items-header">
-                      <span>Ordered Dishes</span>
-                      <span class="text-xs text-muted"
-                        >{{ getSettlementItems(ord).length }} items</span
-                      >
-                    </div>
-                    <div class="settle-items-list">
-                      @for (item of getSettlementItems(ord); track $index) {
-                        <div class="settle-item-row">
-                          <div class="settle-item-left">
-                            <span class="item-qty-pill">{{ item.quantity }}x</span>
-                            <div class="item-text-group">
-                              <span class="item-name-text">{{ item.name }}</span>
-                              @if (item.notes || item.specialInstructions) {
-                                <span class="item-instruction-text">{{
-                                  item.notes || item.specialInstructions
-                                }}</span>
-                              }
-                            </div>
-                          </div>
-                          <span class="item-total-price">{{
-                            item.itemTotal || item.unitPrice * item.quantity | currencyInr
-                          }}</span>
-                        </div>
-                      }
-                    </div>
-                  </div>
-
-                  <div class="settle-divider"></div>
-
-                  <div class="settle-row">
-                    <span>Item Subtotal</span>
-                    <span class="font-semibold">{{ ord.subtotal | currencyInr }}</span>
-                  </div>
-                  @if (settleDiscountMode() === 'COUPON' && getEffectiveDiscount(ord) > 0) {
-                    <div class="settle-row discount">
-                      <span>Coupon Discount ({{ selectedCouponCode() }})</span>
-                      <span class="text-success font-semibold"
-                        >-{{ getEffectiveDiscount(ord) | currencyInr }}</span
-                      >
-                    </div>
-                  }
-                  <div class="settle-row">
-                    <span>Taxes (CGST + SGST)</span>
-                    <span>{{ getSettlementTax(ord) | currencyInr }}</span>
-                  </div>
-                  @if (settleDiscountMode() === 'CUSTOM' && getEffectiveDiscount(ord) > 0) {
-                    <div class="settle-row discount">
-                      <span>Admin Discount / Round-off</span>
-                      <span class="text-success font-semibold"
-                        >-{{ getEffectiveDiscount(ord) | currencyInr }}</span
-                      >
-                    </div>
-                  }
-                  <div class="settle-divider"></div>
-                  <div class="settle-row total-highlight">
-                    <span>Net Payable Total</span>
-                    <span class="amount-large">{{ getSettlementTotal(ord) | currencyInr }}</span>
-                  </div>
-                </div>
-
+              @if (!ord.isSplit) {
                 <!-- Counter Discount & Coupons Block -->
                 <div class="settle-discount-card">
                   <div class="discount-header-row">
@@ -1909,6 +1835,77 @@ export interface OrderSessionGroup {
                       }
                     </div>
                   }
+                </div>
+              }
+              <!-- 1. FULL BILL SETTLEMENT VIEW -->
+              @if (!ord.isSplit && settleMode() === 'FULL') {
+                <div class="settle-summary-box">
+                  <div class="settle-row">
+                    <span>Guest Name</span>
+                    <strong>{{ ord.customerName }}</strong>
+                  </div>
+
+                  <!-- Itemized dishes breakdown -->
+                  <div class="settle-items-section">
+                    <div class="settle-items-header">
+                      <span>Ordered Dishes</span>
+                      <span class="text-xs text-muted"
+                        >{{ getSettlementItems(ord).length }} items</span
+                      >
+                    </div>
+                    <div class="settle-items-list">
+                      @for (item of getSettlementItems(ord); track $index) {
+                        <div class="settle-item-row">
+                          <div class="settle-item-left">
+                            <span class="item-qty-pill">{{ item.quantity }}x</span>
+                            <div class="item-text-group">
+                              <span class="item-name-text">{{ item.name }}</span>
+                              @if (item.notes || item.specialInstructions) {
+                                <span class="item-instruction-text">{{
+                                  item.notes || item.specialInstructions
+                                }}</span>
+                              }
+                            </div>
+                          </div>
+                          <span class="item-total-price">{{
+                            item.itemTotal || item.unitPrice * item.quantity | currencyInr
+                          }}</span>
+                        </div>
+                      }
+                    </div>
+                  </div>
+
+                  <div class="settle-divider"></div>
+
+                  <div class="settle-row">
+                    <span>Item Subtotal</span>
+                    <span class="font-semibold">{{ ord.subtotal | currencyInr }}</span>
+                  </div>
+                  @if (settleDiscountMode() === 'COUPON' && getEffectiveDiscount(ord) > 0) {
+                    <div class="settle-row discount">
+                      <span>Coupon Discount ({{ selectedCouponCode() }})</span>
+                      <span class="text-success font-semibold"
+                        >-{{ getEffectiveDiscount(ord) | currencyInr }}</span
+                      >
+                    </div>
+                  }
+                  <div class="settle-row">
+                    <span>Taxes (CGST + SGST)</span>
+                    <span>{{ getSettlementTax(ord) | currencyInr }}</span>
+                  </div>
+                  @if (settleDiscountMode() === 'CUSTOM' && getEffectiveDiscount(ord) > 0) {
+                    <div class="settle-row discount">
+                      <span>Admin Discount / Round-off</span>
+                      <span class="text-success font-semibold"
+                        >-{{ getEffectiveDiscount(ord) | currencyInr }}</span
+                      >
+                    </div>
+                  }
+                  <div class="settle-divider"></div>
+                  <div class="settle-row total-highlight">
+                    <span>Net Payable Total</span>
+                    <span class="amount-large">{{ getSettlementTotal(ord) | currencyInr }}</span>
+                  </div>
                 </div>
 
                 <div class="payment-selector-group">
@@ -8097,6 +8094,24 @@ export interface OrderSessionGroup {
 export class OrderQueueComponent {
   private dataService = inject(RestaurantDataService);
   private mock = this.dataService;
+  phoneKey(phone: string): string {
+    return phone.replace(/\D/g, '').slice(-10);
+  }
+  readonly tiersByPhone = computed(
+    () =>
+      new Map(
+        this.dataService
+          .customers()
+          .filter((customer) => customer.phone)
+          .map(
+            (customer) =>
+              [
+                this.phoneKey(customer.phone),
+                visitTier(customer.visitCount, this.dataService.milestoneRewardConfig().tierVisits),
+              ] as const,
+          ),
+      ),
+  );
   private toastService = inject(ToastService);
   readonly authService = inject(AdminAuthService);
   private adminAuth = this.authService;
@@ -8307,6 +8322,15 @@ export class OrderQueueComponent {
   }
 
   constructor() {
+    let requestedOrder = history.state?.settleOrderId;
+    effect(() => {
+      if (!requestedOrder) return;
+      const order = this.dataService.orders().find((o) => o.id === requestedOrder);
+      if (order) {
+        requestedOrder = undefined;
+        this.openSettleModal(order);
+      }
+    });
     this.dataService.loadStaff();
     let lastHandledEventTimestamp = 0;
     effect(() => {
@@ -8482,114 +8506,15 @@ export class OrderQueueComponent {
     return false;
   }
 
-  groupOrdersIntoSessions(ordersList: Order[]): OrderSessionGroup[] {
-    const sessionMap = new Map<string, Order[]>();
-
-    // Older tills could reuse a visit after closing only its first round.
-    const closures = new Map<string, number[]>();
-    for (const order of ordersList) {
-      if (!order.seatingSessionId || !order.settledAt || !this.isOrderPaid(order)) continue;
-      const times = closures.get(order.seatingSessionId) ?? [];
-      times.push(Date.parse(order.settledAt));
-      closures.set(order.seatingSessionId, times);
-    }
-
-    for (const ord of ordersList) {
-      let key = '';
-      if (ord.seatingSessionId) {
-        const visit = (closures.get(ord.seatingSessionId) ?? []).filter(
-          (t) => t < Date.parse(ord.createdAt),
-        ).length;
-        key = `sess_${ord.seatingSessionId}_${visit}_${ord.paymentStatus === 'PAID' || ord.paymentStatus === 'REFUNDED' ? 'closed' : ord.status === 'CANCELLED' ? ord.id : ord.isSplit ? 'split_' + ord.splitCount : 'open'}`;
-      } else {
-        // No session ID → each order is its own standalone session.
-        // Never group by table alone: different customer visits at the same table
-        // must stay separate. seatingSessionId is the ONLY grouping key.
-        key = `single_${ord.id}`;
-      }
-
-      if (!sessionMap.has(key)) {
-        sessionMap.set(key, []);
-      }
-      sessionMap.get(key)!.push(ord);
-    }
-
-    const groups: OrderSessionGroup[] = [];
-
-    for (const [sId, groupOrders] of sessionMap.entries()) {
-      const sorted = [...groupOrders].sort(
-        (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
-      );
-      const primary = sorted[0];
-      const latest = sorted[sorted.length - 1];
-
-      const grandSubtotal =
-        Math.round(sorted.reduce((sum, r) => sum + (r.subtotal || 0), 0) * 100) / 100;
-      const grandTax =
-        Math.round(sorted.reduce((sum, r) => sum + (r.taxAmount || 0), 0) * 100) / 100;
-      const grandDiscount =
-        Math.round(sorted.reduce((sum, r) => sum + (r.discountAmount || 0), 0) * 100) / 100;
-      const grossTotal = Math.round((grandSubtotal + grandTax) * 100) / 100;
-      const grandTotal = Math.round(Math.max(0, grossTotal - grandDiscount));
-
-      const isAllCompleted = sorted.every((r) => r.status === 'COMPLETED');
-      const isAllPaid = sorted.every((r) => r.paymentStatus === 'PAID');
-
-      // Determine highest operational priority status across active rounds
-      let effectiveStatus: OrderStatus = latest.status;
-      if (sorted.some((r) => r.status === 'PENDING')) {
-        effectiveStatus = 'PENDING';
-      } else if (sorted.some((r) => r.status === 'ACCEPTED')) {
-        effectiveStatus = 'ACCEPTED';
-      } else if (sorted.some((r) => r.status === 'PREPARING')) {
-        effectiveStatus = 'PREPARING';
-      } else if (sorted.some((r) => r.status === 'READY')) {
-        effectiveStatus = 'READY';
-      } else if (sorted.some((r) => r.status === 'DISPATCHED')) {
-        effectiveStatus = 'DISPATCHED';
-      } else if (sorted.every((r) => r.status === 'SERVED')) {
-        effectiveStatus = 'SERVED';
-      } else if (isAllCompleted) {
-        effectiveStatus = 'COMPLETED';
-      } else if (sorted.every((r) => r.status === 'CANCELLED')) {
-        effectiveStatus = 'CANCELLED';
-      }
-
-      const maxPrint = Math.max(0, ...sorted.map((r) => r.printCount || 0));
-      const hasSplit = sorted.some((r) => r.isSplit);
-      const splitCnt = sorted.find((r) => r.isSplit)?.splitCount;
-
-      groups.push({
-        sessionId: sId,
-        primaryOrder: primary,
-        latestOrder: latest,
-        orders: sorted,
-        isMultiRound: sorted.length > 1,
-        orderCount: sorted.length,
-        tableNumber: primary.tableNumber,
-        tableId: primary.tableId,
-        orderType: primary.orderType || 'DINE_IN',
-        pickupReference: primary.pickupReference,
-        customerName: primary.customerName || 'Walk-in Guest',
-        customerPhone: primary.customerPhone,
-        serverStaffId: sorted.find((r) => r.serverStaffId)?.serverStaffId || primary.serverStaffId,
-        createdAt: primary.createdAt,
-        latestCreatedAt: latest.createdAt,
-        grandSubtotal,
-        grandTax,
-        grandDiscount,
-        grandTotal,
-        effectiveStatus,
-        isAllCompleted,
-        isAllPaid,
-        isSplit: hasSplit,
-        splitCount: splitCnt,
-        printCount: maxPrint,
-        paymentMethod: sorted.find((r) => r.paymentMethod)?.paymentMethod || primary.paymentMethod,
-      });
-    }
-
-    return groups;
+  groupOrdersIntoSessions(orders: Order[]) {
+    return groupOrdersIntoSessions(orders);
+  }
+  needsKitchen = needsKitchen;
+  awaitingKitchen(orders: Order[]) {
+    return orders.some(needsKitchen);
+  }
+  sendToKitchen(order: Order) {
+    this.mock.updateOrderStatusAtomic(order.id, 'PREPARING');
   }
 
   isSessionNew(session: OrderSessionGroup): boolean {
@@ -9125,6 +9050,10 @@ export class OrderQueueComponent {
   // --- Settle Bill Modal Actions ---
   openSettleModal(order: Order): void {
     const sessionOrders = this.getSessionOrders(order);
+    if (sessionOrders.some(needsKitchen)) {
+      this.toastService.warning('Send each round to the kitchen before settlement.');
+      return;
+    }
     if (sessionOrders.length > 1) {
       const allItems = sessionOrders.flatMap((o) => o.items);
       const sub =
@@ -9347,12 +9276,32 @@ export class OrderQueueComponent {
 
   getEqualSplitPartAmount(order: Order, index: number): number {
     const n = this.splitCount();
-    return (
-      (order.sessionRounds ?? [order]).reduce((sum, round) => {
-        const cents = Math.round(round.totalAmount * 100);
-        return sum + Math.floor(cents / n) + Number(index < cents % n);
-      }, 0) / 100
-    );
+    const rounds = order.sessionRounds ?? [order];
+    const subtotal = Math.round(order.subtotal * 100);
+    const discount = Math.min(subtotal, Math.round(100 * this.getEffectiveDiscount(order)));
+    const recalculate =
+      discount !== rounds.reduce((sum, r) => sum + Math.round(r.discountAmount * 100), 0) ||
+      (!!this.selectedCouponCode() && this.settleDiscountMode() === 'COUPON');
+    let cumulative = 0;
+    let allocated = 0;
+    let share = 0;
+    for (const round of rounds) {
+      let total = Math.round(round.totalAmount * 100);
+      if (recalculate && subtotal > 0) {
+        const sub = Math.round(round.subtotal * 100);
+        cumulative += sub;
+        const end = Math.floor((discount * cumulative) / subtotal);
+        const taxable = sub - (end - allocated);
+        allocated = end;
+        const tax = Math.round((taxable * this.gstRate) / 100);
+        const service = Math.round(
+          (sub * (this.dataService.restaurant()?.taxSettings?.serviceChargeRate ?? 0)) / 100,
+        );
+        total = Math.round((taxable + tax + service) / 100) * 100;
+      }
+      share += Math.floor(total / n) + Number(index < total % n);
+    }
+    return share / 100;
   }
 
   incrementSplitCount(): void {
@@ -9369,20 +9318,29 @@ export class OrderQueueComponent {
 
   async confirmCreateSplit(order: Order): Promise<void> {
     this.isSettling.set(true);
-    for (const round of order.sessionRounds ?? [order]) {
-      const result = await this.mock.splitOrderEqual({
-        orderId: round.id,
+    try {
+      const rounds = order.sessionRounds ?? [order];
+      const discount = this.getEffectiveDiscount(order);
+      const updated = await this.mock.splitSession(
+        rounds,
+        this.splitCount(),
+        discount !== rounds.reduce((sum, r) => sum + r.discountAmount, 0)
+          ? Math.min(order.subtotal, discount)
+          : undefined,
+        this.settleDiscountMode() === 'COUPON' ? this.selectedCouponCode() : undefined,
+      );
+      this.selectedOrderForSettlement.set({
+        ...order,
+        isSplit: true,
         splitCount: this.splitCount(),
+        sessionRounds: updated,
+        totalAmount: updated.reduce((sum, r) => sum + r.totalAmount, 0),
       });
-      if (!result.success) {
-        this.closeSettleModal();
-        this.toastService.error(
-          result.error || 'Split creation stopped. Reopen the remaining rounds.',
-        );
-        return;
-      }
+    } catch (error) {
+      this.toastService.error(
+        error instanceof Error ? error.message : 'Could not split this session',
+      );
     }
-    this.selectedOrderForSettlement.set({ ...order, isSplit: true, splitCount: this.splitCount() });
     this.isSettling.set(false);
   }
 

@@ -14,9 +14,29 @@ pub(crate) fn table_committed() {
 pub async fn run(pool: SqlitePool, client: DeviceClient) {
     let mut last = None;
     let mut cursor = None;
+    let mut feedback_due = tokio::time::Instant::now();
     loop {
         if let Err(error) = cycle(&pool, &client, &mut last).await {
             tracing::warn!("SQLite device sync pending: {error}");
+        }
+        if tokio::time::Instant::now() >= feedback_due {
+            if let Err(error) = import_rewards(&pool, &client).await {
+                tracing::warn!("Points reward sync pending: {error}");
+            }
+            let interval = match import_feedback(&pool, &client).await {
+                Ok(100) => 1,
+                Ok(_) => 60,
+                Err(error) => {
+                    tracing::warn!("Customer feedback sync pending: {error}");
+                    60
+                }
+            };
+            feedback_due = tokio::time::Instant::now() + std::time::Duration::from_secs(interval);
+        }
+        match import_reservations(&pool, &client).await {
+            Ok(100) => continue,
+            Err(error) => tracing::warn!("Reservation sync pending: {error}"),
+            _ => {}
         }
         let wait = SyncRequest::WaitForGuest { cursor };
         tokio::select! {
@@ -33,6 +53,132 @@ pub async fn run(pool: SqlitePool, client: DeviceClient) {
             }
         }
     }
+}
+
+async fn import_rewards(pool: &SqlitePool, client: &DeviceClient) -> SyncResult<()> {
+    let rid: String = sqlx::query_scalar("SELECT id FROM restaurants LIMIT 1")
+        .fetch_one(pool)
+        .await?;
+    let restaurant_id = Uuid::parse_str(&rid)?;
+    let claims: Vec<serde_json::Value> = client
+        .post(&SyncRequest::RewardClaims { restaurant_id })
+        .await?;
+    for claim in claims {
+        let request_id = Uuid::parse_str(claim["request"].as_str().ok_or("Invalid reward ID")?)?;
+        let mut tx = pool.begin_with("BEGIN IMMEDIATE").await?;
+        let account:Option<(String,String)>=sqlx::query_as("SELECT u.id,c.id FROM customer_phone_lookup u JOIN coupons c ON c.restaurant_id=u.restaurant_id AND upper(c.code)=upper(?) WHERE u.restaurant_id=? AND substr(u.digits,-10)=substr(?,-10) LIMIT 1").bind(claim["code"].as_str()).bind(&rid).bind(claim["phone"].as_str()).fetch_optional(&mut *tx).await?;
+        let Some((customer, coupon)) = account else {
+            continue;
+        };
+        if sqlx::query(
+            "INSERT INTO imported_point_rewards VALUES(?,?,?) ON CONFLICT(request_id) DO NOTHING",
+        )
+        .bind(request_id.to_string())
+        .bind(&customer)
+        .bind(&coupon)
+        .execute(&mut *tx)
+        .await?
+        .rows_affected()
+            == 1
+        {
+            sqlx::query(
+                "UPDATE customers SET loyalty_points=max(0,loyalty_points-1000) WHERE id=?",
+            )
+            .bind(&customer)
+            .execute(&mut *tx)
+            .await?;
+            sqlx::query("INSERT INTO reward_wallet(id,restaurant_id,coupon_id,customer_id,max_redemptions,assigned_by) VALUES(?,?,?,?,1,'Points reward') ON CONFLICT(coupon_id,customer_id) DO UPDATE SET max_redemptions=max_redemptions+1,status='ACTIVE'").bind(Uuid::new_v4().to_string()).bind(&rid).bind(coupon).bind(customer).execute(&mut *tx).await?;
+        }
+        tx.commit().await?;
+        client
+            .post::<()>(&SyncRequest::RewardDelivered {
+                restaurant_id,
+                request_id,
+            })
+            .await?;
+    }
+    Ok(())
+}
+
+async fn import_reservations(pool: &SqlitePool, client: &DeviceClient) -> SyncResult<usize> {
+    let rid: String = sqlx::query_scalar("SELECT id FROM restaurants LIMIT 1")
+        .fetch_one(pool)
+        .await?;
+    let (after_time, after_id) = sqlx::query_as::<_, (String, String)>(
+        "SELECT created_at,id FROM reservation_checkpoint WHERE restaurant_id=?",
+    )
+    .bind(&rid)
+    .fetch_optional(pool)
+    .await?
+    .unwrap_or_else(|| ("1970-01-01T00:00:00Z".into(), Uuid::nil().to_string()));
+    let bookings: Vec<crate::models::customer::Reservation> = client
+        .post(&SyncRequest::ReservationPage {
+            restaurant_id: Uuid::parse_str(&rid)?,
+            after_time,
+            after_id: Uuid::parse_str(&after_id)?,
+        })
+        .await?;
+    if bookings.is_empty() {
+        return Ok(0);
+    }
+    let mut tx = pool.begin().await?;
+    let mut inserted = Vec::new();
+    for row in &bookings {
+        if row.restaurant_id.to_string() != rid {
+            return Err("Unexpected booking restaurant".into());
+        }
+        let result = sqlx::query("INSERT INTO reservations(id,restaurant_id,table_id,customer_id,customer_name,customer_phone,guest_count,reservation_time,status,special_requests,created_at,updated_at)
+            VALUES(?,?,(SELECT id FROM tables WHERE id=?),(SELECT id FROM customers WHERE id=?),?,?,?,?,?,?,?,?) ON CONFLICT(id) DO NOTHING")
+            .bind(row.id.to_string()).bind(&rid).bind(row.table_id.map(|id|id.to_string())).bind(row.customer_id.map(|id|id.to_string()))
+            .bind(&row.customer_name).bind(&row.customer_phone).bind(row.guest_count).bind(row.reservation_time.to_rfc3339())
+            .bind(row.status.to_ascii_lowercase()).bind(&row.special_requests).bind(row.created_at.to_rfc3339()).bind(row.updated_at.to_rfc3339())
+            .execute(&mut *tx).await?;
+        if result.rows_affected() == 1 {
+            inserted.push(row);
+        }
+    }
+    let last = &bookings[bookings.len() - 1];
+    sqlx::query("INSERT INTO reservation_checkpoint VALUES(?,?,?) ON CONFLICT(restaurant_id) DO UPDATE SET created_at=excluded.created_at,id=excluded.id").bind(rid).bind(last.created_at.to_rfc3339()).bind(last.id.to_string()).execute(&mut *tx).await?;
+    tx.commit().await?;
+    for booking in inserted {
+        crate::ws::broadcast_new_reservation(booking);
+    }
+    Ok(bookings.len())
+}
+
+async fn import_feedback(pool: &SqlitePool, client: &DeviceClient) -> SyncResult<usize> {
+    let rid: String = sqlx::query_scalar("SELECT id FROM restaurants LIMIT 1")
+        .fetch_one(pool)
+        .await?;
+    let (after_time, after_id) = sqlx::query_as::<_, (String, String)>(
+        "SELECT created_at,id FROM feedback_checkpoint WHERE restaurant_id=?",
+    )
+    .bind(&rid)
+    .fetch_optional(pool)
+    .await?
+    .unwrap_or_else(|| ("1970-01-01T00:00:00Z".into(), Uuid::nil().to_string()));
+    let reviews: Vec<crate::models::feedback::CustomerFeedback> = client
+        .post(&SyncRequest::FeedbackPage {
+            restaurant_id: Uuid::parse_str(&rid)?,
+            after_time,
+            after_id: Uuid::parse_str(&after_id)?,
+        })
+        .await?;
+    if reviews.is_empty() {
+        return Ok(0);
+    }
+    let mut tx = pool.begin().await?;
+    for row in &reviews {
+        if row.restaurant_id.to_string() != rid {
+            return Err("Unexpected feedback restaurant".into());
+        }
+        sqlx::query("INSERT INTO feedback(id,restaurant_id,order_id,customer_name,customer_phone,rating,comments,resolution_note,is_resolved,is_public,created_at,updated_at) VALUES(?,?,(SELECT id FROM orders WHERE id=?),?,?,?,?,?,?,?,?,?) ON CONFLICT(id) DO NOTHING")
+        .bind(row.id.to_string()).bind(&rid).bind(row.order_id.map(|id|id.to_string())).bind(&row.customer_name).bind(&row.customer_phone).bind(row.rating).bind(&row.comments).bind(&row.resolution_note).bind(row.is_resolved).bind(row.is_public).bind(row.created_at.to_rfc3339()).bind(row.updated_at.to_rfc3339()).execute(&mut *tx).await?;
+    }
+    let last = &reviews[reviews.len() - 1];
+    sqlx::query("INSERT INTO feedback_checkpoint VALUES(?,?,?) ON CONFLICT(restaurant_id) DO UPDATE SET created_at=excluded.created_at,id=excluded.id").bind(rid).bind(last.created_at.to_rfc3339()).bind(last.id.to_string()).execute(&mut *tx).await?;
+    tx.commit().await?;
+    Ok(reviews.len())
 }
 
 async fn flush(
@@ -168,6 +314,48 @@ mod tests {
     use super::*;
     use axum::{routing::post, Json, Router};
     use serde_json::{json, Value};
+
+    #[tokio::test]
+    async fn booking_backfill_preserves_local_check_in_on_replay() -> SyncResult<()> {
+        let pool = sqlx::sqlite::SqlitePoolOptions::new()
+            .max_connections(1)
+            .connect("sqlite::memory:")
+            .await?;
+        sqlx::migrate!("./migrations_sqlite").run(&pool).await?;
+        let id = Uuid::new_v4();
+        let now = chrono::Utc::now();
+        let booking = json!({"id":id,"restaurant_id":Uuid::from_u128(1),"customer_name":"Test guest","customer_phone":"0000000000","guest_count":3,"reservation_time":now,"status":"CONFIRMED","created_at":now,"updated_at":now});
+        let gateway = Router::new().route(
+            "/device/sync",
+            post(move |Json(req): Json<Value>| {
+                assert_eq!(req["action"], "reservation_page");
+                let response = json!([booking]);
+                async move { Json(response) }
+            }),
+        );
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await?;
+        let client = DeviceClient::new(
+            &format!("http://{}", listener.local_addr()?),
+            "x".repeat(32),
+        )?;
+        let task = tokio::spawn(async move { axum::serve(listener, gateway).await.unwrap() });
+        import_reservations(&pool, &client).await?;
+        let changed =
+            sqlx::query("UPDATE reservations SET status='seated' WHERE id=? AND guest_count=3")
+                .bind(id.to_string())
+                .execute(&pool)
+                .await?;
+        assert_eq!(changed.rows_affected(), 1);
+        import_reservations(&pool, &client).await?;
+        let statuses: Vec<String> =
+            sqlx::query_scalar("SELECT status FROM reservations WHERE id=?")
+                .bind(id.to_string())
+                .fetch_all(&pool)
+                .await?;
+        assert_eq!(statuses, ["seated"]);
+        task.abort();
+        Ok(())
+    }
 
     #[tokio::test]
     async fn gateway_replays_guest_ticket_without_duplicating_lines() {

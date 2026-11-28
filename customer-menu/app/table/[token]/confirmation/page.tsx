@@ -105,7 +105,14 @@ function ConfirmationContent() {
         if (res.ok) {
           const {data} = await res.json();
           setOrderStatus(data.accepted ? data.status.toUpperCase() : 'PENDING');
-          if (data.accepted && ['completed','cancelled'].includes(data.status)) return;
+          if (data.settled === true) {
+            if (!sessionStorage.getItem('feedback-prompt:' + receipt)) {
+              sessionStorage.setItem('feedback-prompt:' + receipt, '1');
+              router.push('/?feedback=1');
+            }
+            return;
+          }
+          if (data.accepted && data.status.toLowerCase() === 'cancelled') return;
         }
       } catch { /* Retry when connectivity returns. */ }
       if (!controller.signal.aborted) timer = setTimeout(poll, 4000);

@@ -25,7 +25,7 @@ impl CustomerRepository {
                        loyalty_points, loyalty_tier::text AS loyalty_tier,
                        created_at, updated_at
                 FROM customers
-                WHERE restaurant_id = $1 AND (name ILIKE $2 OR phone ILIKE $2)
+                WHERE restaurant_id = $1 AND regexp_replace(trim(phone), '[ ()+-]', '', 'g') ~ '^[0-9]{10,15}$' AND (name ILIKE $2 OR phone ILIKE $2)
                 ORDER BY name ASC
                 LIMIT 50
                 "#,
@@ -43,7 +43,7 @@ impl CustomerRepository {
                        loyalty_points, loyalty_tier::text AS loyalty_tier,
                        created_at, updated_at
                 FROM customers
-                WHERE restaurant_id = $1
+                WHERE restaurant_id = $1 AND regexp_replace(trim(phone), '[ ()+-]', '', 'g') ~ '^[0-9]{10,15}$'
                 ORDER BY total_orders DESC, name ASC
                 LIMIT 50
                 "#,
@@ -61,6 +61,24 @@ impl CustomerRepository {
         restaurant_id: Uuid,
         req: CreateCustomerRequest,
     ) -> Result<Customer, AppError> {
+        let digits: String = req
+            .phone
+            .chars()
+            .filter(|c| !matches!(c, ' ' | '-' | '(' | ')' | '+'))
+            .collect();
+        if req.name.trim().is_empty()
+            || !(10..=15).contains(&digits.len())
+            || !digits.bytes().all(|c| c.is_ascii_digit())
+        {
+            return Err(AppError::BadRequest(
+                "Customer name and a valid phone number are required".into(),
+            ));
+        }
+        let phone = if digits.len() == 12 && digits.starts_with("91") {
+            &digits[2..]
+        } else {
+            &digits
+        };
         let customer = sqlx::query_as::<_, Customer>(
             r#"
             INSERT INTO customers (restaurant_id, name, phone, email, address, notes)
@@ -80,7 +98,7 @@ impl CustomerRepository {
         )
         .bind(restaurant_id)
         .bind(&req.name)
-        .bind(&req.phone)
+        .bind(phone)
         .bind(&req.email)
         .bind(&req.address)
         .bind(&req.notes)

@@ -138,6 +138,18 @@ pub(super) async fn split(
     Json(req): Json<SplitOrderRequest>,
 ) -> Response {
     let (_, _, _, rid) = identity(&s, &h).await?;
+    let mut tx = s.pool.begin_with("BEGIN IMMEDIATE").await?;
+    let rows = split_round(&mut tx, &rid, &id, req).await?;
+    tx.commit().await?;
+    ok(json!(rows))
+}
+
+async fn split_round(
+    db: &mut sqlx::SqliteConnection,
+    rid: &str,
+    id: &str,
+    req: SplitOrderRequest,
+) -> Result<Vec<serde_json::Value>, AppError> {
     let kind = req.split_type.to_lowercase();
     let allocations = req.item_allocations.unwrap_or_default();
     let ways = req.ways.unwrap_or_else(|| {
@@ -153,14 +165,13 @@ pub(super) async fn split(
     {
         return Err(bad("Choose between 2 and 100 equal shares"));
     }
-    let mut tx = s.pool.begin_with("BEGIN IMMEDIATE").await?;
-    let (total,status,payment):(i64,String,String)=sqlx::query_as("SELECT total_amount_paise,status,payment_status FROM orders WHERE restaurant_id=? AND id=?").bind(&rid).bind(&id).fetch_optional(&mut *tx).await?.ok_or_else(missing)?;
+    let (total,status,payment):(i64,String,String)=sqlx::query_as("SELECT total_amount_paise,status,payment_status FROM orders WHERE restaurant_id=? AND id=?").bind(&rid).bind(&id).fetch_optional(&mut *db).await?.ok_or_else(missing)?;
     if total < ways as i64 || status == "CANCELLED" || payment != "UNPAID" {
         return Err(bad("This order cannot be split"));
     }
     let count: i64 = sqlx::query_scalar("SELECT count(*) FROM split_bills WHERE order_id=?")
         .bind(&id)
-        .fetch_one(&mut *tx)
+        .fetch_one(&mut *db)
         .await?;
     if count != 0 && count != ways as i64 {
         return Err(bad("Order already split"));
@@ -173,7 +184,7 @@ pub(super) async fn split(
         let lines: Vec<(String, i64, i64)> =
             sqlx::query_as("SELECT id,quantity,unit_price_paise FROM order_items WHERE order_id=?")
                 .bind(&id)
-                .fetch_all(&mut *tx)
+                .fetch_all(&mut *db)
                 .await?;
         let mut available: HashMap<String, (i64, i64)> =
             lines.into_iter().map(|(id, q, p)| (id, (q, p))).collect();
@@ -217,8 +228,8 @@ pub(super) async fn split(
         }
     }
     if count > 0 {
-        let existing:Vec<(String,i64)>=sqlx::query_as("SELECT split_type,amount_paise FROM split_bills WHERE order_id=? ORDER BY split_number").bind(&id).fetch_all(&mut *tx).await?;
-        let existing_lines:Vec<(i32,String,i64)>=sqlx::query_as("SELECT b.split_number,a.order_item_id,a.quantity FROM split_item_allocations a JOIN split_bills b ON b.id=a.split_bill_id WHERE b.order_id=?").bind(&id).fetch_all(&mut *tx).await?;
+        let existing:Vec<(String,i64)>=sqlx::query_as("SELECT split_type,amount_paise FROM split_bills WHERE order_id=? ORDER BY split_number").bind(&id).fetch_all(&mut *db).await?;
+        let existing_lines:Vec<(i32,String,i64)>=sqlx::query_as("SELECT b.split_number,a.order_item_id,a.quantity FROM split_item_allocations a JOIN split_bills b ON b.id=a.split_bill_id WHERE b.order_id=?").bind(&id).fetch_all(&mut *db).await?;
         if existing
             .iter()
             .zip(&shares)
@@ -234,26 +245,25 @@ pub(super) async fn split(
     if count == 0 {
         for (i, amount) in shares.into_iter().enumerate() {
             let sid = Uuid::new_v4().to_string();
-            sqlx::query("INSERT INTO split_bills(id,order_id,split_number,split_total_count,split_type,amount_paise) VALUES(?,?,?,?,?,?)").bind(&sid).bind(&id).bind((i+1) as i64).bind(ways as i64).bind(&kind).bind(amount).execute(&mut *tx).await?;
+            sqlx::query("INSERT INTO split_bills(id,order_id,split_number,split_total_count,split_type,amount_paise) VALUES(?,?,?,?,?,?)").bind(&sid).bind(&id).bind((i+1) as i64).bind(ways as i64).bind(&kind).bind(amount).execute(&mut *db).await?;
             for ((_, item), quantity) in by_share.iter().filter(|((index, _), _)| *index == i) {
-                sqlx::query("INSERT INTO split_item_allocations(split_bill_id,order_item_id,quantity) VALUES(?,?,?)").bind(&sid).bind(item).bind(quantity).execute(&mut *tx).await?;
+                sqlx::query("INSERT INTO split_item_allocations(split_bill_id,order_item_id,quantity) VALUES(?,?,?)").bind(&sid).bind(item).bind(quantity).execute(&mut *db).await?;
             }
         }
         sqlx::query("UPDATE orders SET is_split=1,split_count=? WHERE id=?")
             .bind(ways as i64)
             .bind(&id)
-            .execute(&mut *tx)
+            .execute(&mut *db)
             .await?;
     }
     let rows = sqlx::query("SELECT * FROM split_bills WHERE order_id=? ORDER BY split_number")
         .bind(id)
-        .fetch_all(&mut *tx)
+        .fetch_all(&mut *db)
         .await?;
-    tx.commit().await?;
-    ok(json!(rows
+    Ok(rows
         .into_iter()
         .map(record)
-        .collect::<Result<Vec<_>, _>>()?))
+        .collect::<Result<Vec<_>, _>>()?)
 }
 pub(super) async fn list_refunds(State(s): State<StaffState>, h: HeaderMap) -> Response {
     let (_, _, _, rid) = identity(&s, &h).await?;
@@ -262,4 +272,113 @@ pub(super) async fn list_refunds(State(s): State<StaffState>, h: HeaderMap) -> R
         .into_iter()
         .map(record)
         .collect::<Result<Vec<_>, _>>()?))
+}
+
+#[derive(serde::Deserialize)]
+pub(super) struct SessionSplit {
+    order_ids: Vec<Uuid>,
+    ways: usize,
+    discount_paise: Option<i64>,
+    coupon_code: Option<String>,
+}
+pub(super) async fn session_split(
+    State(s): State<StaffState>,
+    h: HeaderMap,
+    Json(req): Json<SessionSplit>,
+) -> Response {
+    let (_, _, _, rid) = identity(&s, &h).await?;
+    if req.order_ids.is_empty() || req.order_ids.len() > 200 || !(2..=100).contains(&req.ways) {
+        return Err(bad("Invalid rounds or shares"));
+    }
+    let mut tx = s.pool.begin_with("BEGIN IMMEDIATE").await?;
+    let mut rounds = Vec::new();
+    let mut subtotal = 0;
+    let mut visit = None;
+    let mut seen = std::collections::HashSet::new();
+    for key in &req.order_ids {
+        if !seen.insert(key) {
+            return Err(bad("Duplicate round"));
+        }
+        let id = key.to_string();
+        let row = super::snapshot(&mut tx, &rid, &id).await?;
+        let session = row["seating_session_id"].as_str().map(str::to_owned);
+        if req.order_ids.len() > 1
+            && (session.is_none() || (!rounds.is_empty() && session != visit))
+        {
+            return Err(bad("Rounds must belong to the same visit"));
+        }
+        if !matches!(
+            row["status"].as_str(),
+            Some("PREPARING" | "IN_PREPARATION" | "READY" | "DISPATCHED" | "SERVED")
+        ) || row["payment_status"] != "UNPAID"
+        {
+            return Err(bad("Send all rounds to the kitchen before splitting"));
+        }
+        visit = session;
+        subtotal += row["subtotal_paise"].as_i64().unwrap_or(0);
+        rounds.push((id, row));
+    }
+    if let Some(session) = &visit {
+        let active:i64=sqlx::query_scalar("SELECT count(*) FROM orders WHERE restaurant_id=? AND seating_session_id=? AND payment_status IN ('UNPAID','PARTIAL') AND status<>'CANCELLED'").bind(&rid).bind(session).fetch_one(&mut *tx).await?;
+        if active != rounds.len() as i64 {
+            return Err(bad(
+                "The visit changed. Refresh its rounds before splitting.",
+            ));
+        }
+    }
+    let (first, primary) = &rounds[0];
+    let phone = primary["customer_phone_e164"].as_str();
+    let discount = if let Some(code) = req.coupon_code.as_deref() {
+        let (coupon, amount) =
+            super::coupons::quote(&mut tx, &rid, code, subtotal, phone, Some(first)).await?;
+        super::coupons::save(&mut tx, &coupon, first, phone, amount).await?;
+        Some(amount)
+    } else {
+        req.discount_paise
+    };
+    if subtotal <= 0 || discount.is_some_and(|v| v < 0 || v > subtotal) {
+        return Err(bad("Invalid session discount"));
+    }
+    let (tax, service): (f64, f64) =
+        sqlx::query_as("SELECT gst_rate,service_charge_rate FROM restaurants WHERE id=?")
+            .bind(&rid)
+            .fetch_one(&mut *tx)
+            .await?;
+    let mut cumulative = 0i128;
+    let mut allocated = 0i64;
+    let mut result = Vec::new();
+    for (id, row) in rounds {
+        let sub = row["subtotal_paise"].as_i64().unwrap_or(0);
+        if let Some(amount) = discount {
+            cumulative += i128::from(sub);
+            let end = (i128::from(amount) * cumulative / i128::from(subtotal)) as i64;
+            let part = end - allocated;
+            allocated = end;
+            if (row["is_split"] == 1 || row["is_split"] == true)
+                && (row["discount_paise"].as_i64() != Some(part)
+                    || row["applied_coupon_code"].as_str() != req.coupon_code.as_deref())
+            {
+                return Err(bad("Cannot change the discount on an issued split bill"));
+            }
+            let bill = crate::services::order_service::OrderService::calculate_bill(
+                sub, part, tax, service, true,
+            );
+            sqlx::query("UPDATE orders SET discount_paise=?,tax_paise=?,service_charge_paise=?,round_off_paise=?,total_amount_paise=?,applied_coupon_code=? WHERE id=?")
+              .bind(part).bind(bill.tax_paise).bind(bill.service_charge_paise).bind(bill.round_off_paise).bind(bill.final_amount_paise).bind(&req.coupon_code).bind(&id).execute(&mut *tx).await?;
+        }
+        let shares = split_round(
+            &mut tx,
+            &rid,
+            &id,
+            SplitOrderRequest {
+                split_type: "equal".into(),
+                ways: Some(req.ways),
+                item_allocations: None,
+            },
+        )
+        .await?;
+        result.push(json!({"order":super::snapshot(&mut tx,&rid,&id).await?, "shares":shares}));
+    }
+    tx.commit().await?;
+    ok(json!(result))
 }

@@ -210,6 +210,7 @@ describe('Offline Order System & Auto-Sync Resilience', () => {
   it('uses a stable payment key and accepts the confirmed local receipt while internet is offline', async () => {
     networkService.isOnline.set(false);
     service.orders.set([testOrder]);
+    const initialRead = httpMock.expectOne((r) => r.url.endsWith('/tables'));
     const pending = service.settleOrder({ orderId: testOrder.id, paymentMethod: 'UPI' });
     const request = httpMock.expectOne((r) => r.url.endsWith('/settle'));
     expect(request.request.body.idempotency_key).toBe(`settle-${testOrder.id}`);
@@ -218,6 +219,35 @@ describe('Offline Order System & Auto-Sync Resilience', () => {
       data: { amount_paise: 21000, settled_at: new Date().toISOString() },
     });
     expect((await pending).success).toBe(true);
+    localStorage.setItem(
+      'tables',
+      JSON.stringify([{ id: 'table-1', status: 'OCCUPIED', posX: 24 }]),
+    );
+    httpMock
+      .expectOne((r) => r.url.endsWith('/tables'))
+      .flush({
+        success: true,
+        data: [
+          {
+            id: 'table-1',
+            number: 'T-01',
+            status: 'AVAILABLE',
+            current_seating_session_id: null,
+            active_order_id: null,
+          },
+        ],
+      });
+    initialRead.flush({
+      success: true,
+      data: [{ id: 'table-1', number: 'T-01', status: 'OCCUPIED' }],
+    });
+    expect(service.tables()[0]).toMatchObject({
+      status: 'AVAILABLE',
+      currentSeatingSessionId: null,
+      activeOrderId: null,
+      posX: 24,
+    });
+    expect(JSON.parse(localStorage.getItem('tables')!)[0].status).toBe('AVAILABLE');
     expect(service.orders()[0].paymentStatus).toBe('PAID');
   });
 });

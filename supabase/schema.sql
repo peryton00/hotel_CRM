@@ -1477,4 +1477,23 @@ EXECUTE FUNCTION public.broadcast_dining_table_change();
 
 INSERT INTO public._sqlx_migrations (version, description, success, checksum, execution_time) VALUES (7, 'table notifications', true, decode('86cb2fbaa6109166a2a781660a7eff6a8421ff7dec5a5c09ee40c217eb0eb3ade1ffb75eb1c404742c1ee6bec69c862b', 'hex'), 0);
 
+-- 008_reward_policy.sql
+
+CREATE TABLE public.reward_policy(restaurant_id uuid PRIMARY KEY REFERENCES public.restaurants(id),config jsonb NOT NULL);
+ALTER TABLE public.reward_policy ENABLE ROW LEVEL SECURITY;
+REVOKE ALL ON public.reward_policy FROM PUBLIC,anon,authenticated;
+CREATE TABLE public.points_rewards(request_id uuid PRIMARY KEY,restaurant_id uuid NOT NULL REFERENCES public.restaurants(id),customer_id uuid NOT NULL REFERENCES public.customers(id),coupon_id uuid NOT NULL REFERENCES public.coupons(id));
+ALTER TABLE public.points_rewards ENABLE ROW LEVEL SECURITY;
+REVOKE ALL ON public.points_rewards FROM PUBLIC,anon,authenticated;
+
+INSERT INTO public._sqlx_migrations (version, description, success, checksum, execution_time) VALUES (8, 'reward policy', true, decode('d5848b70708c6f464f76323d998bc6a69f260178169857be73d9317fdd66e30d14180bdc7ea3fde50c5623b2360a9531', 'hex'), 0);
+
+-- 009_reward_delivery.sql
+
+ALTER TABLE public.points_rewards ADD COLUMN delivered_at timestamptz;
+CREATE INDEX pending_point_rewards ON public.points_rewards(restaurant_id,request_id) WHERE delivered_at IS NULL;
+CREATE INDEX feedback_device_cursor ON public.customer_feedback(restaurant_id,created_at,id);
+
+INSERT INTO public._sqlx_migrations (version, description, success, checksum, execution_time) VALUES (9, 'reward delivery', true, decode('527fcc8923338d02f6a68498a69f11a66a498f2e3f88017abb1e45c167f5a2332c005d1b933ae4da9b11401f8ee8b476', 'hex'), 0);
+
 COMMIT;

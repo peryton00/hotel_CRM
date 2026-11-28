@@ -1,3 +1,5 @@
+import { WhatsAppBridgeService } from '../../core/services/whatsapp-bridge.service';
+import { groupOrdersIntoSessions } from '../../core/models/order-session';
 import { Injectable, signal, computed, inject, effect } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Observable, firstValueFrom, of, catchError, map, tap } from 'rxjs';
@@ -74,6 +76,9 @@ export interface OfflineSyncAction {
 })
 export class RestaurantDataService {
   private api = inject(ApiClientService);
+  private messaging = inject(WhatsAppBridgeService);
+  private nextMessageRetry = 0;
+  private readonly messagingInFlight = new Set<string>();
   private http = inject(HttpClient);
   private adminAuth = inject(AdminAuthService);
   private toastService = inject(ToastService);
@@ -449,6 +454,18 @@ export class RestaurantDataService {
    * If the API fails, sets apiError without silent fallback to mock data.
    */
   loadAuthoritativeData(): void {
+    if (['ADMIN', 'MANAGER'].includes(this.adminAuth.currentUser()?.role?.toUpperCase() || '')) {
+      this.api.get<LoyaltyMilestoneRewardConfig | null>('/reward-policy').subscribe({
+        next: (config) => {
+          if (config) this.milestoneRewardConfig.set(config);
+        },
+        error: () => this.toastService.warning('Could not load the reward policy.'),
+      });
+      this.api.get<CouponAssignment[]>('/wallet').subscribe({
+        next: (rows) => this.couponAssignments.set(rows),
+        error: () => this.toastService.warning('Could not load customer coupon assignments.'),
+      });
+    }
     this.apiError.set(null);
     this.pendingInitialRequests = 0;
 
@@ -583,76 +600,8 @@ export class RestaurantDataService {
       },
     });
 
-    // 2. Fetch Tables
-    this.isTablesLoading.set(true);
     this.startInitialRequest();
-    this.api.get<any[]>('/tables').subscribe({
-      next: (data) => {
-        const mapped: Table[] = (data || []).map((t) => ({
-          id: t.id,
-          number: (t.table_number || '').startsWith('tbl-')
-            ? 'T-' + t.table_number.slice(4).padStart(2, '0')
-            : t.table_number || t.number || 'T-01',
-          capacity: t.capacity,
-          section: t.section,
-          status: (t.status || 'available').toUpperCase() as TableStatus,
-          qrToken: t.qr_code_identifier || t.qr_token || `tbl-${t.table_number}`,
-          qrUrl: `/table/${t.qr_code_identifier}`,
-          orderingEnabled: t.ordering_enabled !== false,
-          currentSeatingSessionId: t.current_seating_session_id,
-          activeOrderId: t.active_order_id,
-          assignedStaffId: t.assigned_staff_id,
-        }));
-
-        // Restore layout and pending status only for tables confirmed by the API.
-        try {
-          const localStr = localStorage.getItem('tables');
-          if (localStr) {
-            const localTables: Table[] = JSON.parse(localStr);
-            if (Array.isArray(localTables)) {
-              const pendingTableUpdates = new Set(
-                this.offlineOutbox()
-                  .filter((a) => a.type === 'UPDATE_TABLE_STATUS')
-                  .map((a) => a.entityId || a.orderId)
-                  .filter(Boolean),
-              );
-              for (const lt of localTables) {
-                const existing = mapped.find((m) => m.id === lt.id);
-                if (existing) {
-                  if (lt.section) existing.section = lt.section;
-                  if (lt.posX !== undefined) existing.posX = lt.posX;
-                  if (lt.posY !== undefined) existing.posY = lt.posY;
-                  if (lt.shape) existing.shape = lt.shape;
-                  if (
-                    pendingTableUpdates.has(existing.id) ||
-                    pendingTableUpdates.has(lt.id) ||
-                    (!this.isOnline() && lt.status !== existing.status)
-                  ) {
-                    existing.status = lt.status;
-                    existing.currentSeatingSessionId = lt.currentSeatingSessionId;
-                    existing.activeOrderId = lt.activeOrderId;
-                  }
-                }
-              }
-            }
-          }
-        } catch (e) {}
-
-        this.tables.set(mapped);
-        this.saveLocal('tables', mapped);
-        this.isTablesLoading.set(false);
-        this.tablesLoaded.set(true);
-        this.finishInitialRequest();
-      },
-      error: (err) => {
-        this.isTablesLoading.set(false);
-        this.tablesLoaded.set(true);
-        this.finishInitialRequest();
-        if (this.isOnline() && err?.status !== 0) {
-          this.handleApiError('Failed to load tables', err);
-        }
-      },
-    });
+    this.readTables(true);
 
     // 3. Fetch Menu Categories
     this.isMenuLoading.set(true);
@@ -1321,10 +1270,19 @@ export class RestaurantDataService {
     });
   }
 
+  private tableReadVersion = 0;
+
   refreshTables(): void {
+    this.readTables(false);
+  }
+
+  private readTables(initial: boolean): void {
     this.isTablesLoading.set(true);
+    const version = ++this.tableReadVersion;
     this.api.get<any[]>('/tables').subscribe({
       next: (data) => {
+        if (initial) this.finishInitialRequest();
+        if (version !== this.tableReadVersion) return;
         const mapped: Table[] = (data || []).map((t) => ({
           id: t.id,
           number: (t.table_number || '').startsWith('tbl-')
@@ -1340,12 +1298,50 @@ export class RestaurantDataService {
           activeOrderId: t.active_order_id,
           assignedStaffId: t.assigned_staff_id,
         }));
+
+        // Restore layout and pending status only for tables confirmed by the API.
+        try {
+          const localStr = localStorage.getItem('tables');
+          if (localStr) {
+            const localTables: Table[] = JSON.parse(localStr);
+            if (Array.isArray(localTables)) {
+              const pendingTableUpdates = new Set(
+                this.offlineOutbox()
+                  .filter((a) => a.type === 'UPDATE_TABLE_STATUS')
+                  .map((a) => a.entityId || a.orderId)
+                  .filter(Boolean),
+              );
+              for (const lt of localTables) {
+                const existing = mapped.find((m) => m.id === lt.id);
+                if (existing) {
+                  if (lt.section) existing.section = lt.section;
+                  if (lt.posX !== undefined) existing.posX = lt.posX;
+                  if (lt.posY !== undefined) existing.posY = lt.posY;
+                  if (lt.shape) existing.shape = lt.shape;
+                  if (pendingTableUpdates.has(existing.id)) {
+                    existing.status = lt.status;
+                    existing.currentSeatingSessionId = lt.currentSeatingSessionId;
+                    existing.activeOrderId = lt.activeOrderId;
+                  }
+                }
+              }
+            }
+          }
+        } catch (e) {}
+
         this.tables.set(mapped);
+        this.saveLocal('tables', mapped);
         this.isTablesLoading.set(false);
         this.tablesLoaded.set(true);
       },
-      error: () => {
+      error: (err) => {
+        if (initial) this.finishInitialRequest();
+        if (version !== this.tableReadVersion) return;
         this.isTablesLoading.set(false);
+        this.tablesLoaded.set(true);
+        if (this.isOnline() && err?.status !== 0) {
+          this.handleApiError('Failed to load tables', err);
+        }
       },
     });
   }
@@ -2416,6 +2412,9 @@ export class RestaurantDataService {
     success: boolean;
     error?: string;
   } {
+    this.api.put('/reward-policy', config).subscribe({
+      error: () => this.toastService.warning('Reward policy could not be saved to the till.'),
+    });
     this.milestoneRewardConfig.set(config);
     this.saveLocal('loyaltyMilestoneConfig', config);
 
@@ -3027,6 +3026,14 @@ export class RestaurantDataService {
 
     this.pollIntervalId = setInterval(() => {
       if (!this.isOnline()) return;
+      if (Date.now() >= this.nextMessageRetry) {
+        this.nextMessageRetry = Date.now() + 60000;
+        const ids = this.readLocal<string[]>('pendingReceiptMessages', []);
+        for (const id of ids) {
+          const order = this.orders().find((o) => o.id === id);
+          if (order) void this.sendSettlementMessages(order);
+        }
+      }
 
       this.api.get<any>('/orders?days=2').subscribe({
         next: (res) => {
@@ -3288,7 +3295,127 @@ export class RestaurantDataService {
       order: settledOrder,
     });
 
+    if (order.tableId || order.tableNumber) this.refreshTables();
+    void this.sendSettlementMessages(settledOrder);
     return { success: true };
+  }
+
+  private async sendSettlementMessages(order: Order): Promise<void> {
+    const restaurant = this.restaurant();
+    if (!restaurant) return;
+    const all = this.orders();
+    if (
+      order.seatingSessionId &&
+      all.some(
+        (o) =>
+          o.seatingSessionId === order.seatingSessionId &&
+          o.status !== 'CANCELLED' &&
+          (o.paymentStatus === 'UNPAID' || o.paymentStatus === 'PARTIALLY_PAID'),
+      )
+    )
+      return;
+    const group = groupOrdersIntoSessions(all).find((g) => g.orders.some((o) => o.id === order.id));
+    if (!group?.isAllPaid) return;
+    const recipients = new Map<string, Order[]>();
+    for (const round of group.orders) {
+      const phone = (round.customerPhoneE164 || round.customerPhone || '').replace(/[^0-9]/g, '');
+      if (phone.length < 10) continue;
+      recipients.set(phone, [...(recipients.get(phone) ?? []), round]);
+    }
+    const queued = group.primaryOrder.id;
+    if (
+      recipients.size &&
+      !this.readLocal<string[]>('pendingReceiptMessages', []).includes(queued)
+    ) {
+      this.saveLocal('pendingReceiptMessages', [
+        ...this.readLocal<string[]>('pendingReceiptMessages', []),
+        queued,
+      ]);
+    }
+    let complete = true;
+    for (const [phone, rounds] of recipients) {
+      const key =
+        'settlement-message:' +
+        rounds
+          .map((r) => r.id)
+          .sort()
+          .join(',');
+      if (this.messagingInFlight.has(key)) {
+        complete = false;
+        continue;
+      }
+      this.messagingInFlight.add(key);
+      try {
+        const message = [
+          restaurant.name,
+          ...rounds.map(
+            (r) =>
+              'Round ' +
+              (group.orders.indexOf(r) + 1) +
+              ' · ' +
+              r.orderNumber +
+              '\n' +
+              r.items.map((i) => i.quantity + ' × ' + i.name).join('\n'),
+          ),
+          'Total paid: INR ' + rounds.reduce((sum, r) => sum + r.totalAmount, 0).toFixed(2),
+        ].join('\n');
+        if (!localStorage.getItem(key)) {
+          const result = await firstValueFrom(
+            this.messaging.sendBill(phone, restaurant.name, order, null, message),
+          );
+          if (!result.success) {
+            complete = false;
+            this.toastService.warning('Payment saved. WhatsApp receipt queued for retry.');
+            continue;
+          }
+          localStorage.setItem(key, 'sent');
+        }
+        const link = restaurant.googleReviewUrl || restaurant.contact?.googleReviewUrl;
+        if (link && !localStorage.getItem(key + ':review')) {
+          const result = await firstValueFrom(
+            this.messaging.sendBill(
+              phone,
+              restaurant.name,
+              order,
+              null,
+              'Thank you for visiting ' + restaurant.name + '. Review us on Google: ' + link,
+            ),
+          );
+          if (result.success) localStorage.setItem(key + ':review', 'sent');
+          else {
+            complete = false;
+            this.toastService.warning('Receipt sent. Review invitation queued for retry.');
+          }
+        }
+      } catch {
+        complete = false;
+      } finally {
+        this.messagingInFlight.delete(key);
+      }
+    }
+    if (complete)
+      this.saveLocal(
+        'pendingReceiptMessages',
+        this.readLocal<string[]>('pendingReceiptMessages', []).filter((id) => id !== queued),
+      );
+  }
+
+  async splitSession(rounds: Order[], ways: number, discount?: number, coupon?: string) {
+    const result = await firstValueFrom(
+      this.api.post<{ order: any; shares: any[] }[]>('/session-split', {
+        order_ids: rounds.map((round) => round.id),
+        ways,
+        discount_paise: discount === undefined ? undefined : Math.round(discount * 100),
+        coupon_code: coupon || undefined,
+      }),
+    );
+    const byId = new Map(result.map((r) => [r.order.id, this.mapApiOrder(r.order)]));
+    this.orders.update((orders) => orders.map((o) => byId.get(o.id) ?? o));
+    this.splitBills.update((parts) => [
+      ...parts.filter((p) => !byId.has(p.orderId)),
+      ...result.flatMap((r) => r.shares.map((p) => this.mapApiSplitBill(p))),
+    ]);
+    return rounds.map((r) => byId.get(r.id) ?? r);
   }
 
   async splitOrderEqual(req: { orderId: string; sharesCount?: number; splitCount?: number }) {
@@ -3375,16 +3502,26 @@ export class RestaurantDataService {
           ? sb.amount_paise / 100
           : 0;
 
-    // DM-2 fix: use backend proportional values when available
+    const equal = String(sb.split_type ?? sb.splitType ?? 'equal').toUpperCase() === 'EQUAL';
+    const shareOf = (amount: number, fallback: number) => {
+      if (!equal || !parentOrder || splitTotalCount < 1) return fallback;
+      const paise = Math.round(amount * 100);
+      return (
+        (Math.floor(paise / splitTotalCount) + Number(splitIndex <= paise % splitTotalCount)) / 100
+      );
+    };
     const subtotal =
-      typeof sb.subtotal_paise === 'number' && sb.subtotal_paise > 0
+      typeof sb.subtotal_paise === 'number'
         ? sb.subtotal_paise / 100
-        : typeof sb.subtotal === 'number'
-          ? sb.subtotal
-          : totalAmount;
+        : (sb.subtotal ?? shareOf(parentOrder?.subtotal ?? 0, totalAmount));
     const discountAmount =
-      typeof sb.discount_paise === 'number' ? sb.discount_paise / 100 : (sb.discountAmount ?? 0);
-    const taxAmount = typeof sb.tax_paise === 'number' ? sb.tax_paise / 100 : (sb.taxAmount ?? 0);
+      typeof sb.discount_paise === 'number'
+        ? sb.discount_paise / 100
+        : (sb.discountAmount ?? shareOf(parentOrder?.discountAmount ?? 0, 0));
+    const taxAmount =
+      typeof sb.tax_paise === 'number'
+        ? sb.tax_paise / 100
+        : (sb.taxAmount ?? shareOf(parentOrder?.taxAmount ?? 0, 0));
 
     const rawStatus = (sb.payment_status || sb.paymentStatus || 'pending').toUpperCase();
     const paymentStatus: PaymentStatus =
@@ -3526,7 +3663,8 @@ export class RestaurantDataService {
       this.orders.set(updatedOrders);
       this.saveLocal('orders', updatedOrders);
       this.broadcastRealtimeOrderEvent({ type: 'ORDER_UPDATED', order: updatedOrder });
-      if (allSettled && order.tableId) this.refreshTables();
+      if (allSettled) void this.sendSettlementMessages(updatedOrder);
+      if (allSettled && (order.tableId || order.tableNumber)) this.refreshTables();
     }
 
     return { success: true, splitBill: settledBill };
@@ -4183,7 +4321,7 @@ export class RestaurantDataService {
       phone: dto.phone?.trim() || '',
       email: dto.email?.trim() || '',
       customerSince: new Date().toISOString(),
-      visitCount: dto.visitCount || 1,
+      visitCount: dto.visitCount ?? 0,
       lastVisit: new Date().toISOString(),
       totalSpend: dto.totalSpend || 0,
       avgOrderValue: dto.avgOrderValue || 0,
@@ -4546,13 +4684,13 @@ export class RestaurantDataService {
     };
   }
 
-  assignCouponToCustomer(
+  async assignCouponToCustomer(
     couponId: string,
     customerId: string,
     assignedBy = 'Staff',
     maxRedemptions = 1,
     notes = '',
-  ): CouponAssignment {
+  ): Promise<CouponAssignment> {
     if (this.testMock) {
       return this.testMock.assignCouponToCustomer(
         couponId,
@@ -4562,34 +4700,27 @@ export class RestaurantDataService {
         notes,
       );
     }
-    const coupon = this.coupons().find((c) => c.id === couponId);
-    const customer = this.customers().find((c) => c.id === customerId);
-    const newAssignment: CouponAssignment = {
-      id: `asgn-${Date.now()}`,
-      restaurantId: coupon?.restaurantId || 'rest-001',
-      couponId: couponId,
-      couponCode: coupon?.code || '',
-      customerId: customerId,
-      customerPhoneE164: customer?.phone || '',
-      customerName: customer?.name || '',
-      assignedBy,
-      assignedAt: new Date().toISOString(),
-      validFrom: coupon?.validFrom || new Date().toISOString(),
-      validUntil: coupon?.validUntil || new Date().toISOString(),
-      maxRedemptions,
-      redemptionsUsed: 0,
-      status: 'ACTIVE',
-      notes,
-    };
-    this.couponAssignments.set([newAssignment, ...this.couponAssignments()]);
+    const newAssignment = await firstValueFrom(
+      this.api.post<CouponAssignment>('/wallet', {
+        coupon_id: couponId,
+        customer_id: customerId,
+        uses: maxRedemptions,
+        notes,
+      }),
+    );
+    this.couponAssignments.update((current) => [
+      newAssignment,
+      ...current.filter((a) => a.id !== newAssignment.id),
+    ]);
     return newAssignment;
   }
 
-  revokeCouponAssignment(assignmentId: string): void {
+  async revokeCouponAssignment(assignmentId: string): Promise<void> {
     if (this.testMock) {
       this.testMock.revokeCouponAssignment(assignmentId);
       return;
     }
+    await firstValueFrom(this.api.post('/wallet/' + assignmentId + '/revoke', {}));
     const updated = this.couponAssignments().map((a) =>
       a.id === assignmentId ? { ...a, status: 'REVOKED' as const } : a,
     );

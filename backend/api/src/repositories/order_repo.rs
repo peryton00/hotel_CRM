@@ -137,6 +137,15 @@ impl OrderRepository {
                     ));
                 }
                 redeemed_coupon = validation.coupon.map(|coupon| coupon.id);
+                if let Some(cid) = redeemed_coupon {
+                    let targeted: bool = sqlx::query_scalar(
+                        "SELECT coalesce(is_targeted,false) FROM coupons WHERE id=$1",
+                    )
+                    .bind(cid)
+                    .fetch_one(&mut *tx)
+                    .await?;
+                    if targeted && sqlx::query("UPDATE coupon_assignments SET redemptions_used=redemptions_used+1 WHERE coupon_id=$1 AND customer_id=$2 AND status='ACTIVE' AND redemptions_used<max_redemptions").bind(cid).bind(req.customer_id).execute(&mut *tx).await?.rows_affected()!=1 {return Err(AppError::BadRequest("Verify the phone holding an available coupon".into()));}
+                }
                 req.discount_paise = Some(validation.discount_paise);
             }
         }

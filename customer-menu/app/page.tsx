@@ -95,6 +95,7 @@ export default function CustomerFrontHomeScreen() {
   const [isSubmittingReservation, setIsSubmittingReservation] = useState(false);
   const isSubmittingReservationRef = useRef(false);
 
+  const [showFullMenu, setShowFullMenu] = useState(false);
   // Feedback form
   const [feedbackRating, setFeedbackRating] = useState(5);
   const [feedbackComment, setFeedbackComment] = useState('');
@@ -104,6 +105,18 @@ export default function CustomerFrontHomeScreen() {
   const [feedbackSubmitted, setFeedbackSubmitted] = useState(false);
   const [isSubmittingFeedback, setIsSubmittingFeedback] = useState(false);
   const isSubmittingFeedbackRef = useRef(false);
+
+  useEffect(() => {
+    if (!isFeedbackSheetOpen) return;
+    setFeedbackName(localStorage.getItem('customer_name') || '');
+    setFeedbackPhone(localStorage.getItem('customer_phone') || '');
+  }, [isFeedbackSheetOpen]);
+  useEffect(() => {
+    const open = () => { setFeedbackSubmitted(false); setIsFeedbackSheetOpen(true); };
+    if (new URLSearchParams(window.location.search).has('feedback')) open();
+    window.addEventListener('settlement-feedback', open);
+    return () => window.removeEventListener('settlement-feedback', open);
+  }, []);
 
   // Fetch all data dynamically from the database
   useEffect(() => {
@@ -123,7 +136,7 @@ export default function CustomerFrontHomeScreen() {
         if (menuRes.status === 'fulfilled' && menuRes.value?.data?.items?.length) {
           const items: MenuItem[] = menuRes.value.data.items;
           const available = items.filter((i) => i.is_available);
-          setChefSpecials(available.slice(0, 6));
+          setChefSpecials(available);
         }
 
         if (feedbackRes.status === 'fulfilled' && Array.isArray(feedbackRes.value?.data)) {
@@ -509,14 +522,14 @@ export default function CustomerFrontHomeScreen() {
             <div className="flex items-center gap-2">
               <Sparkle size={18} weight="fill" className="text-orange-500" />
               <h2 className="text-sm sm:text-base font-black tracking-tight font-display text-neutral-900 dark:text-white uppercase tracking-wider">
-                Chef Recommended Dishes
+                {showFullMenu ? "Full Menu" : "Chef Recommended Dishes"}
               </h2>
             </div>
             <button
-              onClick={() => setIsTableSheetOpen(true)}
+              onClick={() => setShowFullMenu(v => !v)}
               className="text-xs font-bold text-orange-600 dark:text-orange-400 hover:underline flex items-center gap-1 cursor-pointer"
             >
-              <span>Full Menu</span>
+              <span>{showFullMenu ? "Show fewer dishes" : "Full Menu"}</span>
               <ArrowRight size={12} weight="bold" />
             </button>
           </div>
@@ -529,7 +542,7 @@ export default function CustomerFrontHomeScreen() {
             </div>
           ) : chefSpecials.length > 0 ? (
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
-              {chefSpecials.map((dish) => (
+              {(showFullMenu ? chefSpecials : chefSpecials.slice(0, 6)).map((dish) => (
                 <div
                   key={dish.id}
                   onClick={() => setIsTableSheetOpen(true)}
@@ -1083,24 +1096,24 @@ export default function CustomerFrontHomeScreen() {
                 <div className="grid grid-cols-2 gap-2.5">
                   <div>
                     <label className="block font-bold text-neutral-700 dark:text-neutral-300 mb-1">
-                      Name (Optional)
+                      Name
                     </label>
                     <input
                       type="text"
                       placeholder="e.g. Priya"
-                      value={feedbackName}
+                      required minLength={1} value={feedbackName}
                       onChange={(e) => setFeedbackName(e.target.value)}
                       className="w-full bg-neutral-50 dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 rounded-xl px-3 py-2 text-neutral-900 dark:text-white"
                     />
                   </div>
                   <div>
                     <label className="block font-bold text-neutral-700 dark:text-neutral-300 mb-1">
-                      Phone (Optional)
+                      Phone
                     </label>
                     <input
                       type="tel"
                       placeholder="e.g. 9876543210"
-                      value={feedbackPhone}
+                      required pattern="[+]?[0-9 ]{10,16}" value={feedbackPhone}
                       onChange={(e) => setFeedbackPhone(e.target.value)}
                       className="w-full bg-neutral-50 dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 rounded-xl px-3 py-2 text-neutral-900 dark:text-white"
                     />

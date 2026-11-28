@@ -68,7 +68,7 @@ export default function MenuClient({
 
   const [orderingEnabled, setOrderingEnabled] = useState(table.ordering_enabled);
   const isTableSeated =
-    (tableStatus || '').toUpperCase() === "OCCUPIED" && orderingEnabled !== false;
+    (tableStatus || '').toUpperCase() === "OCCUPIED" && isPosOnline && Boolean(seatingSessionId) && orderingEnabled !== false;
 
   const checkStatusNow = async (silent = false) => {
     setIsCheckingTable(true);
@@ -100,6 +100,7 @@ export default function MenuClient({
         }
       }
     } catch {
+      setIsPosOnline(false);
       if (!silent) {
         dynaura.error({
           title: "Connection Error",
@@ -154,7 +155,7 @@ export default function MenuClient({
           table_number: table.table_number,
           section: table.section,
           status: tableStatus,
-          ordering_enabled: table.ordering_enabled,
+          ordering_enabled: orderingEnabled,
           current_seating_session_id: seatingSessionId,
           token,
           gst_rate: table.gst_rate ?? 5.0,
@@ -162,12 +163,12 @@ export default function MenuClient({
           sgst_rate: table.sgst_rate ?? (table.gst_rate ?? 5.0) / 2,
           service_charge_rate: table.service_charge_rate ?? 0.0,
           restaurant_phone: table.restaurant_phone,
-          is_pos_online: table.is_pos_online ?? true,
+          is_pos_online: isPosOnline,
           restaurant_status: table.restaurant_status ?? "ONLINE",
         }),
       );
     } catch {}
-  }, [table, token, tableStatus]);
+  }, [table, token, tableStatus, seatingSessionId, orderingEnabled, isPosOnline]);
 
   const activeCategories = useMemo(
     () =>

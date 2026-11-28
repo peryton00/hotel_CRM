@@ -1013,14 +1013,14 @@ export class CouponManagementComponent {
     this.showAssignModal = true;
   }
 
-  saveAssignment(): void {
+  async saveAssignment(): Promise<void> {
     if (!this.assignForm.couponId || !this.assignForm.customerId) {
       this.toastService.warning('Please select both a coupon and a customer');
       return;
     }
 
     try {
-      const assignment = this.mock.assignCouponToCustomer(
+      const assignment = await this.mock.assignCouponToCustomer(
         this.assignForm.couponId,
         this.assignForm.customerId,
         this.assignForm.assignedBy,
@@ -1035,8 +1035,13 @@ export class CouponManagementComponent {
     }
   }
 
-  revokeAssignment(assignmentId: string): void {
-    this.mock.revokeCouponAssignment(assignmentId);
+  async revokeAssignment(assignmentId: string): Promise<void> {
+    try {
+      await this.mock.revokeCouponAssignment(assignmentId);
+    } catch {
+      this.toastService.warning('Revocation failed.');
+      return;
+    }
     this.toastService.info('Coupon assignment revoked');
   }
 

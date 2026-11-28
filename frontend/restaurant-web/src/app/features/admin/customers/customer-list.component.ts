@@ -584,16 +584,27 @@ export class CustomerListComponent {
   saveNewCustomer(): void {
     if (!this.newCustName.trim() || !this.newCustPhone.trim()) return;
 
-    this.mock.createCustomer({
+    if (
+      !/^\+?[\d ()-]+$/.test(this.newCustPhone.trim()) ||
+      !/^\d{10,15}$/.test(this.newCustPhone.replace(/\D/g, ''))
+    ) {
+      this.toastService.warning('Enter a valid phone number.');
+      return;
+    }
+    const result = this.mock.createCustomer({
       name: this.newCustName.trim(),
       phone: this.newCustPhone.trim(),
       email: this.newCustEmail.trim() || undefined,
       status: this.newCustStatus,
       loyaltyTier: this.newCustTier,
-      loyaltyPoints: 100,
-      assignedCouponIds: ['coup-002'],
+      loyaltyPoints: 0,
+      assignedCouponIds: [],
     });
 
+    if (!result.success) {
+      this.toastService.warning(result.error || 'Could not add customer.');
+      return;
+    }
     this.toastService.success(`Added guest profile for ${this.newCustName.trim()}`);
     this.showAddModal = false;
   }
@@ -603,38 +614,18 @@ export class CustomerListComponent {
     this.selectedCouponToAssign = this.coupons()[0]?.id || '';
   }
 
-  confirmAssignCoupon(): void {
+  async confirmAssignCoupon(): Promise<void> {
     if (!this.selectedCustomerForCoupon || !this.selectedCouponToAssign) return;
 
     const coup = this.coupons().find((c) => c.id === this.selectedCouponToAssign);
     if (!coup) return;
 
-    // Update coupon assignments
-    const updatedCoupons = this.mock.coupons().map((c) => {
-      if (c.id === this.selectedCouponToAssign) {
-        const assigned = c.assignedCustomerIds || [];
-        if (!assigned.includes(this.selectedCustomerForCoupon!.id)) {
-          return { ...c, assignedCustomerIds: [...assigned, this.selectedCustomerForCoupon!.id] };
-        }
-      }
-      return c;
-    });
-    this.mock.coupons.set(updatedCoupons);
-    this.mock.saveLocal('coupons', updatedCoupons);
-
-    // Update customer assignedCouponIds
-    const updatedCusts = this.mock.customers().map((cust) => {
-      if (cust.id === this.selectedCustomerForCoupon!.id) {
-        const ids = cust.assignedCouponIds || [];
-        if (!ids.includes(this.selectedCouponToAssign)) {
-          return { ...cust, assignedCouponIds: [...ids, this.selectedCouponToAssign] };
-        }
-      }
-      return cust;
-    });
-    this.mock.customers.set(updatedCusts);
-    this.mock.saveLocal('customers', updatedCusts);
-
+    try {
+      await this.mock.assignCouponToCustomer(coup.id, this.selectedCustomerForCoupon.id);
+    } catch {
+      this.toastService.error('Could not assign the coupon.');
+      return;
+    }
     this.toastService.success(`Assigned ${coup.code} to ${this.selectedCustomerForCoupon.name}`);
     this.selectedCustomerForCoupon = null;
   }

@@ -188,8 +188,8 @@ function CheckoutContent() {
         setPastOrders([]);
       }
 
+      setLoyaltyData(loyaltyRes);
       if (loyaltyRes) {
-        setLoyaltyData(loyaltyRes);
         if (loyaltyRes.name && !name) {
           setName(loyaltyRes.name);
           try {
@@ -209,27 +209,29 @@ function CheckoutContent() {
     }
   };
 
+  const lookupVersion = useRef(0);
   const handlePhoneInputChange = async (val: string) => {
     const clean = val.replace(/\D/g, '');
+    const version = ++lookupVersion.current;
+    setName(clean === localStorage.getItem('customer_phone') ? localStorage.getItem('customer_name') || '' : '');
+    setIsLookingUp(false);
     setPhoneInput(clean);
     setLookupMessage('');
     if (clean.length === 10) {
       setIsLookingUp(true);
       try {
         const info = await getCustomerLoyalty(clean);
+        if (version !== lookupVersion.current) return;
         if (info?.name) {
           setName(info.name);
-          try {
-            localStorage.setItem('customer_name', info.name);
-          } catch {}
           setLookupMessage(`Found registered diner: ${info.name} 🎉`);
         } else {
-          setLookupMessage('Welcome! Enter your name to register your table.');
+          setLookupMessage('Enter your name, or verify your phone in Account to load your dining profile.');
         }
       } catch {
         setLookupMessage('');
       } finally {
-        setIsLookingUp(false);
+        if (version === lookupVersion.current) setIsLookingUp(false);
       }
     }
   };
@@ -237,14 +239,12 @@ function CheckoutContent() {
   const handleSavePhone = () => {
     const clean = phoneInput.replace(/\D/g, '');
     const trimmedName = name.trim();
-    if (clean.length >= 10) {
+    if (clean.length === 10) {
       setPhone(clean);
       setIsEditingPhone(false);
       try {
         localStorage.setItem('customer_phone', clean);
-        if (trimmedName) {
-          localStorage.setItem('customer_name', trimmedName);
-        }
+        localStorage.setItem('customer_name', trimmedName);
       } catch {}
       loadPast(clean, tableInfo?.id);
     }
@@ -417,7 +417,7 @@ function CheckoutContent() {
     }
 
     const cleanPhone = phone.replace(/\D/g, '');
-    if (cleanPhone.length < 10) {
+    if (cleanPhone.length !== 10) {
       setError('Please enter a valid 10-digit mobile number.');
       setIsEditingPhone(true);
       return;
@@ -678,9 +678,6 @@ function CheckoutContent() {
                   value={name}
                   onChange={(e) => {
                     setName(e.target.value);
-                    try {
-                      localStorage.setItem('customer_name', e.target.value);
-                    } catch {}
                   }}
                   placeholder="Your Full Name (e.g. Rahul Sharma)"
                   className="flex-1 bg-neutral-50 dark:bg-white/5 border border-neutral-200 dark:border-white/10 rounded-xl px-3 py-2 text-xs text-neutral-900 dark:text-neutral-100 font-medium focus:outline-none focus:ring-2 focus:ring-[#c21807]/20 focus:border-[#c21807]"
@@ -699,7 +696,10 @@ function CheckoutContent() {
         )}
 
         {/* Customer Dining Loyalty & 7-Visit Milestone Tracker */}
-        {phone && !isEditingPhone && (
+        {phone && !isEditingPhone && !loyaltyData && (
+          <button type="button" onClick={()=>setAccountOpen(true)}>{loadingLoyalty ? 'Loading visits…' : 'Open account to verify your phone and view visits'}</button>
+        )}
+        {phone && !isEditingPhone && loyaltyData && (
           <section className="bg-gradient-to-br from-amber-500/10 via-orange-500/5 to-amber-500/5 dark:from-amber-950/40 dark:via-orange-950/20 dark:to-neutral-900 border border-amber-300/80 dark:border-amber-600/40 rounded-3xl p-4 shadow-xs space-y-3 transition-colors duration-200">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
@@ -1535,7 +1535,14 @@ function CheckoutContent() {
       {/* Swiggy/Zomato style Customer Account Drawer */}
       <CustomerAccountDrawer
         isOpen={accountOpen}
-        onClose={() => setAccountOpen(false)}
+        onClose={() => {
+          setAccountOpen(false);
+          const saved = localStorage.getItem('customer_phone') || '';
+          if (saved) {
+            setPhone(saved); setPhoneInput(saved); setName(localStorage.getItem('customer_name') || '');
+            void loadPast(saved, tableInfo?.id);
+          }
+        }}
         tableToken={token}
         tableId={tableInfo?.id}
         tableNumber={tableInfo?.table_number}

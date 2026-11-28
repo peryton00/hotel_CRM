@@ -504,7 +504,18 @@ export class CustomerDetailComponent implements OnInit {
   assignedCoupons = computed(() => {
     const cust = this.customer();
     if (!cust) return [];
-    return this.mock.coupons().filter((c) => cust.assignedCouponIds?.includes(c.id));
+    const held = new Set(
+      this.mock
+        .couponAssignments()
+        .filter(
+          (a) =>
+            a.customerId === cust.id &&
+            a.status === 'ACTIVE' &&
+            a.redemptionsUsed < a.maxRedemptions,
+        )
+        .map((a) => a.couponId),
+    );
+    return this.mock.coupons().filter((c) => held.has(c.id));
   });
 
   showPointsModal = false;

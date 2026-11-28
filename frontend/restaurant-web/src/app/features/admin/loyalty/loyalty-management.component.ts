@@ -1,3 +1,4 @@
+import { visitTier, visitTiers } from '../../../core/models/loyalty.model';
 import { Component, inject, signal, computed } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
@@ -41,10 +42,7 @@ import { EmptyStateComponent } from '../../../shared/components/empty-state/empt
             <i class="ph ph-gift"></i>
             <span>Credit Points</span>
           </button>
-          <button class="btn btn-secondary" (click)="openVisitModal()">
-            <i class="ph ph-calendar-plus"></i>
-            <span>Log Guest Visit</span>
-          </button>
+
           <button class="btn btn-primary" (click)="openMilestoneConfigModal()">
             <i class="ph ph-sparkle"></i>
             <span>Configure 7-Visit Reward</span>
@@ -275,7 +273,6 @@ import { EmptyStateComponent } from '../../../shared/components/empty-state/empt
                 <th>Next Milestone Progress</th>
                 <th>Lifetime Spend</th>
                 <th>Last Visit</th>
-                <th>Quick Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -347,17 +344,6 @@ import { EmptyStateComponent } from '../../../shared/components/empty-state/empt
                       <span class="text-sm text-muted">
                         {{ cust.lastVisit ? (cust.lastVisit | date: 'mediumDate') : 'Never' }}
                       </span>
-                    </td>
-                    <td>
-                      <button
-                        type="button"
-                        class="btn btn-sm btn-outline quick-visit-btn"
-                        (click)="quickLogVisit(cust, $event)"
-                        title="Record a dining visit for this customer"
-                      >
-                        <i class="ph ph-plus-circle"></i>
-                        <span>Log Visit</span>
-                      </button>
                     </td>
                   </tr>
                 } @empty {
@@ -569,6 +555,21 @@ import { EmptyStateComponent } from '../../../shared/components/empty-state/empt
                   />
                   <span class="form-hint">Number of dining visits needed (e.g. 7).</span>
                 </div>
+                <label
+                  >Coupon code for 1,000 points<input
+                    class="form-input"
+                    [(ngModel)]="editingMilestoneConfig.pointsCouponCode"
+                /></label>
+                @for (tier of tiers(); track tier.tier) {
+                  <label
+                    >{{ tier.tier }} minimum visits<input
+                      class="form-input"
+                      type="number"
+                      min="0"
+                      [ngModel]="editingMilestoneConfig.tierVisits?.[tier.tier] ?? tier.minVisits"
+                      (ngModelChange)="setTierVisits(tier.tier, $event)"
+                  /></label>
+                }
 
                 <div class="form-group">
                   <label class="form-label">Reward Type</label>
@@ -1162,7 +1163,15 @@ export class LoyaltyManagementComponent {
 
   tiers = this.mock.loyaltyTiers;
   transactions = this.mock.loyaltyTransactions;
-  customers = this.mock.customers;
+  customers = computed(() =>
+    this.mock.customers().map((customer) => ({
+      ...customer,
+      loyaltyTier: visitTier(
+        customer.visitCount,
+        this.dataService.milestoneRewardConfig().tierVisits,
+      ),
+    })),
+  );
 
   searchQuery = signal<string>('');
   tierFilter = signal<'ALL' | 'PLATINUM' | 'GOLD' | 'SILVER' | 'BRONZE'>('ALL');
@@ -1173,21 +1182,17 @@ export class LoyaltyManagementComponent {
   });
 
   readonly regularGuestsCount = computed(() => {
-    return this.customers().filter((c) => (c.visitCount || 0) >= 3).length;
+    return this.customers().filter((c) => c.loyaltyTier !== 'BRONZE').length;
   });
 
   readonly vipGuestsCount = computed(() => {
-    return this.customers().filter((c) => (c.visitCount || 0) >= 10).length;
+    return this.customers().filter((c) => c.loyaltyTier === 'PLATINUM').length;
   });
 
   readonly tierCounts = computed(() => {
-    const custs = this.customers();
-    return {
-      BRONZE: custs.filter((c) => (c.visitCount || 0) < 3).length,
-      SILVER: custs.filter((c) => (c.visitCount || 0) >= 3 && (c.visitCount || 0) < 5).length,
-      GOLD: custs.filter((c) => (c.visitCount || 0) >= 5 && (c.visitCount || 0) < 10).length,
-      PLATINUM: custs.filter((c) => (c.visitCount || 0) >= 10).length,
-    };
+    const counts = { BRONZE: 0, SILVER: 0, GOLD: 0, PLATINUM: 0 };
+    for (const customer of this.customers()) counts[customer.loyaltyTier]++;
+    return counts;
   });
 
   readonly filteredCustomers = computed(() => {
@@ -1217,22 +1222,16 @@ export class LoyaltyManagementComponent {
     progressPercent: number;
   } {
     const visits = cust.visitCount || 0;
-    if (visits >= 10) {
-      return { nextTier: 'VIP MAX', neededVisits: 0, progressPercent: 100 };
-    }
-    if (visits >= 5) {
-      const needed = 10 - visits;
-      const pct = Math.round(((visits - 5) / 5) * 100);
-      return { nextTier: 'PLATINUM', neededVisits: needed, progressPercent: Math.max(15, pct) };
-    }
-    if (visits >= 3) {
-      const needed = 5 - visits;
-      const pct = Math.round(((visits - 3) / 2) * 100);
-      return { nextTier: 'GOLD', neededVisits: needed, progressPercent: Math.max(25, pct) };
-    }
-    const needed = 3 - visits;
-    const pct = Math.round((visits / 3) * 100);
-    return { nextTier: 'SILVER', neededVisits: needed, progressPercent: Math.max(20, pct) };
+    const tiers = visitTiers(this.dataService.milestoneRewardConfig().tierVisits);
+    const index = tiers.findIndex((tier) => tier.minVisits > visits);
+    if (index < 0) return { nextTier: 'VIP MAX', neededVisits: 0, progressPercent: 100 };
+    const next = tiers[index];
+    const previous = tiers[index - 1]?.minVisits ?? 0;
+    return {
+      nextTier: next.tier,
+      neededVisits: next.minVisits - visits,
+      progressPercent: Math.round((100 * (visits - previous)) / (next.minVisits - previous)),
+    };
   }
 
   // Visit Modal State
@@ -1304,6 +1303,13 @@ export class LoyaltyManagementComponent {
     this.showMilestoneModal = true;
   }
 
+  setTierVisits(tier: string, count: number) {
+    this.editingMilestoneConfig.tierVisits = {
+      ...Object.fromEntries(this.tiers().map((t) => [t.tier, t.minVisits ?? 1])),
+      ...this.editingMilestoneConfig.tierVisits,
+      [tier]: Math.max(0, Math.floor(count)),
+    };
+  }
   saveMilestoneRewardConfig(): void {
     if (!this.editingMilestoneConfig.couponCode) {
       this.toastService.warning('Please provide a valid coupon code for the milestone reward.');

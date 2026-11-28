@@ -20,7 +20,7 @@ import { EmptyStateComponent } from '../../../shared/components/empty-state/empt
 
         <div class="rating-kpi-badge">
           <i class="ph ph-star text-gold"></i>
-          <span class="rating-val">4.85 / 5.0</span>
+          <span class="rating-val">{{ averageRating() }} / 5.0</span>
           <span class="rating-count">(1,420 Verified Reviews)</span>
         </div>
       </div>
@@ -461,6 +461,12 @@ export class FeedbackListComponent {
   }
 
   feedbacks = this.mock.feedbacks;
+  averageRating = computed(() => {
+    const reviews = this.feedbacks();
+    return reviews.length
+      ? (reviews.reduce((sum, review) => sum + review.rating, 0) / reviews.length).toFixed(2)
+      : '—';
+  });
 
   readonly isLoading = computed(
     () => this.feedbacks().length === 0 && !this.dataService.isInitialized(),

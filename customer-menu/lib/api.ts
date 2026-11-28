@@ -85,7 +85,7 @@ export async function placeOrder(body: {
   try {
     const res = await fetch(`${BASE}/public/orders`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...dinerHeaders(body.customer_phone) },
       body: JSON.stringify({ ...body, restaurant_id: RID }),
     });
     if (!res.ok) {
@@ -125,10 +125,7 @@ export async function placeOrder(body: {
 
 export async function getCustomerOrders(phone?: string, tableId?: string) {
   try {
-    let url = `${BASE}/public/orders?rid=${RID}`;
-    if (phone && phone.trim().length > 0) {
-      url += `&phone=${encodeURIComponent(phone.trim())}`;
-    }
+    let url = '/api/order-history?view=guest';
     if (tableId && tableId.trim().length > 0) {
       url += `&table_id=${encodeURIComponent(tableId.trim())}`;
     }
@@ -279,4 +276,9 @@ export async function createFeedback(body: {
     throw new Error(err.error || err.message || 'Failed to submit feedback');
   }
   return res.json();
+}
+
+export async function claimPointsCoupon(phone:string,requestId:string) {
+ const response=await fetch(BASE+'/public/customer/points-reward',{method:'POST',headers:{'Content-Type':'application/json',...dinerHeaders(phone)},body:JSON.stringify({restaurant_id:RID,phone,request_id:requestId})});
+ if (!response.ok) throw new Error('Points reward could not be issued. Check your balance and reward availability.');
 }

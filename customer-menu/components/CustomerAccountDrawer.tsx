@@ -1,6 +1,7 @@
 'use client';
 
-import React, { useState, useEffect, useMemo } from 'react';
+import { claimPointsCoupon } from '@/lib/api';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   User,
   X,
@@ -86,6 +87,7 @@ export function CustomerAccountDrawer({
   const [coupons, setCoupons] = useState<Coupon[]>([]);
   const [loadingCoupons, setLoadingCoupons] = useState(false);
   const [loyaltyData, setLoyaltyData] = useState<{
+    loyalty_points?: number;
     visit_count: number;
     target_visits: number;
     milestone_unlocked: boolean;
@@ -163,8 +165,8 @@ export function CustomerAccountDrawer({
         setPastOrders([]);
       }
 
+      setLoyaltyData(loyaltyRes);
       if (loyaltyRes) {
-        setLoyaltyData(loyaltyRes);
         if (loyaltyRes.name && !name) {
           setName(loyaltyRes.name);
           setNameInput(loyaltyRes.name);
@@ -188,8 +190,17 @@ export function CustomerAccountDrawer({
     }
   };
 
+  const lookupVersion = useRef(0);
   const handlePhoneInputChange = (value: string) => {
-    setPhoneInput(value.replace(/\D/g, ''));
+    const number = value.replace(/\D/g, '');
+    const version = ++lookupVersion.current;
+    setPhoneInput(number);
+    setNameInput(number === localStorage.getItem('customer_phone') ? localStorage.getItem('customer_name') || '' : '');
+    if (number.length === 10 && dinerHeaders(number).Authorization) {
+      void getCustomerLoyalty(number).then(profile => {
+        if (version === lookupVersion.current && profile?.name) setNameInput(profile.name);
+      });
+    }
     setCodeSent(false);
     setVerificationCode('');
     setLookupMessage('');
@@ -197,7 +208,7 @@ export function CustomerAccountDrawer({
 
   const handleSaveProfile = async () => {
     const clean = phoneInput.replace(/\D/g, '');
-    const trimmedName = nameInput.trim();
+    let trimmedName = nameInput.trim();
     if (clean.length !== 10 || lookupLoading) return;
     setLookupLoading(true);
     try {
@@ -210,7 +221,11 @@ export function CustomerAccountDrawer({
             return;
           }
         }
-        if (trimmedName && !(await updateCustomerProfile(clean, trimmedName))) {
+        const profile = await getCustomerLoyalty(clean);
+        if (profile?.name) {
+          trimmedName = profile.name;
+          setNameInput(trimmedName);
+        } else if (trimmedName && !(await updateCustomerProfile(clean, trimmedName))) {
           throw new Error('The restaurant could not save your profile. Please try again.');
         }
       }
@@ -226,9 +241,7 @@ export function CustomerAccountDrawer({
 
     try {
       localStorage.setItem('customer_phone', clean);
-      if (trimmedName) {
-        localStorage.setItem('customer_name', trimmedName);
-      }
+      localStorage.setItem('customer_name', trimmedName);
     } catch {}
 
     setCodeSent(false);
@@ -370,6 +383,14 @@ export function CustomerAccountDrawer({
             <div>
               <h2 className="font-extrabold text-sm text-neutral-900 dark:text-neutral-100 flex items-center gap-1.5">
                 <span>{name || 'Guest Diner'}</span>
+                {loyaltyData && (loyaltyData.loyalty_points ?? 0)>=1000 && <button type="button" onClick={async () => {
+                  const key='points-claim:'+phone;
+                  const id=sessionStorage.getItem(key)||crypto.randomUUID();
+                  sessionStorage.setItem(key,id);
+                  try {await claimPointsCoupon(phone,id); sessionStorage.removeItem(key); await refreshCustomerData(phone);}
+                  catch(error){window.alert(error instanceof Error?error.message:'Reward unavailable');}
+                }}>Redeem 1,000 points</button>}
+                {loyaltyData && <span>{loyaltyData.loyalty_points ?? 0} loyalty points</span>}
                 {loyaltyData?.loyalty_tier && (
                   <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-full bg-amber-100 dark:bg-amber-950/70 text-amber-800 dark:text-amber-300 border border-amber-300/60 dark:border-amber-700/60">
                     {loyaltyData.loyalty_tier}
@@ -500,6 +521,7 @@ export function CustomerAccountDrawer({
               </div>
 
               {/* Loyalty Progress Card */}
+              {loyaltyData ? (
               <div className="bg-gradient-to-r from-amber-500/10 via-orange-500/10 to-amber-500/10 dark:from-amber-950/40 dark:to-orange-950/30 rounded-2xl p-3 border border-amber-300/60 dark:border-amber-700/40 space-y-2">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
@@ -526,6 +548,7 @@ export function CustomerAccountDrawer({
                     : `${Math.max(0, (loyaltyData?.target_visits || 7) - (loyaltyData?.visit_count || 0))} more visits to unlock your 50% discount.`}
                 </p>
               </div>
+              ) : <p className="text-xs">Visit count unavailable. Verify your phone or reopen your account to retry.</p>}
             </div>
           )}
 

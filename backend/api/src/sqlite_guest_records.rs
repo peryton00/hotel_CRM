@@ -29,7 +29,7 @@ async fn customers(
     Query(q): Query<CustomerSearchQuery>,
 ) -> Response {
     let (_, _, _, rid) = identity(&s, &h).await?;
-    let rows=sqlx::query("SELECT * FROM customers WHERE restaurant_id=?1 AND (?2 IS NULL OR instr(lower(name),lower(?2))>0 OR instr(phone,?2)>0) ORDER BY name").bind(rid).bind(q.search).fetch_all(&s.pool).await?;
+    let rows=sqlx::query("SELECT * FROM customers WHERE restaurant_id=?1 AND id IN (SELECT id FROM customer_phone_lookup WHERE length(digits) BETWEEN 10 AND 15 AND digits NOT GLOB '*[^0-9]*') AND (?2 IS NULL OR instr(lower(name),lower(?2))>0 OR instr(phone,?2)>0) ORDER BY name").bind(rid).bind(q.search).fetch_all(&s.pool).await?;
     ok(json!(rows
         .into_iter()
         .map(record)
@@ -41,10 +41,18 @@ async fn customer(
     Json(req): Json<CreateCustomerRequest>,
 ) -> Response {
     let (_, _, _, rid) = identity(&s, &h).await?;
-    if req.name.trim().is_empty() || req.phone.trim().is_empty() {
+    let phone: String = req
+        .phone
+        .chars()
+        .filter(|c| !matches!(c, ' ' | '-' | '(' | ')' | '+'))
+        .collect();
+    if req.name.trim().is_empty()
+        || !(10..=15).contains(&phone.len())
+        || !phone.bytes().all(|c| c.is_ascii_digit())
+    {
         return Err(bad("Name and phone required"));
     }
-    let row=sqlx::query("INSERT INTO customers(id,restaurant_id,name,phone,email,address,notes) VALUES(?,?,?,?,?,?,?) RETURNING *").bind(Uuid::new_v4().to_string()).bind(rid).bind(req.name.trim()).bind(req.phone.trim()).bind(req.email).bind(req.address).bind(req.notes).fetch_one(&s.pool).await?;
+    let row=sqlx::query("INSERT INTO customers(id,restaurant_id,name,phone,email,address,notes) VALUES(?,?,?,?,?,?,?) RETURNING *").bind(Uuid::new_v4().to_string()).bind(rid).bind(req.name.trim()).bind(if phone.len()==12 && phone.starts_with("91") { &phone[2..] } else { &phone }).bind(req.email).bind(req.address).bind(req.notes).fetch_one(&s.pool).await?;
     ok(record(row)?)
 }
 async fn points(

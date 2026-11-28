@@ -1,3 +1,4 @@
+import { groupOrdersIntoSessions, needsKitchen } from '../../../core/models/order-session';
 import { Component, inject, computed, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { RouterModule, Router } from '@angular/router';
@@ -289,11 +290,11 @@ import { AdminAuthService } from '../../../core/services/admin-auth.service';
                         }
                         )
                       </span>
-                      @if (ord.isSplit || getOrderSplitBills(ord.id).length > 0) {
+                      @if (ord.isSplit || sessionSplits(ord).length > 0) {
                         <!-- DC-1: single toggle pill only here, removed duplicate from actions -->
                         <span class="split-info-chip">
                           <i class="ph ph-split-horizontal"></i>
-                          {{ getOrderSplitBills(ord.id).length }} Split Bills
+                          {{ sessionSplits(ord).length }} Split Bills
                         </span>
                       }
                     </div>
@@ -334,7 +335,7 @@ import { AdminAuthService } from '../../../core/services/admin-auth.service';
                       }
 
                       <!-- DC-1: split toggle only in items cell; removed duplicate here -->
-                      @if (ord.isSplit || getOrderSplitBills(ord.id).length > 0) {
+                      @if (ord.isSplit || sessionSplits(ord).length > 0) {
                         <button
                           type="button"
                           class="btn btn-secondary btn-sm split-parts-toggle-btn"
@@ -354,14 +355,18 @@ import { AdminAuthService } from '../../../core/services/admin-auth.service';
                           <span>{{
                             isSplitBillsExpanded(ord.id)
                               ? 'Hide Splits'
-                              : 'Split Bills (' + getOrderSplitBills(ord.id).length + ')'
+                              : 'Split Bills (' + sessionSplits(ord).length + ')'
                           }}</span>
                         </button>
                       }
 
-                      @if (ord.paymentStatus !== 'PAID' && ord.status !== 'CANCELLED') {
+                      @if (
+                        ord.paymentStatus !== 'PAID' &&
+                        ord.status !== 'CANCELLED' &&
+                        kitchenReady(ord)
+                      ) {
                         <!-- DC-2: Split Bill option only if not already split -->
-                        @if (!ord.isSplit && getOrderSplitBills(ord.id).length === 0) {
+                        @if (!ord.isSplit && sessionSplits(ord).length === 0) {
                           <button
                             class="btn btn-secondary btn-sm"
                             (click)="openSplitModal(ord)"
@@ -372,7 +377,7 @@ import { AdminAuthService } from '../../../core/services/admin-auth.service';
                           </button>
                         }
                         <!-- DC-2: Settle Bill hidden when order is already split (backend rejects with 409) -->
-                        @if (!ord.isSplit && getOrderSplitBills(ord.id).length === 0) {
+                        @if (!ord.isSplit && sessionSplits(ord).length === 0) {
                           <button class="btn btn-primary btn-sm" (click)="openSettleModal(ord)">
                             <i class="ph ph-check"></i>
                             <span>Settle Bill</span>
@@ -382,14 +387,18 @@ import { AdminAuthService } from '../../../core/services/admin-auth.service';
 
                       <!-- DC-8: Refund only on fully PAID, not PARTIALLY_PAID -->
                       @if (ord.paymentStatus === 'PAID') {
-                        <button
-                          class="btn btn-secondary btn-sm"
-                          (click)="openRefundModal(ord)"
-                          title="Record Refund"
-                        >
-                          <i class="ph ph-arrow-counter-clockwise"></i>
-                          <span>Refund</span>
-                        </button>
+                        @for (round of getSessionOrders(ord); track round.id) {
+                          <button
+                            class="btn btn-secondary btn-sm"
+                            (click)="openRefundModal(round)"
+                            title="Record Refund"
+                          >
+                            <i class="ph ph-arrow-counter-clockwise"></i>
+                            <span
+                              >Refund {{ ord.isSessionConsolidated ? round.orderNumber : '' }}</span
+                            >
+                          </button>
+                        }
                       }
                     </div>
                   </td>
@@ -397,8 +406,7 @@ import { AdminAuthService } from '../../../core/services/admin-auth.service';
 
                 <!-- Nested Split Bills Breakdown if Order is Split -->
                 @if (
-                  (ord.isSplit || getOrderSplitBills(ord.id).length > 0) &&
-                  isSplitBillsExpanded(ord.id)
+                  (ord.isSplit || sessionSplits(ord).length > 0) && isSplitBillsExpanded(ord.id)
                 ) {
                   <tr class="split-bills-row">
                     <td colspan="8">
@@ -408,7 +416,7 @@ import { AdminAuthService } from '../../../core/services/admin-auth.service';
                             <i class="ph ph-split-horizontal"></i>
                             <span
                               >Split Bills for {{ ord.orderNumber }} ({{
-                                getOrderSplitBills(ord.id).length
+                                sessionSplits(ord).length
                               }}
                               Payable Bills)</span
                             >
@@ -438,7 +446,7 @@ import { AdminAuthService } from '../../../core/services/admin-auth.service';
                               </tr>
                             </thead>
                             <tbody>
-                              @for (split of getOrderSplitBills(ord.id); track split.id) {
+                              @for (split of sessionSplits(ord); track split.id) {
                                 <tr
                                   class="split-item-row"
                                   (click)="onSplitRowClick(ord, split, $event)"
@@ -484,7 +492,7 @@ import { AdminAuthService } from '../../../core/services/admin-auth.service';
                                     <div class="billing-actions">
                                       @if (split.paymentStatus === 'PAID') {
                                         <a
-                                          [routerLink]="['/admin/billing', ord.id]"
+                                          [routerLink]="['/admin/billing', split.orderId]"
                                           [queryParams]="{ splitId: split.id }"
                                           class="btn btn-secondary btn-xs"
                                           title="Print Split Slip"
@@ -3195,6 +3203,38 @@ export class BillingQueueComponent {
     return this.orders().filter((o) => o.paymentStatus === status).length;
   }
 
+  sessionSplits(order: Order): SplitBill[] {
+    const rounds = this.getSessionOrders(order);
+    const parts = rounds.flatMap((round) => this.getOrderSplitBills(round.id));
+    if (
+      rounds.length <= 1 ||
+      order.paymentStatus !== 'PAID' ||
+      !parts.every((p) => p.splitType === 'EQUAL' && p.paymentStatus === 'PAID')
+    )
+      return parts;
+    const grouped = new Map<number, SplitBill[]>();
+    for (const part of parts)
+      grouped.set(part.splitIndex, [...(grouped.get(part.splitIndex) ?? []), part]);
+    if (
+      ![...grouped.values()].every(
+        (group) =>
+          group.length === rounds.length && group.every((p) => p.splitTotalCount === grouped.size),
+      )
+    )
+      return parts;
+    return [...grouped.values()].map((group) => {
+      const sum = (key: 'subtotal' | 'discountAmount' | 'taxAmount' | 'totalAmount') =>
+        group.reduce((value, p) => value + Math.round(p[key] * 100), 0) / 100;
+      return {
+        ...group[0],
+        subtotal: sum('subtotal'),
+        discountAmount: sum('discountAmount'),
+        taxAmount: sum('taxAmount'),
+        totalAmount: sum('totalAmount'),
+      };
+    });
+  }
+
   getOrderSplitBills(orderId: string): SplitBill[] {
     const parent = this.orders().find((o) => o.id === orderId);
     const splits = this.mock.splitBills().filter((b) => b.orderId === orderId);
@@ -3229,7 +3269,7 @@ export class BillingQueueComponent {
     if (target.closest('button, a, input, select, textarea, .billing-actions')) {
       return;
     }
-    this.router.navigate(['/admin/billing', ord.id], { queryParams: { splitId: split.id } });
+    this.router.navigate(['/admin/billing', split.orderId], { queryParams: { splitId: split.id } });
   }
 
   getSplitIndices(): number[] {
@@ -3314,15 +3354,28 @@ export class BillingQueueComponent {
   }
 
   filteredOrders = computed(() => {
-    let list = this.orders();
+    let list = groupOrdersIntoSessions(this.orders()).map((group): Order =>
+      group.isMultiRound
+        ? {
+            ...group.primaryOrder,
+            isSessionConsolidated: true,
+            sessionRoundsCount: group.orderCount,
+            sessionRounds: group.orders,
+            items: group.orders.flatMap((round) => round.items),
+            subtotal: group.grandSubtotal,
+            taxAmount: group.grandTax,
+            discountAmount: group.grandDiscount,
+            totalAmount: group.grandTotal,
+            status: group.effectiveStatus,
+            isSplit: group.isSplit,
+          }
+        : group.primaryOrder,
+    );
     if (this.selectedTab() === 'UNPAID') {
       list = list.filter((o) => o.paymentStatus === 'UNPAID' && o.status !== 'CANCELLED');
     } else if (this.selectedTab() === 'PAID') {
       list = list.filter((o) => o.paymentStatus === 'PAID');
     }
-
-    const consolidated = list;
-    list = consolidated;
 
     // Filter by Completion/Event Date
     const filter = this.dateFilter();
@@ -3389,7 +3442,16 @@ export class BillingQueueComponent {
   });
 
   // --- Full Order Settlement Actions ---
+  kitchenReady(order: Order): boolean {
+    return !this.getSessionOrders(order).some(needsKitchen);
+  }
+
   openSettleModal(order: Order): void {
+    if (!this.kitchenReady(order)) return;
+    if (order.isSessionConsolidated) {
+      void this.router.navigate(['/admin/orders'], { state: { settleOrderId: order.id } });
+      return;
+    }
     if (order.status === 'CANCELLED') {
       this.toastService.warning(`Order ${order.orderNumber} is cancelled and cannot be settled.`);
       return;
@@ -3554,7 +3616,6 @@ export class BillingQueueComponent {
 
     this.isSettling.set(false);
     if (res.success) {
-      if (ord.tableId) this.mock.refreshTables();
       const roundsCount = this.selectedSessionOrders().length;
       const msg =
         roundsCount > 1
@@ -3621,6 +3682,11 @@ export class BillingQueueComponent {
 
   // --- Bill Splitting Actions ---
   openSplitModal(order: Order): void {
+    if (!this.kitchenReady(order)) return;
+    if (order.isSessionConsolidated) {
+      this.openSettleModal(order);
+      return;
+    }
     if (order.status === 'CANCELLED') {
       this.toastService.warning(`Order ${order.orderNumber} is cancelled and cannot be split.`);
       return;

@@ -1,3 +1,4 @@
+import { groupOrdersIntoSessions } from '../../../core/models/order-session';
 import { Component, inject, signal, computed, OnInit, effect } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { RouterModule, ActivatedRoute, Router } from '@angular/router';
@@ -349,6 +350,17 @@ import { WhatsAppBridgeService } from '../../../core/services/whatsapp-bridge.se
                         <td class="col-amt font-bold">
                           {{ it.quantity * it.unitPrice | number: '1.2-2' }}
                         </td>
+                      </tr>
+                    }
+                  } @else if (printedParts().length > 1) {
+                    @for (part of printedParts(); track part.id) {
+                      <tr>
+                        <td>{{ $index + 1 }}</td>
+                        <td>Round {{ $index + 1 }} · {{ part.orderNumber }}</td>
+                        <td></td>
+                        <td>1</td>
+                        <td>{{ part.subtotal | currencyInr }}</td>
+                        <td>{{ part.subtotal | currencyInr }}</td>
                       </tr>
                     }
                   } @else {
@@ -2988,7 +3000,13 @@ export class InvoicePreviewComponent implements OnInit {
     }
 
     // An invoice belongs to its recorded rounds; a seating ID alone is not a receipt.
-    const allOrders = raw.sessionRounds?.length ? [...raw.sessionRounds] : [raw];
+    const paidSession =
+      raw.paymentStatus === 'PAID' && !this.splitBillId()
+        ? groupOrdersIntoSessions(this.mock.orders()).find((group) =>
+            group.orders.some((o) => o.id === raw.id),
+          )
+        : undefined;
+    const allOrders = paidSession?.orders ?? raw.sessionRounds ?? [raw];
 
     const sorted = allOrders.sort(
       (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
@@ -3030,113 +3048,67 @@ export class InvoicePreviewComponent implements OnInit {
     if (!raw) return null;
 
     const rounds = this.sessionRounds();
-    if (rounds.length <= 1) {
-      const itemsSum = raw.items?.reduce(
-        (s, it) => s + (it.unitPrice || 0) * (it.quantity || 1),
-        0,
-      );
-      const subtotal =
-        itemsSum !== undefined && itemsSum > 0 ? Math.round(itemsSum * 100) / 100 : raw.subtotal;
-      const discountAmount = raw.discountAmount || 0;
-      const hasCoupon = !!raw.appliedCouponCode;
-
-      const cgstRate = this.getOrderCgstRate(raw);
-      const sgstRate = this.getOrderSgstRate(raw);
-
-      let taxableValue: number;
-      let cgstAmount: number;
-      let sgstAmount: number;
-      let taxAmount: number;
-      let totalAmount: number;
-
-      if (hasCoupon) {
-        // Coupon discount applies to total BEFORE taxes
-        taxableValue = Math.max(0, Math.round((subtotal - discountAmount) * 100) / 100);
-        cgstAmount = Math.round(taxableValue * (cgstRate / 100) * 100) / 100;
-        sgstAmount = Math.round(taxableValue * (sgstRate / 100) * 100) / 100;
-        taxAmount = Math.round((cgstAmount + sgstAmount) * 100) / 100;
-        // Chargeable amount never shows pointed/decimal value: rounded to whole rupee
-        totalAmount = Math.round(Math.max(0, taxableValue + taxAmount));
-      } else {
-        // Admin / round-off discount applies to total AFTER taxes
-        taxableValue = subtotal;
-        cgstAmount = Math.round(taxableValue * (cgstRate / 100) * 100) / 100;
-        sgstAmount = Math.round(taxableValue * (sgstRate / 100) * 100) / 100;
-        taxAmount = Math.round((cgstAmount + sgstAmount) * 100) / 100;
-        const grossTotal = Math.round((taxableValue + taxAmount) * 100) / 100;
-        // Chargeable amount never shows pointed/decimal value: rounded to whole rupee
-        totalAmount = Math.round(Math.max(0, grossTotal - discountAmount));
-      }
-
-      return {
-        ...raw,
-        subtotal,
-        discountAmount,
-        cgstRate,
-        sgstRate,
-        cgstAmount,
-        sgstAmount,
-        taxAmount,
-        totalAmount,
-      };
-    }
-
-    // Consolidated multi-round session order
-    const allItems = rounds.flatMap((r) => r.order.items || []);
-    const subtotal = Math.round(rounds.reduce((sum, r) => sum + r.roundSubtotal, 0) * 100) / 100;
-
-    const discountAmount =
-      Math.round(
-        (raw.discountAmount || rounds.reduce((sum, r) => sum + (r.order.discountAmount || 0), 0)) *
-          100,
-      ) / 100;
-
-    const hasCoupon = !!(raw.appliedCouponCode || rounds.some((r) => r.order.appliedCouponCode));
-    const cgstRate = this.getOrderCgstRate(raw);
-    const sgstRate = this.getOrderSgstRate(raw);
-
-    let taxableValue: number;
-    let cgstAmount: number;
-    let sgstAmount: number;
-    let taxAmount: number;
-    let totalAmount: number;
-
-    if (hasCoupon) {
-      taxableValue = Math.max(0, Math.round((subtotal - discountAmount) * 100) / 100);
-      cgstAmount = Math.round(taxableValue * (cgstRate / 100) * 100) / 100;
-      sgstAmount = Math.round(taxableValue * (sgstRate / 100) * 100) / 100;
-      taxAmount = Math.round((cgstAmount + sgstAmount) * 100) / 100;
-      totalAmount = Math.round(Math.max(0, taxableValue + taxAmount));
-    } else {
-      taxableValue = subtotal;
-      cgstAmount = Math.round(taxableValue * (cgstRate / 100) * 100) / 100;
-      sgstAmount = Math.round(taxableValue * (sgstRate / 100) * 100) / 100;
-      taxAmount = Math.round((cgstAmount + sgstAmount) * 100) / 100;
-      const grossTotal = Math.round((taxableValue + taxAmount) * 100) / 100;
-      totalAmount = Math.round(Math.max(0, grossTotal - discountAmount));
-    }
-
+    if (rounds.length <= 1) return raw;
+    const sum = (
+      field:
+        'subtotal' | 'discountAmount' | 'cgstAmount' | 'sgstAmount' | 'taxAmount' | 'totalAmount',
+    ) =>
+      rounds.reduce((total, round) => total + Math.round((round.order[field] || 0) * 100), 0) / 100;
     return {
       ...raw,
-      items: allItems,
-      subtotal,
-      discountAmount,
-      cgstRate,
-      sgstRate,
-      cgstAmount,
-      sgstAmount,
-      taxAmount,
-      totalAmount,
+      items: rounds.flatMap((round) => round.order.items),
+      subtotal: sum('subtotal'),
+      discountAmount: sum('discountAmount'),
+      cgstAmount: sum('cgstAmount'),
+      sgstAmount: sum('sgstAmount'),
+      taxAmount: sum('taxAmount'),
+      totalAmount: sum('totalAmount'),
       isSessionConsolidated: true,
       sessionRoundsCount: rounds.length,
       sessionRounds: rounds.map((r) => r.order),
     };
   });
 
+  printedParts = computed(() => {
+    const selected = this.mock.splitBills().find((part) => part.id === this.splitBillId());
+    if (!selected) return [];
+    const group = groupOrdersIntoSessions(this.mock.orders()).find((g) =>
+      g.orders.some((o) => o.id === selected.orderId),
+    );
+    if (!group?.isAllPaid || !group.isMultiRound || selected.splitType !== 'EQUAL')
+      return [selected];
+    const parts = group.orders.map((o) =>
+      this.mock
+        .splitBills()
+        .find(
+          (part) =>
+            part.orderId === o.id &&
+            part.splitIndex === selected.splitIndex &&
+            part.splitTotalCount === selected.splitTotalCount &&
+            part.splitType === 'EQUAL' &&
+            part.paymentStatus === 'PAID',
+        ),
+    );
+    return parts.every((part) => part !== undefined) ? parts : [selected];
+  });
+
   splitBill = computed(() => {
-    const sid = this.splitBillId();
-    if (!sid) return null;
-    return this.mock.splitBills().find((b) => b.id === sid) || null;
+    const parts = this.printedParts();
+    const first = parts[0];
+    if (!first || parts.length === 1) return first ?? null;
+    const sum = (key: 'subtotal' | 'discountAmount' | 'taxAmount' | 'totalAmount') =>
+      parts.reduce((value, part) => value + Math.round(part[key] * 100), 0) / 100;
+    return {
+      ...first,
+      subtotal: sum('subtotal'),
+      discountAmount: sum('discountAmount'),
+      taxAmount: sum('taxAmount'),
+      totalAmount: sum('totalAmount'),
+      taxBreakdown: undefined,
+      paymentMethod: parts.every((p) => p.paymentMethod === first.paymentMethod)
+        ? first.paymentMethod
+        : undefined,
+    };
   });
 
   effectivePrintCount = computed(() => {
